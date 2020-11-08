@@ -345,6 +345,7 @@ window.onload = async function(){
             // from the source inventory.
             if(sim.move_selected_inventory_item(!data.fromPlayer)){
                 updateInventory(sim.get_player_inventory());
+                updateToolBar();
                 updateStructureInventory();
             }
         }
@@ -486,6 +487,7 @@ window.onload = async function(){
         if(!data.fromPlayer){
             if(sim.move_selected_inventory_item(!data.fromPlayer)){
                 updateInventory(sim.get_player_inventory());
+                updateToolBar();
                 updateStructureInventory();
             }
         }
@@ -497,21 +499,15 @@ window.onload = async function(){
         // Update only if the selected inventory is the other one from destination.
         if(sim.get_selected_inventory() !== null){
             if(sim.move_selected_inventory_item(isPlayer)){
-                    updateInventory(sim.get_player_inventory());
-                    updateStructureInventory();
-                }
+                updateInventory(sim.get_player_inventory());
+                updateToolBar();
+                updateStructureInventory();
+            }
         }
     }
 
     canvas.addEventListener("mousedown", function(evt){
-        const result = sim.mouse_down([evt.offsetX, evt.offsetY], evt.button);
-        if(result !== null){
-            const [command, x, y] = result;
-            if(command === "showInventory"){
-                showInventory(x, y);
-            }
-        }
-        updateToolBar();
+        processEvents(sim.mouse_down([evt.offsetX, evt.offsetY], evt.button));
         evt.stopPropagation();
         evt.preventDefault();
         return false;
@@ -537,14 +533,27 @@ window.onload = async function(){
 
     updateInventory(sim.get_player_inventory());
 
-    window.setInterval(function(){
-        let events = sim.simulate(0.05);
+    function processEvents(events){
+        if(!events)
+            return;
         for(let event of events){
             if(event[0] === "updateStructureInventory"){
                 console.log("updateStructureInventory event received");
                 updateStructureInventory([event[1], event[2]]);
             }
+            if(event[0] === "updatePlayerInventory"){
+                console.log("updateStructureInventory event received");
+                updateToolBar();
+            }
+            else if(event[0] === "showInventory"){
+                const [_command, x, y] = event;
+                showInventory(x, y);
+            }
         }
+    }
+
+    window.setInterval(function(){
+        processEvents(sim.simulate(0.05));
         let result = sim.render(ctx);
         // console.log(result);
     }, 50);

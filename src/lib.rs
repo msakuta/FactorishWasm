@@ -1324,8 +1324,10 @@ impl FactorishState {
                     };
                     console_log!("moving {:?}", name);
                     if let Some(name) = name {
-                        FactorishState::move_inventory_item(src, dst, name);
-                        return Ok(true);
+                        if FactorishState::move_inventory_item(src, dst, name) {
+                            self.on_player_update.call1(&window(), &JsValue::from(self.get_player_inventory()?))?;
+                            return Ok(true);
+                        }
                     }
                 }
             }
@@ -1354,6 +1356,9 @@ impl FactorishState {
             x: (pos[0] / 32.) as i32,
             y: (pos[1] / 32.) as i32,
         };
+
+        let mut events = vec![];
+
         if button == 0 {
             if let Some(selected_tool) = self.selected_tool {
                 if let Some(count) = self
@@ -1375,6 +1380,9 @@ impl FactorishState {
                         self.on_player_update
                             .call1(&window(), &JsValue::from(self.get_player_inventory()?))
                             .unwrap_or(JsValue::from(true));
+                        events.push(js_sys::Array::of1(
+                            &JsValue::from_str("updatePlayerInventory")
+                        ));
                     }
                 }
             } else {
@@ -1382,21 +1390,24 @@ impl FactorishState {
                 console_log!("opening inventory at {:?}", cursor);
                 if self.open_structure_inventory(cursor.x, cursor.y).is_ok() {
                     // self.on_show_inventory.call0(&window()).unwrap();
-                    return Ok(JsValue::from(js_sys::Array::of3(
+                    events.push(js_sys::Array::of3(
                         &JsValue::from_str("showInventory"),
                         &JsValue::from(cursor.x),
                         &JsValue::from(cursor.y),
-                    )));
+                    ));
                     // let inventory_elem: web_sys::HtmlElement = document().get_element_by_id("inventory2").unwrap().dyn_into().unwrap();
                     // inventory_elem.style().set_property("display", "block").unwrap();
                 }
             }
         } else {
             self.harvest(&cursor)?;
+            events.push(js_sys::Array::of1(
+                &JsValue::from_str("updatePlayerInventory")
+            ));
         }
         console_log!("clicked: {}, {}", cursor.x, cursor.y);
         self.update_info();
-        Ok(JsValue::null())
+        Ok(JsValue::from(events.iter().collect::<js_sys::Array>()))
     }
 
     pub fn mouse_move(&mut self, pos: &[f64]) -> Result<(), JsValue> {
