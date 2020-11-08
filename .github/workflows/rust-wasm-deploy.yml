@@ -20,11 +20,12 @@ jobs:
       #with:
         # Optional version of wasm-pack to install (eg. "v0.9.1", "latest")
         #version: # optional, default is latest
+    - name: Use Node.js 10.x
+      uses: actions/setup-node@v1
+      with:
+        node-version: 10.x
     - name: Build
-      run: |
-        wasm-pack build --target web &&
-        rm pkg/.gitignore && # We don't want to ignore the products
-        mkdir -p dist && cp FactorishWasm.html dist/ && cp -r pkg dist/pkg && cp -r img dist/img && cp -r js dist/js
+      run: npm ci && npm run build
     - name: Deploy
       uses: peaceiris/actions-gh-pages@v3
       with:
