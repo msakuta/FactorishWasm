@@ -24,6 +24,7 @@ import gear from "../img/gear.png";
 import pipeItem from "../img/pipe-item.png";
 import steamEngine from "../img/steam-engine.png";
 import rotateImage from "../img/rotate.png";
+import closeImage from "../img/close.png";
 
 
 import { FactorishState } from "../pkg/index.js";
@@ -405,6 +406,7 @@ function isIE(){
     };
 
     const inventory2CloseButton = document.getElementById("inventory2CloseButton");
+    inventory2CloseButton.style.backgroundImage = `url(${closeImage})`;
     inventory2CloseButton.addEventListener("click", function(){
         inventoryElem.style.display = "none";
     });
