@@ -1,31 +1,46 @@
-FactorishJS
-===========
+# FactorishWasm
 
-Factorio-style base building game with HTML5+JavaScript
+A port of [https://msakuta.github.io/FactorishJS/](FactorishJS) to Wasm/Rust (and a bit of HTML5+JavaScript).
 
 Try it now!
-https://msakuta.github.io/FactorishJS/FactorishJS.html
+https://msakuta.github.io/FactorishWasm/FactorishWasm.html
 
 
-Features
---------
+## Features
 
 This project is a demonstration that how plain HTML5 and JavaScript can be used to create a game
 with complexity like the great game [Factorio](https://store.steampowered.com/app/427520/Factorio/).
 
 
-Prerequisites
--------------
+## Prerequisites
 
-This game uses pure JavaScript, no additional plugins are required on your side.
-You need a decent browser though.
-
-The game state is saved into your browser, which is entirely in the client side.
-If you want to continue playing with a different device, you'll need to serialize the game state
-and copy it to another device.
+This game uses JavaScript and WebAssembly (Wasm), so you need a browser with WebAssembly support.
+Most modern browser support it nowadays.
 
 
-Libraries
----------
 
-This project doesn't depend on an extenal library (yet).
+## How to build and run
+
+Install
+
+* Cargo >1.40
+* npm
+
+Install wasm-pack command line tool with
+
+    cargo install wasm-pack
+
+Build the project
+
+    wasm-pack build --target web
+
+Serve the web server
+
+    npx serve .
+
+Browse http://localhost:5000/
+
+
+## Libraries
+
+* wasm-bindgen
