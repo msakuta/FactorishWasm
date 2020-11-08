@@ -1,13 +1,28 @@
+import time from "../img/time.png";
 import dirt from "../img/dirt.png";
 import iron from "../img/iron.png";
 import coal from "../img/coal.png";
 import transport from "../img/transport.png";
+import splitter from "../img/splitter.png";
 import chest from "../img/chest.png";
 import mine from "../img/mine.png";
+import assembler from "../img/assembler.png";
+import furnace from "../img/furnace.png";
+import waterWell from "../img/waterwell.png";
+import boiler from "../img/boiler.png";
 import inserter from "../img/inserter-base.png";
 import direction from "../img/direction.png";
 import ore from "../img/ore.png";
 import coalOre from "../img/coal-ore.png";
+import copperOre from "../img/copper-ore.png";
+import ironPlate from "../img/metal.png";
+import steelPlate from "../img/steel-plate.png";
+import copperPlate from "../img/copper-plate.png";
+import copperWire from "../img/copper-wire.png";
+import circuit from "../img/circuit.png";
+import gear from "../img/gear.png";
+import pipeItem from "../img/pipe-item.png";
+import steamEngine from "../img/steam-engine.png";
 import rotateImage from "../img/rotate.png";
 
 
@@ -209,47 +224,47 @@ window.onload = async function(){
     function getImageFile(type){
         switch(type){
         case 'time':
-            return 'img/time.png';
+            return time;
         case 'Iron Ore':
-            return 'img/ore.png';
+            return ore;
         case 'Iron Plate':
-            return 'img/metal.png';
+            return ironPlate;
         case 'Steel Plate':
-            return 'img/steel-plate.png';
+            return steelPlate;
         case 'Copper Ore':
-            return 'img/copper-ore.png';
+            return copperOre;
         case 'Copper Plate':
-            return 'img/copper-plate.png';
+            return copperPlate;
         case 'Coal Ore':
-            return 'img/coal-ore.png';
+            return coalOre;
         case 'Gear':
-            return 'img/gear.png';
+            return gear;
         case 'Copper Wire':
-            return 'img/copper-wire.png';
+            return copperWire;
         case 'Circuit':
-            return 'img/circuit.png';
+            return circuit;
         case 'Transport Belt':
-            return 'img/transport.png';
+            return transport;
         case 'Splitter':
-            return 'img/splitter.png';
+            return splitter;
         case 'Inserter':
-            return 'img/inserter-base.png';
+            return inserter;
         case 'Chest':
-            return 'img/chest.png';
+            return chest;
         case 'Ore Mine':
-            return "img/mine.png";
+            return mine;
         case 'Furnace':
-            return ["img/furnace.png", 3];
+            return [furnace, 3];
         case 'Assembler':
-            return "img/assembler.png";
+            return assembler;
         case 'Water Well':
-            return "img/waterwell.png";
+            return waterWell;
         case 'Boiler':
-            return ["img/boiler.png", 3];
+            return [boiler, 3];
         case 'Pipe':
-            return "img/pipe-item.png";
+            return pipeItem;
         case 'SteamEngine':
-            return "img/steam-engine.png";
+            return steamEngine;
         default:
             return "";
         }
