@@ -1479,10 +1479,10 @@ impl FactorishState {
         self.image_belt = Some(load_image("transport")?);
         self.image_chest = Some(load_image("chest")?);
         self.image_mine = Some(load_image("mine")?);
-        self.image_inserter = Some(load_image("inserter-base")?);
+        self.image_inserter = Some(load_image("inserter")?);
         self.image_direction = Some(load_image("direction")?);
         self.image_iron_ore = Some(load_image("ore")?);
-        self.image_coal_ore = Some(load_image("coal-ore")?);
+        self.image_coal_ore = Some(load_image("coalOre")?);
         Ok(())
     }
 
