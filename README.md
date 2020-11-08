@@ -1,6 +1,6 @@
 # FactorishWasm
 
-A port of [https://msakuta.github.io/FactorishJS/](FactorishJS) to Wasm/Rust (and a bit of HTML5+JavaScript).
+A port of [https://github.com/msakuta/FactorishJS](FactorishJS) to Wasm/Rust (and a bit of HTML5+JavaScript).
 
 Try it now!
 https://msakuta.github.io/FactorishWasm/FactorishWasm.html
