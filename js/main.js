@@ -36,7 +36,7 @@ function isIE(){
     return msie > 0 || trident > 0;
 }
 
-window.onload = async function(){
+(async function(){
     // We could fetch and await in Rust code, but it's far easier to do in JavaScript runtime.
     // We initiate promises at the very beginning of the initialization, and by the time we initialize everything
     // we should have bitmaps ready.
@@ -605,4 +605,4 @@ window.onload = async function(){
         // console.log(result);
     }, 50);
     // simulate()
-}
+})();
