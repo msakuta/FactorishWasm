@@ -9,7 +9,27 @@ function isIE(){
 }
 
 window.onload = async function(){
+    // We could fetch and await in Rust code, but it's far easier to do in JavaScript runtime.
+    // We initiate promises at the very beginning of the initialization, and by the time we initialize everything
+    // we should have bitmaps ready.
+    let loadImages = [
+        "dirt",
+        "iron",
+        "coal",
+        "transport",
+        "chest",
+        "mine",
+        "inserter-base",
+        "direction",
+        "ore",
+        "coal-ore",
+    ].map(async (src) => {
+        const res = await fetch(`img/${src}.png`);
+        return [src, await window.createImageBitmap(await res.blob())];
+    });
+
     await init();
+
     let sim = new FactorishState(updateInventory);
 
     const canvas = document.getElementById('canvas');
@@ -151,7 +171,8 @@ window.onload = async function(){
     // Set the margin after contents are initialized
     toolBarElem.style.marginLeft = (-(toolBarElem.getBoundingClientRect().width + miniMapSize + tableMargin) / 2) + 'px';
 
-    sim.render_init(canvas, infoElem);
+    const loadedImages = await Promise.all(loadImages);
+    sim.render_init(canvas, infoElem, loadedImages);
 
     updateToolBarImage();
 

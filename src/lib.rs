@@ -5,7 +5,7 @@ mod utils;
 use std::collections::HashMap;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
-use web_sys::{CanvasRenderingContext2d, HtmlCanvasElement, HtmlDivElement, HtmlImageElement};
+use web_sys::{CanvasRenderingContext2d, HtmlCanvasElement, HtmlDivElement, ImageBitmap};
 
 use perlin_noise::perlin_noise_pixel;
 
@@ -51,12 +51,14 @@ fn request_animation_frame(f: &Closure<dyn FnMut()>) {
         .expect("should register `requestAnimationFrame` OK");
 }
 
+#[allow(dead_code)]
 fn document() -> web_sys::Document {
     window()
         .document()
         .expect("should have a document on window")
 }
 
+#[allow(dead_code)]
 fn body() -> web_sys::HtmlElement {
     document().body().expect("document should have a body")
 }
@@ -256,17 +258,18 @@ impl Structure for TransportBelt {
                 context.rotate(self.rotation.angle_rad())?;
                 context.translate(-(x + 16.), -(y + 16.))?;
                 for i in 0..2 {
-                    context.draw_image_with_html_image_element_and_sw_and_sh_and_dx_and_dy_and_dw_and_dh(
-                        img,
-                        i as f64 * 32. - (state.sim_time * 16.) % 32.,
-                        0.,
-                        32.,
-                        32.,
-                        self.position.x as f64 * 32.,
-                        self.position.y as f64 * 32.,
-                        32.,
-                        32.,
-                    )?;
+                    context
+                        .draw_image_with_image_bitmap_and_sw_and_sh_and_dx_and_dy_and_dw_and_dh(
+                            img,
+                            i as f64 * 32. - (state.sim_time * 16.) % 32.,
+                            0.,
+                            32.,
+                            32.,
+                            self.position.x as f64 * 32.,
+                            self.position.y as f64 * 32.,
+                            32.,
+                            32.,
+                        )?;
                 }
                 context.restore();
             }
@@ -309,7 +312,7 @@ fn draw_direction_arrow(
             context.translate(x + 16., y + 16.)?;
             context.rotate(rotation.angle_rad() + std::f64::consts::PI)?;
             context.translate(-(x + 16. + 4.) + 16., -(y + 16. + 8.) + 16.)?;
-            context.draw_image_with_html_image_element(img, x, y)?;
+            context.draw_image_with_image_bitmap(img, x, y)?;
             context.restore();
         }
         None => return Err(JsValue::from_str("direction image not available")),
@@ -350,7 +353,7 @@ impl Structure for Inserter {
         let (x, y) = (self.position.x as f64 * 32., self.position.y as f64 * 32.);
         match state.image_inserter.as_ref() {
             Some(img) => {
-                context.draw_image_with_html_image_element(img, x, y)?;
+                context.draw_image_with_image_bitmap(img, x, y)?;
             }
             None => return Err(JsValue::from_str("inserter image not available")),
         }
@@ -489,7 +492,7 @@ impl Structure for Chest {
         let (x, y) = (self.position.x as f64 * 32., self.position.y as f64 * 32.);
         match state.image_chest.as_ref() {
             Some(img) => {
-                context.draw_image_with_html_image_element(img, x, y)?;
+                context.draw_image_with_image_bitmap(img, x, y)?;
                 Ok(())
             }
             None => Err(JsValue::from_str("chest image not available")),
@@ -606,7 +609,7 @@ impl Structure for OreMine {
         let (x, y) = (self.position.x as f64 * 32., self.position.y as f64 * 32.);
         match state.image_mine.as_ref() {
             Some(img) => {
-                context.draw_image_with_html_image_element(img, x, y)?;
+                context.draw_image_with_image_bitmap(img, x, y)?;
             }
             None => return Err(JsValue::from_str("mine image not available")),
         }
@@ -804,16 +807,16 @@ pub struct FactorishState {
     info_elem: Option<HtmlDivElement>,
     on_player_update: js_sys::Function,
     // on_show_inventory: js_sys::Function,
-    image_dirt: Option<HtmlImageElement>,
-    image_ore: Option<HtmlImageElement>,
-    image_coal: Option<HtmlImageElement>,
-    image_belt: Option<HtmlImageElement>,
-    image_chest: Option<HtmlImageElement>,
-    image_mine: Option<HtmlImageElement>,
-    image_inserter: Option<HtmlImageElement>,
-    image_direction: Option<HtmlImageElement>,
-    image_iron_ore: Option<HtmlImageElement>,
-    image_coal_ore: Option<HtmlImageElement>,
+    image_dirt: Option<ImageBitmap>,
+    image_ore: Option<ImageBitmap>,
+    image_coal: Option<ImageBitmap>,
+    image_belt: Option<ImageBitmap>,
+    image_chest: Option<ImageBitmap>,
+    image_mine: Option<ImageBitmap>,
+    image_inserter: Option<ImageBitmap>,
+    image_direction: Option<ImageBitmap>,
+    image_iron_ore: Option<ImageBitmap>,
+    image_coal_ore: Option<ImageBitmap>,
 }
 
 #[derive(Debug)]
@@ -1325,7 +1328,8 @@ impl FactorishState {
                     console_log!("moving {:?}", name);
                     if let Some(name) = name {
                         if FactorishState::move_inventory_item(src, dst, name) {
-                            self.on_player_update.call1(&window(), &JsValue::from(self.get_player_inventory()?))?;
+                            self.on_player_update
+                                .call1(&window(), &JsValue::from(self.get_player_inventory()?))?;
                             return Ok(true);
                         }
                     }
@@ -1380,9 +1384,9 @@ impl FactorishState {
                         self.on_player_update
                             .call1(&window(), &JsValue::from(self.get_player_inventory()?))
                             .unwrap_or(JsValue::from(true));
-                        events.push(js_sys::Array::of1(
-                            &JsValue::from_str("updatePlayerInventory")
-                        ));
+                        events.push(js_sys::Array::of1(&JsValue::from_str(
+                            "updatePlayerInventory",
+                        )));
                     }
                 }
             } else {
@@ -1401,9 +1405,9 @@ impl FactorishState {
             }
         } else {
             self.harvest(&cursor)?;
-            events.push(js_sys::Array::of1(
-                &JsValue::from_str("updatePlayerInventory")
-            ));
+            events.push(js_sys::Array::of1(&JsValue::from_str(
+                "updatePlayerInventory",
+            )));
         }
         console_log!("clicked: {}, {}", cursor.x, cursor.y);
         self.update_info();
@@ -1443,27 +1447,42 @@ impl FactorishState {
         &mut self,
         canvas: HtmlCanvasElement,
         info_elem: HtmlDivElement,
+        image_assets: js_sys::Array,
     ) -> Result<(), JsValue> {
         self.viewport_width = canvas.width() as f64;
         self.viewport_height = canvas.height() as f64;
         self.info_elem = Some(info_elem);
         let load_image = |path| -> Result<_, JsValue> {
-            let img = HtmlImageElement::new()?;
-            img.set_attribute("src", path)?;
-            img.style().set_property("display", "none")?;
-            body().append_child(&img)?;
-            Ok(img)
+            if let Some(value) = image_assets.iter().find(|value| {
+                let array = js_sys::Array::from(value);
+                array.iter().next() == Some(JsValue::from_str(path))
+            }) {
+                let array = js_sys::Array::from(&value);
+                array
+                    .to_vec()
+                    .into_iter()
+                    .nth(1)
+                    .unwrap_or_else(|| {
+                        JsValue::from_str(&format!(
+                            "Couldn't convert value to ImageBitmap: {:?}",
+                            path
+                        ))
+                    })
+                    .dyn_into::<ImageBitmap>()
+            } else {
+                Err(JsValue::from_str(&format!("Image not found: {:?}", path)))
+            }
         };
-        self.image_dirt = Some(load_image("img/dirt.png")?);
-        self.image_ore = Some(load_image("img/iron.png")?);
-        self.image_coal = Some(load_image("img/coal.png")?);
-        self.image_belt = Some(load_image("img/transport.png")?);
-        self.image_chest = Some(load_image("img/chest.png")?);
-        self.image_mine = Some(load_image("img/mine.png")?);
-        self.image_inserter = Some(load_image("img/inserter-base.png")?);
-        self.image_direction = Some(load_image("img/direction.png")?);
-        self.image_iron_ore = Some(load_image("img/ore.png")?);
-        self.image_coal_ore = Some(load_image("img/coal-ore.png")?);
+        self.image_dirt = Some(load_image("dirt")?);
+        self.image_ore = Some(load_image("iron")?);
+        self.image_coal = Some(load_image("coal")?);
+        self.image_belt = Some(load_image("transport")?);
+        self.image_chest = Some(load_image("chest")?);
+        self.image_mine = Some(load_image("mine")?);
+        self.image_inserter = Some(load_image("inserter-base")?);
+        self.image_direction = Some(load_image("direction")?);
+        self.image_iron_ore = Some(load_image("ore")?);
+        self.image_coal_ore = Some(load_image("coal-ore")?);
         Ok(())
     }
 
@@ -1544,16 +1563,16 @@ impl FactorishState {
             Some(((img, img_ore), img_coal)) => {
                 for y in 0..self.viewport_height as u32 / 32 {
                     for x in 0..self.viewport_width as u32 / 32 {
-                        context.draw_image_with_html_image_element(
+                        context.draw_image_with_image_bitmap(
                             img,
                             x as f64 * 32.,
                             y as f64 * 32.,
                         )?;
-                        let draw_ore = |ore: u32, img: &HtmlImageElement| -> Result<(), JsValue> {
+                        let draw_ore = |ore: u32, img: &ImageBitmap| -> Result<(), JsValue> {
                             if 0 < ore {
                                 let idx = (ore / 10).min(3);
                                 // console_log!("x: {}, y: {}, idx: {}, ore: {}", x, y, idx, ore);
-                                context.draw_image_with_html_image_element_and_sw_and_sh_and_dx_and_dy_and_dw_and_dh(
+                                context.draw_image_with_image_bitmap_and_sw_and_sh_and_dx_and_dy_and_dw_and_dh(
                                     img, (idx * 32) as f64, 0., 32., 32., x as f64 * 32., y as f64 * 32., 32., 32.)?;
                             }
                             Ok(())
@@ -1580,7 +1599,7 @@ impl FactorishState {
             match item.type_ {
                 ItemType::IronOre => {
                     if let Some(ref img_iron_ore) = self.image_iron_ore {
-                        context.draw_image_with_html_image_element(
+                        context.draw_image_with_image_bitmap(
                             img_iron_ore,
                             item.x as f64 - 8.,
                             item.y as f64 - 8.,
@@ -1589,7 +1608,7 @@ impl FactorishState {
                 }
                 ItemType::CoalOre => {
                     if let Some(ref img_coal_ore) = self.image_coal_ore {
-                        context.draw_image_with_html_image_element(
+                        context.draw_image_with_image_bitmap(
                             img_coal_ore,
                             item.x as f64 - 8.,
                             item.y as f64 - 8.,
