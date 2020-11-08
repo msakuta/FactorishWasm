@@ -3,7 +3,7 @@
 A port of [FactorishJS](https://github.com/msakuta/FactorishJS) to Wasm/Rust (and a bit of HTML5+JavaScript).
 
 Try it now!
-https://msakuta.github.io/FactorishWasm/FactorishWasm.html
+https://msakuta.github.io/FactorishWasm/index.html
 
 
 ## Features
