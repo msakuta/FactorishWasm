@@ -1,4 +1,16 @@
-import init, { FactorishState } from "../pkg/factorish_js.js";
+import dirt from "../img/dirt.png";
+import iron from "../img/iron.png";
+import coal from "../img/coal.png";
+import transport from "../img/transport.png";
+import chest from "../img/chest.png";
+import mine from "../img/mine.png";
+import inserter from "../img/inserter-base.png";
+import direction from "../img/direction.png";
+import ore from "../img/ore.png";
+import coalOre from "../img/coal-ore.png";
+
+
+import { FactorishState } from "../pkg/index.js";
 
 /// We may no longer need support for IE, since WebAssembly is not supported by IE anyway.
 function isIE(){
@@ -13,22 +25,20 @@ window.onload = async function(){
     // We initiate promises at the very beginning of the initialization, and by the time we initialize everything
     // we should have bitmaps ready.
     let loadImages = [
-        "dirt",
-        "iron",
-        "coal",
-        "transport",
-        "chest",
-        "mine",
-        "inserter-base",
-        "direction",
-        "ore",
-        "coal-ore",
-    ].map(async (src) => {
-        const res = await fetch(`img/${src}.png`);
-        return [src, await window.createImageBitmap(await res.blob())];
+        ["dirt", dirt],
+        ["iron", iron],
+        ["coal", coal],
+        ["transport", transport],
+        ["chest", chest],
+        ["mine", mine],
+        ["inserter", inserter],
+        ["direction", direction],
+        ["ore", ore],
+        ["coalOre", coalOre],
+    ].map(async ([name, src]) => {
+        const res = await fetch(src);
+        return [name, await createImageBitmap(await res.blob())];
     });
-
-    await init();
 
     let sim = new FactorishState(updateInventory);
 
