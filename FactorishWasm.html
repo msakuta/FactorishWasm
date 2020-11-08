@@ -138,7 +138,6 @@
 		</style>
 		<script src="xorshift.js"></script>
 		<script src="perlinNoise.js"></script>
-		<script src="FactorishJS.js"></script>
 		<script type="module" src="./pkg/factorish_js.js"></script>
 	</head>
 	<body>
@@ -158,23 +157,6 @@
 		<input type="checkbox" id="showFluidAmount" checked>Show Fluid Overlay
 		<hr>
 		<div style="position: relative">
-			<div id="container"></div>
-			<div id="cursorInfo"></div>
-			<div id="inventory" class="noselect">
-				<div id="inventoryTitle">Inventory</div>
-				<div class="closeButton" onclick="Conveyor.hideInventory()"></div>
-				<div id="inventoryClient">
-					<img id="inventoryList" draggable="false" src="img/list.png" style="position: absolute">
-					<img id="inventoryIcons" draggable="false" src="img/icons.png" style="position: absolute; left: 0px; top: 32px">
-					<img id="recipeSelectButton" draggable="false" src="img/recipe-select.png" alt="Recipe select" style="position: absolute; left: 0px; top: 80px; border: 1px solid #7f7f7f">
-					<div id="inventoryContent"></div>
-				</div>
-			</div>
-			<div id="recipeSelector">
-				<div id="recipeSelectorTitle">Select a recipe</div>
-				<div id="recipeSelectorContent"></div>
-				<div class="closeButton" onclick="Conveyor.hideRecipeSelect()"></div>
-			</div>
 			<div id="container2" style="position: relative">
 				<canvas id="canvas" width="640" height="480"></canvas>
 				<div id="inventory2" class="noselect">
