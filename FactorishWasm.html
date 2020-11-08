@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 	<head>
-		<title>Conveyor</title>
+		<title>FactorishWasm</title>
 		<meta charset="utf-8">
 		<meta name="viewport" content="width=device-width, initial-scale=1.0">
 		<style>
@@ -136,13 +136,11 @@
 			}
 
 		</style>
-		<script src="xorshift.js"></script>
-		<script src="perlinNoise.js"></script>
 		<script type="module" src="./pkg/factorish_js.js"></script>
 	</head>
 	<body>
-		<h1>FactorishJS</h1>
-		<p style="font-size: 80%; font-style: italic">- Factorio-style base building game with HTML5+JavaScript -</p>
+		<h1>FactorishWasm</h1>
+		<p style="font-size: 80%; font-style: italic">- Factorio-style base building game with WebAssembly -</p>
 		Size:
 		<select id="sizeSelect">
 			<option>16</option>
@@ -173,13 +171,12 @@
 		</div>
 		<div id="points"></div>
 		<hr>
-		Auto Save Content: <textarea id="autoSaveText" cols="80" rows="10" type="text" value=""></textarea><br>
 		<input type="button" value="get state (Save)" onclick="document.getElementById('saveText').value = Conveyor.serialize()">
 		<input type="button" value="set state (Load)" onclick="Conveyor.deserialize(document.getElementById('saveText').value)">
 		<input id="saveText" type="text" value="">
 		<div id="mousecaptor" style="display: none; position: fixed; top: 0px; left: 0px; width: 100%; height: 100%; background-color: rgba(0,0,0,0)"></div>
 		<hr>
-		<p>Source on <a href="https://github.com/msakuta/FactorishJS">GitHub</a>.</p>
+		<p>Source on <a href="https://github.com/msakuta/FactorishWasm">GitHub</a>.</p>
 	</body>
 	<script type="module" src="./js/main.js"></script>
 </html>
