@@ -24,7 +24,7 @@ jobs:
       run: |
         wasm-pack build --target web &&
         rm pkg/.gitignore && # We don't want to ignore the products
-        mkdir -p dist && cp FactorishWasm.html dist/ && cp -r pkg dist/pkg
+        mkdir -p dist && cp FactorishWasm.html dist/ && cp -r pkg dist/pkg && cp -r img dist/img
     - name: Deploy
       uses: peaceiris/actions-gh-pages@v3
       with:
