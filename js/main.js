@@ -372,7 +372,7 @@ window.onload = async function(){
         function mousemove(evt){
             if(!pos)
                 return;
-            var containerElem = document.getElementById('container');
+            var containerElem = document.getElementById('container2');
             var cr = containerElem.getBoundingClientRect();
             var rel = [evt.screenX - pos[0], evt.screenY - pos[1]];
             pos = [evt.screenX, evt.screenY];
