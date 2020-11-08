@@ -8,6 +8,7 @@ import inserter from "../img/inserter-base.png";
 import direction from "../img/direction.png";
 import ore from "../img/ore.png";
 import coalOre from "../img/coal-ore.png";
+import rotateImage from "../img/rotate.png";
 
 
 import { FactorishState } from "../pkg/index.js";
@@ -173,7 +174,7 @@ window.onload = async function(){
     rotateButton.style.top = '4px';
     rotateButton.style.left = (32.0 * i + 4) + 'px';
     rotateButton.style.border = '1px blue solid';
-    rotateButton.style.backgroundImage = 'url("img/rotate.png")';
+    rotateButton.style.backgroundImage = `url(${rotateImage}`;
     rotateButton.onmousedown = function(e){
         rotate();
     }
