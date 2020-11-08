@@ -21,11 +21,12 @@ jobs:
         # Optional version of wasm-pack to install (eg. "v0.9.1", "latest")
         #version: # optional, default is latest
     - name: Build
-      run:
+      run: |
         wasm-pack build --target web &&
-        rm pkg/.gitignore # We don't want to ignore the products
+        rm pkg/.gitignore && # We don't want to ignore the products
+        mkdir -p dist && cp FactorishWasm.html dist/ && cp -r pkg dist/pkg
     - name: Deploy
       uses: peaceiris/actions-gh-pages@v3
       with:
         github_token: ${{ secrets.GITHUB_TOKEN }}
-        publish_dir: .
+        publish_dir: ./dist
