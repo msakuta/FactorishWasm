@@ -155,21 +155,21 @@ enum ItemResponse {
 
 type ItemResponseResult = (ItemResponse, Option<FrameProcResult>);
 
-type Inventory = HashMap<String, usize>;
+type Inventory = HashMap<ItemType, usize>;
 
 trait InventoryTrait {
-    fn remove_item(&mut self, item: &str) -> bool{
+    fn remove_item(&mut self, item: &ItemType) -> bool{
         self.remove_items(item, 1)
     }
-    fn remove_items(&mut self, item: &str, count: usize) -> bool;
-    fn add_item(&mut self, item: &str){
+    fn remove_items(&mut self, item: &ItemType, count: usize) -> bool;
+    fn add_item(&mut self, item: &ItemType){
         self.add_items(item, 1);
     }
-    fn add_items(&mut self, item: &str, count: usize);
+    fn add_items(&mut self, item: &ItemType, count: usize);
 }
 
 impl InventoryTrait for Inventory {
-    fn remove_items(&mut self, item: &str, count: usize) -> bool {
+    fn remove_items(&mut self, item: &ItemType, count: usize) -> bool {
         if let Some(entry) = self.get_mut(item) {
             if *entry <= count {
                 self.remove(item);
@@ -182,11 +182,11 @@ impl InventoryTrait for Inventory {
         }
     }
 
-    fn add_items(&mut self, item: &str, count: usize) {
+    fn add_items(&mut self, item: &ItemType, count: usize) {
         if let Some(entry) = self.get_mut(item) {
             *entry += count;
         } else {
-            self.insert(item.to_string(), count);
+            self.insert(*item, count);
         }
     }
 }
@@ -242,28 +242,28 @@ trait Structure {
 
 const tilesize: i32 = 32;
 struct ToolDef {
-    item_name: &'static str,
+    item_type: ItemType,
     image: &'static str,
 }
 const tool_defs: [ToolDef; 5] = [
     ToolDef {
-        item_name: "Transport Belt",
+        item_type: ItemType::TransportBelt,
         image: "img/transport.png",
     },
     ToolDef {
-        item_name: "Inserter",
+        item_type: ItemType::Inserter,
         image: "img/inserter-base.png",
     },
     ToolDef {
-        item_name: "Ore Mine",
+        item_type: ItemType::OreMine,
         image: "img/mine.png",
     },
     ToolDef {
-        item_name: "Chest",
+        item_type: ItemType::Chest,
         image: "img/chest.png",
     },
     ToolDef {
-        item_name: "Furnace",
+        item_type: ItemType::Furnace,
         image: "img/furnace.png",
     },
 ];
@@ -525,6 +525,12 @@ fn item_to_str(type_: &ItemType) -> String {
         ItemType::CopperOre => "Copper Ore".to_string(),
         ItemType::IronPlate => "Iron Plate".to_string(),
         ItemType::CopperPlate => "Copper Plate".to_string(),
+
+        ItemType::TransportBelt => "Transport Belt".to_string(),
+        ItemType::Chest => "Chest".to_string(),
+        ItemType::Inserter => "Inserter".to_string(),
+        ItemType::OreMine => "Ore Mine".to_string(),
+        ItemType::Furnace => "Furnace".to_string(),
     }
 }
 
@@ -565,14 +571,14 @@ impl Structure for Chest {
             "Items: \n{}",
             self.inventory
                 .iter()
-                .map(|item| format!("{}: {}<br>", item.0, item.1))
+                .map(|item| format!("{:?}: {}<br>", item.0, item.1))
                 .fold(String::from(""), |accum, item| accum + &item)
         )
     }
 
     fn item_response(&mut self, _item: &DropItem) -> Result<ItemResponseResult, ()> {
         if self.inventory.len() < CHEST_CAPACITY {
-            self.inventory.add_item(&item_to_str(&_item.type_));
+            self.inventory.add_item(&_item.type_);
             Ok((
                 ItemResponse::Consume,
                 Some(FrameProcResult::InventoryChanged(self.position)),
@@ -595,16 +601,16 @@ impl Structure for Chest {
     ) -> Result<(DropItem, Box<dyn FnOnce(&DropItem) + 'a>), ()> {
         if let Some(ref mut item) = self.inventory.iter_mut().next() {
             if 0 < *item.1 {
-                let item_name = item.0.clone();
+                let item_type = item.0.clone();
                 Ok((
                     DropItem {
                         id: state.serial_no,
-                        type_: str_to_item(&item.0).ok_or(())?,
+                        type_: *item.0,
                         x: position.x * 32,
                         y: position.y * 32,
                     },
                     Box::new(move |_| {
-                        self.inventory.remove_item(&item_name);
+                        self.inventory.remove_item(&item_type);
                     }),
                 ))
             } else {
@@ -900,7 +906,7 @@ impl Structure for Furnace {
                 "Items: \n{}",
                 self.inventory
                     .iter()
-                    .map(|item| format!("{}: {}<br>", item.0, item.1))
+                    .map(|item| format!("{:?}: {}<br>", item.0, item.1))
                     .fold(String::from(""), |accum, item| accum + &item)
             )
         )
@@ -914,12 +920,12 @@ impl Structure for Furnace {
         if let Some(recipe) = &self.recipe {
             let mut ret = FrameProcResult::None;
             // First, check if we need to refill the energy buffer in order to continue the current work.
-            if self.inventory.get("Coal Ore").is_some() {
+            if self.inventory.get(&ItemType::CoalOre).is_some() {
                 // Refill the energy from the fuel
                 if self.power < recipe.power_cost {
                     self.power += COAL_POWER;
                     self.max_power = self.power;
-                    self.inventory.remove_item("Coal Ore");
+                    self.inventory.remove_item(&ItemType::CoalOre);
                     ret = FrameProcResult::InventoryChanged(self.position);
                 }
             }
@@ -934,7 +940,7 @@ impl Structure for Furnace {
                     .input
                     .iter()
                     .map(|consume_item| {
-                        if let Some(entry) = self.inventory.get(&item_to_str(&consume_item.0)) {
+                        if let Some(entry) = self.inventory.get(&consume_item.0) {
                             *consume_item.1 <= *entry
                         } else {
                             false
@@ -950,12 +956,12 @@ impl Structure for Furnace {
 
                 // Consume inputs from inventory
                 for consume_item in &recipe.input {
-                    self.inventory.remove_item(&item_to_str(&consume_item.0));
+                    self.inventory.remove_item(&consume_item.0);
                 }
 
                 // Produce outputs into inventory
                 for output_item in &recipe.output {
-                    self.inventory.add_item(&item_to_str(&output_item.0));
+                    self.inventory.add_item(&output_item.0);
                 }
                 return Ok(FrameProcResult::InventoryChanged(self.position));
             } else {
@@ -1017,7 +1023,7 @@ impl Structure for Furnace {
 
         // Fuels are always welcome.
         if o.type_ == ItemType::CoalOre {
-            self.inventory.add_item(&item_to_str(&ItemType::CoalOre));
+            self.inventory.add_item(&ItemType::CoalOre);
             return Ok(());
         }
 
@@ -1033,7 +1039,7 @@ impl Structure for Furnace {
                     .find(|item| *item.0 == o.type_)
                     .is_some()
             {
-                self.inventory.add_item(&item_to_str(&o.type_));
+                self.inventory.add_item(&o.type_);
                 return Ok(());
             } else {
                 return Err(JsValue::from_str("Item is not part of recipe"))
@@ -1049,16 +1055,16 @@ impl Structure for Furnace {
     ) -> Result<(DropItem, Box<dyn FnOnce(&DropItem) + 'a>), ()> {
         if let Some(ref mut item) = self.inventory.iter_mut().next() {
             if 0 < *item.1 {
-                let item_name = item.0.clone();
+                let item_type = *item.0;
                 Ok((
                     DropItem {
                         id: state.serial_no,
-                        type_: str_to_item(&item.0).ok_or(())?,
+                        type_: *item.0,
                         x: position.x * 32,
                         y: position.y * 32,
                     },
                     Box::new(move |_| {
-                        self.inventory.remove_item(&item_name);
+                        self.inventory.remove_item(&item_type);
                     }),
                 ))
             } else {
@@ -1077,6 +1083,12 @@ enum ItemType {
     CopperOre,
     IronPlate,
     CopperPlate,
+
+    TransportBelt,
+    Chest,
+    Inserter,
+    OreMine,
+    Furnace,
 }
 
 const objsize: i32 = 8;
@@ -1104,17 +1116,17 @@ impl DropItem {
 
 struct Player {
     inventory: Inventory,
-    selected_item: Option<String>,
+    selected_item: Option<ItemType>,
 }
 
 impl Player {
-    fn add_item(&mut self, name: &str, count: usize) {
+    fn add_item(&mut self, name: &ItemType, count: usize) {
         self.inventory.add_items(name, count);
     }
 
-    fn select_item(&mut self, name: &str) -> Result<(), JsValue> {
+    fn select_item(&mut self, name: &ItemType) -> Result<(), JsValue> {
         if self.inventory.get(name).is_some() {
-            self.selected_item = Some(name.to_string());
+            self.selected_item = Some(*name);
             Ok(())
         } else {
             self.selected_item = None;
@@ -1134,7 +1146,7 @@ pub struct FactorishState {
     board: Vec<Cell>,
     structures: Vec<Box<dyn Structure>>,
     selected_structure_inventory: Option<Position>,
-    selected_structure_item: Option<String>,
+    selected_structure_item: Option<ItemType>,
     drop_items: Vec<DropItem>,
     serial_no: u32,
     selected_tool: Option<usize>,
@@ -1207,7 +1219,7 @@ impl FactorishState {
                     ("Furnace", 3usize),
                 ]
                 .iter()
-                .map(|(s, num)| (String::from(*s), *num))
+                .map(|(s, num)| (str_to_item(*s).unwrap(), *num))
                 .collect(),
                 selected_item: None,
             },
@@ -1541,7 +1553,7 @@ impl FactorishState {
             .enumerate()
             .find(|(_, structure)| structure.position() == position)
         {
-            self.player.inventory.add_item(structure.name());
+            self.player.inventory.add_item(&str_to_item(&structure.name()).ok_or_else(|| JsValue::from_str("wrong structure name"))?);
             if let Some(inventory) = structure.inventory() {
                 for (name, &count) in inventory {
                     self.player.add_item(name, count)
@@ -1557,34 +1569,35 @@ impl FactorishState {
         }
     }
 
-    /// Returns [[itemName, itemCount]*, selectedItemName]
-    pub fn get_player_inventory(&self) -> Result<js_sys::Array, JsValue> {
+    fn get_inventory(&self, inventory: &Inventory, selected_item: &Option<ItemType>) -> Result<js_sys::Array, JsValue> {
         Ok(js_sys::Array::of2(
             &JsValue::from(
-                self.player
-                    .inventory
+                inventory
                     .iter()
                     .map(|pair| {
                         js_sys::Array::of2(
-                            &JsValue::from_str(pair.0),
+                            &JsValue::from_str(&item_to_str(&pair.0)),
                             &JsValue::from_f64(*pair.1 as f64),
                         )
                     })
                     .collect::<js_sys::Array>(),
             ),
             &JsValue::from_str(
-                &self
-                    .player
-                    .selected_item
+                &selected_item
                     .as_ref()
-                    .map(|s| s as &str)
-                    .unwrap_or(&""),
+                    .map(|s| item_to_str(s))
+                    .unwrap_or("".to_string()),
             ),
         ))
     }
 
+    /// Returns [[itemName, itemCount]*, selectedItemName]
+    pub fn get_player_inventory(&self) -> Result<js_sys::Array, JsValue> {
+        self.get_inventory(&self.player.inventory, &self.player.selected_item)
+    }
+
     pub fn select_player_inventory(&mut self, name: &str) -> Result<(), JsValue> {
-        self.player.select_item(name)
+        self.player.select_item(&str_to_item(name).ok_or_else(|| JsValue::from_str("Item name not identified"))?)
     }
 
     pub fn open_structure_inventory(&mut self, c: i32, r: i32) -> Result<(), JsValue> {
@@ -1610,24 +1623,7 @@ impl FactorishState {
     pub fn get_structure_inventory(&self, c: i32, r: i32) -> Result<js_sys::Array, JsValue> {
         if let Some(structure) = self.find_structure_tile(&[c, r]) {
             if let Some(inventory) = structure.inventory() {
-                return Ok(js_sys::Array::of2(
-                    &inventory
-                        .iter()
-                        .map(|pair| {
-                            js_sys::Array::of2(
-                                &JsValue::from_str(pair.0),
-                                &JsValue::from_f64(*pair.1 as f64),
-                            )
-                        })
-                        .collect::<js_sys::Array>(),
-                    &JsValue::from_str(
-                        &self
-                            .selected_structure_item
-                            .as_ref()
-                            .map(|s| s as &str)
-                            .unwrap_or(&""),
-                    ),
-                ));
+                return self.get_inventory(inventory, &self.selected_structure_item);
             }
         }
         Err(JsValue::from_str(
@@ -1636,17 +1632,17 @@ impl FactorishState {
     }
 
     pub fn select_structure_inventory(&mut self, name: &str) -> Result<(), JsValue> {
-        self.selected_structure_item = Some(name.to_string());
+        self.selected_structure_item = Some(str_to_item(name).ok_or_else(|| JsValue::from("Item name not valid"))?);
         Ok(())
     }
 
     fn move_inventory_item(
         src: &mut Inventory,
         dst: &mut Inventory,
-        name: &str,
+        item_type: &ItemType,
     ) -> bool {
-        if let Some(src_item) = src.remove(name) {
-            dst.add_items(name, src_item);
+        if let Some(src_item) = src.remove(item_type) {
+            dst.add_items(item_type, src_item);
             true
         } else {
             false
@@ -1657,7 +1653,7 @@ impl FactorishState {
         if let Some(pos) = self.selected_structure_inventory {
             if let Some(idx) = self.find_structure_tile_idx(&[pos.x, pos.y]) {
                 if let Some(inventory) = self.structures[idx].inventory_mut() {
-                    let (src, dst, name) = if to_player {
+                    let (src, dst, item_name) = if to_player {
                         (
                             inventory,
                             &mut self.player.inventory,
@@ -1670,9 +1666,9 @@ impl FactorishState {
                             &self.player.selected_item,
                         )
                     };
-                    console_log!("moving {:?}", name);
-                    if let Some(name) = name {
-                        if FactorishState::move_inventory_item(src, dst, name) {
+                    console_log!("moving {:?}", item_name);
+                    if let Some(item_name) = item_name {
+                        if FactorishState::move_inventory_item(src, dst, item_name) {
                             self.on_player_update
                                 .call1(&window(), &JsValue::from(self.get_player_inventory()?))?;
                             return Ok(true);
@@ -1714,7 +1710,7 @@ impl FactorishState {
                 if let Some(count) = self
                     .player
                     .inventory
-                    .get(tool_defs[selected_tool].item_name)
+                    .get(&tool_defs[selected_tool].item_type)
                 {
                     if 1 <= *count {
                         self.harvest(&cursor)?;
@@ -1723,7 +1719,7 @@ impl FactorishState {
                         if let Some(count) = self
                             .player
                             .inventory
-                            .get_mut(tool_defs[selected_tool].item_name)
+                            .get_mut(&tool_defs[selected_tool].item_type)
                         {
                             *count -= 1;
                         }
@@ -1853,7 +1849,7 @@ impl FactorishState {
                     *self
                         .player
                         .inventory
-                        .get(tool_defs[selected_tool].item_name)
+                        .get(&tool_defs[selected_tool].item_type)
                         .unwrap_or(&0) as f64,
                 ),
             ]
@@ -1895,7 +1891,7 @@ impl FactorishState {
         tool_defs
             .iter()
             .map(|tool| {
-                JsValue::from(*self.player.inventory.get(tool.item_name).unwrap_or(&0) as f64)
+                JsValue::from(*self.player.inventory.get(&tool.item_type).unwrap_or(&0) as f64)
             })
             .collect()
     }
@@ -1958,6 +1954,12 @@ impl FactorishState {
                 ItemType::CopperOre => &self.image_copper_ore,
                 ItemType::IronPlate => &self.image_iron_plate,
                 ItemType::CopperPlate => &self.image_copper_plate,
+
+                ItemType::TransportBelt => &self.image_belt,
+                ItemType::Chest => &self.image_chest,
+                ItemType::Inserter => &self.image_inserter,
+                ItemType::OreMine => &self.image_mine,
+                ItemType::Furnace => &self.image_furnace,
             };
             if let Some(ref image) = img {
                 context.draw_image_with_image_bitmap(
