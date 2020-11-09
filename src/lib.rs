@@ -63,6 +63,8 @@ fn body() -> web_sys::HtmlElement {
     document().body().expect("document should have a body")
 }
 
+const COAL_POWER: f64 = 100.; // kilojoules
+
 #[derive(Copy, Clone)]
 struct Cell {
     iron_ore: u32,
@@ -184,6 +186,9 @@ trait Structure {
     fn item_response(&mut self, _item: &DropItem) -> Result<ItemResponseResult, ()> {
         Err(())
     }
+    fn input(&mut self, _o: &DropItem) -> Result<(), JsValue> {
+        Err(JsValue::from_str("Not supported"))
+    }
     fn output<'a>(
         &'a mut self,
         _state: &mut FactorishState,
@@ -204,7 +209,7 @@ struct ToolDef {
     item_name: &'static str,
     image: &'static str,
 }
-const tool_defs: [ToolDef; 4] = [
+const tool_defs: [ToolDef; 5] = [
     ToolDef {
         item_name: "Transport Belt",
         image: "img/transport.png",
@@ -220,6 +225,10 @@ const tool_defs: [ToolDef; 4] = [
     ToolDef {
         item_name: "Chest",
         image: "img/chest.png",
+    },
+    ToolDef {
+        item_name: "Furnace",
+        image: "img/furnace.png",
     },
 ];
 
@@ -374,18 +383,19 @@ impl Structure for Inserter {
             let input_position = self.position.add(self.rotation.delta_inv());
             let output_position = self.position.add(self.rotation.delta());
 
-            let mut try_output = |state: &mut FactorishState, type_| -> bool {
-                if let Some(structure_idx) =
-                    state.find_structure_tile_idx(&[output_position.x, output_position.y])
+            let mut try_output = |state: &mut FactorishState, structures: &mut dyn Iterator<Item = &mut Box<dyn Structure>>, type_| -> bool {
+                if let Some((structure_idx, structure)) =
+                    structures.enumerate().find(|(_idx, structure)| *structure.position() == output_position)
                 {
                     console_log!(
-                        "found structure to output: {}, {}, {}",
+                        "found structure to output[{}]: {}, {}, {}",
+                        structure_idx,
+                        structure.name(),
                         output_position.x,
-                        output_position.y,
-                        structure_idx
+                        output_position.y
                     );
-                    state.structures[structure_idx]
-                        .item_response(&DropItem::new(
+                    structure
+                        .input(&DropItem::new(
                             &mut state.serial_no,
                             type_,
                             output_position.x,
@@ -402,7 +412,7 @@ impl Structure for Inserter {
             };
 
             if let Some(&DropItem { type_, id, .. }) = state.find_item(&input_position) {
-                if try_output(state, type_) {
+                if try_output(state, structures, type_) {
                     state.remove_item(id);
                 } else {
                     console_log!("fail output_object: {:?}", type_);
@@ -412,7 +422,7 @@ impl Structure for Inserter {
             }) {
                 // console_log!("outputting from a structure at {:?}", structure.position());
                 if let Ok((item, callback)) = structure.output(state, &output_position) {
-                    if try_output(state, item.type_) {
+                    if try_output(state, structures, item.type_) {
                         callback(&item);
                         if let Some(pos) = state.selected_structure_inventory {
                             if pos == input_position {
@@ -527,6 +537,10 @@ impl Structure for Chest {
         } else {
             Err(())
         }
+    }
+
+    fn input(&mut self, o: &DropItem) -> Result<(), JsValue> {
+        self.item_response(o).map(|_| ()).map_err(|_| JsValue::from_str("ItemResponse failed"))
     }
 
     fn output<'a>(
@@ -754,7 +768,226 @@ impl Structure for OreMine {
     }
 }
 
-#[derive(Copy, Clone, Eq, PartialEq, Debug)]
+
+struct Furnace {
+    position: Position,
+    inventory: HashMap<String, usize>,
+    progress: f64,
+    power: f64,
+    max_power: f64,
+    recipe: Option<Recipe>,
+}
+
+impl Furnace {
+    fn new(position: &Position) -> Self {
+        Furnace {
+            position: *position,
+            inventory: HashMap::new(),
+            progress: 0.,
+            power: 20.,
+            max_power: 20.,
+            recipe: None,
+        }
+    }
+}
+
+impl Structure for Furnace {
+    fn name(&self) -> &str {
+        "Furnace"
+    }
+
+    fn position(&self) -> &Position {
+        &self.position
+    }
+
+    fn draw(
+        &self,
+        state: &FactorishState,
+        context: &CanvasRenderingContext2d,
+    ) -> Result<(), JsValue> {
+        let (x, y) = (self.position.x as f64 * 32., self.position.y as f64 * 32.);
+        match state.image_furnace.as_ref() {
+            Some(img) => {
+                context.draw_image_with_image_bitmap_and_sw_and_sh_and_dx_and_dy_and_dw_and_dh(img, 0., 0., 32., 32., x, y, 32., 32.)?;
+            }
+            None => return Err(JsValue::from_str("furnace image not available")),
+        }
+
+        Ok(())
+    }
+
+    fn desc(&self, _state: &FactorishState) -> String {
+        format!("{}<br>{}",
+            if self.recipe.is_some() {
+                // Progress bar
+                format!("{}{}{}{}",
+                    format!("Progress: {:.0}%<br>", self.progress * 100.),
+                    "<div style='position: relative; width: 100px; height: 10px; background-color: #001f1f; margin: 2px; border: 1px solid #3f3f3f'>",
+                    format!("<div style='position: absolute; width: {}px; height: 10px; background-color: #ff00ff'></div></div>",
+                        self.progress * 100.),
+                    format!(r#"Power: {:.1}kJ <div style='position: relative; width: 100px; height: 10px; background-color: #001f1f; margin: 2px; border: 1px solid #3f3f3f'>
+                    <div style='position: absolute; width: {}px; height: 10px; background-color: #ff00ff'></div></div>"#,
+                    self.power,
+                    if 0. < self.max_power { (self.power) / self.max_power * 100. } else { 0. }),
+                    )
+            // getHTML(generateItemImage("time", true, this.recipe.time), true) + "<br>" +
+            // "Outputs: <br>" +
+            // getHTML(generateItemImage(this.recipe.output, true, 1), true) + "<br>";
+            } else {
+                String::from("No recipe")
+            },
+        format!(
+            "Items: \n{}",
+            self.inventory
+                .iter()
+                .map(|item| format!("{}: {}<br>", item.0, item.1))
+                .fold(String::from(""), |accum, item| accum + &item)
+        ))
+    }
+
+    fn frame_proc(&mut self, _state: &mut FactorishState, _structures: &mut dyn Iterator<Item = &mut Box<dyn Structure>>) -> Result<FrameProcResult, ()> {
+        if let Some(recipe) = &self.recipe {
+            let mut ret = FrameProcResult::None;
+            // First, check if we need to refill the energy buffer in order to continue the current work.
+            if let Some(entry) = self.inventory.get_mut("Coal Ore") {
+                // Refill the energy from the fuel
+                if self.power < recipe.power_cost {
+                    self.power += COAL_POWER;
+                    self.max_power = self.power;
+                    *entry -= 1;
+                    if *entry == 0 {
+                        self.inventory.remove("Coal Ore");
+                    }
+                    ret = FrameProcResult::InventoryChanged(self.position);
+                }
+            }
+
+            // Proceed only if we have sufficient energy in the buffer.
+            let progress = (self.power / recipe.power_cost).min(1. / recipe.recipe_time).min(1.);
+            if 1. <= self.progress + progress {
+                self.progress = 0.;
+                let has_ingredients = recipe.input.iter().map(|consume_item| {
+                    if let Some(entry) = self.inventory.get(&item_to_str(&consume_item.0)) {
+                        *consume_item.1 <= *entry
+                    } else {
+                        false
+                    }
+                }).all(|v| v);
+
+                // First, check if we have enough ingredients to finish this recipe.
+                if !has_ingredients {
+                    self.recipe = None;
+                    return Ok(FrameProcResult::None);
+                }
+
+                // Consume inputs from inventory
+                for consume_item in &recipe.input {
+                    let entry = self.inventory.get_mut(&item_to_str(&consume_item.0)).unwrap();
+                    *entry -= *consume_item.1;
+                    if *entry == 0 {
+                        self.inventory.remove(&item_to_str(&consume_item.0));
+                    }
+                }
+
+                // Produce outputs into inventory
+                for output_item in &recipe.output {
+                    if let Some(entry) = self.inventory.get_mut(&item_to_str(&output_item.0)) {
+                        *entry += output_item.1;
+                    } else {
+                        self.inventory.insert(item_to_str(&output_item.0), *output_item.1);
+                    }
+                }
+                return Ok(FrameProcResult::InventoryChanged(self.position))
+            } else {
+                self.progress += progress;
+                self.power -= progress * recipe.power_cost;
+            }
+            return Ok(ret);
+        }
+        Ok(FrameProcResult::None)
+    }
+
+    fn inventory(&self) -> Option<&HashMap<String, usize>> {
+        Some(&self.inventory)
+    }
+
+    fn inventory_mut(&mut self) -> Option<&mut HashMap<String, usize>> {
+        Some(&mut self.inventory)
+    }
+
+    fn input(&mut self, o: &DropItem) -> Result<(), JsValue> {
+        if self.recipe.is_none() {
+            match o.type_ {
+                ItemType::IronOre => {
+                    self.recipe = Some(Recipe{
+                        input: [(ItemType::IronOre, 1usize)].iter().map(|(k,v)| (*k, *v)).collect(),
+                        output: [(ItemType::IronPlate, 1usize)].iter().map(|(k,v)| (*k, *v)).collect(),
+                        power_cost: 20.,
+                        recipe_time: 50.,
+                    });
+                }
+                ItemType::CopperOre => {
+                    self.recipe = Some(Recipe{
+                        input: [(ItemType::CopperOre, 1usize)].iter().map(|(k,v)| (*k, *v)).collect(),
+                        output: [(ItemType::CopperPlate, 1usize)].iter().map(|(k,v)| (*k, *v)).collect(),
+                        power_cost: 20.,
+                        recipe_time: 50.,
+                    });
+                }
+                _ => return Err(JsValue::from_str(&format!("Cannot smelt {}", item_to_str(&o.type_)))),
+            }
+        }
+
+        // Fuels are always welcome.
+        if o.type_ == ItemType::CoalOre {
+            if let Some(entry) = self.inventory.get_mut(&item_to_str(&ItemType::CoalOre)) {
+                *entry += 1;
+            } else {
+                self.inventory.insert(item_to_str(&o.type_), 1usize);
+            }
+        }
+
+        if let Some(recipe) = &self.recipe {
+            if recipe.input.iter().find(|item| *item.0 == o.type_).is_some() ||
+                recipe.output.iter().find(|item| *item.0 == o.type_).is_some() {
+                    if let Some(entry) = self.inventory.get_mut(&item_to_str(&o.type_)) {
+                        *entry += 1;
+                    } else {
+                        self.inventory.insert(item_to_str(&o.type_), 1usize);
+                    }
+                }
+        }
+        Ok(())
+    }
+
+    fn output<'a>(&'a mut self, state: &mut FactorishState, position: &Position) -> Result<(DropItem, Box<dyn FnOnce(&DropItem) + 'a>), ()> {
+        if let Some(ref mut item) = self.inventory.iter_mut().next() {
+            if 0 < *item.1 {
+                let item_name = item.0.clone();
+                Ok((
+                    DropItem {
+                        id: state.serial_no,
+                        type_: str_to_item(&item.0).ok_or(())?,
+                        x: position.x * 32,
+                        y: position.y * 32,
+                    },
+                    Box::new(move |_| {
+                        if let Some(item) = self.inventory.iter_mut().find(|it| *it.0 == item_name)
+                        {
+                            *item.1 -= 1
+                        }
+                    }),
+                ))
+            } else {
+                Err(())
+            }
+        } else {
+            Err(())
+        }
+    }
+}
+
+
 #[derive(Copy, Clone, Eq, PartialEq, Debug, Hash)]
 enum ItemType {
     IronOre,
@@ -893,6 +1126,7 @@ impl FactorishState {
                     ("Inserter", 5usize),
                     ("Ore Mine", 5usize),
                     ("Chest", 3usize),
+                    ("Furnace", 3usize),
                 ]
                 .iter()
                 .map(|(s, num)| (String::from(*s), *num))
