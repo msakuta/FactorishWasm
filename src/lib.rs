@@ -155,6 +155,8 @@ enum ItemResponse {
 
 type ItemResponseResult = (ItemResponse, Option<FrameProcResult>);
 
+type Inventory = HashMap<String, usize>;
+
 trait Structure {
     fn name(&self) -> &str;
     fn position(&self) -> &Position;
@@ -196,10 +198,10 @@ trait Structure {
     ) -> Result<(DropItem, Box<dyn FnOnce(&DropItem) + 'a>), ()> {
         Err(())
     }
-    fn inventory(&self) -> Option<&HashMap<String, usize>> {
+    fn inventory(&self) -> Option<&Inventory> {
         None
     }
-    fn inventory_mut(&mut self) -> Option<&mut HashMap<String, usize>> {
+    fn inventory_mut(&mut self) -> Option<&mut Inventory> {
         None
     }
 }
@@ -463,14 +465,14 @@ const CHEST_CAPACITY: usize = 100;
 
 struct Chest {
     position: Position,
-    inventory: HashMap<String, usize>,
+    inventory: Inventory,
 }
 
 impl Chest {
     fn new(position: &Position) -> Self {
         Chest {
             position: *position,
-            inventory: HashMap::new(),
+            inventory: Inventory::new(),
         }
     }
 }
@@ -579,11 +581,11 @@ impl Structure for Chest {
         }
     }
 
-    fn inventory(&self) -> Option<&HashMap<String, usize>> {
+    fn inventory(&self) -> Option<&Inventory> {
         Some(&self.inventory)
     }
 
-    fn inventory_mut(&mut self) -> Option<&mut HashMap<String, usize>> {
+    fn inventory_mut(&mut self) -> Option<&mut Inventory> {
         Some(&mut self.inventory)
     }
 }
@@ -787,7 +789,7 @@ impl Structure for OreMine {
 
 struct Furnace {
     position: Position,
-    inventory: HashMap<String, usize>,
+    inventory: Inventory,
     progress: f64,
     power: f64,
     max_power: f64,
@@ -798,7 +800,7 @@ impl Furnace {
     fn new(position: &Position) -> Self {
         Furnace {
             position: *position,
-            inventory: HashMap::new(),
+            inventory: Inventory::new(),
             progress: 0.,
             power: 20.,
             max_power: 20.,
@@ -946,11 +948,11 @@ impl Structure for Furnace {
         Ok(FrameProcResult::None)
     }
 
-    fn inventory(&self) -> Option<&HashMap<String, usize>> {
+    fn inventory(&self) -> Option<&Inventory> {
         Some(&self.inventory)
     }
 
-    fn inventory_mut(&mut self) -> Option<&mut HashMap<String, usize>> {
+    fn inventory_mut(&mut self) -> Option<&mut Inventory> {
         Some(&mut self.inventory)
     }
 
@@ -1089,7 +1091,7 @@ impl DropItem {
 }
 
 struct Player {
-    inventory: HashMap<String, usize>,
+    inventory: Inventory,
     selected_item: Option<String>,
 }
 
