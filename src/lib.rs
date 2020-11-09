@@ -158,11 +158,11 @@ type ItemResponseResult = (ItemResponse, Option<FrameProcResult>);
 type Inventory = HashMap<ItemType, usize>;
 
 trait InventoryTrait {
-    fn remove_item(&mut self, item: &ItemType) -> bool{
+    fn remove_item(&mut self, item: &ItemType) -> bool {
         self.remove_items(item, 1)
     }
     fn remove_items(&mut self, item: &ItemType, count: usize) -> bool;
-    fn add_item(&mut self, item: &ItemType){
+    fn add_item(&mut self, item: &ItemType) {
         self.add_items(item, 1);
     }
     fn add_items(&mut self, item: &ItemType, count: usize);
@@ -442,12 +442,13 @@ impl Structure for Inserter {
                             output_position.x,
                             output_position.y,
                         ))
-                        .is_ok() {
-                            ret = FrameProcResult::InventoryChanged(output_position);
-                            true
-                        } else {
-                            false
-                        }
+                        .is_ok()
+                    {
+                        ret = FrameProcResult::InventoryChanged(output_position);
+                        true
+                    } else {
+                        false
+                    }
                 } else if let Ok(()) = state.new_object(output_position.x, output_position.y, type_)
                 {
                     self.cooldown += 20.;
@@ -1052,7 +1053,7 @@ impl Structure for Furnace {
                 self.inventory.add_item(&o.type_);
                 return Ok(());
             } else {
-                return Err(JsValue::from_str("Item is not part of recipe"))
+                return Err(JsValue::from_str("Item is not part of recipe"));
             }
         }
         Err(JsValue::from_str("Recipe is not initialized"))
@@ -1563,8 +1564,11 @@ impl FactorishState {
             .enumerate()
             .find(|(_, structure)| structure.position() == position)
         {
-            self.player.inventory.add_item(&str_to_item(&structure.name()).ok_or_else(
-                || JsValue::from_str(&format!("wrong structure name: {:?}", structure.name())))?);
+            self.player
+                .inventory
+                .add_item(&str_to_item(&structure.name()).ok_or_else(|| {
+                    JsValue::from_str(&format!("wrong structure name: {:?}", structure.name()))
+                })?);
             if let Some(inventory) = structure.inventory() {
                 for (name, &count) in inventory {
                     self.player.add_item(name, count)
@@ -1580,7 +1584,11 @@ impl FactorishState {
         }
     }
 
-    fn get_inventory(&self, inventory: &Inventory, selected_item: &Option<ItemType>) -> Result<js_sys::Array, JsValue> {
+    fn get_inventory(
+        &self,
+        inventory: &Inventory,
+        selected_item: &Option<ItemType>,
+    ) -> Result<js_sys::Array, JsValue> {
         Ok(js_sys::Array::of2(
             &JsValue::from(
                 inventory
@@ -1608,7 +1616,9 @@ impl FactorishState {
     }
 
     pub fn select_player_inventory(&mut self, name: &str) -> Result<(), JsValue> {
-        self.player.select_item(&str_to_item(name).ok_or_else(|| JsValue::from_str("Item name not identified"))?)
+        self.player.select_item(
+            &str_to_item(name).ok_or_else(|| JsValue::from_str("Item name not identified"))?,
+        )
     }
 
     pub fn open_structure_inventory(&mut self, c: i32, r: i32) -> Result<(), JsValue> {
@@ -1643,15 +1653,12 @@ impl FactorishState {
     }
 
     pub fn select_structure_inventory(&mut self, name: &str) -> Result<(), JsValue> {
-        self.selected_structure_item = Some(str_to_item(name).ok_or_else(|| JsValue::from("Item name not valid"))?);
+        self.selected_structure_item =
+            Some(str_to_item(name).ok_or_else(|| JsValue::from("Item name not valid"))?);
         Ok(())
     }
 
-    fn move_inventory_item(
-        src: &mut Inventory,
-        dst: &mut Inventory,
-        item_type: &ItemType,
-    ) -> bool {
+    fn move_inventory_item(src: &mut Inventory, dst: &mut Inventory, item_type: &ItemType) -> bool {
         if let Some(src_item) = src.remove(item_type) {
             dst.add_items(item_type, src_item);
             true
