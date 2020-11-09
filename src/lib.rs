@@ -914,7 +914,7 @@ impl Structure for Furnace {
         if let Some(recipe) = &self.recipe {
             let mut ret = FrameProcResult::None;
             // First, check if we need to refill the energy buffer in order to continue the current work.
-            if self.inventory.get_mut("Coal Ore").is_some() {
+            if self.inventory.get("Coal Ore").is_some() {
                 // Refill the energy from the fuel
                 if self.power < recipe.power_cost {
                     self.power += COAL_POWER;
@@ -1541,13 +1541,7 @@ impl FactorishState {
             .enumerate()
             .find(|(_, structure)| structure.position() == position)
         {
-            if let Some(count) = self.player.inventory.get_mut(structure.name()) {
-                *count += 1;
-            } else {
-                self.player
-                    .inventory
-                    .insert(structure.name().to_string(), 1);
-            }
+            self.player.inventory.add_item(structure.name());
             if let Some(inventory) = structure.inventory() {
                 for (name, &count) in inventory {
                     self.player.add_item(name, count)
@@ -1647,20 +1641,16 @@ impl FactorishState {
     }
 
     fn move_inventory_item(
-        src: &mut HashMap<String, usize>,
-        dst: &mut HashMap<String, usize>,
+        src: &mut Inventory,
+        dst: &mut Inventory,
         name: &str,
     ) -> bool {
-        if let Some(src_item) = src.get(name) {
-            if let Some(dest_item) = dst.get_mut(name) {
-                *dest_item += *src_item;
-            } else {
-                dst.insert(name.to_string(), *src_item);
-            }
-            src.remove(name);
-            return true;
+        if let Some(src_item) = src.remove(name) {
+            dst.add_items(name, src_item);
+            true
+        } else {
+            false
         }
-        false
     }
 
     pub fn move_selected_inventory_item(&mut self, to_player: bool) -> Result<bool, JsValue> {
