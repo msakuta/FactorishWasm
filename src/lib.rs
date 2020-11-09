@@ -67,6 +67,7 @@ fn body() -> web_sys::HtmlElement {
 struct Cell {
     iron_ore: u32,
     coal_ore: u32,
+    copper_ore: u32,
 }
 
 #[derive(Eq, PartialEq, Copy, Clone, Debug)]
@@ -464,6 +465,9 @@ fn item_to_str(type_: &ItemType) -> String {
     match type_ {
         ItemType::IronOre => "Iron Ore".to_string(),
         ItemType::CoalOre => "Coal Ore".to_string(),
+        ItemType::CopperOre => "Copper Ore".to_string(),
+        ItemType::IronPlate => "Iron Plate".to_string(),
+        ItemType::CopperPlate => "Copper Plate".to_string(),
     }
 }
 
@@ -564,8 +568,11 @@ impl Structure for Chest {
     }
 }
 
+type ItemSet = HashMap<ItemType, usize>;
+
 struct Recipe {
-    item_type: ItemType,
+    input: ItemSet,
+    output: ItemSet,
     power_cost: f64,
     recipe_time: f64,
 }
@@ -656,13 +663,22 @@ impl Structure for OreMine {
         if self.recipe.is_none() {
             if 0 < tile.iron_ore {
                 self.recipe = Some(Recipe {
-                    item_type: ItemType::IronOre,
+                    input: HashMap::new(),
+                    output: [(ItemType::IronOre, 1usize)].iter().map(|(k,v)| (*k, *v)).collect(),
                     power_cost: 0.1,
                     recipe_time: 80.,
                 });
             } else if 0 < tile.coal_ore {
                 self.recipe = Some(Recipe {
-                    item_type: ItemType::CoalOre,
+                    input: HashMap::new(),
+                    output: [(ItemType::CoalOre, 1usize)].iter().map(|(k,v)| (*k, *v)).collect(),
+                    power_cost: 0.1,
+                    recipe_time: 80.,
+                });
+            } else if 0 < tile.copper_ore {
+                self.recipe = Some(Recipe {
+                    input: HashMap::new(),
+                    output: [(ItemType::CopperOre, 1usize)].iter().map(|(k,v)| (*k, *v)).collect(),
                     power_cost: 0.1,
                     recipe_time: 80.,
                 });
@@ -687,18 +703,26 @@ impl Structure for OreMine {
                 let output_position = self.position.add(self.rotation.delta());
                 if !state.hit_check(output_position.x, output_position.y, None) {
                     // let dest_tile = state.board[dx as usize + dy as usize * state.width as usize];
-                    if let Err(_code) =
-                        state.new_object(output_position.x, output_position.y, recipe.item_type)
-                    {
-                        // console_log!("Failed to create object: {:?}", code);
-                    } else {
-                        if let Some(tile) = state.tile_at_mut(&[self.position.x, self.position.y]) {
-                            self.cooldown = recipe.recipe_time;
-                            match recipe.item_type {
-                                ItemType::IronOre => tile.iron_ore -= 1,
-                                ItemType::CoalOre => tile.coal_ore -= 1,
+                    let mut it = recipe.output.iter();
+                    if let Some(item) = it.next() {
+                        if let Err(_code) =
+                            state.new_object(output_position.x, output_position.y, *item.0)
+                        {
+                            // console_log!("Failed to create object: {:?}", code);
+                        } else {
+                            if let Some(tile) = state.tile_at_mut(&[self.position.x, self.position.y]) {
+                                self.cooldown = recipe.recipe_time;
+                                match *item.0 {
+                                    ItemType::IronOre => tile.iron_ore -= 1,
+                                    ItemType::CoalOre => tile.coal_ore -= 1,
+                                    ItemType::CopperOre => tile.copper_ore -= 1,
+                                    _ => (),
+                                }
                             }
                         }
+                        assert!(it.next().is_none());
+                    } else {
+                        return Err(())
                     }
                 }
             } else {
@@ -731,9 +755,13 @@ impl Structure for OreMine {
 }
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
+#[derive(Copy, Clone, Eq, PartialEq, Debug, Hash)]
 enum ItemType {
     IronOre,
     CoalOre,
+    CopperOre,
+    IronPlate,
+    CopperPlate,
 }
 
 const objsize: i32 = 8;
@@ -810,13 +838,18 @@ pub struct FactorishState {
     image_dirt: Option<ImageBitmap>,
     image_ore: Option<ImageBitmap>,
     image_coal: Option<ImageBitmap>,
+    image_copper: Option<ImageBitmap>,
     image_belt: Option<ImageBitmap>,
     image_chest: Option<ImageBitmap>,
     image_mine: Option<ImageBitmap>,
+    image_furnace: Option<ImageBitmap>,
     image_inserter: Option<ImageBitmap>,
     image_direction: Option<ImageBitmap>,
     image_iron_ore: Option<ImageBitmap>,
     image_coal_ore: Option<ImageBitmap>,
+    image_copper_ore: Option<ImageBitmap>,
+    image_iron_plate: Option<ImageBitmap>,
+    image_copper_plate: Option<ImageBitmap>,
 }
 
 #[derive(Debug)]
@@ -870,18 +903,24 @@ impl FactorishState {
             image_dirt: None,
             image_ore: None,
             image_coal: None,
+            image_copper: None,
             image_belt: None,
             image_chest: None,
             image_mine: None,
+            image_furnace: None,
             image_inserter: None,
             image_direction: None,
             image_iron_ore: None,
             image_coal_ore: None,
+            image_copper_ore: None,
+            image_iron_plate: None,
+            image_copper_plate: None,
             board: {
                 let mut ret = vec![
                     Cell {
                         iron_ore: 0,
-                        coal_ore: 0
+                        coal_ore: 0,
+                        copper_ore: 0,
                     };
                     (width * height) as usize
                 ];
@@ -889,11 +928,14 @@ impl FactorishState {
                     for x in 0..width {
                         let [fx, fy] = [x as f64, y as f64];
                         let iron = (perlin_noise_pixel(fx, fy, 8) * 4000. - 3000.).max(0.) as u32;
+                        let copper = (perlin_noise_pixel(fx, fy, 9) * 4000. - 3000.).max(0.) as u32;
                         let coal = (perlin_noise_pixel(fx, fy, 10) * 2000. - 1500.).max(0.) as u32;
-                        if iron < coal {
-                            ret[(x + y * width) as usize].coal_ore = coal;
-                        } else if 0 < iron {
-                            ret[(x + y * width) as usize].iron_ore = iron;
+
+                        match [iron, copper, coal].iter().enumerate().max_by_key(|v| v.1) {
+                            Some((0, _)) => ret[(x + y * width) as usize].coal_ore = coal,
+                            Some((1, _)) => ret[(x + y * width) as usize].copper_ore = copper,
+                            Some((2, _)) => ret[(x + y * width) as usize].iron_ore = iron,
+                            _ => (),
                         }
                     }
                 }
@@ -1115,8 +1157,9 @@ impl FactorishState {
                             format!(
                                 r#"Empty tile<br>
                                 Iron Ore: {}<br>
-                                Coal Ore: {}"#,
-                                cell.iron_ore, cell.coal_ore
+                                Coal Ore: {}<br>
+                                Copper Ore: {}"#,
+                                cell.iron_ore, cell.coal_ore, cell.copper_ore
                             )
                         },
                     );
@@ -1348,7 +1391,8 @@ impl FactorishState {
             0 => Box::new(TransportBelt::new(cursor.x, cursor.y, self.tool_rotation)),
             1 => Box::new(Inserter::new(cursor.x, cursor.y, self.tool_rotation)),
             2 => Box::new(OreMine::new(cursor.x, cursor.y, self.tool_rotation)),
-            _ => Box::new(Chest::new(cursor)),
+            3 => Box::new(Chest::new(cursor)),
+            _ => Box::new(Furnace::new(cursor)),
         })
     }
 
@@ -1476,13 +1520,18 @@ impl FactorishState {
         self.image_dirt = Some(load_image("dirt")?);
         self.image_ore = Some(load_image("iron")?);
         self.image_coal = Some(load_image("coal")?);
+        self.image_copper = Some(load_image("copper")?);
         self.image_belt = Some(load_image("transport")?);
         self.image_chest = Some(load_image("chest")?);
         self.image_mine = Some(load_image("mine")?);
+        self.image_furnace = Some(load_image("furnace")?);
         self.image_inserter = Some(load_image("inserter")?);
         self.image_direction = Some(load_image("direction")?);
         self.image_iron_ore = Some(load_image("ore")?);
         self.image_coal_ore = Some(load_image("coalOre")?);
+        self.image_copper_ore = Some(load_image("copperOre")?);
+        self.image_iron_plate = Some(load_image("ironPlate")?);
+        self.image_copper_plate = Some(load_image("copperPlate")?);
         Ok(())
     }
 
@@ -1559,8 +1608,9 @@ impl FactorishState {
             .as_ref()
             .zip(self.image_ore.as_ref())
             .zip(self.image_coal.as_ref())
+            .zip(self.image_copper.as_ref())
         {
-            Some(((img, img_ore), img_coal)) => {
+            Some((((img, img_ore), img_coal), img_copper)) => {
                 for y in 0..self.viewport_height as u32 / 32 {
                     for x in 0..self.viewport_width as u32 / 32 {
                         context.draw_image_with_image_bitmap(
@@ -1579,6 +1629,7 @@ impl FactorishState {
                         };
                         draw_ore(self.board[(x + y * self.width) as usize].iron_ore, img_ore)?;
                         draw_ore(self.board[(x + y * self.width) as usize].coal_ore, img_coal)?;
+                        draw_ore(self.board[(x + y * self.width) as usize].copper_ore, img_copper)?;
                     }
                 }
                 // console_log!(
@@ -1596,25 +1647,19 @@ impl FactorishState {
         }
 
         for item in &self.drop_items {
-            match item.type_ {
-                ItemType::IronOre => {
-                    if let Some(ref img_iron_ore) = self.image_iron_ore {
-                        context.draw_image_with_image_bitmap(
-                            img_iron_ore,
-                            item.x as f64 - 8.,
-                            item.y as f64 - 8.,
-                        )?;
-                    }
-                }
-                ItemType::CoalOre => {
-                    if let Some(ref img_coal_ore) = self.image_coal_ore {
-                        context.draw_image_with_image_bitmap(
-                            img_coal_ore,
-                            item.x as f64 - 8.,
-                            item.y as f64 - 8.,
-                        )?;
-                    }
-                }
+            let img = match item.type_ {
+                ItemType::IronOre => &self.image_iron_ore,
+                ItemType::CoalOre => &self.image_coal_ore,
+                ItemType::CopperOre => &self.image_copper_ore,
+                ItemType::IronPlate => &self.image_iron_plate,
+                ItemType::CopperPlate => &self.image_copper_plate,
+            };
+            if let Some(ref image) = img {
+                context.draw_image_with_image_bitmap(
+                    image,
+                    item.x as f64 - 8.,
+                    item.y as f64 - 8.,
+                )?;
             }
         }
 

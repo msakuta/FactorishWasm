@@ -2,6 +2,7 @@ import time from "../img/time.png";
 import dirt from "../img/dirt.png";
 import iron from "../img/iron.png";
 import coal from "../img/coal.png";
+import copper from "../img/copper.png";
 import transport from "../img/transport.png";
 import splitter from "../img/splitter.png";
 import chest from "../img/chest.png";
@@ -45,13 +46,18 @@ function isIE(){
         ["dirt", dirt],
         ["iron", iron],
         ["coal", coal],
+        ["copper", copper],
         ["transport", transport],
         ["chest", chest],
         ["mine", mine],
+        ["furnace", furnace],
         ["inserter", inserter],
         ["direction", direction],
         ["ore", ore],
         ["coalOre", coalOre],
+        ["ironPlate", ironPlate],
+        ["copperOre", copperOre],
+        ["copperPlate", copperPlate],
     ].map(async ([name, src]) => {
         const res = await fetch(src);
         return [name, await createImageBitmap(await res.blob())];
