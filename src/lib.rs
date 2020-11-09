@@ -157,6 +157,40 @@ type ItemResponseResult = (ItemResponse, Option<FrameProcResult>);
 
 type Inventory = HashMap<String, usize>;
 
+trait InventoryTrait {
+    fn remove_item(&mut self, item: &str) -> bool{
+        self.remove_items(item, 1)
+    }
+    fn remove_items(&mut self, item: &str, count: usize) -> bool;
+    fn add_item(&mut self, item: &str){
+        self.add_items(item, 1);
+    }
+    fn add_items(&mut self, item: &str, count: usize);
+}
+
+impl InventoryTrait for Inventory {
+    fn remove_items(&mut self, item: &str, count: usize) -> bool {
+        if let Some(entry) = self.get_mut(item) {
+            if *entry <= count {
+                self.remove(item);
+            } else {
+                *entry -= count;
+            }
+            true
+        } else {
+            false
+        }
+    }
+
+    fn add_items(&mut self, item: &str, count: usize) {
+        if let Some(entry) = self.get_mut(item) {
+            *entry += count;
+        } else {
+            self.insert(item.to_string(), count);
+        }
+    }
+}
+
 trait Structure {
     fn name(&self) -> &str;
     fn position(&self) -> &Position;
@@ -384,6 +418,7 @@ impl Structure for Inserter {
             self.cooldown = 0.;
             let input_position = self.position.add(self.rotation.delta_inv());
             let output_position = self.position.add(self.rotation.delta());
+            let mut ret = FrameProcResult::None;
 
             let mut try_output = |state: &mut FactorishState,
                                   structures: &mut dyn Iterator<Item = &mut Box<dyn Structure>>,
@@ -400,14 +435,19 @@ impl Structure for Inserter {
                         output_position.x,
                         output_position.y
                     );
-                    structure
+                    if structure
                         .input(&DropItem::new(
                             &mut state.serial_no,
                             type_,
                             output_position.x,
                             output_position.y,
                         ))
-                        .is_ok()
+                        .is_ok() {
+                            ret = FrameProcResult::InventoryChanged(output_position);
+                            true
+                        } else {
+                            false
+                        }
                 } else if let Ok(()) = state.new_object(output_position.x, output_position.y, type_)
                 {
                     self.cooldown += 20.;
@@ -444,6 +484,7 @@ impl Structure for Inserter {
                     // console_log!("output failed");
                 }
             }
+            return Ok(ret);
         } else {
             self.cooldown -= 1.;
         }
@@ -531,11 +572,7 @@ impl Structure for Chest {
 
     fn item_response(&mut self, _item: &DropItem) -> Result<ItemResponseResult, ()> {
         if self.inventory.len() < CHEST_CAPACITY {
-            if let Some(item_ref) = self.inventory.get_mut(&item_to_str(&_item.type_)) {
-                *item_ref += 1;
-            } else {
-                self.inventory.insert(item_to_str(&_item.type_), 1);
-            }
+            self.inventory.add_item(&item_to_str(&_item.type_));
             Ok((
                 ItemResponse::Consume,
                 Some(FrameProcResult::InventoryChanged(self.position)),
@@ -567,10 +604,7 @@ impl Structure for Chest {
                         y: position.y * 32,
                     },
                     Box::new(move |_| {
-                        if let Some(item) = self.inventory.iter_mut().find(|it| *it.0 == item_name)
-                        {
-                            *item.1 -= 1
-                        }
+                        self.inventory.remove_item(&item_name);
                     }),
                 ))
             } else {
@@ -880,15 +914,12 @@ impl Structure for Furnace {
         if let Some(recipe) = &self.recipe {
             let mut ret = FrameProcResult::None;
             // First, check if we need to refill the energy buffer in order to continue the current work.
-            if let Some(entry) = self.inventory.get_mut("Coal Ore") {
+            if self.inventory.get_mut("Coal Ore").is_some() {
                 // Refill the energy from the fuel
                 if self.power < recipe.power_cost {
                     self.power += COAL_POWER;
                     self.max_power = self.power;
-                    *entry -= 1;
-                    if *entry == 0 {
-                        self.inventory.remove("Coal Ore");
-                    }
+                    self.inventory.remove_item("Coal Ore");
                     ret = FrameProcResult::InventoryChanged(self.position);
                 }
             }
@@ -919,24 +950,12 @@ impl Structure for Furnace {
 
                 // Consume inputs from inventory
                 for consume_item in &recipe.input {
-                    let entry = self
-                        .inventory
-                        .get_mut(&item_to_str(&consume_item.0))
-                        .unwrap();
-                    *entry -= *consume_item.1;
-                    if *entry == 0 {
-                        self.inventory.remove(&item_to_str(&consume_item.0));
-                    }
+                    self.inventory.remove_item(&item_to_str(&consume_item.0));
                 }
 
                 // Produce outputs into inventory
                 for output_item in &recipe.output {
-                    if let Some(entry) = self.inventory.get_mut(&item_to_str(&output_item.0)) {
-                        *entry += output_item.1;
-                    } else {
-                        self.inventory
-                            .insert(item_to_str(&output_item.0), *output_item.1);
-                    }
+                    self.inventory.add_item(&item_to_str(&output_item.0));
                 }
                 return Ok(FrameProcResult::InventoryChanged(self.position));
             } else {
@@ -998,11 +1017,7 @@ impl Structure for Furnace {
 
         // Fuels are always welcome.
         if o.type_ == ItemType::CoalOre {
-            if let Some(entry) = self.inventory.get_mut(&item_to_str(&ItemType::CoalOre)) {
-                *entry += 1;
-            } else {
-                self.inventory.insert(item_to_str(&o.type_), 1usize);
-            }
+            self.inventory.remove_item(&item_to_str(&ItemType::CoalOre));
         }
 
         if let Some(recipe) = &self.recipe {
@@ -1017,11 +1032,7 @@ impl Structure for Furnace {
                     .find(|item| *item.0 == o.type_)
                     .is_some()
             {
-                if let Some(entry) = self.inventory.get_mut(&item_to_str(&o.type_)) {
-                    *entry += 1;
-                } else {
-                    self.inventory.insert(item_to_str(&o.type_), 1usize);
-                }
+                self.inventory.add_item(&item_to_str(&o.type_));
             }
         }
         Ok(())
@@ -1043,10 +1054,7 @@ impl Structure for Furnace {
                         y: position.y * 32,
                     },
                     Box::new(move |_| {
-                        if let Some(item) = self.inventory.iter_mut().find(|it| *it.0 == item_name)
-                        {
-                            *item.1 -= 1
-                        }
+                        self.inventory.remove_item(&item_name);
                     }),
                 ))
             } else {
@@ -1097,11 +1105,7 @@ struct Player {
 
 impl Player {
     fn add_item(&mut self, name: &str, count: usize) {
-        if let Some(entry) = self.inventory.get_mut(name) {
-            *entry += count;
-        } else {
-            self.inventory.insert(name.to_string(), count);
-        }
+        self.inventory.add_items(name, count);
     }
 
     fn select_item(&mut self, name: &str) -> Result<(), JsValue> {
