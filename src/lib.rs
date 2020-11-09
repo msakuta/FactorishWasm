@@ -424,17 +424,17 @@ impl Structure for Inserter {
                                   structures: &mut dyn Iterator<Item = &mut Box<dyn Structure>>,
                                   type_|
              -> bool {
-                if let Some((structure_idx, structure)) = structures
+                if let Some((_structure_idx, structure)) = structures
                     .enumerate()
                     .find(|(_idx, structure)| *structure.position() == output_position)
                 {
-                    console_log!(
-                        "found structure to output[{}]: {}, {}, {}",
-                        structure_idx,
-                        structure.name(),
-                        output_position.x,
-                        output_position.y
-                    );
+                    // console_log!(
+                    //     "found structure to output[{}]: {}, {}, {}",
+                    //     structure_idx,
+                    //     structure.name(),
+                    //     output_position.x,
+                    //     output_position.y
+                    // );
                     if structure
                         .input(&DropItem::new(
                             &mut state.serial_no,
@@ -461,7 +461,7 @@ impl Structure for Inserter {
                 if try_output(state, structures, type_) {
                     state.remove_item(id);
                 } else {
-                    console_log!("fail output_object: {:?}", type_);
+                    // console_log!("fail output_object: {:?}", type_);
                 }
             } else if let Some((_, structure)) = structures.enumerate().find(|(_, s)| {
                 s.position().x == input_position.x && s.position().y == input_position.y
@@ -1017,7 +1017,8 @@ impl Structure for Furnace {
 
         // Fuels are always welcome.
         if o.type_ == ItemType::CoalOre {
-            self.inventory.remove_item(&item_to_str(&ItemType::CoalOre));
+            self.inventory.add_item(&item_to_str(&ItemType::CoalOre));
+            return Ok(());
         }
 
         if let Some(recipe) = &self.recipe {
@@ -1033,9 +1034,12 @@ impl Structure for Furnace {
                     .is_some()
             {
                 self.inventory.add_item(&item_to_str(&o.type_));
+                return Ok(());
+            } else {
+                return Err(JsValue::from_str("Item is not part of recipe"))
             }
         }
-        Ok(())
+        Err(JsValue::from_str("Recipe is not initialized"))
     }
 
     fn output<'a>(
