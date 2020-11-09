@@ -538,6 +538,16 @@ fn str_to_item(name: &str) -> Option<ItemType> {
     match name {
         "Iron Ore" => Some(ItemType::IronOre),
         "Coal Ore" => Some(ItemType::CoalOre),
+        "Copper Ore" => Some(ItemType::CopperOre),
+        "Iron Plate" => Some(ItemType::IronPlate),
+        "Copper Plate" => Some(ItemType::CopperPlate),
+
+        "Transport Belt" => Some(ItemType::TransportBelt),
+        "Chest" => Some(ItemType::Chest),
+        "Inserter" => Some(ItemType::Inserter),
+        "Ore Mine" => Some(ItemType::OreMine),
+        "Furnace" => Some(ItemType::Furnace),
+
         _ => None,
     }
 }
@@ -1212,14 +1222,14 @@ impl FactorishState {
             tool_rotation: Rotation::Left,
             player: Player {
                 inventory: [
-                    ("Transport Belt", 10usize),
-                    ("Inserter", 5usize),
-                    ("Ore Mine", 5usize),
-                    ("Chest", 3usize),
-                    ("Furnace", 3usize),
+                    (ItemType::TransportBelt, 10usize),
+                    (ItemType::Inserter, 5usize),
+                    (ItemType::OreMine, 5usize),
+                    (ItemType::Chest, 3usize),
+                    (ItemType::Furnace, 3usize),
                 ]
                 .iter()
-                .map(|(s, num)| (str_to_item(*s).unwrap(), *num))
+                .map(|v| *v)
                 .collect(),
                 selected_item: None,
             },
@@ -1553,7 +1563,8 @@ impl FactorishState {
             .enumerate()
             .find(|(_, structure)| structure.position() == position)
         {
-            self.player.inventory.add_item(&str_to_item(&structure.name()).ok_or_else(|| JsValue::from_str("wrong structure name"))?);
+            self.player.inventory.add_item(&str_to_item(&structure.name()).ok_or_else(
+                || JsValue::from_str(&format!("wrong structure name: {:?}", structure.name())))?);
             if let Some(inventory) = structure.inventory() {
                 for (name, &count) in inventory {
                     self.player.add_item(name, count)
