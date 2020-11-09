@@ -383,9 +383,13 @@ impl Structure for Inserter {
             let input_position = self.position.add(self.rotation.delta_inv());
             let output_position = self.position.add(self.rotation.delta());
 
-            let mut try_output = |state: &mut FactorishState, structures: &mut dyn Iterator<Item = &mut Box<dyn Structure>>, type_| -> bool {
-                if let Some((structure_idx, structure)) =
-                    structures.enumerate().find(|(_idx, structure)| *structure.position() == output_position)
+            let mut try_output = |state: &mut FactorishState,
+                                  structures: &mut dyn Iterator<Item = &mut Box<dyn Structure>>,
+                                  type_|
+             -> bool {
+                if let Some((structure_idx, structure)) = structures
+                    .enumerate()
+                    .find(|(_idx, structure)| *structure.position() == output_position)
                 {
                     console_log!(
                         "found structure to output[{}]: {}, {}, {}",
@@ -540,7 +544,9 @@ impl Structure for Chest {
     }
 
     fn input(&mut self, o: &DropItem) -> Result<(), JsValue> {
-        self.item_response(o).map(|_| ()).map_err(|_| JsValue::from_str("ItemResponse failed"))
+        self.item_response(o)
+            .map(|_| ())
+            .map_err(|_| JsValue::from_str("ItemResponse failed"))
     }
 
     fn output<'a>(
@@ -678,21 +684,30 @@ impl Structure for OreMine {
             if 0 < tile.iron_ore {
                 self.recipe = Some(Recipe {
                     input: HashMap::new(),
-                    output: [(ItemType::IronOre, 1usize)].iter().map(|(k,v)| (*k, *v)).collect(),
+                    output: [(ItemType::IronOre, 1usize)]
+                        .iter()
+                        .map(|(k, v)| (*k, *v))
+                        .collect(),
                     power_cost: 0.1,
                     recipe_time: 80.,
                 });
             } else if 0 < tile.coal_ore {
                 self.recipe = Some(Recipe {
                     input: HashMap::new(),
-                    output: [(ItemType::CoalOre, 1usize)].iter().map(|(k,v)| (*k, *v)).collect(),
+                    output: [(ItemType::CoalOre, 1usize)]
+                        .iter()
+                        .map(|(k, v)| (*k, *v))
+                        .collect(),
                     power_cost: 0.1,
                     recipe_time: 80.,
                 });
             } else if 0 < tile.copper_ore {
                 self.recipe = Some(Recipe {
                     input: HashMap::new(),
-                    output: [(ItemType::CopperOre, 1usize)].iter().map(|(k,v)| (*k, *v)).collect(),
+                    output: [(ItemType::CopperOre, 1usize)]
+                        .iter()
+                        .map(|(k, v)| (*k, *v))
+                        .collect(),
                     power_cost: 0.1,
                     recipe_time: 80.,
                 });
@@ -724,7 +739,9 @@ impl Structure for OreMine {
                         {
                             // console_log!("Failed to create object: {:?}", code);
                         } else {
-                            if let Some(tile) = state.tile_at_mut(&[self.position.x, self.position.y]) {
+                            if let Some(tile) =
+                                state.tile_at_mut(&[self.position.x, self.position.y])
+                            {
                                 self.cooldown = recipe.recipe_time;
                                 match *item.0 {
                                     ItemType::IronOre => tile.iron_ore -= 1,
@@ -736,7 +753,7 @@ impl Structure for OreMine {
                         }
                         assert!(it.next().is_none());
                     } else {
-                        return Err(())
+                        return Err(());
                     }
                 }
             } else {
@@ -767,7 +784,6 @@ impl Structure for OreMine {
         }
     }
 }
-
 
 struct Furnace {
     position: Position,
@@ -814,7 +830,8 @@ impl Structure for Furnace {
                     0.
                 };
                 context.draw_image_with_image_bitmap_and_sw_and_sh_and_dx_and_dy_and_dw_and_dh(
-                    img, sx, 0., 32., 32., x, y, 32., 32.)?;
+                    img, sx, 0., 32., 32., x, y, 32., 32.,
+                )?;
             }
             None => return Err(JsValue::from_str("furnace image not available")),
         }
@@ -823,7 +840,8 @@ impl Structure for Furnace {
     }
 
     fn desc(&self, _state: &FactorishState) -> String {
-        format!("{}<br>{}",
+        format!(
+            "{}<br>{}",
             if self.recipe.is_some() {
                 // Progress bar
                 format!("{}{}{}{}",
@@ -842,16 +860,21 @@ impl Structure for Furnace {
             } else {
                 String::from("No recipe")
             },
-        format!(
-            "Items: \n{}",
-            self.inventory
-                .iter()
-                .map(|item| format!("{}: {}<br>", item.0, item.1))
-                .fold(String::from(""), |accum, item| accum + &item)
-        ))
+            format!(
+                "Items: \n{}",
+                self.inventory
+                    .iter()
+                    .map(|item| format!("{}: {}<br>", item.0, item.1))
+                    .fold(String::from(""), |accum, item| accum + &item)
+            )
+        )
     }
 
-    fn frame_proc(&mut self, _state: &mut FactorishState, _structures: &mut dyn Iterator<Item = &mut Box<dyn Structure>>) -> Result<FrameProcResult, ()> {
+    fn frame_proc(
+        &mut self,
+        _state: &mut FactorishState,
+        _structures: &mut dyn Iterator<Item = &mut Box<dyn Structure>>,
+    ) -> Result<FrameProcResult, ()> {
         if let Some(recipe) = &self.recipe {
             let mut ret = FrameProcResult::None;
             // First, check if we need to refill the energy buffer in order to continue the current work.
@@ -869,16 +892,22 @@ impl Structure for Furnace {
             }
 
             // Proceed only if we have sufficient energy in the buffer.
-            let progress = (self.power / recipe.power_cost).min(1. / recipe.recipe_time).min(1.);
+            let progress = (self.power / recipe.power_cost)
+                .min(1. / recipe.recipe_time)
+                .min(1.);
             if 1. <= self.progress + progress {
                 self.progress = 0.;
-                let has_ingredients = recipe.input.iter().map(|consume_item| {
-                    if let Some(entry) = self.inventory.get(&item_to_str(&consume_item.0)) {
-                        *consume_item.1 <= *entry
-                    } else {
-                        false
-                    }
-                }).all(|v| v);
+                let has_ingredients = recipe
+                    .input
+                    .iter()
+                    .map(|consume_item| {
+                        if let Some(entry) = self.inventory.get(&item_to_str(&consume_item.0)) {
+                            *consume_item.1 <= *entry
+                        } else {
+                            false
+                        }
+                    })
+                    .all(|v| v);
 
                 // First, check if we have enough ingredients to finish this recipe.
                 if !has_ingredients {
@@ -888,7 +917,10 @@ impl Structure for Furnace {
 
                 // Consume inputs from inventory
                 for consume_item in &recipe.input {
-                    let entry = self.inventory.get_mut(&item_to_str(&consume_item.0)).unwrap();
+                    let entry = self
+                        .inventory
+                        .get_mut(&item_to_str(&consume_item.0))
+                        .unwrap();
                     *entry -= *consume_item.1;
                     if *entry == 0 {
                         self.inventory.remove(&item_to_str(&consume_item.0));
@@ -900,10 +932,11 @@ impl Structure for Furnace {
                     if let Some(entry) = self.inventory.get_mut(&item_to_str(&output_item.0)) {
                         *entry += output_item.1;
                     } else {
-                        self.inventory.insert(item_to_str(&output_item.0), *output_item.1);
+                        self.inventory
+                            .insert(item_to_str(&output_item.0), *output_item.1);
                     }
                 }
-                return Ok(FrameProcResult::InventoryChanged(self.position))
+                return Ok(FrameProcResult::InventoryChanged(self.position));
             } else {
                 self.progress += progress;
                 self.power -= progress * recipe.power_cost;
@@ -925,22 +958,39 @@ impl Structure for Furnace {
         if self.recipe.is_none() {
             match o.type_ {
                 ItemType::IronOre => {
-                    self.recipe = Some(Recipe{
-                        input: [(ItemType::IronOre, 1usize)].iter().map(|(k,v)| (*k, *v)).collect(),
-                        output: [(ItemType::IronPlate, 1usize)].iter().map(|(k,v)| (*k, *v)).collect(),
+                    self.recipe = Some(Recipe {
+                        input: [(ItemType::IronOre, 1usize)]
+                            .iter()
+                            .map(|(k, v)| (*k, *v))
+                            .collect(),
+                        output: [(ItemType::IronPlate, 1usize)]
+                            .iter()
+                            .map(|(k, v)| (*k, *v))
+                            .collect(),
                         power_cost: 20.,
                         recipe_time: 50.,
                     });
                 }
                 ItemType::CopperOre => {
-                    self.recipe = Some(Recipe{
-                        input: [(ItemType::CopperOre, 1usize)].iter().map(|(k,v)| (*k, *v)).collect(),
-                        output: [(ItemType::CopperPlate, 1usize)].iter().map(|(k,v)| (*k, *v)).collect(),
+                    self.recipe = Some(Recipe {
+                        input: [(ItemType::CopperOre, 1usize)]
+                            .iter()
+                            .map(|(k, v)| (*k, *v))
+                            .collect(),
+                        output: [(ItemType::CopperPlate, 1usize)]
+                            .iter()
+                            .map(|(k, v)| (*k, *v))
+                            .collect(),
                         power_cost: 20.,
                         recipe_time: 50.,
                     });
                 }
-                _ => return Err(JsValue::from_str(&format!("Cannot smelt {}", item_to_str(&o.type_)))),
+                _ => {
+                    return Err(JsValue::from_str(&format!(
+                        "Cannot smelt {}",
+                        item_to_str(&o.type_)
+                    )))
+                }
             }
         }
 
@@ -954,19 +1004,32 @@ impl Structure for Furnace {
         }
 
         if let Some(recipe) = &self.recipe {
-            if recipe.input.iter().find(|item| *item.0 == o.type_).is_some() ||
-                recipe.output.iter().find(|item| *item.0 == o.type_).is_some() {
-                    if let Some(entry) = self.inventory.get_mut(&item_to_str(&o.type_)) {
-                        *entry += 1;
-                    } else {
-                        self.inventory.insert(item_to_str(&o.type_), 1usize);
-                    }
+            if recipe
+                .input
+                .iter()
+                .find(|item| *item.0 == o.type_)
+                .is_some()
+                || recipe
+                    .output
+                    .iter()
+                    .find(|item| *item.0 == o.type_)
+                    .is_some()
+            {
+                if let Some(entry) = self.inventory.get_mut(&item_to_str(&o.type_)) {
+                    *entry += 1;
+                } else {
+                    self.inventory.insert(item_to_str(&o.type_), 1usize);
                 }
+            }
         }
         Ok(())
     }
 
-    fn output<'a>(&'a mut self, state: &mut FactorishState, position: &Position) -> Result<(DropItem, Box<dyn FnOnce(&DropItem) + 'a>), ()> {
+    fn output<'a>(
+        &'a mut self,
+        state: &mut FactorishState,
+        position: &Position,
+    ) -> Result<(DropItem, Box<dyn FnOnce(&DropItem) + 'a>), ()> {
         if let Some(ref mut item) = self.inventory.iter_mut().next() {
             if 0 < *item.1 {
                 let item_name = item.0.clone();
@@ -992,7 +1055,6 @@ impl Structure for Furnace {
         }
     }
 }
-
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug, Hash)]
 enum ItemType {
@@ -1869,7 +1931,10 @@ impl FactorishState {
                         };
                         draw_ore(self.board[(x + y * self.width) as usize].iron_ore, img_ore)?;
                         draw_ore(self.board[(x + y * self.width) as usize].coal_ore, img_coal)?;
-                        draw_ore(self.board[(x + y * self.width) as usize].copper_ore, img_copper)?;
+                        draw_ore(
+                            self.board[(x + y * self.width) as usize].copper_ore,
+                            img_copper,
+                        )?;
                     }
                 }
                 // console_log!(

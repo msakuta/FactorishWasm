@@ -1,4 +1,3 @@
-
 pub fn perlin_noise_pixel(x: f64, y: f64, bit: u32) -> f64 {
     let mut sum = 0.;
     let [mut maxv, mut f] = [0., 1.];
