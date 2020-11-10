@@ -7,6 +7,7 @@ mod perlin_noise;
 mod structure;
 mod transport_belt;
 mod utils;
+mod items;
 
 use chest::Chest;
 use furnace::Furnace;
@@ -14,6 +15,7 @@ use inserter::Inserter;
 use ore_mine::OreMine;
 use structure::Structure;
 use transport_belt::TransportBelt;
+use items::{ItemType, DropItem, str_to_item, item_to_str};
 
 use std::collections::HashMap;
 use wasm_bindgen::prelude::*;
@@ -252,40 +254,6 @@ fn draw_direction_arrow(
     Ok(())
 }
 
-fn item_to_str(type_: &ItemType) -> String {
-    match type_ {
-        ItemType::IronOre => "Iron Ore".to_string(),
-        ItemType::CoalOre => "Coal Ore".to_string(),
-        ItemType::CopperOre => "Copper Ore".to_string(),
-        ItemType::IronPlate => "Iron Plate".to_string(),
-        ItemType::CopperPlate => "Copper Plate".to_string(),
-
-        ItemType::TransportBelt => "Transport Belt".to_string(),
-        ItemType::Chest => "Chest".to_string(),
-        ItemType::Inserter => "Inserter".to_string(),
-        ItemType::OreMine => "Ore Mine".to_string(),
-        ItemType::Furnace => "Furnace".to_string(),
-    }
-}
-
-fn str_to_item(name: &str) -> Option<ItemType> {
-    match name {
-        "Iron Ore" => Some(ItemType::IronOre),
-        "Coal Ore" => Some(ItemType::CoalOre),
-        "Copper Ore" => Some(ItemType::CopperOre),
-        "Iron Plate" => Some(ItemType::IronPlate),
-        "Copper Plate" => Some(ItemType::CopperPlate),
-
-        "Transport Belt" => Some(ItemType::TransportBelt),
-        "Chest" => Some(ItemType::Chest),
-        "Inserter" => Some(ItemType::Inserter),
-        "Ore Mine" => Some(ItemType::OreMine),
-        "Furnace" => Some(ItemType::Furnace),
-
-        _ => None,
-    }
-}
-
 type ItemSet = HashMap<ItemType, usize>;
 
 struct Recipe {
@@ -295,43 +263,7 @@ struct Recipe {
     recipe_time: f64,
 }
 
-#[derive(Copy, Clone, Eq, PartialEq, Debug, Hash)]
-enum ItemType {
-    IronOre,
-    CoalOre,
-    CopperOre,
-    IronPlate,
-    CopperPlate,
-
-    TransportBelt,
-    Chest,
-    Inserter,
-    OreMine,
-    Furnace,
-}
-
 const objsize: i32 = 8;
-
-struct DropItem {
-    id: u32,
-    type_: ItemType,
-    x: i32,
-    y: i32,
-}
-
-impl DropItem {
-    fn new(serial_no: &mut u32, type_: ItemType, c: i32, r: i32) -> Self {
-        let itilesize = tilesize as i32;
-        let ret = DropItem {
-            id: *serial_no,
-            type_,
-            x: c * itilesize + itilesize / 2,
-            y: r * itilesize + itilesize / 2,
-        };
-        *serial_no += 1;
-        ret
-    }
-}
 
 struct Player {
     inventory: Inventory,
