@@ -1,5 +1,5 @@
-use super::structure::Structure;
-use super::{DropItem, FactorishState, ItemResponse, ItemResponseResult, Position, Rotation};
+use super::structure::{ItemResponse, ItemResponseResult, Structure};
+use super::{DropItem, FactorishState, Position, Rotation};
 use wasm_bindgen::prelude::*;
 use web_sys::CanvasRenderingContext2d;
 

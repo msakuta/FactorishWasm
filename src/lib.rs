@@ -2,20 +2,20 @@
 mod chest;
 mod furnace;
 mod inserter;
+mod items;
 mod ore_mine;
 mod perlin_noise;
 mod structure;
 mod transport_belt;
 mod utils;
-mod items;
 
 use chest::Chest;
 use furnace::Furnace;
 use inserter::Inserter;
+use items::{item_to_str, str_to_item, DropItem, ItemType};
 use ore_mine::OreMine;
-use structure::Structure;
+use structure::{FrameProcResult, ItemResponse, Position, Rotation, Structure};
 use transport_belt::TransportBelt;
-use items::{ItemType, DropItem, str_to_item, item_to_str};
 
 use std::collections::HashMap;
 use wasm_bindgen::prelude::*;
@@ -86,89 +86,6 @@ struct Cell {
     coal_ore: u32,
     copper_ore: u32,
 }
-
-#[derive(Eq, PartialEq, Copy, Clone, Debug)]
-struct Position {
-    x: i32,
-    y: i32,
-}
-
-impl Position {
-    fn add(&self, o: (i32, i32)) -> Position {
-        Self {
-            x: self.x + o.0,
-            y: self.y + o.1,
-        }
-    }
-}
-
-impl From<&[i32; 2]> for Position {
-    fn from(xy: &[i32; 2]) -> Self {
-        Self { x: xy[0], y: xy[1] }
-    }
-}
-
-#[derive(Copy, Clone)]
-enum Rotation {
-    Left,
-    Top,
-    Right,
-    Bottom,
-}
-
-impl Rotation {
-    fn delta(&self) -> (i32, i32) {
-        match self {
-            Rotation::Left => (-1, 0),
-            Rotation::Top => (0, -1),
-            Rotation::Right => (1, 0),
-            Rotation::Bottom => (0, 1),
-        }
-    }
-
-    fn delta_inv(&self) -> (i32, i32) {
-        let delta = self.delta();
-        (-delta.0, -delta.1)
-    }
-
-    fn next(&mut self) {
-        *self = match self {
-            Rotation::Left => Rotation::Top,
-            Rotation::Top => Rotation::Right,
-            Rotation::Right => Rotation::Bottom,
-            Rotation::Bottom => Rotation::Left,
-        }
-    }
-
-    fn angle_deg(&self) -> i32 {
-        self.angle_4() * 90
-    }
-
-    fn angle_4(&self) -> i32 {
-        match self {
-            Rotation::Left => 2,
-            Rotation::Top => 3,
-            Rotation::Right => 0,
-            Rotation::Bottom => 1,
-        }
-    }
-
-    fn angle_rad(&self) -> f64 {
-        self.angle_deg() as f64 * std::f64::consts::PI / 180.
-    }
-}
-
-enum FrameProcResult {
-    None,
-    InventoryChanged(Position),
-}
-
-enum ItemResponse {
-    Move(i32, i32),
-    Consume,
-}
-
-type ItemResponseResult = (ItemResponse, Option<FrameProcResult>);
 
 type Inventory = HashMap<ItemType, usize>;
 

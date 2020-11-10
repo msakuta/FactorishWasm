@@ -1,8 +1,5 @@
-use super::structure::Structure;
-use super::{
-    DropItem, FactorishState, FrameProcResult, Inventory, InventoryTrait, ItemResponse,
-    ItemResponseResult, Position,
-};
+use super::structure::{ItemResponse, ItemResponseResult, Structure};
+use super::{DropItem, FactorishState, FrameProcResult, Inventory, InventoryTrait, Position};
 use wasm_bindgen::prelude::*;
 use web_sys::CanvasRenderingContext2d;
 

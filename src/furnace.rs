@@ -1,9 +1,9 @@
+use super::items::item_to_str;
 use super::structure::Structure;
 use super::{
-    DropItem, FactorishState, FrameProcResult, Inventory, InventoryTrait, ItemType,
-    Position, Recipe, COAL_POWER,
+    DropItem, FactorishState, FrameProcResult, Inventory, InventoryTrait, ItemType, Position,
+    Recipe, COAL_POWER,
 };
-use super::items::item_to_str;
 use wasm_bindgen::prelude::*;
 use web_sys::CanvasRenderingContext2d;
 

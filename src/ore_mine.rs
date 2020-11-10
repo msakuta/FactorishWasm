@@ -1,7 +1,7 @@
-use super::structure::Structure;
+use super::items::ItemType;
+use super::structure::{ItemResponse, ItemResponseResult, Structure};
 use super::{
-    draw_direction_arrow, DropItem, FactorishState, FrameProcResult, ItemResponse,
-    ItemResponseResult, ItemType, Position, Recipe, Rotation,
+    draw_direction_arrow, DropItem, FactorishState, FrameProcResult, Position, Recipe, Rotation,
 };
 use std::collections::HashMap;
 use wasm_bindgen::prelude::*;

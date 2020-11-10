@@ -1,6 +1,5 @@
 use super::tilesize;
 
-
 #[derive(Copy, Clone, Eq, PartialEq, Debug, Hash)]
 pub(crate) enum ItemType {
     IronOre,
@@ -49,8 +48,6 @@ pub(crate) fn str_to_item(name: &str) -> Option<ItemType> {
         _ => None,
     }
 }
-
-
 
 pub(crate) struct DropItem {
     pub id: u32,
