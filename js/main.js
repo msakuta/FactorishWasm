@@ -12,6 +12,7 @@ import furnace from "../img/furnace.png";
 import waterWell from "../img/waterwell.png";
 import boiler from "../img/boiler.png";
 import inserter from "../img/inserter-base.png";
+import inserterHand from "../img/inserter-hand.png";
 import direction from "../img/direction.png";
 import ore from "../img/ore.png";
 import coalOre from "../img/coal-ore.png";
@@ -52,6 +53,7 @@ function isIE(){
         ["mine", mine],
         ["furnace", furnace],
         ["inserter", inserter],
+        ["inserterHand", inserterHand],
         ["direction", direction],
         ["ore", ore],
         ["coalOre", coalOre],

@@ -380,7 +380,15 @@ impl Inserter {
             cooldown: 0.,
         }
     }
+
+    fn get_arm_angle(&self) -> f64 {
+        self.rotation.angle_rad()
+            + (2. * self.cooldown.min(INSERTER_TIME - self.cooldown) / INSERTER_TIME - 0.5)
+                * std::f64::consts::PI
+    }
 }
+
+const INSERTER_TIME: f64 = 20.;
 
 impl Structure for Inserter {
     fn name(&self) -> &str {
@@ -402,6 +410,17 @@ impl Structure for Inserter {
                 context.draw_image_with_image_bitmap(img, x, y)?;
             }
             None => return Err(JsValue::from_str("inserter image not available")),
+        }
+        match state.image_inserter_hand.as_ref() {
+            Some(img) => {
+                context.save();
+                context.translate(x + 16., y + 16.)?;
+                context.rotate(self.get_arm_angle())?;
+                context.translate(-(x + 16.), -(y + 28.))?;
+                context.draw_image_with_image_bitmap(img, x, y)?;
+                context.restore();
+            }
+            None => return Err(JsValue::from_str("inserter-arm image not available")),
         }
 
         draw_direction_arrow((x, y), &self.rotation, state, context)?;
@@ -445,13 +464,14 @@ impl Structure for Inserter {
                         .is_ok()
                     {
                         ret = FrameProcResult::InventoryChanged(output_position);
+                        self.cooldown += INSERTER_TIME;
                         true
                     } else {
                         false
                     }
                 } else if let Ok(()) = state.new_object(output_position.x, output_position.y, type_)
                 {
-                    self.cooldown += 20.;
+                    self.cooldown += INSERTER_TIME;
                     true
                 } else {
                     false
@@ -1178,6 +1198,7 @@ pub struct FactorishState {
     image_mine: Option<ImageBitmap>,
     image_furnace: Option<ImageBitmap>,
     image_inserter: Option<ImageBitmap>,
+    image_inserter_hand: Option<ImageBitmap>,
     image_direction: Option<ImageBitmap>,
     image_iron_ore: Option<ImageBitmap>,
     image_coal_ore: Option<ImageBitmap>,
@@ -1244,6 +1265,7 @@ impl FactorishState {
             image_mine: None,
             image_furnace: None,
             image_inserter: None,
+            image_inserter_hand: None,
             image_direction: None,
             image_iron_ore: None,
             image_coal_ore: None,
@@ -1842,6 +1864,7 @@ impl FactorishState {
         self.image_mine = Some(load_image("mine")?);
         self.image_furnace = Some(load_image("furnace")?);
         self.image_inserter = Some(load_image("inserter")?);
+        self.image_inserter_hand = Some(load_image("inserterHand")?);
         self.image_direction = Some(load_image("direction")?);
         self.image_iron_ore = Some(load_image("ore")?);
         self.image_coal_ore = Some(load_image("coalOre")?);
