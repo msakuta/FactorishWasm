@@ -601,7 +601,8 @@ function isIE(){
                 updateStructureInventory([event[1], event[2]]);
             }
             if(event[0] === "updatePlayerInventory"){
-                console.log("updateStructureInventory event received");
+                console.log("updatePlayerInventory event received");
+                updateInventory(sim.get_player_inventory());
                 updateToolBar();
             }
             else if(event[0] === "showInventory"){

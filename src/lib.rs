@@ -1649,7 +1649,17 @@ impl FactorishState {
                 .unwrap_or(JsValue::from(true));
             Ok(true)
         } else {
-            Ok(false)
+            let mut ret = false;
+            while let Some(item_index) = self
+                .drop_items
+                .iter()
+                .position(|item| item.x / 32 == position.x && item.y / 32 == position.y)
+            {
+                self.player
+                    .add_item(&self.drop_items.remove(item_index).type_, 1);
+                ret = true;
+            }
+            Ok(ret)
         }
     }
 
