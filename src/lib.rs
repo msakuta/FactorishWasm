@@ -386,10 +386,13 @@ impl Inserter {
         }
     }
 
-    fn get_arm_angle(&self) -> f64 {
-        self.rotation.angle_rad()
-            + (2. * self.cooldown.min(INSERTER_TIME - self.cooldown) / INSERTER_TIME - 0.5)
-                * std::f64::consts::PI
+    fn get_arm_angles(&self) -> (f64, f64) {
+        (self.rotation.angle_rad()
+            + (2. * self.cooldown.min(INSERTER_TIME - self.cooldown) / INSERTER_TIME * 0.8 + 0.2 - 0.5)
+                * std::f64::consts::PI,
+            self.rotation.angle_rad()
+                + (2. * self.cooldown.max(INSERTER_TIME - self.cooldown) / INSERTER_TIME * 0.8 + 0.2 - 0.5)
+                    * std::f64::consts::PI)
     }
 }
 
@@ -414,17 +417,26 @@ impl Structure for Inserter {
         match depth {
             0 => match state.image_inserter.as_ref() {
                 Some(img) => {
-                    context.draw_image_with_image_bitmap(img, x, y)?;
+                    context.draw_image_with_image_bitmap_and_sw_and_sh_and_dx_and_dy_and_dw_and_dh(
+                        img, 0., 0., 32., 32., x, y, 32., 32.)?;
                 }
                 None => return Err(JsValue::from_str("inserter image not available")),
             },
-            1 => match state.image_inserter_hand.as_ref() {
+            1 => match state.image_inserter.as_ref() {
                 Some(img) => {
+                    let angles = self.get_arm_angles();
                     context.save();
                     context.translate(x + 16., y + 16.)?;
-                    context.rotate(self.get_arm_angle())?;
-                    context.translate(-(x + 16.), -(y + 28.))?;
-                    context.draw_image_with_image_bitmap(img, x, y)?;
+                    context.rotate(angles.0)?;
+                    context.translate(-(x + 8.), -(y + 20.))?;
+                    context.draw_image_with_image_bitmap_and_sw_and_sh_and_dx_and_dy_and_dw_and_dh(
+                        img, 48., 0., 16., 32., x, y, 16., 32.)?;
+                    context.translate(x + 8., y + 8.)?;
+                    context.rotate(-angles.0)?;
+                    context.rotate(angles.1)?;
+                    context.translate(-(x + 8.), -(y + 20.))?;
+                    context.draw_image_with_image_bitmap_and_sw_and_sh_and_dx_and_dy_and_dw_and_dh(
+                        img, 32., 0., 16., 24., x, y, 16., 24.)?;
                     context.restore();
                 }
                 None => return Err(JsValue::from_str("inserter-arm image not available")),
@@ -1226,7 +1238,6 @@ pub struct FactorishState {
     image_mine: Option<ImageBitmap>,
     image_furnace: Option<ImageBitmap>,
     image_inserter: Option<ImageBitmap>,
-    image_inserter_hand: Option<ImageBitmap>,
     image_direction: Option<ImageBitmap>,
     image_iron_ore: Option<ImageBitmap>,
     image_coal_ore: Option<ImageBitmap>,
@@ -1293,7 +1304,6 @@ impl FactorishState {
             image_mine: None,
             image_furnace: None,
             image_inserter: None,
-            image_inserter_hand: None,
             image_direction: None,
             image_iron_ore: None,
             image_coal_ore: None,
@@ -1892,7 +1902,6 @@ impl FactorishState {
         self.image_mine = Some(load_image("mine")?);
         self.image_furnace = Some(load_image("furnace")?);
         self.image_inserter = Some(load_image("inserter")?);
-        self.image_inserter_hand = Some(load_image("inserterHand")?);
         self.image_direction = Some(load_image("direction")?);
         self.image_iron_ore = Some(load_image("ore")?);
         self.image_coal_ore = Some(load_image("coalOre")?);
