@@ -126,28 +126,22 @@ impl InventoryTrait for Inventory {
 const tilesize: i32 = 32;
 struct ToolDef {
     item_type: ItemType,
-    image: &'static str,
 }
 const tool_defs: [ToolDef; 5] = [
     ToolDef {
         item_type: ItemType::TransportBelt,
-        image: "img/transport.png",
     },
     ToolDef {
         item_type: ItemType::Inserter,
-        image: "img/inserter-base.png",
     },
     ToolDef {
         item_type: ItemType::OreMine,
-        image: "img/mine.png",
     },
     ToolDef {
         item_type: ItemType::Chest,
-        image: "img/chest.png",
     },
     ToolDef {
         item_type: ItemType::Furnace,
-        image: "img/furnace.png",
     },
 ];
 
@@ -921,7 +915,7 @@ impl FactorishState {
     pub fn tool_defs(&self) -> Result<js_sys::Array, JsValue> {
         Ok(tool_defs
             .iter()
-            .map(|tool| JsValue::from_str(tool.image))
+            .map(|_| JsValue::null())
             .collect::<js_sys::Array>())
     }
 
