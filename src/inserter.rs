@@ -1,9 +1,7 @@
-
-use super::{FactorishState, FrameProcResult, Position, Rotation, DropItem, draw_direction_arrow};
 use super::structure::Structure;
+use super::{draw_direction_arrow, DropItem, FactorishState, FrameProcResult, Position, Rotation};
 use wasm_bindgen::prelude::*;
-use web_sys::{CanvasRenderingContext2d};
-
+use web_sys::CanvasRenderingContext2d;
 
 pub(crate) struct Inserter {
     position: Position,
