@@ -198,6 +198,7 @@ trait Structure {
         &self,
         state: &FactorishState,
         context: &CanvasRenderingContext2d,
+        depth: i32,
     ) -> Result<(), JsValue>;
     fn desc(&self, _state: &FactorishState) -> String {
         String::from("")
@@ -295,7 +296,11 @@ impl Structure for TransportBelt {
         &self,
         state: &FactorishState,
         context: &CanvasRenderingContext2d,
+        depth: i32,
     ) -> Result<(), JsValue> {
+        if depth != 0 {
+            return Ok(());
+        };
         match state.image_belt.as_ref() {
             Some(img) => {
                 let (x, y) = (self.position.x as f64 * 32., self.position.y as f64 * 32.);
@@ -403,27 +408,30 @@ impl Structure for Inserter {
         &self,
         state: &FactorishState,
         context: &CanvasRenderingContext2d,
+        depth: i32,
     ) -> Result<(), JsValue> {
         let (x, y) = (self.position.x as f64 * 32., self.position.y as f64 * 32.);
-        match state.image_inserter.as_ref() {
-            Some(img) => {
-                context.draw_image_with_image_bitmap(img, x, y)?;
-            }
-            None => return Err(JsValue::from_str("inserter image not available")),
+        match depth {
+            0 => match state.image_inserter.as_ref() {
+                Some(img) => {
+                    context.draw_image_with_image_bitmap(img, x, y)?;
+                }
+                None => return Err(JsValue::from_str("inserter image not available")),
+            },
+            1 => match state.image_inserter_hand.as_ref() {
+                Some(img) => {
+                    context.save();
+                    context.translate(x + 16., y + 16.)?;
+                    context.rotate(self.get_arm_angle())?;
+                    context.translate(-(x + 16.), -(y + 28.))?;
+                    context.draw_image_with_image_bitmap(img, x, y)?;
+                    context.restore();
+                }
+                None => return Err(JsValue::from_str("inserter-arm image not available")),
+            },
+            2 => draw_direction_arrow((x, y), &self.rotation, state, context)?,
+            _ => assert!(false),
         }
-        match state.image_inserter_hand.as_ref() {
-            Some(img) => {
-                context.save();
-                context.translate(x + 16., y + 16.)?;
-                context.rotate(self.get_arm_angle())?;
-                context.translate(-(x + 16.), -(y + 28.))?;
-                context.draw_image_with_image_bitmap(img, x, y)?;
-                context.restore();
-            }
-            None => return Err(JsValue::from_str("inserter-arm image not available")),
-        }
-
-        draw_direction_arrow((x, y), &self.rotation, state, context)?;
 
         Ok(())
     }
@@ -586,7 +594,11 @@ impl Structure for Chest {
         &self,
         state: &FactorishState,
         context: &CanvasRenderingContext2d,
+        depth: i32,
     ) -> Result<(), JsValue> {
+        if depth != 0 {
+            return Ok(());
+        };
         let (x, y) = (self.position.x as f64 * 32., self.position.y as f64 * 32.);
         match state.image_chest.as_ref() {
             Some(img) => {
@@ -705,16 +717,21 @@ impl Structure for OreMine {
         &self,
         state: &FactorishState,
         context: &CanvasRenderingContext2d,
+        depth: i32,
     ) -> Result<(), JsValue> {
         let (x, y) = (self.position.x as f64 * 32., self.position.y as f64 * 32.);
-        match state.image_mine.as_ref() {
-            Some(img) => {
-                context.draw_image_with_image_bitmap(img, x, y)?;
+        match depth {
+            0 => {
+                match state.image_mine.as_ref() {
+                    Some(img) => {
+                        context.draw_image_with_image_bitmap(img, x, y)?;
+                    }
+                    None => return Err(JsValue::from_str("mine image not available")),
+                }
             }
-            None => return Err(JsValue::from_str("mine image not available")),
+            2 => draw_direction_arrow((x, y), &self.rotation, state, context)?,
+            _ => (),
         }
-
-        draw_direction_arrow((x, y), &self.rotation, state, context)?;
 
         Ok(())
     }
@@ -893,7 +910,11 @@ impl Structure for Furnace {
         &self,
         state: &FactorishState,
         context: &CanvasRenderingContext2d,
+        depth: i32,
     ) -> Result<(), JsValue> {
+        if depth != 0 {
+            return Ok(());
+        };
         let (x, y) = (self.position.x as f64 * 32., self.position.y as f64 * 32.);
         match state.image_furnace.as_ref() {
             Some(img) => {
@@ -1908,7 +1929,9 @@ impl FactorishState {
     ) -> Result<(), JsValue> {
         let mut tool = self.new_structure(tool_index, &Position { x: 0, y: 0 })?;
         tool.set_rotation(&self.tool_rotation).ok();
-        tool.draw(self, context)?;
+        for depth in 0..3 {
+            tool.draw(self, context, depth)?;
+        }
         Ok(())
     }
 
@@ -1984,9 +2007,14 @@ impl FactorishState {
             }
         }
 
-        for structure in &self.structures {
-            structure.draw(&self, &context)?;
-        }
+        let draw_structures = |depth| -> Result<(), JsValue> {
+            for structure in &self.structures {
+                structure.draw(&self, &context, depth)?;
+            }
+            Ok(())
+        };
+
+        draw_structures(0)?;
 
         for item in &self.drop_items {
             let img = match item.type_ {
@@ -2011,6 +2039,9 @@ impl FactorishState {
             }
         }
 
+        draw_structures(1)?;
+        draw_structures(2)?;
+
         if let Some(ref cursor) = self.cursor {
             let (x, y) = ((cursor[0] * 32) as f64, (cursor[1] * 32) as f64);
             if let Some(selected_tool) = self.selected_tool {
@@ -2018,7 +2049,9 @@ impl FactorishState {
                 context.set_global_alpha(0.5);
                 let mut tool = self.new_structure(selected_tool, &Position::from(cursor))?;
                 tool.set_rotation(&self.tool_rotation).ok();
-                tool.draw(self, &context)?;
+                for depth in 0..3 {
+                    tool.draw(self, &context, depth)?;
+                }
                 context.restore();
             }
             context.set_stroke_style(&JsValue::from_str("blue"));
