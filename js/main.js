@@ -206,8 +206,12 @@ function isIE(){
     // Set the margin after contents are initialized
     toolBarElem.style.marginLeft = (-(toolBarElem.getBoundingClientRect().width + miniMapSize + tableMargin) / 2) + 'px';
 
-    const loadedImages = await Promise.all(loadImages);
-    sim.render_init(canvas, infoElem, loadedImages);
+    try{
+        const loadedImages = await Promise.all(loadImages);
+        sim.render_init(canvas, infoElem, loadedImages);
+    } catch(e) {
+        alert(`FactorishState.render_init failed: ${e}`);
+    }
 
     updateToolBarImage();
 
