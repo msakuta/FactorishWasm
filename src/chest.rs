@@ -1,5 +1,6 @@
+use super::items::{DropItem, ItemType};
 use super::structure::{ItemResponse, ItemResponseResult, Structure};
-use super::{DropItem, FactorishState, FrameProcResult, Inventory, InventoryTrait, Position};
+use super::{FactorishState, FrameProcResult, Inventory, InventoryTrait, Position};
 use wasm_bindgen::prelude::*;
 use web_sys::CanvasRenderingContext2d;
 
@@ -73,6 +74,11 @@ impl Structure for Chest {
         self.item_response(o)
             .map(|_| ())
             .map_err(|_| JsValue::from_str("ItemResponse failed"))
+    }
+
+    /// Chest can put any item
+    fn can_input(&self, _o: &ItemType) -> bool {
+        self.inventory.len() < CHEST_CAPACITY
     }
 
     fn output<'a>(

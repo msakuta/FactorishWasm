@@ -12,7 +12,7 @@ mod utils;
 use chest::Chest;
 use furnace::Furnace;
 use inserter::Inserter;
-use items::{item_to_str, str_to_item, DropItem, ItemType};
+use items::{item_to_str, render_drop_item, str_to_item, DropItem, ItemType};
 use ore_mine::OreMine;
 use structure::{FrameProcResult, ItemResponse, Position, Rotation, Structure};
 use transport_belt::TransportBelt;
@@ -1034,26 +1034,7 @@ impl FactorishState {
         draw_structures(0)?;
 
         for item in &self.drop_items {
-            let img = match item.type_ {
-                ItemType::IronOre => &self.image_iron_ore,
-                ItemType::CoalOre => &self.image_coal_ore,
-                ItemType::CopperOre => &self.image_copper_ore,
-                ItemType::IronPlate => &self.image_iron_plate,
-                ItemType::CopperPlate => &self.image_copper_plate,
-
-                ItemType::TransportBelt => &self.image_belt,
-                ItemType::Chest => &self.image_chest,
-                ItemType::Inserter => &self.image_inserter,
-                ItemType::OreMine => &self.image_mine,
-                ItemType::Furnace => &self.image_furnace,
-            };
-            if let Some(ref image) = img {
-                context.draw_image_with_image_bitmap(
-                    image,
-                    item.x as f64 - 8.,
-                    item.y as f64 - 8.,
-                )?;
-            }
+            render_drop_item(self, &context, &item.type_, item.x, item.y)?;
         }
 
         draw_structures(1)?;

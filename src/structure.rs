@@ -1,3 +1,4 @@
+use super::items::ItemType;
 use super::{DropItem, FactorishState, Inventory};
 use wasm_bindgen::prelude::*;
 use web_sys::CanvasRenderingContext2d;
@@ -119,6 +120,9 @@ pub(crate) trait Structure {
     }
     fn input(&mut self, _o: &DropItem) -> Result<(), JsValue> {
         Err(JsValue::from_str("Not supported"))
+    }
+    fn can_input(&self, _o: &ItemType) -> bool {
+        false
     }
     fn output<'a>(
         &'a mut self,

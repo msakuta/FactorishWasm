@@ -232,6 +232,17 @@ impl Structure for Furnace {
         Err(JsValue::from_str("Recipe is not initialized"))
     }
 
+    fn can_input(&self, item_type: &ItemType) -> bool {
+        if let Some(recipe) = &self.recipe {
+            *item_type == ItemType::CoalOre || recipe.input.get(item_type).is_some()
+        } else {
+            match item_type {
+                ItemType::CoalOre | ItemType::IronOre | ItemType::CopperOre => true,
+                _ => false,
+            }
+        }
+    }
+
     fn output<'a>(
         &'a mut self,
         state: &mut FactorishState,
