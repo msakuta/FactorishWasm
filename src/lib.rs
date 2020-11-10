@@ -387,12 +387,18 @@ impl Inserter {
     }
 
     fn get_arm_angles(&self) -> (f64, f64) {
-        (self.rotation.angle_rad()
-            + (2. * self.cooldown.min(INSERTER_TIME - self.cooldown) / INSERTER_TIME * 0.8 + 0.2 - 0.5)
-                * std::f64::consts::PI,
+        (
             self.rotation.angle_rad()
-                + (2. * self.cooldown.max(INSERTER_TIME - self.cooldown) / INSERTER_TIME * 0.8 + 0.2 - 0.5)
-                    * std::f64::consts::PI)
+                + (2. * self.cooldown.min(INSERTER_TIME - self.cooldown) / INSERTER_TIME * 0.8
+                    + 0.2
+                    - 0.5)
+                    * std::f64::consts::PI,
+            self.rotation.angle_rad()
+                + (2. * self.cooldown.max(INSERTER_TIME - self.cooldown) / INSERTER_TIME * 0.8
+                    + 0.2
+                    - 0.5)
+                    * std::f64::consts::PI,
+        )
     }
 }
 
@@ -417,8 +423,10 @@ impl Structure for Inserter {
         match depth {
             0 => match state.image_inserter.as_ref() {
                 Some(img) => {
-                    context.draw_image_with_image_bitmap_and_sw_and_sh_and_dx_and_dy_and_dw_and_dh(
-                        img, 0., 0., 32., 32., x, y, 32., 32.)?;
+                    context
+                        .draw_image_with_image_bitmap_and_sw_and_sh_and_dx_and_dy_and_dw_and_dh(
+                            img, 0., 0., 32., 32., x, y, 32., 32.,
+                        )?;
                 }
                 None => return Err(JsValue::from_str("inserter image not available")),
             },
@@ -429,14 +437,18 @@ impl Structure for Inserter {
                     context.translate(x + 16., y + 16.)?;
                     context.rotate(angles.0)?;
                     context.translate(-(x + 8.), -(y + 20.))?;
-                    context.draw_image_with_image_bitmap_and_sw_and_sh_and_dx_and_dy_and_dw_and_dh(
-                        img, 48., 0., 16., 32., x, y, 16., 32.)?;
+                    context
+                        .draw_image_with_image_bitmap_and_sw_and_sh_and_dx_and_dy_and_dw_and_dh(
+                            img, 48., 0., 16., 32., x, y, 16., 32.,
+                        )?;
                     context.translate(x + 8., y + 8.)?;
                     context.rotate(-angles.0)?;
                     context.rotate(angles.1)?;
                     context.translate(-(x + 8.), -(y + 20.))?;
-                    context.draw_image_with_image_bitmap_and_sw_and_sh_and_dx_and_dy_and_dw_and_dh(
-                        img, 32., 0., 16., 24., x, y, 16., 24.)?;
+                    context
+                        .draw_image_with_image_bitmap_and_sw_and_sh_and_dx_and_dy_and_dw_and_dh(
+                            img, 32., 0., 16., 24., x, y, 16., 24.,
+                        )?;
                     context.restore();
                 }
                 None => return Err(JsValue::from_str("inserter-arm image not available")),
@@ -464,8 +476,7 @@ impl Structure for Inserter {
                                   type_|
              -> bool {
                 let mut try_move = |state: &mut FactorishState| {
-                    if let Ok(()) = state.new_object(output_position.x, output_position.y, type_)
-                    {
+                    if let Ok(()) = state.new_object(output_position.x, output_position.y, type_) {
                         self.cooldown += INSERTER_TIME;
                         true
                     } else {
@@ -740,14 +751,12 @@ impl Structure for OreMine {
     ) -> Result<(), JsValue> {
         let (x, y) = (self.position.x as f64 * 32., self.position.y as f64 * 32.);
         match depth {
-            0 => {
-                match state.image_mine.as_ref() {
-                    Some(img) => {
-                        context.draw_image_with_image_bitmap(img, x, y)?;
-                    }
-                    None => return Err(JsValue::from_str("mine image not available")),
+            0 => match state.image_mine.as_ref() {
+                Some(img) => {
+                    context.draw_image_with_image_bitmap(img, x, y)?;
                 }
-            }
+                None => return Err(JsValue::from_str("mine image not available")),
+            },
             2 => draw_direction_arrow((x, y), &self.rotation, state, context)?,
             _ => (),
         }
