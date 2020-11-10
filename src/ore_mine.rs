@@ -187,13 +187,17 @@ impl Structure for OreMine {
         Ok(())
     }
 
-    fn item_response(&mut self, item: &DropItem) -> Result<ItemResponseResult, ()> {
+    fn input(&mut self, item: &DropItem) -> Result<(), JsValue> {
         if item.type_ == ItemType::CoalOre && self.power == 0. {
             self.max_power = 100.;
             self.power = 100.;
-            Ok((ItemResponse::Consume, None))
+            Ok(())
         } else {
-            Err(())
+            Err(JsValue::from_str("not inputtable to ore mine"))
         }
+    }
+
+    fn can_input(&self, item_type: &ItemType) -> bool {
+        *item_type == ItemType::CoalOre && self.power == 0.
     }
 }

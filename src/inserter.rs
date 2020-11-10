@@ -197,7 +197,7 @@ impl Structure for Inserter {
                         {
                             self.cooldown += INSERTER_TIME;
                             self.hold_item = None;
-                            return Ok(FrameProcResult::InventoryChanged(output_position))
+                            return Ok(FrameProcResult::InventoryChanged(output_position));
                         } else if structure.movable() {
                             try_move(state)
                         }
