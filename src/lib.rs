@@ -451,6 +451,15 @@ impl Structure for Inserter {
                                   structures: &mut dyn Iterator<Item = &mut Box<dyn Structure>>,
                                   type_|
              -> bool {
+                let mut try_move = |state: &mut FactorishState| {
+                    if let Ok(()) = state.new_object(output_position.x, output_position.y, type_)
+                    {
+                        self.cooldown += INSERTER_TIME;
+                        true
+                    } else {
+                        false
+                    }
+                };
                 if let Some((_structure_idx, structure)) = structures
                     .enumerate()
                     .find(|(_idx, structure)| *structure.position() == output_position)
@@ -474,15 +483,13 @@ impl Structure for Inserter {
                         ret = FrameProcResult::InventoryChanged(output_position);
                         self.cooldown += INSERTER_TIME;
                         true
+                    } else if structure.movable() {
+                        try_move(state)
                     } else {
                         false
                     }
-                } else if let Ok(()) = state.new_object(output_position.x, output_position.y, type_)
-                {
-                    self.cooldown += INSERTER_TIME;
-                    true
                 } else {
-                    false
+                    try_move(state)
                 }
             };
 
