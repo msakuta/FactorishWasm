@@ -69,10 +69,11 @@ struct Cell {
     coal_ore: u32,
 }
 
+#[wasm_bindgen]
 #[derive(Eq, PartialEq, Copy, Clone, Debug)]
-struct Position {
-    x: i32,
-    y: i32,
+pub struct Position {
+    pub x: i32,
+    pub y: i32,
 }
 
 impl Position {
@@ -1248,14 +1249,11 @@ impl FactorishState {
         }
     }
 
-    pub fn get_selected_inventory(&self) -> Result<JsValue, JsValue> {
+    pub fn get_selected_inventory(&self) -> Result<Position, JsValue> {
         if let Some(pos) = self.selected_structure_inventory {
-            return Ok(JsValue::from(js_sys::Array::of2(
-                &JsValue::from(pos.x),
-                &JsValue::from(pos.y),
-            )));
+            return Ok(pos);
         }
-        Ok(JsValue::null())
+        Err(JsValue::from_str("not selected"))
     }
 
     pub fn get_structure_inventory(&self, c: i32, r: i32) -> Result<js_sys::Array, JsValue> {

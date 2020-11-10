@@ -277,7 +277,11 @@ function isIE(){
 
     function updateStructureInventory(pos){
         updateInventoryInt(inventoryContentElem, sim, false, sim.get_structure_inventory(
-            ...(pos ? pos : sim.get_selected_inventory())));
+            ...(pos ? pos : (() => {
+                let pos = sim.get_selected_inventory();
+                console.log(`pos: ${pos.x}, ${pos.y}`);
+                return [pos.x, pos.y];
+            })())));
     }
 
     function generateItemImage(i, iconSize, count){
