@@ -259,7 +259,7 @@ function isIE(){
         case 'Splitter':
             return splitter;
         case 'Inserter':
-            return inserter;
+            return [inserter, 2];
         case 'Chest':
             return chest;
         case 'Ore Mine':

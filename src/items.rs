@@ -79,21 +79,45 @@ pub(crate) fn render_drop_item(
     x: i32,
     y: i32,
 ) -> Result<(), JsValue> {
-    let img = match item_type {
-        ItemType::IronOre => &state.image_iron_ore,
-        ItemType::CoalOre => &state.image_coal_ore,
-        ItemType::CopperOre => &state.image_copper_ore,
-        ItemType::IronPlate => &state.image_iron_plate,
-        ItemType::CopperPlate => &state.image_copper_plate,
-
-        ItemType::TransportBelt => &state.image_belt,
-        ItemType::Chest => &state.image_chest,
-        ItemType::Inserter => &state.image_inserter,
-        ItemType::OreMine => &state.image_mine,
-        ItemType::Furnace => &state.image_furnace,
+    let render16 = |img: &Option<_>| -> Result<(), JsValue> {
+        if let Some(image) = img.as_ref() {
+            context.draw_image_with_image_bitmap_and_dw_and_dh(
+                image,
+                x as f64 - 8.,
+                y as f64 - 8.,
+                16.,
+                16.,
+            )?;
+        }
+        Ok(())
     };
-    if let Some(ref image) = img {
-        context.draw_image_with_image_bitmap(image, x as f64 - 8., y as f64 - 8.)?;
+    let render_animated32 = |img: &Option<_>| -> Result<(), JsValue> {
+        if let Some(image) = img.as_ref() {
+            context.draw_image_with_image_bitmap_and_sw_and_sh_and_dx_and_dy_and_dw_and_dh(
+                image,
+                0.,
+                0.,
+                32.,
+                32.,
+                x as f64 - 8.,
+                y as f64 - 8.,
+                16.,
+                16.,
+            )?;
+        }
+        Ok(())
+    };
+    match item_type {
+        ItemType::IronOre => render16(&state.image_iron_ore),
+        ItemType::CoalOre => render16(&state.image_coal_ore),
+        ItemType::CopperOre => render16(&state.image_copper_ore),
+        ItemType::IronPlate => render16(&state.image_iron_plate),
+        ItemType::CopperPlate => render16(&state.image_copper_plate),
+
+        ItemType::TransportBelt => render16(&state.image_belt),
+        ItemType::Chest => render16(&state.image_chest),
+        ItemType::Inserter => render_animated32(&state.image_inserter),
+        ItemType::OreMine => render16(&state.image_mine),
+        ItemType::Furnace => render_animated32(&state.image_furnace),
     }
-    Ok(())
 }
