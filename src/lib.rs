@@ -1,4 +1,5 @@
 #![allow(non_upper_case_globals)]
+mod assembler;
 mod chest;
 mod furnace;
 mod inserter;
@@ -9,6 +10,7 @@ mod structure;
 mod transport_belt;
 mod utils;
 
+use assembler::Assembler;
 use chest::Chest;
 use furnace::Furnace;
 use inserter::Inserter;
@@ -17,6 +19,7 @@ use ore_mine::OreMine;
 use structure::{FrameProcResult, ItemResponse, Position, Rotation, Structure};
 use transport_belt::TransportBelt;
 
+use serde::Serialize;
 use std::collections::HashMap;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
@@ -143,7 +146,7 @@ const tilesize: i32 = 32;
 struct ToolDef {
     item_type: ItemType,
 }
-const tool_defs: [ToolDef; 5] = [
+const tool_defs: [ToolDef; 6] = [
     ToolDef {
         item_type: ItemType::TransportBelt,
     },
@@ -158,6 +161,9 @@ const tool_defs: [ToolDef; 5] = [
     },
     ToolDef {
         item_type: ItemType::Furnace,
+    },
+    ToolDef {
+        item_type: ItemType::Assembler,
     },
 ];
 
@@ -188,6 +194,25 @@ struct Recipe {
     output: ItemSet,
     power_cost: f64,
     recipe_time: f64,
+}
+
+#[derive(Serialize)]
+struct RecipeSerial {
+    input: HashMap<String, usize>,
+    output: HashMap<String, usize>,
+    power_cost: f64,
+    recipe_time: f64,
+}
+
+impl From<Recipe> for RecipeSerial {
+    fn from(o: Recipe) -> Self {
+        Self {
+            input: o.input.iter().map(|(k, v)| (item_to_str(k), *v)).collect(),
+            output: o.output.iter().map(|(k, v)| (item_to_str(k), *v)).collect(),
+            power_cost: o.power_cost,
+            recipe_time: o.recipe_time,
+        }
+    }
 }
 
 const objsize: i32 = 8;
@@ -244,6 +269,7 @@ pub struct FactorishState {
     image_chest: Option<ImageBitmap>,
     image_mine: Option<ImageBitmap>,
     image_furnace: Option<ImageBitmap>,
+    image_assembler: Option<ImageBitmap>,
     image_inserter: Option<ImageBitmap>,
     image_direction: Option<ImageBitmap>,
     image_iron_ore: Option<ImageBitmap>,
@@ -251,6 +277,7 @@ pub struct FactorishState {
     image_copper_ore: Option<ImageBitmap>,
     image_iron_plate: Option<ImageBitmap>,
     image_copper_plate: Option<ImageBitmap>,
+    image_gear: Option<ImageBitmap>,
 }
 
 #[derive(Debug)]
@@ -295,6 +322,7 @@ impl FactorishState {
                     (ItemType::OreMine, 5usize),
                     (ItemType::Chest, 3usize),
                     (ItemType::Furnace, 3usize),
+                    (ItemType::Assembler, 3usize),
                 ]
                 .iter()
                 .map(|v| *v)
@@ -310,6 +338,7 @@ impl FactorishState {
             image_chest: None,
             image_mine: None,
             image_furnace: None,
+            image_assembler: None,
             image_inserter: None,
             image_direction: None,
             image_iron_ore: None,
@@ -317,6 +346,7 @@ impl FactorishState {
             image_copper_ore: None,
             image_iron_plate: None,
             image_copper_plate: None,
+            image_gear: None,
             board: {
                 let mut ret = vec![
                     Cell {
@@ -707,6 +737,7 @@ impl FactorishState {
         }
     }
 
+    /// Returns currently selected structure's coordinates in 2-array or `null` if none selected
     pub fn get_selected_inventory(&self) -> Result<JsValue, JsValue> {
         if let Some(pos) = self.selected_structure_inventory {
             return Ok(JsValue::from(js_sys::Array::of2(
@@ -732,6 +763,37 @@ impl FactorishState {
         self.selected_structure_item =
             Some(str_to_item(name).ok_or_else(|| JsValue::from("Item name not valid"))?);
         Ok(())
+    }
+
+    pub fn get_structure_recipes(&self, c: i32, r: i32) -> Result<JsValue, JsValue> {
+        if let Some(structure) = self.find_structure_tile(&[c, r]) {
+            // Ok(structure.get_recipes()
+            //     .iter()
+            //     .map(|recipe| {
+            //         js_sys::Array::of2(
+            //             &recipe.input.iter().map(|pair| js_sys::Object::::of2(
+            //                 &JsValue::from_str(&item_to_str(pair.0)),
+            //                 &JsValue::from(*pair.1 as f64)
+            //             )).collect::<js_sys::Array>(),
+            //             &recipe.output.iter().map(|pair| js_sys::Array::of2(
+            //                 &JsValue::from_str(&item_to_str(pair.0)),
+            //                 &JsValue::from(*pair.1 as f64)
+            //             )).collect::<js_sys::Array>(),
+            //         )
+            //     })
+            //     .collect::<js_sys::Array>(),
+            // )
+            Ok(JsValue::from_serde(
+                &structure
+                    .get_recipes()
+                    .into_iter()
+                    .map(|v| RecipeSerial::from(v))
+                    .collect::<Vec<_>>(),
+            )
+            .unwrap())
+        } else {
+            Err(JsValue::from_str("structure is not found"))
+        }
     }
 
     fn move_inventory_item(src: &mut Inventory, dst: &mut Inventory, item_type: &ItemType) -> bool {
@@ -776,15 +838,24 @@ impl FactorishState {
 
     fn new_structure(
         &self,
-        tool_index: usize,
+        tool: &ItemType,
         cursor: &Position,
     ) -> Result<Box<dyn Structure>, JsValue> {
-        Ok(match tool_index {
-            0 => Box::new(TransportBelt::new(cursor.x, cursor.y, self.tool_rotation)),
-            1 => Box::new(Inserter::new(cursor.x, cursor.y, self.tool_rotation)),
-            2 => Box::new(OreMine::new(cursor.x, cursor.y, self.tool_rotation)),
-            3 => Box::new(Chest::new(cursor)),
-            _ => Box::new(Furnace::new(cursor)),
+        Ok(match tool {
+            ItemType::TransportBelt => {
+                Box::new(TransportBelt::new(cursor.x, cursor.y, self.tool_rotation))
+            }
+            ItemType::Inserter => Box::new(Inserter::new(cursor.x, cursor.y, self.tool_rotation)),
+            ItemType::OreMine => Box::new(OreMine::new(cursor.x, cursor.y, self.tool_rotation)),
+            ItemType::Chest => Box::new(Chest::new(cursor)),
+            ItemType::Furnace => Box::new(Furnace::new(cursor)),
+            ItemType::Assembler => Box::new(Assembler::new(cursor)),
+            _ => {
+                return Err(JsValue::from_str(&format!(
+                    "Can't make a structure from {:?}",
+                    tool
+                )))
+            }
         })
     }
 
@@ -809,7 +880,7 @@ impl FactorishState {
                     if 1 <= *count {
                         self.harvest(&cursor)?;
                         self.structures
-                            .push(self.new_structure(selected_tool, &cursor)?);
+                            .push(self.new_structure(&tool_defs[selected_tool].item_type, &cursor)?);
                         if let Some(count) = self
                             .player
                             .inventory
@@ -917,6 +988,7 @@ impl FactorishState {
         self.image_chest = Some(load_image("chest")?);
         self.image_mine = Some(load_image("mine")?);
         self.image_furnace = Some(load_image("furnace")?);
+        self.image_assembler = Some(load_image("assembler")?);
         self.image_inserter = Some(load_image("inserter")?);
         self.image_direction = Some(load_image("direction")?);
         self.image_iron_ore = Some(load_image("ore")?);
@@ -924,6 +996,7 @@ impl FactorishState {
         self.image_copper_ore = Some(load_image("copperOre")?);
         self.image_iron_plate = Some(load_image("ironPlate")?);
         self.image_copper_plate = Some(load_image("copperPlate")?);
+        self.image_gear = Some(load_image("gear")?);
         Ok(())
     }
 
@@ -960,7 +1033,7 @@ impl FactorishState {
         context: &CanvasRenderingContext2d,
     ) -> Result<(), JsValue> {
         context.clear_rect(0., 0., 32., 32.);
-        let mut tool = self.new_structure(tool_index, &Position { x: 0, y: 0 })?;
+        let mut tool = self.new_structure(&tool_defs[tool_index].item_type, &Position { x: 0, y: 0 })?;
         tool.set_rotation(&self.tool_rotation).ok();
         for depth in 0..3 {
             tool.draw(self, context, depth)?;
@@ -1061,7 +1134,7 @@ impl FactorishState {
             if let Some(selected_tool) = self.selected_tool {
                 context.save();
                 context.set_global_alpha(0.5);
-                let mut tool = self.new_structure(selected_tool, &Position::from(cursor))?;
+                let mut tool = self.new_structure(&tool_defs[selected_tool].item_type, &Position::from(cursor))?;
                 tool.set_rotation(&self.tool_rotation).ok();
                 for depth in 0..3 {
                     tool.draw(self, &context, depth)?;

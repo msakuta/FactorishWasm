@@ -26,6 +26,7 @@ import pipeItem from "../img/pipe-item.png";
 import steamEngine from "../img/steam-engine.png";
 import rotateImage from "../img/rotate.png";
 import closeImage from "../img/close.png";
+import rightarrow from "../img/rightarrow.png";
 
 
 import { FactorishState } from "../pkg/index.js";
@@ -51,6 +52,7 @@ function isIE(){
         ["chest", chest],
         ["mine", mine],
         ["furnace", furnace],
+        ["assembler", assembler],
         ["inserter", inserter],
         ["direction", direction],
         ["ore", ore],
@@ -58,6 +60,7 @@ function isIE(){
         ["ironPlate", ironPlate],
         ["copperOre", copperOre],
         ["copperPlate", copperPlate],
+        ["gear", gear],
     ].map(async ([name, src]) => {
         const res = await fetch(src);
         return [name, await createImageBitmap(await res.blob())];
@@ -503,6 +506,68 @@ function isIE(){
         // }
     }
 
+    let recipeTarget = null;
+
+    function recipeDraw(recipe, onclick){
+        var ret = "";
+        ret += "<div class='recipe-box'"
+            + (onclick ? " onclick='" + onclick + "'" : "") + ">";
+        ret += "<span style='display: inline-block; margin: 1px'>" +
+            getHTML(generateItemImage("time", true, recipe.recipe_time), true) + "</span>";
+        ret += "<span style='display: inline-block; width: 50%'>";
+        for(var k in recipe.input)
+            ret += getHTML(generateItemImage(k, true, recipe.input[k]), true);
+        ret += `</span><img src='${rightarrow}' style='width: 20px; height: 32px'><span style='display: inline-block; width: 10%'>`;
+        for(var k in recipe.output)
+            ret += getHTML(generateItemImage(k, true, recipe.output[k]), true);
+        ret += "</span></div>";
+        return ret;
+    }
+
+    /// Convert a HTML element to string.
+    /// If deep === true, descendants are serialized, too.
+    function getHTML(who, deep){
+        var div = document.createElement('div');
+        div.appendChild(who.cloneNode(false));
+        var txt = div.innerHTML;
+        if(deep){
+            var ax = txt.indexOf('>')+1;
+            txt= txt.substring(0, ax)+who.innerHTML+ txt.substring(ax);
+        }
+        return txt;
+    }
+
+    function showRecipeSelect(){
+        var recipeSelector = document.getElementById('recipeSelector');
+        var recipeSelectorContent = document.getElementById('recipeSelectorContent');
+        if(recipeSelector.style.display !== "none"){
+            recipeSelector.style.display = "none";
+            return;
+        }
+        else if(sim.get_selected_inventory()){
+            recipeSelector.style.display = "block";
+            bringToTop(recipeSelector);
+            recipeTarget = sim.get_selected_inventory();
+            var text = "";
+            var recipes = sim.get_structure_recipes(...sim.get_selected_inventory());
+            for(var i = 0; i < recipes.length; i++)
+                text += recipeDraw(recipes[i], "Conveyor.recipeSelectClick(" + i + ")");
+            recipeSelectorContent.innerHTML = text;
+        }
+        else{
+            recipeTarget = null;
+            recipeSelectorContent.innerHTML = "No recipes available";
+        }
+    }
+    
+    function hideRecipeSelect(){
+        var recipeSelector = document.getElementById('recipeSelector');
+        recipeSelector.style.display = "none";
+    }
+    const recipeSelectorCloseButton = document.getElementById('recipeSelectorCloseButton');
+    recipeSelectorCloseButton.onclick = hideRecipeSelect;
+    recipeSelectorCloseButton.style.backgroundImage = `url(${closeImage})`;
+
     // Place a window element at the center of the container, assumes the windows have margin set in the middle.
     function placeCenter(elem){
         var containerElem = document.getElementById('container2');
@@ -513,6 +578,9 @@ function isIE(){
 
     placeCenter(inventoryElem);
     windowOrder.push(inventoryElem);
+
+    const recipeSelectButtonElem = document.getElementById('recipeSelectButton');
+    recipeSelectButtonElem.onclick = showRecipeSelect;
 
     const playerElem = document.createElement('div');
     playerElem.style.overflow = 'visible';

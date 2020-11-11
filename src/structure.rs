@@ -1,5 +1,5 @@
 use super::items::ItemType;
-use super::{DropItem, FactorishState, Inventory};
+use super::{DropItem, FactorishState, Inventory, Recipe};
 use wasm_bindgen::prelude::*;
 use web_sys::CanvasRenderingContext2d;
 
@@ -143,5 +143,8 @@ pub(crate) trait Structure {
     fn destroy_inventory(&mut self) -> Inventory {
         self.inventory_mut()
             .map_or(Inventory::new(), |inventory| std::mem::take(inventory))
+    }
+    fn get_recipes(&self) -> Vec<Recipe> {
+        vec![]
     }
 }

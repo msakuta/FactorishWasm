@@ -9,12 +9,14 @@ pub(crate) enum ItemType {
     CopperOre,
     IronPlate,
     CopperPlate,
+    Gear,
 
     TransportBelt,
     Chest,
     Inserter,
     OreMine,
     Furnace,
+    Assembler,
 }
 
 pub(crate) fn item_to_str(type_: &ItemType) -> String {
@@ -24,12 +26,14 @@ pub(crate) fn item_to_str(type_: &ItemType) -> String {
         ItemType::CopperOre => "Copper Ore".to_string(),
         ItemType::IronPlate => "Iron Plate".to_string(),
         ItemType::CopperPlate => "Copper Plate".to_string(),
+        ItemType::Gear => "Gear".to_string(),
 
         ItemType::TransportBelt => "Transport Belt".to_string(),
         ItemType::Chest => "Chest".to_string(),
         ItemType::Inserter => "Inserter".to_string(),
         ItemType::OreMine => "Ore Mine".to_string(),
         ItemType::Furnace => "Furnace".to_string(),
+        ItemType::Assembler => "Assembler".to_string(),
     }
 }
 
@@ -39,13 +43,14 @@ pub(crate) fn str_to_item(name: &str) -> Option<ItemType> {
         "Coal Ore" => Some(ItemType::CoalOre),
         "Copper Ore" => Some(ItemType::CopperOre),
         "Iron Plate" => Some(ItemType::IronPlate),
-        "Copper Plate" => Some(ItemType::CopperPlate),
+        "Gear" => Some(ItemType::Gear),
 
         "Transport Belt" => Some(ItemType::TransportBelt),
         "Chest" => Some(ItemType::Chest),
         "Inserter" => Some(ItemType::Inserter),
         "Ore Mine" => Some(ItemType::OreMine),
         "Furnace" => Some(ItemType::Furnace),
+        "Assembler" => Some(ItemType::Assembler),
 
         _ => None,
     }
@@ -113,11 +118,13 @@ pub(crate) fn render_drop_item(
         ItemType::CopperOre => render16(&state.image_copper_ore),
         ItemType::IronPlate => render16(&state.image_iron_plate),
         ItemType::CopperPlate => render16(&state.image_copper_plate),
+        ItemType::Gear => render16(&state.image_copper_plate),
 
         ItemType::TransportBelt => render16(&state.image_belt),
         ItemType::Chest => render16(&state.image_chest),
         ItemType::Inserter => render_animated32(&state.image_inserter),
         ItemType::OreMine => render16(&state.image_mine),
         ItemType::Furnace => render_animated32(&state.image_furnace),
+        ItemType::Assembler => render16(&state.image_assembler),
     }
 }
