@@ -625,17 +625,16 @@ impl FactorishState {
                 .add_item(&str_to_item(&structure.name()).ok_or_else(|| {
                     JsValue::from_str(&format!("wrong structure name: {:?}", structure.name()))
                 })?);
-            if let Some(inventory) = structure.inventory() {
-                for (name, &count) in inventory {
-                    self.player.add_item(name, count)
-                }
+            let mut structure = self.structures.remove(index);
+            for (name, count) in structure.destroy_inventory() {
+                self.player.add_item(&name, count)
             }
-            self.structures.remove(index);
             self.on_player_update
                 .call1(&window(), &JsValue::from(self.get_player_inventory()?))
                 .unwrap_or(JsValue::from(true));
             Ok(true)
         } else {
+            // Pick up dropped items in the cell
             let mut ret = false;
             while let Some(item_index) = self
                 .drop_items

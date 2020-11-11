@@ -1,6 +1,9 @@
 use super::items::{render_drop_item, ItemType};
 use super::structure::Structure;
-use super::{draw_direction_arrow, DropItem, FactorishState, FrameProcResult, Position, Rotation};
+use super::{
+    draw_direction_arrow, DropItem, FactorishState, FrameProcResult, Inventory, InventoryTrait,
+    Position, Rotation,
+};
 use wasm_bindgen::prelude::*;
 use web_sys::CanvasRenderingContext2d;
 
@@ -220,5 +223,13 @@ impl Structure for Inserter {
     fn set_rotation(&mut self, rotation: &Rotation) -> Result<(), ()> {
         self.rotation = *rotation;
         Ok(())
+    }
+
+    fn destroy_inventory(&mut self) -> Inventory {
+        let mut ret = Inventory::new();
+        if let Some(item) = self.hold_item {
+            ret.add_item(&item);
+        }
+        ret
     }
 }
