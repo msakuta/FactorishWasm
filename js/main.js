@@ -113,16 +113,16 @@ function isIE(){
     var toolOverlays = [];
     var toolCursorElem;
     // Tool bar
-    var toolBarElem = document.createElement('div');
+    var toolBarElem = document.getElementById('toolBar');
     toolBarElem.style.borderStyle = 'solid';
     toolBarElem.style.borderWidth = '1px';
     toolBarElem.style.borderColor = 'red';
-    toolBarElem.style.position = 'relative';
+    toolBarElem.style.position = 'absolute';
     toolBarElem.margin = '3px';
+    toolBarElem.style.top = '480px';
     toolBarElem.style.left = '50%';
     toolBarElem.style.width = ((toolDefs.length + 1) * tilesize + 8) + 'px';
     toolBarElem.style.height = (tilesize + 8) + 'px';
-    container.appendChild(toolBarElem);
     var toolBarCanvases = [];
     for(var i = 0; i < toolDefs.length; i++){
         var toolContainer = document.createElement('span');
@@ -520,9 +520,10 @@ function isIE(){
     playerElem.style.borderWidth = '1px';
     playerElem.style.border = '1px solid #00f';
     playerElem.style.backgroundColor = '#ffff7f';
-    playerElem.style.position = 'relative';
+    playerElem.style.position = 'absolute';
     playerElem.style.margin = '3px';
     playerElem.style.left = '50%';
+    playerElem.style.top = '520px';
     playerElem.style.width = (320) + 'px';
     playerElem.style.height = (160) + 'px';
     container.appendChild(playerElem);

@@ -13,11 +13,19 @@
 
 				background-color: #f0f0f0;
 				margin: 0px;
+				width: fit-content;
 			}
 
-			#container{
+			#container, #container2{
 				position: relative;
+				width: 900px;
+				height: 700px;
 				line-height: 80%;
+			}
+
+			#canvas{
+				position: absolute;
+				left: 0;
 			}
 
 			#inventory, #inventory2{
@@ -153,7 +161,7 @@
 		<input type="checkbox" id="showFluidAmount" checked>Show Fluid Overlay
 		<hr>
 		<div style="position: relative">
-			<div id="container2" style="position: relative">
+			<div id="container2">
 				<canvas id="canvas" width="640" height="480"></canvas>
 				<div id="inventory2" class="noselect">
 					<div id="inventory2Title">Inventory</div>
@@ -165,6 +173,7 @@
 						<div id="inventory2Content"></div>
 					</div>
 				</div>
+				<div id="toolBar"></div>
 			</div>
 		</div>
 		<div id="points"></div>
