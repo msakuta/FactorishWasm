@@ -959,6 +959,7 @@ impl FactorishState {
         tool_index: usize,
         context: &CanvasRenderingContext2d,
     ) -> Result<(), JsValue> {
+        context.clear_rect(0., 0., 32., 32.);
         let mut tool = self.new_structure(tool_index, &Position { x: 0, y: 0 })?;
         tool.set_rotation(&self.tool_rotation).ok();
         for depth in 0..3 {
