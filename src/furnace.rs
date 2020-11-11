@@ -10,7 +10,7 @@ use web_sys::CanvasRenderingContext2d;
 pub(crate) struct Furnace {
     position: Position,
     inventory: Inventory,
-    progress: f64,
+    progress: Option<f64>,
     power: f64,
     max_power: f64,
     recipe: Option<Recipe>,
@@ -21,7 +21,7 @@ impl Furnace {
         Furnace {
             position: *position,
             inventory: Inventory::new(),
-            progress: 0.,
+            progress: None,
             power: 20.,
             max_power: 20.,
             recipe: None,
@@ -50,7 +50,7 @@ impl Structure for Furnace {
         let (x, y) = (self.position.x as f64 * 32., self.position.y as f64 * 32.);
         match state.image_furnace.as_ref() {
             Some(img) => {
-                let sx = if 0. < self.progress && 0. < self.power {
+                let sx = if self.progress.is_some() && 0. < self.power {
                     ((((state.sim_time * 5.) as isize) % 2 + 1) * 32) as f64
                 } else {
                     0.
@@ -71,10 +71,10 @@ impl Structure for Furnace {
             if self.recipe.is_some() {
                 // Progress bar
                 format!("{}{}{}{}",
-                    format!("Progress: {:.0}%<br>", self.progress * 100.),
+                    format!("Progress: {:.0}%<br>", self.progress.unwrap_or(0.) * 100.),
                     "<div style='position: relative; width: 100px; height: 10px; background-color: #001f1f; margin: 2px; border: 1px solid #3f3f3f'>",
                     format!("<div style='position: absolute; width: {}px; height: 10px; background-color: #ff00ff'></div></div>",
-                        self.progress * 100.),
+                        self.progress.unwrap_or(0.) * 100.),
                     format!(r#"Power: {:.1}kJ <div style='position: relative; width: 100px; height: 10px; background-color: #001f1f; margin: 2px; border: 1px solid #3f3f3f'>
                     <div style='position: absolute; width: {}px; height: 10px; background-color: #ff00ff'></div></div>"#,
                     self.power,
@@ -114,43 +114,37 @@ impl Structure for Furnace {
                 }
             }
 
-            // Proceed only if we have sufficient energy in the buffer.
-            let progress = (self.power / recipe.power_cost)
-                .min(1. / recipe.recipe_time)
-                .min(1.);
-            if 1. <= self.progress + progress {
-                self.progress = 0.;
-                let has_ingredients = recipe
-                    .input
-                    .iter()
-                    .map(|consume_item| {
-                        if let Some(entry) = self.inventory.get(&consume_item.0) {
-                            *consume_item.1 <= *entry
-                        } else {
-                            false
-                        }
-                    })
-                    .all(|v| v);
-
+            if self.progress.is_none() {
                 // First, check if we have enough ingredients to finish this recipe.
-                if !has_ingredients {
-                    self.recipe = None;
-                    return Ok(FrameProcResult::None);
+                // If we do, consume the ingredients and start the progress timer.
+                // We can't start as soon as the recipe is set because we may not have enough ingredients
+                // at the point we set the recipe.
+                if recipe.input.iter().map(|(item, count)| count <= &self.inventory.count_item(item)).all(|b| b) {
+                    for (item, count) in &recipe.input {
+                        self.inventory.remove_items(item, *count);
+                    }
+                    self.progress = Some(0.);
+                    ret = FrameProcResult::InventoryChanged(self.position);
                 }
+            }
 
-                // Consume inputs from inventory
-                for consume_item in &recipe.input {
-                    self.inventory.remove_item(&consume_item.0);
-                }
+            if let Some(prev_progress) = self.progress {
+                // Proceed only if we have sufficient energy in the buffer.
+                let progress = (self.power / recipe.power_cost)
+                    .min(1. / recipe.recipe_time)
+                    .min(1.);
+                if 1. <= prev_progress + progress {
+                    self.progress = None;
 
-                // Produce outputs into inventory
-                for output_item in &recipe.output {
-                    self.inventory.add_item(&output_item.0);
+                    // Produce outputs into inventory
+                    for output_item in &recipe.output {
+                        self.inventory.add_item(&output_item.0);
+                    }
+                    return Ok(FrameProcResult::InventoryChanged(self.position));
+                } else {
+                    self.progress = Some(prev_progress + progress);
+                    self.power -= progress * recipe.power_cost;
                 }
-                return Ok(FrameProcResult::InventoryChanged(self.position));
-            } else {
-                self.progress += progress;
-                self.power -= progress * recipe.power_cost;
             }
             return Ok(ret);
         }
