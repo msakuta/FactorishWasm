@@ -286,6 +286,12 @@ function isIE(){
     }
 
     function updateStructureInventory(pos){
+        if(pos){
+            // Don't update with non-selected structure inventory
+            const selPos = sim.get_selected_inventory();
+            if(!selPos || pos[0] !== selPos[0] || pos[1] !== selPos[1])
+                return;
+        }
         updateInventoryInt(inventoryContentElem, sim, false, sim.get_structure_inventory(
             ...(pos ? pos : sim.get_selected_inventory())));
     }
@@ -597,7 +603,7 @@ function isIE(){
             return;
         for(let event of events){
             if(event[0] === "updateStructureInventory"){
-                console.log("updateStructureInventory event received");
+                console.log(`updateStructureInventory event received ${event}`);
                 updateStructureInventory([event[1], event[2]]);
             }
             if(event[0] === "updatePlayerInventory"){
