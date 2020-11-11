@@ -212,17 +212,7 @@ impl Structure for Furnace {
         }
 
         if let Some(recipe) = &self.recipe {
-            if recipe
-                .input
-                .iter()
-                .find(|item| *item.0 == o.type_)
-                .is_some()
-                || recipe
-                    .output
-                    .iter()
-                    .find(|item| *item.0 == o.type_)
-                    .is_some()
-            {
+            if 0 < recipe.input.count_item(&o.type_) || 0 < recipe.output.count_item(&o.type_) {
                 self.inventory.add_item(&o.type_);
                 return Ok(());
             } else {

@@ -98,6 +98,7 @@ trait InventoryTrait {
         self.add_items(item, 1);
     }
     fn add_items(&mut self, item: &ItemType, count: usize);
+    fn count_item(&self, item: &ItemType) -> usize;
 }
 
 impl InventoryTrait for Inventory {
@@ -120,6 +121,10 @@ impl InventoryTrait for Inventory {
         } else {
             self.insert(*item, count);
         }
+    }
+
+    fn count_item(&self, item: &ItemType) -> usize {
+        *self.get(item).unwrap_or(&0)
     }
 }
 

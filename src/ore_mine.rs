@@ -1,5 +1,5 @@
 use super::items::ItemType;
-use super::structure::{ItemResponse, ItemResponseResult, Structure};
+use super::structure::Structure;
 use super::{
     draw_direction_arrow, DropItem, FactorishState, FrameProcResult, Position, Recipe, Rotation,
 };
