@@ -119,7 +119,12 @@ impl Structure for Furnace {
                 // If we do, consume the ingredients and start the progress timer.
                 // We can't start as soon as the recipe is set because we may not have enough ingredients
                 // at the point we set the recipe.
-                if recipe.input.iter().map(|(item, count)| count <= &self.inventory.count_item(item)).all(|b| b) {
+                if recipe
+                    .input
+                    .iter()
+                    .map(|(item, count)| count <= &self.inventory.count_item(item))
+                    .all(|b| b)
+                {
                     for (item, count) in &recipe.input {
                         self.inventory.remove_items(item, *count);
                     }
@@ -149,14 +154,6 @@ impl Structure for Furnace {
             return Ok(ret);
         }
         Ok(FrameProcResult::None)
-    }
-
-    fn inventory(&self) -> Option<&Inventory> {
-        Some(&self.inventory)
-    }
-
-    fn inventory_mut(&mut self) -> Option<&mut Inventory> {
-        Some(&mut self.inventory)
     }
 
     fn input(&mut self, o: &DropItem) -> Result<(), JsValue> {
@@ -252,5 +249,25 @@ impl Structure for Furnace {
         } else {
             Err(())
         }
+    }
+
+    fn inventory(&self) -> Option<&Inventory> {
+        Some(&self.inventory)
+    }
+
+    fn inventory_mut(&mut self) -> Option<&mut Inventory> {
+        Some(&mut self.inventory)
+    }
+
+    fn destroy_inventory(&mut self) -> Inventory {
+        // Return the ingredients if it was in the middle of processing a recipe.
+        if let Some(recipe) = self.recipe.take() {
+            if self.progress.is_some() {
+                let mut ret = std::mem::take(&mut self.inventory);
+                ret.merge(recipe.input);
+                return ret;
+            }
+        }
+        std::mem::take(&mut self.inventory)
     }
 }

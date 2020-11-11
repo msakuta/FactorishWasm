@@ -99,6 +99,7 @@ trait InventoryTrait {
     }
     fn add_items(&mut self, item: &ItemType, count: usize);
     fn count_item(&self, item: &ItemType) -> usize;
+    fn merge(&mut self, other: Inventory);
 }
 
 impl InventoryTrait for Inventory {
@@ -125,6 +126,16 @@ impl InventoryTrait for Inventory {
 
     fn count_item(&self, item: &ItemType) -> usize {
         *self.get(item).unwrap_or(&0)
+    }
+
+    fn merge(&mut self, other: Inventory) {
+        for (k, v) in other {
+            if let Some(vv) = self.get_mut(&k) {
+                *vv += v;
+            } else {
+                self.insert(k, v);
+            }
+        }
     }
 }
 
