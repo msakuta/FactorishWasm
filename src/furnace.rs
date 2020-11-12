@@ -270,4 +270,32 @@ impl Structure for Furnace {
         }
         std::mem::take(&mut self.inventory)
     }
+    fn get_recipes(&self) -> Vec<Recipe> {
+        vec![
+            Recipe {
+                input: [(ItemType::IronOre, 1usize)]
+                    .iter()
+                    .map(|(k, v)| (*k, *v))
+                    .collect(),
+                output: [(ItemType::IronPlate, 1usize)]
+                    .iter()
+                    .map(|(k, v)| (*k, *v))
+                    .collect(),
+                power_cost: 20.,
+                recipe_time: 50.,
+            },
+            Recipe {
+                input: [(ItemType::CopperOre, 1usize)]
+                    .iter()
+                    .map(|(k, v)| (*k, *v))
+                    .collect(),
+                output: [(ItemType::CopperPlate, 1usize)]
+                    .iter()
+                    .map(|(k, v)| (*k, *v))
+                    .collect(),
+                power_cost: 20.,
+                recipe_time: 50.,
+            },
+        ]
+    }
 }
