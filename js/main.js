@@ -467,9 +467,6 @@ function isIE(){
 
     var inventoryTitleElem = document.getElementById('inventory2Title');
 
-    placeCenter(inventoryElem);
-    windowOrder.push(inventoryElem);
-
     inventoryTitleElem.addEventListener('mousedown', function(evt){
         dragWindowMouseDown(evt, inventoryElem, inventoryDragStart);
     });
@@ -509,19 +506,32 @@ function isIE(){
     let recipeTarget = null;
 
     function recipeDraw(recipe, onclick){
-        var ret = "";
-        ret += "<div class='recipe-box'"
-            + (onclick ? " onclick='" + onclick + "'" : "") + ">";
-        ret += "<span style='display: inline-block; margin: 1px'>" +
-            getHTML(generateItemImage("time", true, recipe.recipe_time), true) + "</span>";
-        ret += "<span style='display: inline-block; width: 50%'>";
+        const recipeBox = document.createElement("div");
+        recipeBox.className = "recipe-box";
+        recipeBox.onclick = onclick;
+        const timeIcon = document.createElement("span");
+        timeIcon.style.display = "inline-block";
+        timeIcon.style.margin = "1px";
+        timeIcon.innerHTML = getHTML(generateItemImage("time", true, recipe.recipe_time), true);
+        recipeBox.appendChild(timeIcon);
+        const inputBox = document.createElement("span");
+        inputBox.style.display = "inline-block";
+        inputBox.style.width = "50%";
         for(var k in recipe.input)
-            ret += getHTML(generateItemImage(k, true, recipe.input[k]), true);
-        ret += `</span><img src='${rightarrow}' style='width: 20px; height: 32px'><span style='display: inline-block; width: 10%'>`;
+            inputBox.innerHTML += getHTML(generateItemImage(k, true, recipe.input[k]), true);
+        recipeBox.appendChild(inputBox);
+        const arrowImg = document.createElement("img");
+        arrowImg.src = rightarrow;
+        arrowImg.style.width = "20px";
+        arrowImg.style.height = "32px";
+        recipeBox.appendChild(arrowImg);
+        const outputBox = document.createElement("span");
+        outputBox.style.display = "inline-block";
+        outputBox.style.width = "10%";
         for(var k in recipe.output)
-            ret += getHTML(generateItemImage(k, true, recipe.output[k]), true);
-        ret += "</span></div>";
-        return ret;
+            outputBox.innerHTML += getHTML(generateItemImage(k, true, recipe.output[k]), true);
+        recipeBox.appendChild(outputBox);
+        return recipeBox;
     }
 
     /// Convert a HTML element to string.
@@ -550,16 +560,23 @@ function isIE(){
             recipeTarget = sim.get_selected_inventory();
             var text = "";
             var recipes = sim.get_structure_recipes(...sim.get_selected_inventory());
-            for(var i = 0; i < recipes.length; i++)
-                text += recipeDraw(recipes[i], "Conveyor.recipeSelectClick(" + i + ")");
-            recipeSelectorContent.innerHTML = text;
+            while(0 < recipeSelectorContent.childNodes.length)
+                recipeSelectorContent.removeChild(recipeSelectorContent.childNodes[0]);
+            for(var i = 0; i < recipes.length; i++){
+                const index = i;
+                recipeSelectorContent.appendChild(recipeDraw(recipes[i], (evt) => {
+                    sim.select_recipe(recipeTarget[0], recipeTarget[1], index);
+                    recipeSelector.style.display = "none";
+                }));
+            }
+            // recipeSelectorContent.innerHTML = text;
         }
         else{
             recipeTarget = null;
             recipeSelectorContent.innerHTML = "No recipes available";
         }
     }
-    
+
     function hideRecipeSelect(){
         var recipeSelector = document.getElementById('recipeSelector');
         recipeSelector.style.display = "none";
@@ -581,6 +598,18 @@ function isIE(){
 
     const recipeSelectButtonElem = document.getElementById('recipeSelectButton');
     recipeSelectButtonElem.onclick = showRecipeSelect;
+
+    var recipeSelectorDragStart = null;
+
+    const recipeSelectorTitle = document.getElementById('recipeSelectorTitle');
+    const recipeSelector = document.getElementById('recipeSelector');
+    if(recipeSelectorTitle && recipeSelector){
+        placeCenter(recipeSelector);
+        windowOrder.push(recipeSelector);
+        recipeSelectorTitle.addEventListener('mousedown', function(evt){
+            dragWindowMouseDown(evt, recipeSelector, recipeSelectorDragStart);
+        })
+    }
 
     const playerElem = document.createElement('div');
     playerElem.style.overflow = 'visible';

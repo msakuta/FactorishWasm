@@ -278,4 +278,14 @@ impl Structure for Assembler {
             recipe_time: 50.,
         }]
     }
+
+    fn select_recipe(&mut self, index: usize) -> Result<bool, JsValue> {
+        self.recipe = Some(
+            self.get_recipes()
+                .get(index)
+                .ok_or(js_err!("recipes index out of bound {:?}", index))?
+                .clone(),
+        );
+        Ok(true)
+    }
 }

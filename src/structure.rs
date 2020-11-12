@@ -147,4 +147,7 @@ pub(crate) trait Structure {
     fn get_recipes(&self) -> Vec<Recipe> {
         vec![]
     }
+    fn select_recipe(&mut self, _index: usize) -> Result<bool, JsValue> {
+        Err(JsValue::from_str("recipes not available"))
+    }
 }

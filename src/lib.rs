@@ -1,4 +1,14 @@
 #![allow(non_upper_case_globals)]
+
+macro_rules! js_err {
+    ($fmt:expr, $($arg1:expr),*) => {
+        JsValue::from_str(&format!($fmt, $($arg1),+))
+    };
+    ($fmt:expr) => {
+        JsValue::from_str($fmt)
+    }
+}
+
 mod assembler;
 mod chest;
 mod furnace;
@@ -189,6 +199,7 @@ fn draw_direction_arrow(
 
 type ItemSet = HashMap<ItemType, usize>;
 
+#[derive(Clone)]
 struct Recipe {
     input: ItemSet,
     output: ItemSet,
@@ -519,6 +530,14 @@ impl FactorishState {
             .map(|s| s.as_ref())
     }
 
+    /// Mutable variant of find_structure_tile
+    fn find_structure_tile_mut(&mut self, tile: &[i32]) -> Option<&mut Box<dyn Structure>> {
+        self.structures
+            .iter_mut()
+            .find(|s| s.position().x == tile[0] && s.position().y == tile[1])
+        // .map(|s| s.as_mut())
+    }
+
     /// Dirty hack to enable modifying a structure in an array.
     /// Instead of returning mutable reference, return an index into the array, so the
     /// caller can directly reference the structure from array `self.structures[idx]`.
@@ -796,6 +815,14 @@ impl FactorishState {
         }
     }
 
+    pub fn select_recipe(&mut self, c: i32, r: i32, index: usize) -> Result<bool, JsValue> {
+        if let Some(structure) = self.find_structure_tile_mut(&[c, r]) {
+            structure.select_recipe(index)
+        } else {
+            Err(JsValue::from_str("Structure is not found"))
+        }
+    }
+
     fn move_inventory_item(src: &mut Inventory, dst: &mut Inventory, item_type: &ItemType) -> bool {
         if let Some(src_item) = src.remove(item_type) {
             dst.add_items(item_type, src_item);
@@ -879,8 +906,9 @@ impl FactorishState {
                 {
                     if 1 <= *count {
                         self.harvest(&cursor)?;
-                        self.structures
-                            .push(self.new_structure(&tool_defs[selected_tool].item_type, &cursor)?);
+                        self.structures.push(
+                            self.new_structure(&tool_defs[selected_tool].item_type, &cursor)?,
+                        );
                         if let Some(count) = self
                             .player
                             .inventory
@@ -1033,7 +1061,8 @@ impl FactorishState {
         context: &CanvasRenderingContext2d,
     ) -> Result<(), JsValue> {
         context.clear_rect(0., 0., 32., 32.);
-        let mut tool = self.new_structure(&tool_defs[tool_index].item_type, &Position { x: 0, y: 0 })?;
+        let mut tool =
+            self.new_structure(&tool_defs[tool_index].item_type, &Position { x: 0, y: 0 })?;
         tool.set_rotation(&self.tool_rotation).ok();
         for depth in 0..3 {
             tool.draw(self, context, depth)?;
@@ -1134,7 +1163,8 @@ impl FactorishState {
             if let Some(selected_tool) = self.selected_tool {
                 context.save();
                 context.set_global_alpha(0.5);
-                let mut tool = self.new_structure(&tool_defs[selected_tool].item_type, &Position::from(cursor))?;
+                let mut tool = self
+                    .new_structure(&tool_defs[selected_tool].item_type, &Position::from(cursor))?;
                 tool.set_rotation(&self.tool_rotation).ok();
                 for depth in 0..3 {
                     tool.draw(self, &context, depth)?;
