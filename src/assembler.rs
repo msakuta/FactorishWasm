@@ -241,18 +241,32 @@ impl Structure for Assembler {
     }
 
     fn get_recipes(&self) -> Vec<Recipe> {
-        vec![Recipe {
-            input: [(ItemType::IronPlate, 1usize)]
-                .iter()
-                .map(|(k, v)| (*k, *v))
-                .collect(),
-            output: [(ItemType::Gear, 1usize)]
-                .iter()
-                .map(|(k, v)| (*k, *v))
-                .collect(),
-            power_cost: 20.,
-            recipe_time: 50.,
-        }]
+        vec![
+            Recipe {
+                input: [(ItemType::IronPlate, 2usize)]
+                    .iter()
+                    .map(|(k, v)| (*k, *v))
+                    .collect(),
+                output: [(ItemType::Gear, 1usize)]
+                    .iter()
+                    .map(|(k, v)| (*k, *v))
+                    .collect(),
+                power_cost: 20.,
+                recipe_time: 50.,
+            },
+            Recipe {
+                input: [(ItemType::IronPlate, 1usize), (ItemType::Gear, 1usize)]
+                    .iter()
+                    .map(|(k, v)| (*k, *v))
+                    .collect(),
+                output: [(ItemType::TransportBelt, 1usize)]
+                    .iter()
+                    .map(|(k, v)| (*k, *v))
+                    .collect(),
+                power_cost: 20.,
+                recipe_time: 50.,
+            },
+        ]
     }
 
     fn select_recipe(&mut self, index: usize) -> Result<bool, JsValue> {
