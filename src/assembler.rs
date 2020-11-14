@@ -266,6 +266,18 @@ impl Structure for Assembler {
                 power_cost: 20.,
                 recipe_time: 50.,
             },
+            Recipe {
+                input: [(ItemType::IronPlate, 5usize)]
+                    .iter()
+                    .map(|(k, v)| (*k, *v))
+                    .collect(),
+                output: [(ItemType::Chest, 1usize)]
+                    .iter()
+                    .map(|(k, v)| (*k, *v))
+                    .collect(),
+                power_cost: 20.,
+                recipe_time: 50.,
+            },
         ]
     }
 
