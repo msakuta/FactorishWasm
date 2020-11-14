@@ -1,3 +1,4 @@
+use super::items::get_item_image_url;
 use super::structure::Structure;
 use super::{
     DropItem, FactorishState, FrameProcResult, Inventory, InventoryTrait, ItemType, Position,
@@ -5,6 +6,36 @@ use super::{
 };
 use wasm_bindgen::prelude::*;
 use web_sys::CanvasRenderingContext2d;
+
+fn generate_item_image(item_image: &str, icon_size: bool, count: usize) -> String {
+    let size = 32;
+    format!("<div style=\"background-image: url('{}'); width: {}px; height: {}px; display: inline-block\"     draggable='false'>{}</div>",
+        item_image, size, size,
+    if icon_size && 0 < count {
+        format!("<span class='overlay noselect' style='position: relative; display: inline-block; width: {}px; height: {}px'>{}</span>", size, size, count)
+    } else {
+        "".to_string()
+    })
+}
+
+fn _recipe_html(state: &FactorishState, recipe: &Recipe) -> String {
+    let mut ret = String::from("");
+    ret += "<div class='recipe-box'>";
+    ret += &format!(
+        "<span style='display: inline-block; margin: 1px'>{}</span>",
+        &generate_item_image("time", true, recipe.recipe_time as usize)
+    );
+    ret += "<span style='display: inline-block; width: 50%'>";
+    for (key, value) in &recipe.input {
+        ret += &generate_item_image(get_item_image_url(state, &key), true, *value);
+    }
+    ret += "</span><img src='img/rightarrow.png' style='width: 20px; height: 32px'><span style='display: inline-block; width: 10%'>";
+    for (key, value) in &recipe.output {
+        ret += &generate_item_image(get_item_image_url(state, &key), true, *value);
+    }
+    ret += "</span></div>";
+    return ret;
+}
 
 pub(crate) struct Assembler {
     position: Position,
@@ -49,7 +80,7 @@ impl Structure for Assembler {
         let (x, y) = (self.position.x as f64 * 32., self.position.y as f64 * 32.);
         match state.image_assembler.as_ref() {
             Some(img) => {
-                context.draw_image_with_image_bitmap(img, x, y)?;
+                context.draw_image_with_image_bitmap(&img.bitmap, x, y)?;
             }
             None => return Err(JsValue::from_str("assembler image not available")),
         }
@@ -60,7 +91,7 @@ impl Structure for Assembler {
     fn desc(&self, _state: &FactorishState) -> String {
         format!(
             "{}<br>{}",
-            if self.recipe.is_some() {
+            if let Some(recipe) = &self.recipe {
                 // Progress bar
                 format!("{}{}{}{}",
                     format!("Progress: {:.0}%<br>", self.progress.unwrap_or(0.) * 100.),
@@ -72,9 +103,11 @@ impl Structure for Assembler {
                     self.power,
                     if 0. < self.max_power { (self.power) / self.max_power * 100. } else { 0. }),
                     )
-            // getHTML(generateItemImage("time", true, this.recipe.time), true) + "<br>" +
-            // "Outputs: <br>" +
-            // getHTML(generateItemImage(this.recipe.output, true, 1), true) + "<br>";
+                + &generate_item_image(&_state.image_time.as_ref().unwrap().url, true, recipe.recipe_time as usize) + "<br>" +
+                "Outputs: <br>" +
+                &recipe.output.iter()
+                    .map(|item| format!("{}<br>", &generate_item_image(get_item_image_url(_state, &item.0), true, 1)))
+                    .fold::<String, _>("".to_string(), |a, s| a + &s)
             } else {
                 String::from("No recipe")
             },
@@ -160,17 +193,6 @@ impl Structure for Assembler {
         Err(JsValue::from_str("Recipe is not initialized"))
     }
 
-    fn can_input(&self, item_type: &ItemType) -> bool {
-        if let Some(recipe) = &self.recipe {
-            *item_type == ItemType::CoalOre || recipe.input.get(item_type).is_some()
-        } else {
-            match item_type {
-                ItemType::IronOre | ItemType::CopperOre => true,
-                _ => false,
-            }
-        }
-    }
-
     fn output<'a>(
         &'a mut self,
         state: &mut FactorishState,
@@ -241,5 +263,9 @@ impl Structure for Assembler {
                 .clone(),
         );
         Ok(true)
+    }
+
+    fn get_selected_recipe(&self) -> Option<&Recipe> {
+        self.recipe.as_ref()
     }
 }

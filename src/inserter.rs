@@ -1,8 +1,8 @@
-use super::items::{render_drop_item, ItemType};
+use super::items::{item_to_str, render_drop_item, ItemType};
 use super::structure::Structure;
 use super::{
-    draw_direction_arrow, DropItem, FactorishState, FrameProcResult, Inventory, InventoryTrait,
-    Position, Rotation,
+    draw_direction_arrow, log, DropItem, FactorishState, FrameProcResult, Inventory,
+    InventoryTrait, Position, Rotation,
 };
 use wasm_bindgen::prelude::*;
 use web_sys::CanvasRenderingContext2d;
@@ -60,7 +60,15 @@ impl Structure for Inserter {
                 Some(img) => {
                     context
                         .draw_image_with_image_bitmap_and_sw_and_sh_and_dx_and_dy_and_dw_and_dh(
-                            img, 0., 0., 32., 32., x, y, 32., 32.,
+                            &img.bitmap,
+                            0.,
+                            0.,
+                            32.,
+                            32.,
+                            x,
+                            y,
+                            32.,
+                            32.,
                         )?;
                 }
                 None => return Err(JsValue::from_str("inserter image not available")),
@@ -74,7 +82,15 @@ impl Structure for Inserter {
                     context.translate(-(x + 8.), -(y + 20.))?;
                     context
                         .draw_image_with_image_bitmap_and_sw_and_sh_and_dx_and_dy_and_dw_and_dh(
-                            img, 48., 0., 16., 32., x, y, 16., 32.,
+                            &img.bitmap,
+                            48.,
+                            0.,
+                            16.,
+                            32.,
+                            x,
+                            y,
+                            16.,
+                            32.,
                         )?;
                     context.translate(x + 8., y + 8.)?;
                     context.rotate(-angles.0)?;
@@ -82,7 +98,15 @@ impl Structure for Inserter {
                     context.translate(-(x + 8.), -(y + 20.))?;
                     context
                         .draw_image_with_image_bitmap_and_sw_and_sh_and_dx_and_dy_and_dw_and_dh(
-                            img, 32., 0., 16., 24., x, y, 16., 24.,
+                            &img.bitmap,
+                            32.,
+                            0.,
+                            16.,
+                            24.,
+                            x,
+                            y,
+                            16.,
+                            24.,
                         )?;
                     if let Some(item) = self.hold_item {
                         context.translate(x + 4., y + 4.)?;

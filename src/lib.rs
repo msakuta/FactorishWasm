@@ -1,5 +1,13 @@
 #![allow(non_upper_case_globals)]
 
+macro_rules! console_log {
+    ($fmt:expr, $($arg1:expr),*) => {
+        log(&format!($fmt, $($arg1),+))
+    };
+    ($fmt:expr) => {
+        log($fmt)
+    }
+}
 macro_rules! js_err {
     ($fmt:expr, $($arg1:expr),*) => {
         JsValue::from_str(&format!($fmt, $($arg1),+))
@@ -40,16 +48,7 @@ use perlin_noise::perlin_noise_pixel;
 #[wasm_bindgen]
 extern "C" {
     #[wasm_bindgen(js_namespace = console)]
-    fn log(s: &str);
-}
-
-macro_rules! console_log {
-    ($fmt:expr, $($arg1:expr),*) => {
-        log(&format!($fmt, $($arg1),+))
-    };
-    ($fmt:expr) => {
-        log($fmt)
-    }
+    pub(crate) fn log(s: &str);
 }
 
 // When the `wee_alloc` feature is enabled, use `wee_alloc` as the global
@@ -189,7 +188,7 @@ fn draw_direction_arrow(
             context.translate(x + 16., y + 16.)?;
             context.rotate(rotation.angle_rad() + std::f64::consts::PI)?;
             context.translate(-(x + 16. + 4.) + 16., -(y + 16. + 8.) + 16.)?;
-            context.draw_image_with_image_bitmap(img, x, y)?;
+            context.draw_image_with_image_bitmap(&img.bitmap, x, y)?;
             context.restore();
         }
         None => return Err(JsValue::from_str("direction image not available")),
@@ -249,6 +248,17 @@ impl Player {
     }
 }
 
+struct ImageBundle {
+    url: String,
+    bitmap: ImageBitmap,
+}
+
+impl<'a> Into<&'a ImageBitmap> for &'a ImageBundle {
+    fn into(self) -> &'a ImageBitmap {
+        &self.bitmap
+    }
+}
+
 #[wasm_bindgen]
 pub struct FactorishState {
     delta_time: f64,
@@ -272,23 +282,24 @@ pub struct FactorishState {
     info_elem: Option<HtmlDivElement>,
     on_player_update: js_sys::Function,
     // on_show_inventory: js_sys::Function,
-    image_dirt: Option<ImageBitmap>,
-    image_ore: Option<ImageBitmap>,
-    image_coal: Option<ImageBitmap>,
-    image_copper: Option<ImageBitmap>,
-    image_belt: Option<ImageBitmap>,
-    image_chest: Option<ImageBitmap>,
-    image_mine: Option<ImageBitmap>,
-    image_furnace: Option<ImageBitmap>,
-    image_assembler: Option<ImageBitmap>,
-    image_inserter: Option<ImageBitmap>,
-    image_direction: Option<ImageBitmap>,
-    image_iron_ore: Option<ImageBitmap>,
-    image_coal_ore: Option<ImageBitmap>,
-    image_copper_ore: Option<ImageBitmap>,
-    image_iron_plate: Option<ImageBitmap>,
-    image_copper_plate: Option<ImageBitmap>,
-    image_gear: Option<ImageBitmap>,
+    image_dirt: Option<ImageBundle>,
+    image_ore: Option<ImageBundle>,
+    image_coal: Option<ImageBundle>,
+    image_copper: Option<ImageBundle>,
+    image_belt: Option<ImageBundle>,
+    image_chest: Option<ImageBundle>,
+    image_mine: Option<ImageBundle>,
+    image_furnace: Option<ImageBundle>,
+    image_assembler: Option<ImageBundle>,
+    image_inserter: Option<ImageBundle>,
+    image_direction: Option<ImageBundle>,
+    image_iron_ore: Option<ImageBundle>,
+    image_coal_ore: Option<ImageBundle>,
+    image_copper_ore: Option<ImageBundle>,
+    image_iron_plate: Option<ImageBundle>,
+    image_copper_plate: Option<ImageBundle>,
+    image_gear: Option<ImageBundle>,
+    image_time: Option<ImageBundle>,
 }
 
 #[derive(Debug)]
@@ -358,6 +369,7 @@ impl FactorishState {
             image_iron_plate: None,
             image_copper_plate: None,
             image_gear: None,
+            image_time: None,
             board: {
                 let mut ret = vec![
                     Cell {
@@ -989,23 +1001,36 @@ impl FactorishState {
         self.viewport_width = canvas.width() as f64;
         self.viewport_height = canvas.height() as f64;
         self.info_elem = Some(info_elem);
-        let load_image = |path| -> Result<_, JsValue> {
+
+        let load_image = |path| -> Result<ImageBundle, JsValue> {
             if let Some(value) = image_assets.iter().find(|value| {
                 let array = js_sys::Array::from(value);
                 array.iter().next() == Some(JsValue::from_str(path))
             }) {
-                let array = js_sys::Array::from(&value);
-                array
-                    .to_vec()
-                    .into_iter()
-                    .nth(1)
-                    .unwrap_or_else(|| {
-                        JsValue::from_str(&format!(
-                            "Couldn't convert value to ImageBitmap: {:?}",
-                            path
-                        ))
-                    })
-                    .dyn_into::<ImageBitmap>()
+                let array = js_sys::Array::from(&value).to_vec();
+                Ok(ImageBundle {
+                    url: array
+                        .get(1)
+                        .map(|v| v.clone())
+                        .ok_or_else(|| {
+                            JsValue::from_str(&format!(
+                                "Couldn't convert value to String: {:?}",
+                                path
+                            ))
+                        })?
+                        .dyn_into::<js_sys::JsString>()?
+                        .into(),
+                    bitmap: array
+                        .get(2)
+                        .map(|v| v.clone())
+                        .ok_or_else(|| {
+                            JsValue::from_str(&format!(
+                                "Couldn't convert value to ImageBitmap: {:?}",
+                                path
+                            ))
+                        })?
+                        .dyn_into::<ImageBitmap>()?,
+                })
             } else {
                 Err(JsValue::from_str(&format!("Image not found: {:?}", path)))
             }
@@ -1027,6 +1052,7 @@ impl FactorishState {
         self.image_iron_plate = Some(load_image("ironPlate")?);
         self.image_copper_plate = Some(load_image("copperPlate")?);
         self.image_gear = Some(load_image("gear")?);
+        self.image_time = Some(load_image("time")?);
         Ok(())
     }
 
@@ -1113,7 +1139,7 @@ impl FactorishState {
                 for y in 0..self.viewport_height as u32 / 32 {
                     for x in 0..self.viewport_width as u32 / 32 {
                         context.draw_image_with_image_bitmap(
-                            img,
+                            &img.bitmap,
                             x as f64 * 32.,
                             y as f64 * 32.,
                         )?;
@@ -1126,11 +1152,17 @@ impl FactorishState {
                             }
                             Ok(())
                         };
-                        draw_ore(self.board[(x + y * self.width) as usize].iron_ore, img_ore)?;
-                        draw_ore(self.board[(x + y * self.width) as usize].coal_ore, img_coal)?;
+                        draw_ore(
+                            self.board[(x + y * self.width) as usize].iron_ore,
+                            &img_ore.bitmap,
+                        )?;
+                        draw_ore(
+                            self.board[(x + y * self.width) as usize].coal_ore,
+                            &img_coal.bitmap,
+                        )?;
                         draw_ore(
                             self.board[(x + y * self.width) as usize].copper_ore,
-                            img_copper,
+                            &img_copper.bitmap,
                         )?;
                     }
                 }

@@ -124,8 +124,14 @@ pub(crate) trait Structure {
     fn input(&mut self, _o: &DropItem) -> Result<(), JsValue> {
         Err(JsValue::from_str("Not supported"))
     }
-    fn can_input(&self, _o: &ItemType) -> bool {
-        false
+    /// Returns wheter the structure can accept an item as the input. If this structure is a factory
+    /// that returns recipes by get_selected_recipe(), it will check if it's in the inputs.
+    fn can_input(&self, item_type: &ItemType) -> bool {
+        if let Some(recipe) = self.get_selected_recipe() {
+            recipe.input.get(item_type).is_some()
+        } else {
+            false
+        }
     }
     fn output<'a>(
         &'a mut self,
@@ -152,5 +158,8 @@ pub(crate) trait Structure {
     }
     fn select_recipe(&mut self, _index: usize) -> Result<bool, JsValue> {
         Err(JsValue::from_str("recipes not available"))
+    }
+    fn get_selected_recipe(&self) -> Option<&Recipe> {
+        None
     }
 }

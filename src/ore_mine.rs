@@ -48,7 +48,7 @@ impl Structure for OreMine {
         match depth {
             0 => match state.image_mine.as_ref() {
                 Some(img) => {
-                    context.draw_image_with_image_bitmap(img, x, y)?;
+                    context.draw_image_with_image_bitmap(&img.bitmap, x, y)?;
                 }
                 None => return Err(JsValue::from_str("mine image not available")),
             },

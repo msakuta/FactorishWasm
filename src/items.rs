@@ -1,4 +1,4 @@
-use super::{tilesize, FactorishState};
+use super::{tilesize, FactorishState, ImageBundle};
 use wasm_bindgen::prelude::*;
 use web_sys::CanvasRenderingContext2d;
 
@@ -84,10 +84,10 @@ pub(crate) fn render_drop_item(
     x: i32,
     y: i32,
 ) -> Result<(), JsValue> {
-    let render16 = |img: &Option<_>| -> Result<(), JsValue> {
+    let render16 = |img: &Option<ImageBundle>| -> Result<(), JsValue> {
         if let Some(image) = img.as_ref() {
             context.draw_image_with_image_bitmap_and_dw_and_dh(
-                image,
+                &image.bitmap,
                 x as f64 - 8.,
                 y as f64 - 8.,
                 16.,
@@ -96,10 +96,10 @@ pub(crate) fn render_drop_item(
         }
         Ok(())
     };
-    let render_animated32 = |img: &Option<_>| -> Result<(), JsValue> {
+    let render_animated32 = |img: &Option<ImageBundle>| -> Result<(), JsValue> {
         if let Some(image) = img.as_ref() {
             context.draw_image_with_image_bitmap_and_sw_and_sh_and_dx_and_dy_and_dw_and_dh(
-                image,
+                &image.bitmap,
                 0.,
                 0.,
                 32.,
@@ -118,7 +118,7 @@ pub(crate) fn render_drop_item(
         ItemType::CopperOre => render16(&state.image_copper_ore),
         ItemType::IronPlate => render16(&state.image_iron_plate),
         ItemType::CopperPlate => render16(&state.image_copper_plate),
-        ItemType::Gear => render16(&state.image_copper_plate),
+        ItemType::Gear => render16(&state.image_gear),
 
         ItemType::TransportBelt => render16(&state.image_belt),
         ItemType::Chest => render16(&state.image_chest),
@@ -126,5 +126,23 @@ pub(crate) fn render_drop_item(
         ItemType::OreMine => render16(&state.image_mine),
         ItemType::Furnace => render_animated32(&state.image_furnace),
         ItemType::Assembler => render16(&state.image_assembler),
+    }
+}
+
+pub(crate) fn get_item_image_url<'a>(state: &'a FactorishState, item_type: &ItemType) -> &'a str {
+    match item_type {
+        ItemType::IronOre => &state.image_iron_ore.as_ref().unwrap().url,
+        ItemType::CoalOre => &state.image_coal_ore.as_ref().unwrap().url,
+        ItemType::CopperOre => &state.image_copper_ore.as_ref().unwrap().url,
+        ItemType::IronPlate => &state.image_iron_plate.as_ref().unwrap().url,
+        ItemType::CopperPlate => &state.image_copper_plate.as_ref().unwrap().url,
+        ItemType::Gear => &state.image_gear.as_ref().unwrap().url,
+
+        ItemType::TransportBelt => &state.image_belt.as_ref().unwrap().url,
+        ItemType::Chest => &state.image_chest.as_ref().unwrap().url,
+        ItemType::Inserter => &state.image_inserter.as_ref().unwrap().url,
+        ItemType::OreMine => &state.image_mine.as_ref().unwrap().url,
+        ItemType::Furnace => &state.image_furnace.as_ref().unwrap().url,
+        ItemType::Assembler => &state.image_assembler.as_ref().unwrap().url,
     }
 }

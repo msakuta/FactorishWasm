@@ -41,7 +41,7 @@ impl Structure for Chest {
         let (x, y) = (self.position.x as f64 * 32., self.position.y as f64 * 32.);
         match state.image_chest.as_ref() {
             Some(img) => {
-                context.draw_image_with_image_bitmap(img, x, y)?;
+                context.draw_image_with_image_bitmap(&img.bitmap, x, y)?;
                 Ok(())
             }
             None => Err(JsValue::from_str("chest image not available")),

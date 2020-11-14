@@ -61,10 +61,13 @@ function isIE(){
         ["copperOre", copperOre],
         ["copperPlate", copperPlate],
         ["gear", gear],
+        ["time", time],
     ].map(async ([name, src]) => {
         const res = await fetch(src);
-        return [name, await createImageBitmap(await res.blob())];
+        return [name, src, await createImageBitmap(await res.blob())];
     });
+
+    let paused = false;
 
     let sim = new FactorishState(updateInventory);
 
@@ -679,16 +682,20 @@ function isIE(){
         evt.preventDefault();
     });
     canvas.addEventListener("mousemove", function(evt){
-        sim.mouse_move([evt.offsetX, evt.offsetY]);
+        if(!paused)
+            sim.mouse_move([evt.offsetX, evt.offsetY]);
     });
 
     canvas.addEventListener("mouseleave", function(evt){
-        sim.mouse_leave([evt.offsetX, evt.offsetY]);
+        if(!paused)
+            sim.mouse_leave([evt.offsetX, evt.offsetY]);
     });
 
     function onKeyDown(event){
         if(sim.on_key_down(event.keyCode))
             updateToolBarImage();
+        else if(event.keyCode === 80)
+            paused = !paused;
     }
     window.addEventListener( 'keydown', onKeyDown, false );
 
@@ -717,7 +724,8 @@ function isIE(){
     }
 
     window.setInterval(function(){
-        processEvents(sim.simulate(0.05));
+        if(!paused)
+            processEvents(sim.simulate(0.05));
         let result = sim.render(ctx);
         // console.log(result);
     }, 50);
