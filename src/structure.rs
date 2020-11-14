@@ -10,6 +10,9 @@ pub(crate) struct Position {
 }
 
 impl Position {
+    pub fn new(x: i32, y: i32) -> Self {
+        Self { x, y }
+    }
     pub(crate) fn add(&self, o: (i32, i32)) -> Position {
         Self {
             x: self.x + o.0,

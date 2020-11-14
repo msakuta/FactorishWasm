@@ -1,4 +1,3 @@
-use super::items::item_to_str;
 use super::structure::Structure;
 use super::{
     DropItem, FactorishState, FrameProcResult, Inventory, InventoryTrait, ItemType, Position,
@@ -150,51 +149,6 @@ impl Structure for Assembler {
     }
 
     fn input(&mut self, o: &DropItem) -> Result<(), JsValue> {
-        if self.recipe.is_none() {
-            match o.type_ {
-                ItemType::IronOre => {
-                    self.recipe = Some(Recipe {
-                        input: [(ItemType::IronOre, 1usize)]
-                            .iter()
-                            .map(|(k, v)| (*k, *v))
-                            .collect(),
-                        output: [(ItemType::IronPlate, 1usize)]
-                            .iter()
-                            .map(|(k, v)| (*k, *v))
-                            .collect(),
-                        power_cost: 20.,
-                        recipe_time: 50.,
-                    });
-                }
-                ItemType::CopperOre => {
-                    self.recipe = Some(Recipe {
-                        input: [(ItemType::CopperOre, 1usize)]
-                            .iter()
-                            .map(|(k, v)| (*k, *v))
-                            .collect(),
-                        output: [(ItemType::CopperPlate, 1usize)]
-                            .iter()
-                            .map(|(k, v)| (*k, *v))
-                            .collect(),
-                        power_cost: 20.,
-                        recipe_time: 50.,
-                    });
-                }
-                _ => {
-                    return Err(JsValue::from_str(&format!(
-                        "Cannot smelt {}",
-                        item_to_str(&o.type_)
-                    )))
-                }
-            }
-        }
-
-        // Fuels are always welcome.
-        if o.type_ == ItemType::CoalOre {
-            self.inventory.add_item(&ItemType::CoalOre);
-            return Ok(());
-        }
-
         if let Some(recipe) = &self.recipe {
             if 0 < recipe.input.count_item(&o.type_) || 0 < recipe.output.count_item(&o.type_) {
                 self.inventory.add_item(&o.type_);
@@ -211,7 +165,7 @@ impl Structure for Assembler {
             *item_type == ItemType::CoalOre || recipe.input.get(item_type).is_some()
         } else {
             match item_type {
-                ItemType::CoalOre | ItemType::IronOre | ItemType::CopperOre => true,
+                ItemType::IronOre | ItemType::CopperOre => true,
                 _ => false,
             }
         }

@@ -389,6 +389,8 @@ impl FactorishState {
                 Box::new(TransportBelt::new(11, 3, Rotation::Left)),
                 Box::new(TransportBelt::new(12, 3, Rotation::Left)),
                 Box::new(OreMine::new(12, 2, Rotation::Bottom)),
+                Box::new(Furnace::new(&Position::new(8, 3))),
+                Box::new(Assembler::new(&Position::new(6, 3))),
             ],
             selected_structure_inventory: None,
             selected_structure_item: None,
