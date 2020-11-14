@@ -169,28 +169,16 @@ impl Structure for Furnace {
             match o.type_ {
                 ItemType::IronOre => {
                     self.recipe = Some(Recipe {
-                        input: [(ItemType::IronOre, 1usize)]
-                            .iter()
-                            .map(|(k, v)| (*k, *v))
-                            .collect(),
-                        output: [(ItemType::IronPlate, 1usize)]
-                            .iter()
-                            .map(|(k, v)| (*k, *v))
-                            .collect(),
+                        input: hash_map!(ItemType::IronOre => 1usize),
+                        output: hash_map!(ItemType::IronPlate => 1usize),
                         power_cost: 20.,
                         recipe_time: 50.,
                     });
                 }
                 ItemType::CopperOre => {
                     self.recipe = Some(Recipe {
-                        input: [(ItemType::CopperOre, 1usize)]
-                            .iter()
-                            .map(|(k, v)| (*k, *v))
-                            .collect(),
-                        output: [(ItemType::CopperPlate, 1usize)]
-                            .iter()
-                            .map(|(k, v)| (*k, *v))
-                            .collect(),
+                        input: hash_map!(ItemType::CopperOre => 1usize),
+                        output: hash_map!(ItemType::CopperPlate => 1usize),
                         power_cost: 20.,
                         recipe_time: 50.,
                     });
@@ -281,26 +269,14 @@ impl Structure for Furnace {
     fn get_recipes(&self) -> Vec<Recipe> {
         vec![
             Recipe {
-                input: [(ItemType::IronOre, 1usize)]
-                    .iter()
-                    .map(|(k, v)| (*k, *v))
-                    .collect(),
-                output: [(ItemType::IronPlate, 1usize)]
-                    .iter()
-                    .map(|(k, v)| (*k, *v))
-                    .collect(),
+                input: hash_map!(ItemType::IronOre => 1usize),
+                output: hash_map!(ItemType::IronPlate => 1usize),
                 power_cost: 20.,
                 recipe_time: 50.,
             },
             Recipe {
-                input: [(ItemType::CopperOre, 1usize)]
-                    .iter()
-                    .map(|(k, v)| (*k, *v))
-                    .collect(),
-                output: [(ItemType::CopperPlate, 1usize)]
-                    .iter()
-                    .map(|(k, v)| (*k, *v))
-                    .collect(),
+                input: hash_map!(ItemType::CopperOre => 1usize),
+                output: hash_map!(ItemType::CopperPlate => 1usize),
                 power_cost: 20.,
                 recipe_time: 50.,
             },

@@ -97,30 +97,21 @@ impl Structure for OreMine {
             if 0 < tile.iron_ore {
                 self.recipe = Some(Recipe {
                     input: HashMap::new(),
-                    output: [(ItemType::IronOre, 1usize)]
-                        .iter()
-                        .map(|(k, v)| (*k, *v))
-                        .collect(),
+                    output: hash_map!(ItemType::IronOre => 1usize),
                     power_cost: 0.1,
                     recipe_time: 80.,
                 });
             } else if 0 < tile.coal_ore {
                 self.recipe = Some(Recipe {
                     input: HashMap::new(),
-                    output: [(ItemType::CoalOre, 1usize)]
-                        .iter()
-                        .map(|(k, v)| (*k, *v))
-                        .collect(),
+                    output: hash_map!(ItemType::CoalOre => 1usize),
                     power_cost: 0.1,
                     recipe_time: 80.,
                 });
             } else if 0 < tile.copper_ore {
                 self.recipe = Some(Recipe {
                     input: HashMap::new(),
-                    output: [(ItemType::CopperOre, 1usize)]
-                        .iter()
-                        .map(|(k, v)| (*k, *v))
-                        .collect(),
+                    output: hash_map!(ItemType::CopperOre => 1usize),
                     power_cost: 0.1,
                     recipe_time: 80.,
                 });

@@ -243,38 +243,20 @@ impl Structure for Assembler {
     fn get_recipes(&self) -> Vec<Recipe> {
         vec![
             Recipe {
-                input: [(ItemType::IronPlate, 2usize)]
-                    .iter()
-                    .map(|(k, v)| (*k, *v))
-                    .collect(),
-                output: [(ItemType::Gear, 1usize)]
-                    .iter()
-                    .map(|(k, v)| (*k, *v))
-                    .collect(),
+                input: hash_map!(ItemType::IronPlate => 2usize),
+                output: hash_map!(ItemType::Gear => 1usize),
                 power_cost: 20.,
                 recipe_time: 50.,
             },
             Recipe {
-                input: [(ItemType::IronPlate, 1usize), (ItemType::Gear, 1usize)]
-                    .iter()
-                    .map(|(k, v)| (*k, *v))
-                    .collect(),
-                output: [(ItemType::TransportBelt, 1usize)]
-                    .iter()
-                    .map(|(k, v)| (*k, *v))
-                    .collect(),
+                input: hash_map!(ItemType::IronPlate => 1usize, ItemType::Gear => 1usize),
+                output: hash_map!(ItemType::TransportBelt => 1usize),
                 power_cost: 20.,
                 recipe_time: 50.,
             },
             Recipe {
-                input: [(ItemType::IronPlate, 5usize)]
-                    .iter()
-                    .map(|(k, v)| (*k, *v))
-                    .collect(),
-                output: [(ItemType::Chest, 1usize)]
-                    .iter()
-                    .map(|(k, v)| (*k, *v))
-                    .collect(),
+                input: hash_map!(ItemType::IronPlate => 5usize),
+                output: hash_map!(ItemType::Chest => 1usize),
                 power_cost: 20.,
                 recipe_time: 50.,
             },

@@ -17,6 +17,18 @@ macro_rules! js_err {
     }
 }
 
+macro_rules! hash_map {
+    { $($key:expr => $value:expr),+ } => {
+        {
+            let mut m = ::std::collections::HashMap::new();
+            $(
+                m.insert($key, $value);
+            )+
+            m
+        }
+    };
+}
+
 mod assembler;
 mod chest;
 mod furnace;
