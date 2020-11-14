@@ -138,11 +138,45 @@ impl Structure for OreMine {
             //     }
             // }
 
+            let output =
+                |state: &mut FactorishState, item, position: &Position, cooldown: &mut f64| {
+                    if let Some(tile) = state.tile_at_mut(&[position.x, position.y]) {
+                        *cooldown = recipe.recipe_time;
+                        match item {
+                            ItemType::IronOre => tile.iron_ore -= 1,
+                            ItemType::CoalOre => tile.coal_ore -= 1,
+                            ItemType::CopperOre => tile.copper_ore -= 1,
+                            _ => (),
+                        }
+                    }
+                };
+
             // Proceed only if we have sufficient energy in the buffer.
             let progress = (self.power / recipe.power_cost).min(1.);
             if self.cooldown < progress {
                 self.cooldown = 0.;
                 let output_position = self.position.add(self.rotation.delta());
+                let mut str_iter = _structures.map(|v| v);
+                if let Some(structure) = str_iter.find(|s| *s.position() == output_position) {
+                    let mut it = recipe.output.iter();
+                    if let Some(item) = it.next() {
+                        if structure
+                            .input(&DropItem {
+                                id: 1,
+                                type_: *item.0,
+                                x: output_position.x,
+                                y: output_position.y,
+                            })
+                            .is_ok()
+                        {
+                            output(state, *item.0, &self.position, &mut self.cooldown);
+                            return Ok(FrameProcResult::InventoryChanged(output_position));
+                        }
+                    }
+                    if !structure.movable() {
+                        return Ok(FrameProcResult::None);
+                    }
+                }
                 if !state.hit_check(output_position.x, output_position.y, None) {
                     // let dest_tile = state.board[dx as usize + dy as usize * state.width as usize];
                     let mut it = recipe.output.iter();
@@ -152,17 +186,7 @@ impl Structure for OreMine {
                         {
                             // console_log!("Failed to create object: {:?}", code);
                         } else {
-                            if let Some(tile) =
-                                state.tile_at_mut(&[self.position.x, self.position.y])
-                            {
-                                self.cooldown = recipe.recipe_time;
-                                match *item.0 {
-                                    ItemType::IronOre => tile.iron_ore -= 1,
-                                    ItemType::CoalOre => tile.coal_ore -= 1,
-                                    ItemType::CopperOre => tile.copper_ore -= 1,
-                                    _ => (),
-                                }
-                            }
+                            output(state, *item.0, &self.position, &mut self.cooldown);
                         }
                         assert!(it.next().is_none());
                     } else {
