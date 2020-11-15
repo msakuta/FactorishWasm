@@ -1,5 +1,5 @@
 use super::items::item_to_str;
-use super::structure::Structure;
+use super::structure::{Structure, DynIterMut};
 use super::{
     log, DropItem, FactorishState, FrameProcResult, Inventory, InventoryTrait, ItemType, Position,
     Recipe, Rotation, COAL_POWER,
@@ -208,11 +208,11 @@ impl Structure for WaterWell {
     fn frame_proc(
         &mut self,
         state: &mut FactorishState,
-        structures: &mut dyn Iterator<Item = &mut Box<dyn Structure>>,
+        structures: &mut dyn DynIterMut<Item = Box<dyn Structure>>,
     ) -> Result<FrameProcResult, ()> {
         self.output_fluid_box.amount =
             (self.output_fluid_box.amount + 1.).min(self.output_fluid_box.max_amount);
-        let connections = self.connection(state, &mut structures.map(|s| s as &Box<dyn Structure>));
+        let connections = self.connection(state, &mut structures.dyn_iter_mut().map(|s| s as &Box<dyn Structure>));
         self.output_fluid_box.connect_to = [
             connections & 1 != 0,
             connections & 2 != 0,
@@ -221,77 +221,8 @@ impl Structure for WaterWell {
         ];
         console_log!("WaterWell: conn: {}, {:?}", connections, self.output_fluid_box.connect_to);
         self.output_fluid_box
-            .simulate(&self.position, state, structures);
+            .simulate(&self.position, state, &mut structures.dyn_iter_mut());
         Ok(FrameProcResult::None)
-    }
-
-    fn input(&mut self, o: &DropItem) -> Result<(), JsValue> {
-        console_log!("Boiler: {:?}", o.type_);
-        // Fuels are always welcome.
-        if o.type_ == ItemType::CoalOre {
-            self.inventory.add_item(&ItemType::CoalOre);
-            return Ok(());
-        }
-
-        Err(JsValue::from_str("Recipe is not initialized"))
-    }
-
-    fn can_input(&self, item_type: &ItemType) -> bool {
-        if let Some(recipe) = &self.recipe {
-            *item_type == ItemType::CoalOre || recipe.input.get(item_type).is_some()
-        } else {
-            match item_type {
-                ItemType::CoalOre | ItemType::IronOre | ItemType::CopperOre => true,
-                _ => false,
-            }
-        }
-    }
-
-    fn output<'a>(
-        &'a mut self,
-        state: &mut FactorishState,
-        position: &Position,
-    ) -> Result<(DropItem, Box<dyn FnOnce(&DropItem) + 'a>), ()> {
-        if let Some(ref mut item) = self.inventory.iter_mut().next() {
-            if 0 < *item.1 {
-                let item_type = *item.0;
-                Ok((
-                    DropItem {
-                        id: state.serial_no,
-                        type_: *item.0,
-                        x: position.x * 32,
-                        y: position.y * 32,
-                    },
-                    Box::new(move |_| {
-                        self.inventory.remove_item(&item_type);
-                    }),
-                ))
-            } else {
-                Err(())
-            }
-        } else {
-            Err(())
-        }
-    }
-
-    fn inventory(&self) -> Option<&Inventory> {
-        Some(&self.inventory)
-    }
-
-    fn inventory_mut(&mut self) -> Option<&mut Inventory> {
-        Some(&mut self.inventory)
-    }
-
-    fn destroy_inventory(&mut self) -> Inventory {
-        // Return the ingredients if it was in the middle of processing a recipe.
-        if let Some(recipe) = self.recipe.take() {
-            if self.progress.is_some() {
-                let mut ret = std::mem::take(&mut self.inventory);
-                ret.merge(recipe.input);
-                return ret;
-            }
-        }
-        std::mem::take(&mut self.inventory)
     }
 
     fn get_selected_recipe(&self) -> Option<&Recipe> {

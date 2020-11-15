@@ -1,5 +1,5 @@
 use super::items::get_item_image_url;
-use super::structure::Structure;
+use super::structure::{Structure, DynIterMut};
 use super::{
     DropItem, FactorishState, FrameProcResult, Inventory, InventoryTrait, ItemType, Position,
     Recipe, COAL_POWER,
@@ -124,7 +124,7 @@ impl Structure for Assembler {
     fn frame_proc(
         &mut self,
         _state: &mut FactorishState,
-        _structures: &mut dyn Iterator<Item = &mut Box<dyn Structure>>,
+        structures: &mut dyn DynIterMut<Item = Box<dyn Structure>>,
     ) -> Result<FrameProcResult, ()> {
         if let Some(recipe) = &self.recipe {
             let mut ret = FrameProcResult::None;
@@ -193,28 +193,17 @@ impl Structure for Assembler {
         Err(JsValue::from_str("Recipe is not initialized"))
     }
 
-    fn output<'a>(
-        &'a mut self,
+    fn can_output(&self) -> Inventory {
+        self.inventory.clone()
+    }
+
+    fn output(
+        &mut self,
         state: &mut FactorishState,
-        position: &Position,
-    ) -> Result<(DropItem, Box<dyn FnOnce(&DropItem) + 'a>), ()> {
-        if let Some(ref mut item) = self.inventory.iter_mut().next() {
-            if 0 < *item.1 {
-                let item_type = *item.0;
-                Ok((
-                    DropItem {
-                        id: state.serial_no,
-                        type_: *item.0,
-                        x: position.x * 32,
-                        y: position.y * 32,
-                    },
-                    Box::new(move |_| {
-                        self.inventory.remove_item(&item_type);
-                    }),
-                ))
-            } else {
-                Err(())
-            }
+        item_type: &ItemType,
+    ) -> Result<(), ()> {
+        if self.inventory.remove_item(item_type) {
+            Ok(())
         } else {
             Err(())
         }

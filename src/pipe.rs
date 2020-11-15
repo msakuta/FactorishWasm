@@ -1,5 +1,5 @@
 use super::items::item_to_str;
-use super::structure::Structure;
+use super::structure::{Structure, DynIterMut};
 use super::water_well::FluidBox;
 use super::{
     log, DropItem, FactorishState, FrameProcResult, Inventory, InventoryTrait, ItemType, Position,
@@ -87,7 +87,7 @@ impl Structure for Pipe {
     fn frame_proc(
         &mut self,
         _state: &mut FactorishState,
-        _structures: &mut dyn Iterator<Item = &mut Box<dyn Structure>>,
+        _structures: &mut dyn DynIterMut<Item = Box<dyn Structure>>,
     ) -> Result<FrameProcResult, ()> {
         Ok(FrameProcResult::None)
     }

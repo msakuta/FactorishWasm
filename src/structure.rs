@@ -90,6 +90,22 @@ pub(crate) enum ItemResponse {
 
 pub(crate) type ItemResponseResult = (ItemResponse, Option<FrameProcResult>);
 
+use std::fmt::Debug;
+pub(crate) trait DynIterMut {
+    type Item;
+    fn dyn_iter_mut(&mut self) -> Box<dyn Iterator<Item = &mut Self::Item> + '_>;
+}
+impl<T, Item> DynIterMut for T
+where
+    for<'a> &'a mut T: IntoIterator<Item = &'a mut Item>,
+{
+    type Item = Item;
+    fn dyn_iter_mut(&mut self) -> Box<dyn Iterator<Item = &mut Self::Item> + '_> {
+        Box::new(self.into_iter())
+    }
+}
+
+
 pub(crate) trait Structure {
     fn name(&self) -> &str;
     fn position(&self) -> &Position;
@@ -105,7 +121,7 @@ pub(crate) trait Structure {
     fn frame_proc(
         &mut self,
         _state: &mut FactorishState,
-        _structures: &mut dyn Iterator<Item = &mut Box<dyn Structure>>,
+        structures: &mut dyn DynIterMut<Item = Box<dyn Structure>>,
     ) -> Result<FrameProcResult, ()> {
         Ok(FrameProcResult::None)
     }
@@ -134,11 +150,18 @@ pub(crate) trait Structure {
             false
         }
     }
-    fn output<'a>(
-        &'a mut self,
+    /// Query a set of items that this structure can output. Actual output would not happen until `output()`, thus
+    /// this method is immutable. It should return empty Inventory if it cannot output anything.
+    fn can_output(&self) -> Inventory {
+        Inventory::new()
+    }
+    /// Perform actual output. The operation should always succeed since the output-tability is checked beforehand
+    /// with `can_output`.
+    fn output(
+        &mut self,
         _state: &mut FactorishState,
-        _position: &Position,
-    ) -> Result<(DropItem, Box<dyn FnOnce(&DropItem) + 'a>), ()> {
+        _item_type: &ItemType,
+    ) -> Result<(), ()> {
         Err(())
     }
     fn inventory(&self) -> Option<&Inventory> {

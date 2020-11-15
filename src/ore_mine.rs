@@ -1,5 +1,5 @@
 use super::items::ItemType;
-use super::structure::Structure;
+use super::structure::{Structure, DynIterMut};
 use super::{
     draw_direction_arrow, DropItem, FactorishState, FrameProcResult, Position, Recipe, Rotation,
 };
@@ -85,7 +85,7 @@ impl Structure for OreMine {
     fn frame_proc(
         &mut self,
         state: &mut FactorishState,
-        _structures: &mut dyn Iterator<Item = &mut Box<dyn Structure>>,
+        structures: &mut dyn DynIterMut<Item = Box<dyn Structure>>,
     ) -> Result<FrameProcResult, ()> {
         let otile = &state.tile_at(&[self.position.x, self.position.y]);
         if otile.is_none() {
@@ -147,7 +147,7 @@ impl Structure for OreMine {
             if self.cooldown < progress {
                 self.cooldown = 0.;
                 let output_position = self.position.add(self.rotation.delta());
-                let mut str_iter = _structures.map(|v| v);
+                let mut str_iter = structures.dyn_iter_mut().map(|v| v);
                 if let Some(structure) = str_iter.find(|s| *s.position() == output_position) {
                     let mut it = recipe.output.iter();
                     if let Some(item) = it.next() {

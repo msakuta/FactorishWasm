@@ -473,29 +473,47 @@ impl FactorishState {
             }
         };
 
+        use std::iter;
+        struct MutRef<'r, T: ?Sized>(&'r mut T);
+        impl<'a, 'r, T: ?Sized> IntoIterator for &'a mut MutRef<'r, T>
+        where
+            &'a mut T: IntoIterator,
+        {
+            type IntoIter = <&'a mut T as IntoIterator>::IntoIter;
+            type Item = <&'a mut T as IntoIterator>::Item;
+            fn into_iter(self) -> Self::IntoIter {
+                self.0.into_iter()
+            }
+        }
+
+        struct Chained<S, T>(S, T);
+        impl<'a, S, T, Item: 'a> IntoIterator for &'a mut Chained<S, T>
+        where
+            &'a mut S: IntoIterator<Item = &'a mut Item>,
+            &'a mut T: IntoIterator<Item = &'a mut Item>,
+        {
+            type IntoIter =
+                iter::Chain<<&'a mut S as IntoIterator>::IntoIter, <&'a mut T as IntoIterator>::IntoIter>;
+            type Item = &'a mut Item;
+            fn into_iter(self) -> Self::IntoIter {
+                self.0.into_iter().chain(self.1.into_iter())
+            }
+        }
+
+
         // This is silly way to avoid borrow checker that temporarily move the structures
         // away from self so that they do not claim mutable borrow twice, but it works.
         let mut structures = std::mem::take(&mut self.structures);
         for i in 0..structures.len() {
-            if 0 < i {
-                let (front, mid) = structures.split_at_mut(i);
-                let (center, last) = mid
-                    .split_first_mut()
-                    .ok_or(JsValue::from_str("Structures split fail"))?;
-                frame_proc_result_to_event(
-                    center.frame_proc(self, &mut front.into_iter().chain(last.into_iter())),
-                );
-            } else {
-                let (center, last) = structures
-                    .split_first_mut()
-                    .ok_or(JsValue::from_str("Structures split fail"))?;
-                frame_proc_result_to_event(center.frame_proc(self, &mut last.iter_mut()));
-            }
+            let (front, mid) = structures.split_at_mut(i);
+            let (center, last) = mid
+                .split_first_mut()
+                .ok_or(JsValue::from_str("Structures split fail"))?;
+            frame_proc_result_to_event(
+                center.frame_proc(self, &mut Chained(MutRef(front), MutRef(last))),
+            );
         }
-        // for structure in &mut structures {
-        //     structure.frame_proc(self, &mut structures);
-        // }
-        // let mut drop_items = std::mem::take(&mut self.drop_items);
+
         let mut to_remove = vec![];
         for i in 0..self.drop_items.len() {
             let item = &self.drop_items[i];
