@@ -311,6 +311,8 @@ pub struct FactorishState {
     image_iron_plate: Option<ImageBundle>,
     image_copper_plate: Option<ImageBundle>,
     image_gear: Option<ImageBundle>,
+    image_copper_wire: Option<ImageBundle>,
+    image_circuit: Option<ImageBundle>,
     image_time: Option<ImageBundle>,
 }
 
@@ -381,6 +383,8 @@ impl FactorishState {
             image_iron_plate: None,
             image_copper_plate: None,
             image_gear: None,
+            image_copper_wire: None,
+            image_circuit: None,
             image_time: None,
             board: {
                 let mut ret = vec![
@@ -1064,6 +1068,8 @@ impl FactorishState {
         self.image_iron_plate = Some(load_image("ironPlate")?);
         self.image_copper_plate = Some(load_image("copperPlate")?);
         self.image_gear = Some(load_image("gear")?);
+        self.image_copper_wire = Some(load_image("copperWire")?);
+        self.image_circuit = Some(load_image("circuit")?);
         self.image_time = Some(load_image("time")?);
         Ok(())
     }

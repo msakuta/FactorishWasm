@@ -10,6 +10,8 @@ pub(crate) enum ItemType {
     IronPlate,
     CopperPlate,
     Gear,
+    CopperWire,
+    Circuit,
 
     TransportBelt,
     Chest,
@@ -27,6 +29,8 @@ pub(crate) fn item_to_str(type_: &ItemType) -> String {
         ItemType::IronPlate => "Iron Plate".to_string(),
         ItemType::CopperPlate => "Copper Plate".to_string(),
         ItemType::Gear => "Gear".to_string(),
+        ItemType::CopperWire => "Copper Wire".to_string(),
+        ItemType::Circuit => "Circuit".to_string(),
 
         ItemType::TransportBelt => "Transport Belt".to_string(),
         ItemType::Chest => "Chest".to_string(),
@@ -43,7 +47,10 @@ pub(crate) fn str_to_item(name: &str) -> Option<ItemType> {
         "Coal Ore" => Some(ItemType::CoalOre),
         "Copper Ore" => Some(ItemType::CopperOre),
         "Iron Plate" => Some(ItemType::IronPlate),
+        "Copper Plate" => Some(ItemType::CopperPlate),
         "Gear" => Some(ItemType::Gear),
+        "Copper Wire" => Some(ItemType::CopperWire),
+        "Circuit" => Some(ItemType::Circuit),
 
         "Transport Belt" => Some(ItemType::TransportBelt),
         "Chest" => Some(ItemType::Chest),
@@ -119,6 +126,8 @@ pub(crate) fn render_drop_item(
         ItemType::IronPlate => render16(&state.image_iron_plate),
         ItemType::CopperPlate => render16(&state.image_copper_plate),
         ItemType::Gear => render16(&state.image_gear),
+        ItemType::CopperWire => render16(&state.image_copper_wire),
+        ItemType::Circuit => render16(&state.image_circuit),
 
         ItemType::TransportBelt => render16(&state.image_belt),
         ItemType::Chest => render16(&state.image_chest),
@@ -137,6 +146,8 @@ pub(crate) fn get_item_image_url<'a>(state: &'a FactorishState, item_type: &Item
         ItemType::IronPlate => &state.image_iron_plate.as_ref().unwrap().url,
         ItemType::CopperPlate => &state.image_copper_plate.as_ref().unwrap().url,
         ItemType::Gear => &state.image_gear.as_ref().unwrap().url,
+        ItemType::CopperWire => &state.image_copper_wire.as_ref().unwrap().url,
+        ItemType::Circuit => &state.image_circuit.as_ref().unwrap().url,
 
         ItemType::TransportBelt => &state.image_belt.as_ref().unwrap().url,
         ItemType::Chest => &state.image_chest.as_ref().unwrap().url,

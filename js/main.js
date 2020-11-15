@@ -61,6 +61,8 @@ function isIE(){
         ["copperOre", copperOre],
         ["copperPlate", copperPlate],
         ["gear", gear],
+        ["copperWire", copperWire],
+        ["circuit", circuit],
         ["time", time],
     ].map(async ([name, src]) => {
         const res = await fetch(src);

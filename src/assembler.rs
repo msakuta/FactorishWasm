@@ -106,7 +106,7 @@ impl Structure for Assembler {
                 + &generate_item_image(&_state.image_time.as_ref().unwrap().url, true, recipe.recipe_time as usize) + "<br>" +
                 "Outputs: <br>" +
                 &recipe.output.iter()
-                    .map(|item| format!("{}<br>", &generate_item_image(get_item_image_url(_state, &item.0), true, 1)))
+                    .map(|item| format!("{}<br>", &generate_item_image(get_item_image_url(_state, &item.0), true, *item.1)))
                     .fold::<String, _>("".to_string(), |a, s| a + &s)
             } else {
                 String::from("No recipe")
@@ -168,7 +168,7 @@ impl Structure for Assembler {
 
                     // Produce outputs into inventory
                     for output_item in &recipe.output {
-                        self.inventory.add_item(&output_item.0);
+                        self.inventory.add_items(&output_item.0, *output_item.1);
                     }
                     return Ok(FrameProcResult::InventoryChanged(self.position));
                 } else {
@@ -259,6 +259,24 @@ impl Structure for Assembler {
                 output: hash_map!(ItemType::Chest => 1usize),
                 power_cost: 20.,
                 recipe_time: 50.,
+            },
+            Recipe {
+                input: hash_map!(ItemType::CopperPlate => 1usize),
+                output: hash_map!(ItemType::CopperWire => 2usize),
+                power_cost: 20.,
+                recipe_time: 20.,
+            },
+            Recipe {
+                input: hash_map!(ItemType::IronPlate => 1, ItemType::CopperWire => 3usize),
+                output: hash_map!(ItemType::Circuit => 1usize),
+                power_cost: 20.,
+                recipe_time: 50.,
+            },
+            Recipe {
+                input: hash_map!(ItemType::IronPlate => 5, ItemType::Gear => 5, ItemType::Circuit => 3),
+                output: hash_map!(ItemType::Assembler => 1),
+                power_cost: 20.,
+                recipe_time: 120.,
             },
         ]
     }
