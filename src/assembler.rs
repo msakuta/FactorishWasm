@@ -278,6 +278,12 @@ impl Structure for Assembler {
                 power_cost: 20.,
                 recipe_time: 120.,
             },
+            Recipe {
+                input: hash_map!(ItemType::IronPlate => 1, ItemType::Gear => 1, ItemType::Circuit => 1),
+                output: hash_map!(ItemType::Inserter => 1),
+                power_cost: 20.,
+                recipe_time: 20.,
+            },
         ]
     }
 
