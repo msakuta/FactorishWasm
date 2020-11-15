@@ -1,5 +1,6 @@
 use super::items::ItemType;
-use super::{DropItem, FactorishState, Inventory, Recipe};
+use super::water_well::FluidBox;
+use super::{DropItem, FactorishState, Inventory, Recipe, log};
 use wasm_bindgen::prelude::*;
 use web_sys::CanvasRenderingContext2d;
 
@@ -161,5 +162,32 @@ pub(crate) trait Structure {
     }
     fn get_selected_recipe(&self) -> Option<&Recipe> {
         None
+    }
+    fn fluid_box(&self) -> Option<&FluidBox> {
+        None
+    }
+    fn fluid_box_mut(&mut self) -> Option<&mut FluidBox> {
+        None
+    }
+    fn connection(&self, state: &FactorishState, structures: &mut dyn Iterator<Item = &Box<dyn Structure>>) -> u32 {
+        // let mut structures_copy = structures.clone();
+        let mut has_fluid_box = |x, y| {
+            if x < 0 || state.width <= x as u32 || y < 0 || state.height <= y as u32 {
+                return false;
+            }
+            if let Some(structure) = structures.map(|s| s).find(|s| *s.position() == Position{x, y}) {
+                return structure.fluid_box().is_some();
+            }
+            return false;
+        };
+
+        // Fluid containers connect to other containers
+        let Position { x, y } = *self.position();
+        let l = has_fluid_box(x - 1, y) as u32;
+        let t = has_fluid_box(x, y - 1) as u32;
+        let r = has_fluid_box(x + 1, y) as u32;
+        let b = has_fluid_box(x, y + 1) as u32;
+        console_log!("connection {:?}", [l, t, r, b]);
+        return l | (t << 1) | (r << 2) | (b << 3);
     }
 }

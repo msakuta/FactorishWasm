@@ -19,6 +19,9 @@ pub(crate) enum ItemType {
     OreMine,
     Furnace,
     Assembler,
+    Boiler,
+    WaterWell,
+    Pipe,
 }
 
 pub(crate) fn item_to_str(type_: &ItemType) -> String {
@@ -38,6 +41,9 @@ pub(crate) fn item_to_str(type_: &ItemType) -> String {
         ItemType::OreMine => "Ore Mine".to_string(),
         ItemType::Furnace => "Furnace".to_string(),
         ItemType::Assembler => "Assembler".to_string(),
+        ItemType::Boiler => "Boiler".to_string(),
+        ItemType::WaterWell => "Water Well".to_string(),
+        ItemType::Pipe => "Pipe".to_string(),
     }
 }
 
@@ -58,6 +64,9 @@ pub(crate) fn str_to_item(name: &str) -> Option<ItemType> {
         "Ore Mine" => Some(ItemType::OreMine),
         "Furnace" => Some(ItemType::Furnace),
         "Assembler" => Some(ItemType::Assembler),
+        "Boiler" => Some(ItemType::Boiler),
+        "Water Well" => Some(ItemType::WaterWell),
+        "Pipe" => Some(ItemType::Pipe),
 
         _ => None,
     }
@@ -135,6 +144,9 @@ pub(crate) fn render_drop_item(
         ItemType::OreMine => render16(&state.image_mine),
         ItemType::Furnace => render_animated32(&state.image_furnace),
         ItemType::Assembler => render16(&state.image_assembler),
+        ItemType::Boiler => render16(&state.image_boiler),
+        ItemType::WaterWell => render16(&state.image_water_well),
+        ItemType::Pipe => render16(&state.image_pipe),
     }
 }
 
@@ -155,5 +167,8 @@ pub(crate) fn get_item_image_url<'a>(state: &'a FactorishState, item_type: &Item
         ItemType::OreMine => &state.image_mine.as_ref().unwrap().url,
         ItemType::Furnace => &state.image_furnace.as_ref().unwrap().url,
         ItemType::Assembler => &state.image_assembler.as_ref().unwrap().url,
+        ItemType::Boiler => &state.image_boiler.as_ref().unwrap().url,
+        ItemType::WaterWell => &state.image_water_well.as_ref().unwrap().url,
+        ItemType::Pipe => &state.image_pipe.as_ref().unwrap().url,
     }
 }

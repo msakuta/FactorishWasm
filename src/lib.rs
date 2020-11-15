@@ -30,24 +30,30 @@ macro_rules! hash_map {
 }
 
 mod assembler;
+mod boiler;
 mod chest;
 mod furnace;
 mod inserter;
 mod items;
 mod ore_mine;
 mod perlin_noise;
+mod pipe;
 mod structure;
 mod transport_belt;
 mod utils;
+mod water_well;
 
 use assembler::Assembler;
+use boiler::Boiler;
 use chest::Chest;
 use furnace::Furnace;
 use inserter::Inserter;
 use items::{item_to_str, render_drop_item, str_to_item, DropItem, ItemType};
 use ore_mine::OreMine;
+use pipe::Pipe;
 use structure::{FrameProcResult, ItemResponse, Position, Rotation, Structure};
 use transport_belt::TransportBelt;
+use water_well::WaterWell;
 
 use serde::Serialize;
 use std::collections::HashMap;
@@ -167,7 +173,7 @@ const tilesize: i32 = 32;
 struct ToolDef {
     item_type: ItemType,
 }
-const tool_defs: [ToolDef; 6] = [
+const tool_defs: [ToolDef; 9] = [
     ToolDef {
         item_type: ItemType::TransportBelt,
     },
@@ -185,6 +191,15 @@ const tool_defs: [ToolDef; 6] = [
     },
     ToolDef {
         item_type: ItemType::Assembler,
+    },
+    ToolDef {
+        item_type: ItemType::Boiler,
+    },
+    ToolDef {
+        item_type: ItemType::WaterWell,
+    },
+    ToolDef {
+        item_type: ItemType::Pipe,
     },
 ];
 
@@ -303,6 +318,9 @@ pub struct FactorishState {
     image_mine: Option<ImageBundle>,
     image_furnace: Option<ImageBundle>,
     image_assembler: Option<ImageBundle>,
+    image_boiler: Option<ImageBundle>,
+    image_water_well: Option<ImageBundle>,
+    image_pipe: Option<ImageBundle>,
     image_inserter: Option<ImageBundle>,
     image_direction: Option<ImageBundle>,
     image_iron_ore: Option<ImageBundle>,
@@ -359,6 +377,9 @@ impl FactorishState {
                     (ItemType::Chest, 3usize),
                     (ItemType::Furnace, 3usize),
                     (ItemType::Assembler, 3usize),
+                    (ItemType::Boiler, 3usize),
+                    (ItemType::WaterWell, 1usize),
+                    (ItemType::Pipe, 5usize),
                 ]
                 .iter()
                 .map(|v| *v)
@@ -375,6 +396,9 @@ impl FactorishState {
             image_mine: None,
             image_furnace: None,
             image_assembler: None,
+            image_boiler: None,
+            image_water_well: None,
+            image_pipe: None,
             image_inserter: None,
             image_direction: None,
             image_iron_ore: None,
@@ -907,6 +931,9 @@ impl FactorishState {
             ItemType::Chest => Box::new(Chest::new(cursor)),
             ItemType::Furnace => Box::new(Furnace::new(cursor)),
             ItemType::Assembler => Box::new(Assembler::new(cursor)),
+            ItemType::Boiler => Box::new(Boiler::new(cursor)),
+            ItemType::WaterWell => Box::new(WaterWell::new(cursor)),
+            ItemType::Pipe => Box::new(Pipe::new(cursor)),
             _ => {
                 return Err(JsValue::from_str(&format!(
                     "Can't make a structure from {:?}",
@@ -1062,6 +1089,9 @@ impl FactorishState {
         self.image_mine = Some(load_image("mine")?);
         self.image_furnace = Some(load_image("furnace")?);
         self.image_assembler = Some(load_image("assembler")?);
+        self.image_boiler = Some(load_image("boiler")?);
+        self.image_water_well = Some(load_image("waterWell")?);
+        self.image_pipe = Some(load_image("pipe")?);
         self.image_inserter = Some(load_image("inserter")?);
         self.image_direction = Some(load_image("direction")?);
         self.image_iron_ore = Some(load_image("ore")?);
