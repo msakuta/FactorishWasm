@@ -1,6 +1,6 @@
 use super::items::ItemType;
 use super::water_well::FluidBox;
-use super::{DropItem, FactorishState, Inventory, Recipe, log};
+use super::{log, DropItem, FactorishState, Inventory, Recipe};
 use wasm_bindgen::prelude::*;
 use web_sys::CanvasRenderingContext2d;
 
@@ -105,7 +105,6 @@ where
     }
 }
 
-
 pub(crate) trait Structure {
     fn name(&self) -> &str;
     fn position(&self) -> &Position;
@@ -157,11 +156,7 @@ pub(crate) trait Structure {
     }
     /// Perform actual output. The operation should always succeed since the output-tability is checked beforehand
     /// with `can_output`.
-    fn output(
-        &mut self,
-        _state: &mut FactorishState,
-        _item_type: &ItemType,
-    ) -> Result<(), ()> {
+    fn output(&mut self, _state: &mut FactorishState, _item_type: &ItemType) -> Result<(), ()> {
         Err(())
     }
     fn inventory(&self) -> Option<&Inventory> {
@@ -192,13 +187,20 @@ pub(crate) trait Structure {
     fn fluid_box_mut(&mut self) -> Option<&mut FluidBox> {
         None
     }
-    fn connection(&self, state: &FactorishState, structures: &mut dyn Iterator<Item = &Box<dyn Structure>>) -> u32 {
+    fn connection(
+        &self,
+        state: &FactorishState,
+        structures: &mut dyn Iterator<Item = &Box<dyn Structure>>,
+    ) -> u32 {
         // let mut structures_copy = structures.clone();
         let mut has_fluid_box = |x, y| {
             if x < 0 || state.width <= x as u32 || y < 0 || state.height <= y as u32 {
                 return false;
             }
-            if let Some(structure) = structures.map(|s| s).find(|s| *s.position() == Position{x, y}) {
+            if let Some(structure) = structures
+                .map(|s| s)
+                .find(|s| *s.position() == Position { x, y })
+            {
                 return structure.fluid_box().is_some();
             }
             return false;

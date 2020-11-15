@@ -1,5 +1,5 @@
 use super::items::item_to_str;
-use super::structure::{Structure, DynIterMut};
+use super::structure::{DynIterMut, Structure};
 use super::water_well::{FluidBox, FluidType};
 use super::{
     log, DropItem, FactorishState, FrameProcResult, Inventory, InventoryTrait, ItemType, Position,
@@ -179,11 +179,7 @@ impl Structure for Boiler {
         }
     }
 
-    fn output(
-        &mut self,
-        state: &mut FactorishState,
-        item_type: &ItemType,
-    ) -> Result<(), ()> {
+    fn output(&mut self, state: &mut FactorishState, item_type: &ItemType) -> Result<(), ()> {
         if self.inventory.remove_item(item_type) {
             Ok(())
         } else {

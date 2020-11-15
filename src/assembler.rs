@@ -1,5 +1,5 @@
 use super::items::get_item_image_url;
-use super::structure::{Structure, DynIterMut};
+use super::structure::{DynIterMut, Structure};
 use super::{
     DropItem, FactorishState, FrameProcResult, Inventory, InventoryTrait, ItemType, Position,
     Recipe, COAL_POWER,
@@ -197,11 +197,7 @@ impl Structure for Assembler {
         self.inventory.clone()
     }
 
-    fn output(
-        &mut self,
-        state: &mut FactorishState,
-        item_type: &ItemType,
-    ) -> Result<(), ()> {
+    fn output(&mut self, state: &mut FactorishState, item_type: &ItemType) -> Result<(), ()> {
         if self.inventory.remove_item(item_type) {
             Ok(())
         } else {

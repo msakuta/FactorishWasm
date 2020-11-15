@@ -1,5 +1,5 @@
 use super::items::item_to_str;
-use super::structure::{Structure, DynIterMut};
+use super::structure::{DynIterMut, Structure};
 use super::{
     log, DropItem, FactorishState, FrameProcResult, Inventory, InventoryTrait, ItemType, Position,
     Recipe, Rotation, COAL_POWER,
@@ -54,21 +54,16 @@ impl FluidBox {
         let rel_dir = [[-1, 0], [0, -1], [1, 0], [0, 1]];
         for (i, connect) in self.connect_to.iter().enumerate().filter(|(_, c)| **c) {
             let dir_idx = i % 4;
-            let pos = Position{
+            let pos = Position {
                 x: position.x + rel_dir[dir_idx][0],
                 y: position.y + rel_dir[dir_idx][1],
             };
-            if pos.x < 0
-                || state.width <= pos.x as u32
-                || pos.y < 0
-                || state.height <= pos.y as u32
+            if pos.x < 0 || state.width <= pos.x as u32 || pos.y < 0 || state.height <= pos.y as u32
             {
                 continue;
             }
             console_log!("FluidBox checking struct at {:?}", pos);
-            if let Some(structure) = structures.map(|s| s).find(|s| {
-                *s.position() == pos
-            }) {
+            if let Some(structure) = structures.map(|s| s).find(|s| *s.position() == pos) {
                 console_log!("FluidBox found struct at {:?}", pos);
                 if let Some(fluid_box) = structure.fluid_box_mut() {
                     // Different types of fluids won't mix
@@ -212,14 +207,21 @@ impl Structure for WaterWell {
     ) -> Result<FrameProcResult, ()> {
         self.output_fluid_box.amount =
             (self.output_fluid_box.amount + 1.).min(self.output_fluid_box.max_amount);
-        let connections = self.connection(state, &mut structures.dyn_iter_mut().map(|s| s as &Box<dyn Structure>));
+        let connections = self.connection(
+            state,
+            &mut structures.dyn_iter_mut().map(|s| s as &Box<dyn Structure>),
+        );
         self.output_fluid_box.connect_to = [
             connections & 1 != 0,
             connections & 2 != 0,
             connections & 4 != 0,
             connections & 8 != 0,
         ];
-        console_log!("WaterWell: conn: {}, {:?}", connections, self.output_fluid_box.connect_to);
+        console_log!(
+            "WaterWell: conn: {}, {:?}",
+            connections,
+            self.output_fluid_box.connect_to
+        );
         self.output_fluid_box
             .simulate(&self.position, state, &mut structures.dyn_iter_mut());
         Ok(FrameProcResult::None)

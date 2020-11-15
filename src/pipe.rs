@@ -1,5 +1,5 @@
 use super::items::item_to_str;
-use super::structure::{Structure, DynIterMut};
+use super::structure::{DynIterMut, Structure};
 use super::water_well::FluidBox;
 use super::{
     log, DropItem, FactorishState, FrameProcResult, Inventory, InventoryTrait, ItemType, Position,

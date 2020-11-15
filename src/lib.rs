@@ -492,14 +492,15 @@ impl FactorishState {
             &'a mut S: IntoIterator<Item = &'a mut Item>,
             &'a mut T: IntoIterator<Item = &'a mut Item>,
         {
-            type IntoIter =
-                iter::Chain<<&'a mut S as IntoIterator>::IntoIter, <&'a mut T as IntoIterator>::IntoIter>;
+            type IntoIter = iter::Chain<
+                <&'a mut S as IntoIterator>::IntoIter,
+                <&'a mut T as IntoIterator>::IntoIter,
+            >;
             type Item = &'a mut Item;
             fn into_iter(self) -> Self::IntoIter {
                 self.0.into_iter().chain(self.1.into_iter())
             }
         }
-
 
         // This is silly way to avoid borrow checker that temporarily move the structures
         // away from self so that they do not claim mutable borrow twice, but it works.
