@@ -954,18 +954,20 @@ impl FactorishState {
                         )));
                     }
                 }
-            } else {
-                // Select clicked structure
-                console_log!("opening inventory at {:?}", cursor);
-                if self.open_structure_inventory(cursor.x, cursor.y).is_ok() {
-                    // self.on_show_inventory.call0(&window()).unwrap();
-                    events.push(js_sys::Array::of3(
-                        &JsValue::from_str("showInventory"),
-                        &JsValue::from(cursor.x),
-                        &JsValue::from(cursor.y),
-                    ));
-                    // let inventory_elem: web_sys::HtmlElement = document().get_element_by_id("inventory2").unwrap().dyn_into().unwrap();
-                    // inventory_elem.style().set_property("display", "block").unwrap();
+            } else if let Some(structure) = self.find_structure_tile(&[cursor.x, cursor.y]) {
+                if structure.inventory().is_some() {
+                    // Select clicked structure
+                    console_log!("opening inventory at {:?}", cursor);
+                    if self.open_structure_inventory(cursor.x, cursor.y).is_ok() {
+                        // self.on_show_inventory.call0(&window()).unwrap();
+                        events.push(js_sys::Array::of3(
+                            &JsValue::from_str("showInventory"),
+                            &JsValue::from(cursor.x),
+                            &JsValue::from(cursor.y),
+                        ));
+                        // let inventory_elem: web_sys::HtmlElement = document().get_element_by_id("inventory2").unwrap().dyn_into().unwrap();
+                        // inventory_elem.style().set_property("display", "block").unwrap();
+                    }
                 }
             }
         } else {
