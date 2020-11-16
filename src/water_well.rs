@@ -6,7 +6,7 @@ use web_sys::CanvasRenderingContext2d;
 use std::cmp::Eq;
 use std::collections::HashMap;
 
-#[derive(Eq, PartialEq, Clone, Copy)]
+#[derive(Eq, PartialEq, Clone, Copy, Debug)]
 pub(crate) enum FluidType {
     Water,
     // Steam,
@@ -40,7 +40,7 @@ impl FluidBox {
         self
     }
 
-    fn simulate(
+    pub(crate) fn simulate(
         &mut self,
         position: &Position,
         state: &mut FactorishState,
@@ -63,12 +63,13 @@ impl FluidBox {
             {
                 continue;
             }
-            console_log!("FluidBox checking struct at {:?}", pos);
             if let Some(structure) = structures.map(|s| s).find(|s| *s.position() == pos) {
-                console_log!("FluidBox found struct at {:?}", pos);
                 if let Some(fluid_box) = structure.fluid_box_mut() {
                     // Different types of fluids won't mix
-                    if 0. < fluid_box.amount && fluid_box.type_ != self.type_ {
+                    if 0. < fluid_box.amount
+                        && fluid_box.type_ != self.type_
+                        && fluid_box.type_.is_some()
+                    {
                         continue;
                     }
                     let pressure = fluid_box.amount - self.amount;
@@ -77,10 +78,11 @@ impl FluidBox {
                     if if flow < 0. {
                         !self.output_enable
                             || !fluid_box.input_enable
-                            || fluid_box.filter != self.type_
+                            || fluid_box.filter.is_some() && fluid_box.filter != self.type_
                     } else {
                         !self.input_enable
-                            || !fluid_box.output_enable && self.filter != fluid_box.type_
+                            || !fluid_box.output_enable
+                            || self.filter.is_some() && self.filter != fluid_box.type_
                     } {
                         continue;
                     }
@@ -227,5 +229,9 @@ impl Structure for WaterWell {
 
     fn fluid_box(&self) -> Option<&FluidBox> {
         Some(&self.output_fluid_box)
+    }
+
+    fn fluid_box_mut(&mut self) -> Option<&mut FluidBox> {
+        Some(&mut self.output_fluid_box)
     }
 }

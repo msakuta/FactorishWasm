@@ -13,7 +13,7 @@ impl Pipe {
     pub(crate) fn new(position: &Position) -> Self {
         Pipe {
             position: *position,
-            fluid_box: FluidBox::new(true, false, [false; 4]),
+            fluid_box: FluidBox::new(true, true, [false; 4]),
         }
     }
 }
@@ -95,6 +95,8 @@ impl Structure for Pipe {
             connections & 4 != 0,
             connections & 8 != 0,
         ];
+        self.fluid_box
+            .simulate(&self.position, state, &mut structures.dyn_iter_mut());
         Ok(FrameProcResult::None)
     }
 

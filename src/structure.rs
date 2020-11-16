@@ -231,7 +231,6 @@ pub(crate) trait Structure {
         let t = has_fluid_box(x, y - 1) as u32;
         let r = has_fluid_box(x + 1, y) as u32;
         let b = has_fluid_box(x, y + 1) as u32;
-        console_log!("connection {:?}", [l, t, r, b]);
         return l | (t << 1) | (r << 2) | (b << 3);
     }
 }
