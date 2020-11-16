@@ -1,9 +1,8 @@
-use super::items::item_to_str;
 use super::structure::{DynIterMut, Structure};
-use super::water_well::{FluidBox, FluidType};
+use super::water_well::FluidBox;
 use super::{
     log, DropItem, FactorishState, FrameProcResult, Inventory, InventoryTrait, ItemType, Position,
-    Recipe, Rotation, COAL_POWER,
+    Recipe, COAL_POWER,
 };
 use wasm_bindgen::prelude::*;
 use web_sys::CanvasRenderingContext2d;
@@ -17,8 +16,8 @@ pub(crate) struct Boiler {
     power: f64,
     max_power: f64,
     recipe: Option<Recipe>,
-    input_fluid_box: FluidBox,
-    output_fluid_box: FluidBox,
+    _input_fluid_box: FluidBox,
+    _output_fluid_box: FluidBox,
 }
 
 impl Boiler {
@@ -35,8 +34,8 @@ impl Boiler {
                 power_cost: 0.,
                 recipe_time: 30.,
             }),
-            input_fluid_box: FluidBox::new(true, false, [false; 4]),
-            output_fluid_box: FluidBox::new(false, true, [false; 4]),
+            _input_fluid_box: FluidBox::new(true, false, [false; 4]),
+            _output_fluid_box: FluidBox::new(false, true, [false; 4]),
         }
     }
 }
@@ -119,7 +118,7 @@ impl Structure for Boiler {
     fn frame_proc(
         &mut self,
         _state: &mut FactorishState,
-        structures: &mut dyn DynIterMut<Item = Box<dyn Structure>>,
+        _structures: &mut dyn DynIterMut<Item = Box<dyn Structure>>,
     ) -> Result<FrameProcResult, ()> {
         if let Some(recipe) = &self.recipe {
             let mut ret = FrameProcResult::None;
@@ -179,7 +178,7 @@ impl Structure for Boiler {
         }
     }
 
-    fn output(&mut self, state: &mut FactorishState, item_type: &ItemType) -> Result<(), ()> {
+    fn output(&mut self, _state: &mut FactorishState, item_type: &ItemType) -> Result<(), ()> {
         if self.inventory.remove_item(item_type) {
             Ok(())
         } else {

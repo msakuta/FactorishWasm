@@ -169,6 +169,30 @@ impl InventoryTrait for Inventory {
     }
 }
 
+use std::iter;
+struct Ref<'r, T: ?Sized>(&'r T);
+impl<'a, 'r, T: ?Sized> IntoIterator for &'a Ref<'r, T>
+where
+    &'a T: IntoIterator,
+{
+    type IntoIter = <&'a T as IntoIterator>::IntoIter;
+    type Item = <&'a T as IntoIterator>::Item;
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
+    }
+}
+struct MutRef<'r, T: ?Sized>(&'r mut T);
+impl<'a, 'r, T: ?Sized> IntoIterator for &'a mut MutRef<'r, T>
+where
+    &'a mut T: IntoIterator,
+{
+    type IntoIter = <&'a mut T as IntoIterator>::IntoIter;
+    type Item = <&'a mut T as IntoIterator>::Item;
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
+    }
+}
+
 const tilesize: i32 = 32;
 struct ToolDef {
     item_type: ItemType,
@@ -379,7 +403,7 @@ impl FactorishState {
                     (ItemType::Assembler, 3usize),
                     (ItemType::Boiler, 3usize),
                     (ItemType::WaterWell, 1usize),
-                    (ItemType::Pipe, 5usize),
+                    (ItemType::Pipe, 15usize),
                 ]
                 .iter()
                 .map(|v| *v)
@@ -473,8 +497,17 @@ impl FactorishState {
             }
         };
 
-        use std::iter;
         struct MutRef<'r, T: ?Sized>(&'r mut T);
+        impl<'a, 'r, T: ?Sized> IntoIterator for &'a MutRef<'r, T>
+        where
+            &'a T: IntoIterator,
+        {
+            type IntoIter = <&'a T as IntoIterator>::IntoIter;
+            type Item = <&'a T as IntoIterator>::Item;
+            fn into_iter(self) -> Self::IntoIter {
+                self.0.into_iter()
+            }
+        }
         impl<'a, 'r, T: ?Sized> IntoIterator for &'a mut MutRef<'r, T>
         where
             &'a mut T: IntoIterator,
@@ -487,6 +520,18 @@ impl FactorishState {
         }
 
         struct Chained<S, T>(S, T);
+        impl<'a, S, T, Item: 'a> IntoIterator for &'a Chained<S, T>
+        where
+            &'a S: IntoIterator<Item = &'a Item>,
+            &'a T: IntoIterator<Item = &'a Item>,
+        {
+            type IntoIter =
+                iter::Chain<<&'a S as IntoIterator>::IntoIter, <&'a T as IntoIterator>::IntoIter>;
+            type Item = &'a Item;
+            fn into_iter(self) -> Self::IntoIter {
+                self.0.into_iter().chain(self.1.into_iter())
+            }
+        }
         impl<'a, S, T, Item: 'a> IntoIterator for &'a mut Chained<S, T>
         where
             &'a mut S: IntoIterator<Item = &'a mut Item>,
@@ -501,7 +546,6 @@ impl FactorishState {
                 self.0.into_iter().chain(self.1.into_iter())
             }
         }
-
         // This is silly way to avoid borrow checker that temporarily move the structures
         // away from self so that they do not claim mutable borrow twice, but it works.
         let mut structures = std::mem::take(&mut self.structures);

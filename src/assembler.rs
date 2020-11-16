@@ -124,7 +124,7 @@ impl Structure for Assembler {
     fn frame_proc(
         &mut self,
         _state: &mut FactorishState,
-        structures: &mut dyn DynIterMut<Item = Box<dyn Structure>>,
+        _structures: &mut dyn DynIterMut<Item = Box<dyn Structure>>,
     ) -> Result<FrameProcResult, ()> {
         if let Some(recipe) = &self.recipe {
             let mut ret = FrameProcResult::None;
@@ -197,7 +197,7 @@ impl Structure for Assembler {
         self.inventory.clone()
     }
 
-    fn output(&mut self, state: &mut FactorishState, item_type: &ItemType) -> Result<(), ()> {
+    fn output(&mut self, _state: &mut FactorishState, item_type: &ItemType) -> Result<(), ()> {
         if self.inventory.remove_item(item_type) {
             Ok(())
         } else {

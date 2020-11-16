@@ -1,14 +1,8 @@
-use super::items::item_to_str;
 use super::structure::{DynIterMut, Structure};
 use super::water_well::FluidBox;
-use super::{
-    log, DropItem, FactorishState, FrameProcResult, Inventory, InventoryTrait, ItemType, Position,
-    Recipe, Rotation, COAL_POWER,
-};
+use super::{FactorishState, FrameProcResult, Position, Ref};
 use wasm_bindgen::prelude::*;
 use web_sys::CanvasRenderingContext2d;
-
-use std::collections::HashMap;
 
 pub(crate) struct Pipe {
     position: Position,
@@ -49,7 +43,12 @@ impl Structure for Pipe {
                 // let (center, last) = mid
                 //     .split_first_mut()
                 //     .ok_or(JsValue::from_str("Structures split fail"))?;
-                let connections = self.connection(state, &mut state.structures.iter());
+
+                // We could split and chain like above, but we don't have to, as long as we deal with immutable
+                // references.
+                let structures_slice: &[Box<dyn Structure>] = state.structures.as_slice();
+
+                let connections = self.connection(state, &mut Ref(structures_slice));
                 let sx = (connections % 4 * 32) as f64;
                 let sy = ((connections / 4) * 32) as f64;
                 context.draw_image_with_image_bitmap_and_sw_and_sh_and_dx_and_dy_and_dw_and_dh(
@@ -86,9 +85,16 @@ impl Structure for Pipe {
 
     fn frame_proc(
         &mut self,
-        _state: &mut FactorishState,
-        _structures: &mut dyn DynIterMut<Item = Box<dyn Structure>>,
+        state: &mut FactorishState,
+        structures: &mut dyn DynIterMut<Item = Box<dyn Structure>>,
     ) -> Result<FrameProcResult, ()> {
+        let connections = self.connection(state, structures.as_dyn_iter());
+        self.fluid_box.connect_to = [
+            connections & 1 != 0,
+            connections & 2 != 0,
+            connections & 4 != 0,
+            connections & 8 != 0,
+        ];
         Ok(FrameProcResult::None)
     }
 

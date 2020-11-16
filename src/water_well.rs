@@ -1,9 +1,5 @@
-use super::items::item_to_str;
 use super::structure::{DynIterMut, Structure};
-use super::{
-    log, DropItem, FactorishState, FrameProcResult, Inventory, InventoryTrait, ItemType, Position,
-    Recipe, Rotation, COAL_POWER,
-};
+use super::{log, FactorishState, FrameProcResult, Inventory, ItemType, Position, Recipe};
 use wasm_bindgen::prelude::*;
 use web_sys::CanvasRenderingContext2d;
 
@@ -13,7 +9,7 @@ use std::collections::HashMap;
 #[derive(Eq, PartialEq, Clone, Copy)]
 pub(crate) enum FluidType {
     Water,
-    Steam,
+    // Steam,
 }
 
 pub(crate) struct FluidBox {
@@ -39,20 +35,25 @@ impl FluidBox {
         }
     }
 
+    fn set_type(mut self, type_: &FluidType) -> Self {
+        self.type_ = Some(*type_);
+        self
+    }
+
     fn simulate(
         &mut self,
         position: &Position,
         state: &mut FactorishState,
         structures: &mut dyn Iterator<Item = &mut Box<dyn Structure>>,
     ) {
-        let mut biggest_flow_idx = -1;
+        let mut _biggest_flow_idx = -1;
         let mut biggest_flow_amount = 1e-3; // At least this amount of flow is required for displaying flow direction
                                             // In an unlikely event, a fluid box without either input or output ports has nothing to do
         if self.amount == 0. || !self.input_enable && !self.output_enable {
             return;
         }
         let rel_dir = [[-1, 0], [0, -1], [1, 0], [0, 1]];
-        for (i, connect) in self.connect_to.iter().enumerate().filter(|(_, c)| **c) {
+        for (i, _connect) in self.connect_to.iter().enumerate().filter(|(_, c)| **c) {
             let dir_idx = i % 4;
             let pos = Position {
                 x: position.x + rel_dir[dir_idx][0],
@@ -88,7 +89,7 @@ impl FluidBox {
                     fluid_box.type_ = self.type_;
                     if biggest_flow_amount < flow.abs() {
                         biggest_flow_amount = flow;
-                        biggest_flow_idx = i as isize;
+                        _biggest_flow_idx = i as isize;
                     }
                 }
             }
@@ -101,9 +102,7 @@ pub(crate) struct WaterWell {
     inventory: Inventory,
     progress: Option<f64>,
     power: f64,
-    max_power: f64,
     recipe: Option<Recipe>,
-    input_fluid_box: FluidBox,
     output_fluid_box: FluidBox,
 }
 
@@ -114,15 +113,13 @@ impl WaterWell {
             inventory: Inventory::new(),
             progress: None,
             power: 0.,
-            max_power: 20.,
             recipe: Some(Recipe {
                 input: hash_map!(ItemType::CoalOre => 1usize),
                 output: HashMap::new(),
                 power_cost: 0.,
                 recipe_time: 30.,
             }),
-            input_fluid_box: FluidBox::new(true, false, [false; 4]),
-            output_fluid_box: FluidBox::new(false, true, [false; 4]),
+            output_fluid_box: FluidBox::new(false, true, [false; 4]).set_type(&FluidType::Water),
         }
     }
 }
@@ -207,10 +204,7 @@ impl Structure for WaterWell {
     ) -> Result<FrameProcResult, ()> {
         self.output_fluid_box.amount =
             (self.output_fluid_box.amount + 1.).min(self.output_fluid_box.max_amount);
-        let connections = self.connection(
-            state,
-            &mut structures.dyn_iter_mut().map(|s| s as &Box<dyn Structure>),
-        );
+        let connections = self.connection(state, structures.as_dyn_iter());
         self.output_fluid_box.connect_to = [
             connections & 1 != 0,
             connections & 2 != 0,

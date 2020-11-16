@@ -91,15 +91,33 @@ pub(crate) enum ItemResponse {
 pub(crate) type ItemResponseResult = (ItemResponse, Option<FrameProcResult>);
 
 use std::fmt::Debug;
-pub(crate) trait DynIterMut {
+
+pub(crate) trait DynIter {
     type Item;
+    fn dyn_iter(&self) -> Box<dyn Iterator<Item = &Self::Item> + '_>;
+    fn as_dyn_iter(&self) -> &dyn DynIter<Item = Self::Item>;
+}
+impl<T, Item> DynIter for T
+where
+    for<'a> &'a T: IntoIterator<Item = &'a Item>,
+{
+    type Item = Item;
+    fn dyn_iter(&self) -> Box<dyn Iterator<Item = &Self::Item> + '_> {
+        Box::new(self.into_iter())
+    }
+    fn as_dyn_iter(&self) -> &dyn DynIter<Item = Self::Item> {
+        self
+    }
+}
+
+pub(crate) trait DynIterMut: DynIter {
     fn dyn_iter_mut(&mut self) -> Box<dyn Iterator<Item = &mut Self::Item> + '_>;
 }
 impl<T, Item> DynIterMut for T
 where
+    for<'a> &'a T: IntoIterator<Item = &'a Item>,
     for<'a> &'a mut T: IntoIterator<Item = &'a mut Item>,
 {
-    type Item = Item;
     fn dyn_iter_mut(&mut self) -> Box<dyn Iterator<Item = &mut Self::Item> + '_> {
         Box::new(self.into_iter())
     }
@@ -120,7 +138,7 @@ pub(crate) trait Structure {
     fn frame_proc(
         &mut self,
         _state: &mut FactorishState,
-        structures: &mut dyn DynIterMut<Item = Box<dyn Structure>>,
+        _structures: &mut dyn DynIterMut<Item = Box<dyn Structure>>,
     ) -> Result<FrameProcResult, ()> {
         Ok(FrameProcResult::None)
     }
@@ -190,14 +208,15 @@ pub(crate) trait Structure {
     fn connection(
         &self,
         state: &FactorishState,
-        structures: &mut dyn Iterator<Item = &Box<dyn Structure>>,
+        structures: &dyn DynIter<Item = Box<dyn Structure>>,
     ) -> u32 {
         // let mut structures_copy = structures.clone();
-        let mut has_fluid_box = |x, y| {
+        let has_fluid_box = |x, y| {
             if x < 0 || state.width <= x as u32 || y < 0 || state.height <= y as u32 {
                 return false;
             }
             if let Some(structure) = structures
+                .dyn_iter()
                 .map(|s| s)
                 .find(|s| *s.position() == Position { x, y })
             {

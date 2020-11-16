@@ -1,8 +1,8 @@
-use super::items::{item_to_str, render_drop_item, ItemType};
+use super::items::{render_drop_item, ItemType};
 use super::structure::{DynIterMut, Structure};
 use super::{
-    draw_direction_arrow, log, DropItem, FactorishState, FrameProcResult, Inventory,
-    InventoryTrait, Position, Rotation,
+    draw_direction_arrow, DropItem, FactorishState, FrameProcResult, Inventory, InventoryTrait,
+    Position, Rotation,
 };
 use wasm_bindgen::prelude::*;
 use web_sys::CanvasRenderingContext2d;
@@ -221,7 +221,7 @@ impl Structure for Inserter {
                             .enumerate()
                             .find(|(_, s)| *s.position() == input_position)
                         {
-                            structure.output(state, &type_.0);
+                            structure.output(state, &type_.0)?;
                             return Ok(FrameProcResult::InventoryChanged(input_position));
                         }
                     }
