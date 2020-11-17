@@ -16,7 +16,7 @@ pub(crate) struct Boiler {
     power: f64,
     max_power: f64,
     recipe: Option<Recipe>,
-    _input_fluid_box: FluidBox,
+    input_fluid_box: FluidBox,
     _output_fluid_box: FluidBox,
 }
 
@@ -34,7 +34,7 @@ impl Boiler {
                 power_cost: 0.,
                 recipe_time: 30.,
             }),
-            _input_fluid_box: FluidBox::new(true, false, [false; 4]),
+            input_fluid_box: FluidBox::new(true, false, [false; 4]),
             _output_fluid_box: FluidBox::new(false, true, [false; 4]),
         }
     }
@@ -89,7 +89,7 @@ impl Structure for Boiler {
             "{}<br>{}",
             if self.recipe.is_some() {
                 // Progress bar
-                format!("{}{}{}{}",
+                format!("{}{}{}{}Input fluid: {}",
                     format!("Progress: {:.0}%<br>", self.progress.unwrap_or(0.) * 100.),
                     "<div style='position: relative; width: 100px; height: 10px; background-color: #001f1f; margin: 2px; border: 1px solid #3f3f3f'>",
                     format!("<div style='position: absolute; width: {}px; height: 10px; background-color: #ff00ff'></div></div>",
@@ -98,7 +98,7 @@ impl Structure for Boiler {
                     <div style='position: absolute; width: {}px; height: 10px; background-color: #ff00ff'></div></div>"#,
                     self.power,
                     if 0. < self.max_power { (self.power) / self.max_power * 100. } else { 0. }),
-                    )
+                    self.input_fluid_box.desc())
             // getHTML(generateItemImage("time", true, this.recipe.time), true) + "<br>" +
             // "Outputs: <br>" +
             // getHTML(generateItemImage(this.recipe.output, true, 1), true) + "<br>";
@@ -208,5 +208,13 @@ impl Structure for Boiler {
 
     fn get_selected_recipe(&self) -> Option<&Recipe> {
         self.recipe.as_ref()
+    }
+
+    fn fluid_box(&self) -> Option<&FluidBox> {
+        Some(&self.input_fluid_box)
+    }
+
+    fn fluid_box_mut(&mut self) -> Option<&mut FluidBox> {
+        Some(&mut self.input_fluid_box)
     }
 }

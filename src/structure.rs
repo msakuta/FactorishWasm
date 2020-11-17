@@ -1,6 +1,6 @@
 use super::items::ItemType;
 use super::water_well::FluidBox;
-use super::{log, DropItem, FactorishState, Inventory, Recipe};
+use super::{DropItem, FactorishState, Inventory, Recipe};
 use wasm_bindgen::prelude::*;
 use web_sys::CanvasRenderingContext2d;
 
