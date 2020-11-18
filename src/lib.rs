@@ -1405,7 +1405,7 @@ impl FactorishState {
                 let (x, y) = (ent.position.0 - 24., ent.position.1 - 24.);
                 context.save();
                 context
-                    .set_global_alpha(((ent.max_life - ent.life).min(ent.life) * 0.25).min(0.35));
+                    .set_global_alpha(((ent.max_life - ent.life).min(ent.life) * 0.15).min(0.35));
                 context.translate(x + 16., y + 16.)?;
                 context.rotate(ent.rotation)?;
                 context.draw_image_with_image_bitmap_and_dw_and_dh(

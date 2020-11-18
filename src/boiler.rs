@@ -3,7 +3,7 @@ use super::structure::{DynIterMut, Structure};
 use super::water_well::{FluidBox, FluidType};
 use super::{
     DropItem, FactorishState, FrameProcResult, Inventory, InventoryTrait, ItemType, Position,
-    Recipe, COAL_POWER,
+    Recipe, TempEnt, COAL_POWER,
 };
 use wasm_bindgen::prelude::*;
 use web_sys::CanvasRenderingContext2d;
@@ -170,6 +170,11 @@ impl Structure for Boiler {
             if let Some(prev_progress) = self.progress {
                 // Proceed only if we have sufficient energy in the buffer.
                 let progress = self.combustion_rate();
+                if state.rng.next() < progress * 10. {
+                    state
+                        .temp_ents
+                        .push(TempEnt::new(&mut state.rng, self.position));
+                }
                 if 1. <= prev_progress + progress {
                     self.progress = None;
 

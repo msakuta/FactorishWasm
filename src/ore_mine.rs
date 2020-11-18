@@ -2,6 +2,7 @@ use super::items::ItemType;
 use super::structure::{DynIterMut, Structure};
 use super::{
     draw_direction_arrow, DropItem, FactorishState, FrameProcResult, Position, Recipe, Rotation,
+    TempEnt,
 };
 use std::collections::HashMap;
 use wasm_bindgen::prelude::*;
@@ -144,6 +145,11 @@ impl Structure for OreMine {
 
             // Proceed only if we have sufficient energy in the buffer.
             let progress = (self.power / recipe.power_cost).min(1.);
+            if state.rng.next() < progress / recipe.recipe_time * 5. {
+                state
+                    .temp_ents
+                    .push(TempEnt::new(&mut state.rng, self.position));
+            }
             if self.cooldown < progress {
                 self.cooldown = 0.;
                 let output_position = self.position.add(self.rotation.delta());
