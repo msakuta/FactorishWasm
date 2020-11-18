@@ -11,6 +11,7 @@ import assembler from "../img/assembler.png";
 import furnace from "../img/furnace.png";
 import waterWell from "../img/waterwell.png";
 import boiler from "../img/boiler.png";
+import pipe from "../img/pipe.png";
 import inserter from "../img/inserter-base.png";
 import direction from "../img/direction.png";
 import ore from "../img/ore.png";
@@ -26,6 +27,7 @@ import pipeItem from "../img/pipe-item.png";
 import steamEngine from "../img/steam-engine.png";
 import rotateImage from "../img/rotate.png";
 import closeImage from "../img/close.png";
+import rightarrow from "../img/rightarrow.png";
 
 
 import { FactorishState } from "../pkg/index.js";
@@ -51,6 +53,10 @@ function isIE(){
         ["chest", chest],
         ["mine", mine],
         ["furnace", furnace],
+        ["assembler", assembler],
+        ["boiler", boiler],
+        ["waterWell", waterWell],
+        ["pipe", pipe],
         ["inserter", inserter],
         ["direction", direction],
         ["ore", ore],
@@ -58,10 +64,16 @@ function isIE(){
         ["ironPlate", ironPlate],
         ["copperOre", copperOre],
         ["copperPlate", copperPlate],
+        ["gear", gear],
+        ["copperWire", copperWire],
+        ["circuit", circuit],
+        ["time", time],
     ].map(async ([name, src]) => {
         const res = await fetch(src);
-        return [name, await createImageBitmap(await res.blob())];
+        return [name, src, await createImageBitmap(await res.blob())];
     });
+
+    let paused = false;
 
     let sim = new FactorishState(updateInventory);
 
@@ -464,9 +476,6 @@ function isIE(){
 
     var inventoryTitleElem = document.getElementById('inventory2Title');
 
-    placeCenter(inventoryElem);
-    windowOrder.push(inventoryElem);
-
     inventoryTitleElem.addEventListener('mousedown', function(evt){
         dragWindowMouseDown(evt, inventoryElem, inventoryDragStart);
     });
@@ -503,6 +512,88 @@ function isIE(){
         // }
     }
 
+    let recipeTarget = null;
+
+    function recipeDraw(recipe, onclick){
+        const recipeBox = document.createElement("div");
+        recipeBox.className = "recipe-box";
+        recipeBox.onclick = onclick;
+        const timeIcon = document.createElement("span");
+        timeIcon.style.display = "inline-block";
+        timeIcon.style.margin = "1px";
+        timeIcon.innerHTML = getHTML(generateItemImage("time", true, recipe.recipe_time), true);
+        recipeBox.appendChild(timeIcon);
+        const inputBox = document.createElement("span");
+        inputBox.style.display = "inline-block";
+        inputBox.style.width = "50%";
+        for(var k in recipe.input)
+            inputBox.innerHTML += getHTML(generateItemImage(k, true, recipe.input[k]), true);
+        recipeBox.appendChild(inputBox);
+        const arrowImg = document.createElement("img");
+        arrowImg.src = rightarrow;
+        arrowImg.style.width = "20px";
+        arrowImg.style.height = "32px";
+        recipeBox.appendChild(arrowImg);
+        const outputBox = document.createElement("span");
+        outputBox.style.display = "inline-block";
+        outputBox.style.width = "10%";
+        for(var k in recipe.output)
+            outputBox.innerHTML += getHTML(generateItemImage(k, true, recipe.output[k]), true);
+        recipeBox.appendChild(outputBox);
+        return recipeBox;
+    }
+
+    /// Convert a HTML element to string.
+    /// If deep === true, descendants are serialized, too.
+    function getHTML(who, deep){
+        var div = document.createElement('div');
+        div.appendChild(who.cloneNode(false));
+        var txt = div.innerHTML;
+        if(deep){
+            var ax = txt.indexOf('>')+1;
+            txt= txt.substring(0, ax)+who.innerHTML+ txt.substring(ax);
+        }
+        return txt;
+    }
+
+    function showRecipeSelect(){
+        var recipeSelector = document.getElementById('recipeSelector');
+        var recipeSelectorContent = document.getElementById('recipeSelectorContent');
+        if(recipeSelector.style.display !== "none"){
+            recipeSelector.style.display = "none";
+            return;
+        }
+        else if(sim.get_selected_inventory()){
+            recipeSelector.style.display = "block";
+            bringToTop(recipeSelector);
+            recipeTarget = sim.get_selected_inventory();
+            var text = "";
+            var recipes = sim.get_structure_recipes(...sim.get_selected_inventory());
+            while(0 < recipeSelectorContent.childNodes.length)
+                recipeSelectorContent.removeChild(recipeSelectorContent.childNodes[0]);
+            for(var i = 0; i < recipes.length; i++){
+                const index = i;
+                recipeSelectorContent.appendChild(recipeDraw(recipes[i], (evt) => {
+                    sim.select_recipe(recipeTarget[0], recipeTarget[1], index);
+                    recipeSelector.style.display = "none";
+                }));
+            }
+            // recipeSelectorContent.innerHTML = text;
+        }
+        else{
+            recipeTarget = null;
+            recipeSelectorContent.innerHTML = "No recipes available";
+        }
+    }
+
+    function hideRecipeSelect(){
+        var recipeSelector = document.getElementById('recipeSelector');
+        recipeSelector.style.display = "none";
+    }
+    const recipeSelectorCloseButton = document.getElementById('recipeSelectorCloseButton');
+    recipeSelectorCloseButton.onclick = hideRecipeSelect;
+    recipeSelectorCloseButton.style.backgroundImage = `url(${closeImage})`;
+
     // Place a window element at the center of the container, assumes the windows have margin set in the middle.
     function placeCenter(elem){
         var containerElem = document.getElementById('container2');
@@ -513,6 +604,21 @@ function isIE(){
 
     placeCenter(inventoryElem);
     windowOrder.push(inventoryElem);
+
+    const recipeSelectButtonElem = document.getElementById('recipeSelectButton');
+    recipeSelectButtonElem.onclick = showRecipeSelect;
+
+    var recipeSelectorDragStart = null;
+
+    const recipeSelectorTitle = document.getElementById('recipeSelectorTitle');
+    const recipeSelector = document.getElementById('recipeSelector');
+    if(recipeSelectorTitle && recipeSelector){
+        placeCenter(recipeSelector);
+        windowOrder.push(recipeSelector);
+        recipeSelectorTitle.addEventListener('mousedown', function(evt){
+            dragWindowMouseDown(evt, recipeSelector, recipeSelectorDragStart);
+        })
+    }
 
     const playerElem = document.createElement('div');
     playerElem.style.overflow = 'visible';
@@ -582,16 +688,20 @@ function isIE(){
         evt.preventDefault();
     });
     canvas.addEventListener("mousemove", function(evt){
-        sim.mouse_move([evt.offsetX, evt.offsetY]);
+        if(!paused)
+            sim.mouse_move([evt.offsetX, evt.offsetY]);
     });
 
     canvas.addEventListener("mouseleave", function(evt){
-        sim.mouse_leave([evt.offsetX, evt.offsetY]);
+        if(!paused)
+            sim.mouse_leave([evt.offsetX, evt.offsetY]);
     });
 
     function onKeyDown(event){
         if(sim.on_key_down(event.keyCode))
             updateToolBarImage();
+        else if(event.keyCode === 80)
+            paused = !paused;
     }
     window.addEventListener( 'keydown', onKeyDown, false );
 
@@ -620,7 +730,8 @@ function isIE(){
     }
 
     window.setInterval(function(){
-        processEvents(sim.simulate(0.05));
+        if(!paused)
+            processEvents(sim.simulate(0.05));
         let result = sim.render(ctx);
         // console.log(result);
     }, 50);

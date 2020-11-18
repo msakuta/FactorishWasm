@@ -45,7 +45,7 @@ impl Structure for TransportBelt {
                 for i in 0..2 {
                     context
                         .draw_image_with_image_bitmap_and_sw_and_sh_and_dx_and_dy_and_dw_and_dh(
-                            img,
+                            &img.bitmap,
                             i as f64 * 32. - (state.sim_time * 16.) % 32.,
                             0.,
                             32.,

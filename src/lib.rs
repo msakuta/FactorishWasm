@@ -1,22 +1,61 @@
 #![allow(non_upper_case_globals)]
+
+macro_rules! console_log {
+    ($fmt:expr, $($arg1:expr),*) => {
+        log(&format!($fmt, $($arg1),+))
+    };
+    ($fmt:expr) => {
+        log($fmt)
+    }
+}
+macro_rules! js_err {
+    ($fmt:expr, $($arg1:expr),*) => {
+        JsValue::from_str(&format!($fmt, $($arg1),+))
+    };
+    ($fmt:expr) => {
+        JsValue::from_str($fmt)
+    }
+}
+
+macro_rules! hash_map {
+    { $($key:expr => $value:expr),+ } => {
+        {
+            let mut m = ::std::collections::HashMap::new();
+            $(
+                m.insert($key, $value);
+            )+
+            m
+        }
+    };
+}
+
+mod assembler;
+mod boiler;
 mod chest;
 mod furnace;
 mod inserter;
 mod items;
 mod ore_mine;
 mod perlin_noise;
+mod pipe;
 mod structure;
 mod transport_belt;
 mod utils;
+mod water_well;
 
+use assembler::Assembler;
+use boiler::Boiler;
 use chest::Chest;
 use furnace::Furnace;
 use inserter::Inserter;
 use items::{item_to_str, render_drop_item, str_to_item, DropItem, ItemType};
 use ore_mine::OreMine;
+use pipe::Pipe;
 use structure::{FrameProcResult, ItemResponse, Position, Rotation, Structure};
 use transport_belt::TransportBelt;
+use water_well::WaterWell;
 
+use serde::Serialize;
 use std::collections::HashMap;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
@@ -27,16 +66,7 @@ use perlin_noise::perlin_noise_pixel;
 #[wasm_bindgen]
 extern "C" {
     #[wasm_bindgen(js_namespace = console)]
-    fn log(s: &str);
-}
-
-macro_rules! console_log {
-    ($fmt:expr, $($arg1:expr),*) => {
-        log(&format!($fmt, $($arg1),+))
-    };
-    ($fmt:expr) => {
-        log($fmt)
-    }
+    pub(crate) fn log(s: &str);
 }
 
 // When the `wee_alloc` feature is enabled, use `wee_alloc` as the global
@@ -139,11 +169,35 @@ impl InventoryTrait for Inventory {
     }
 }
 
+use std::iter;
+struct Ref<'r, T: ?Sized>(&'r T);
+impl<'a, 'r, T: ?Sized> IntoIterator for &'a Ref<'r, T>
+where
+    &'a T: IntoIterator,
+{
+    type IntoIter = <&'a T as IntoIterator>::IntoIter;
+    type Item = <&'a T as IntoIterator>::Item;
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
+    }
+}
+struct MutRef<'r, T: ?Sized>(&'r mut T);
+impl<'a, 'r, T: ?Sized> IntoIterator for &'a mut MutRef<'r, T>
+where
+    &'a mut T: IntoIterator,
+{
+    type IntoIter = <&'a mut T as IntoIterator>::IntoIter;
+    type Item = <&'a mut T as IntoIterator>::Item;
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
+    }
+}
+
 const tilesize: i32 = 32;
 struct ToolDef {
     item_type: ItemType,
 }
-const tool_defs: [ToolDef; 5] = [
+const tool_defs: [ToolDef; 9] = [
     ToolDef {
         item_type: ItemType::TransportBelt,
     },
@@ -159,6 +213,18 @@ const tool_defs: [ToolDef; 5] = [
     ToolDef {
         item_type: ItemType::Furnace,
     },
+    ToolDef {
+        item_type: ItemType::Assembler,
+    },
+    ToolDef {
+        item_type: ItemType::Boiler,
+    },
+    ToolDef {
+        item_type: ItemType::WaterWell,
+    },
+    ToolDef {
+        item_type: ItemType::Pipe,
+    },
 ];
 
 fn draw_direction_arrow(
@@ -173,7 +239,7 @@ fn draw_direction_arrow(
             context.translate(x + 16., y + 16.)?;
             context.rotate(rotation.angle_rad() + std::f64::consts::PI)?;
             context.translate(-(x + 16. + 4.) + 16., -(y + 16. + 8.) + 16.)?;
-            context.draw_image_with_image_bitmap(img, x, y)?;
+            context.draw_image_with_image_bitmap(&img.bitmap, x, y)?;
             context.restore();
         }
         None => return Err(JsValue::from_str("direction image not available")),
@@ -183,11 +249,31 @@ fn draw_direction_arrow(
 
 type ItemSet = HashMap<ItemType, usize>;
 
+#[derive(Clone)]
 struct Recipe {
     input: ItemSet,
     output: ItemSet,
     power_cost: f64,
     recipe_time: f64,
+}
+
+#[derive(Serialize)]
+struct RecipeSerial {
+    input: HashMap<String, usize>,
+    output: HashMap<String, usize>,
+    power_cost: f64,
+    recipe_time: f64,
+}
+
+impl From<Recipe> for RecipeSerial {
+    fn from(o: Recipe) -> Self {
+        Self {
+            input: o.input.iter().map(|(k, v)| (item_to_str(k), *v)).collect(),
+            output: o.output.iter().map(|(k, v)| (item_to_str(k), *v)).collect(),
+            power_cost: o.power_cost,
+            recipe_time: o.recipe_time,
+        }
+    }
 }
 
 const objsize: i32 = 8;
@@ -210,6 +296,17 @@ impl Player {
             self.selected_item = None;
             Err(JsValue::from_str("item not found"))
         }
+    }
+}
+
+struct ImageBundle {
+    url: String,
+    bitmap: ImageBitmap,
+}
+
+impl<'a> Into<&'a ImageBitmap> for &'a ImageBundle {
+    fn into(self) -> &'a ImageBitmap {
+        &self.bitmap
     }
 }
 
@@ -236,21 +333,29 @@ pub struct FactorishState {
     info_elem: Option<HtmlDivElement>,
     on_player_update: js_sys::Function,
     // on_show_inventory: js_sys::Function,
-    image_dirt: Option<ImageBitmap>,
-    image_ore: Option<ImageBitmap>,
-    image_coal: Option<ImageBitmap>,
-    image_copper: Option<ImageBitmap>,
-    image_belt: Option<ImageBitmap>,
-    image_chest: Option<ImageBitmap>,
-    image_mine: Option<ImageBitmap>,
-    image_furnace: Option<ImageBitmap>,
-    image_inserter: Option<ImageBitmap>,
-    image_direction: Option<ImageBitmap>,
-    image_iron_ore: Option<ImageBitmap>,
-    image_coal_ore: Option<ImageBitmap>,
-    image_copper_ore: Option<ImageBitmap>,
-    image_iron_plate: Option<ImageBitmap>,
-    image_copper_plate: Option<ImageBitmap>,
+    image_dirt: Option<ImageBundle>,
+    image_ore: Option<ImageBundle>,
+    image_coal: Option<ImageBundle>,
+    image_copper: Option<ImageBundle>,
+    image_belt: Option<ImageBundle>,
+    image_chest: Option<ImageBundle>,
+    image_mine: Option<ImageBundle>,
+    image_furnace: Option<ImageBundle>,
+    image_assembler: Option<ImageBundle>,
+    image_boiler: Option<ImageBundle>,
+    image_water_well: Option<ImageBundle>,
+    image_pipe: Option<ImageBundle>,
+    image_inserter: Option<ImageBundle>,
+    image_direction: Option<ImageBundle>,
+    image_iron_ore: Option<ImageBundle>,
+    image_coal_ore: Option<ImageBundle>,
+    image_copper_ore: Option<ImageBundle>,
+    image_iron_plate: Option<ImageBundle>,
+    image_copper_plate: Option<ImageBundle>,
+    image_gear: Option<ImageBundle>,
+    image_copper_wire: Option<ImageBundle>,
+    image_circuit: Option<ImageBundle>,
+    image_time: Option<ImageBundle>,
 }
 
 #[derive(Debug)]
@@ -295,6 +400,10 @@ impl FactorishState {
                     (ItemType::OreMine, 5usize),
                     (ItemType::Chest, 3usize),
                     (ItemType::Furnace, 3usize),
+                    (ItemType::Assembler, 3usize),
+                    (ItemType::Boiler, 3usize),
+                    (ItemType::WaterWell, 1usize),
+                    (ItemType::Pipe, 15usize),
                 ]
                 .iter()
                 .map(|v| *v)
@@ -310,6 +419,10 @@ impl FactorishState {
             image_chest: None,
             image_mine: None,
             image_furnace: None,
+            image_assembler: None,
+            image_boiler: None,
+            image_water_well: None,
+            image_pipe: None,
             image_inserter: None,
             image_direction: None,
             image_iron_ore: None,
@@ -317,6 +430,10 @@ impl FactorishState {
             image_copper_ore: None,
             image_iron_plate: None,
             image_copper_plate: None,
+            image_gear: None,
+            image_copper_wire: None,
+            image_circuit: None,
+            image_time: None,
             board: {
                 let mut ret = vec![
                     Cell {
@@ -348,6 +465,8 @@ impl FactorishState {
                 Box::new(TransportBelt::new(11, 3, Rotation::Left)),
                 Box::new(TransportBelt::new(12, 3, Rotation::Left)),
                 Box::new(OreMine::new(12, 2, Rotation::Bottom)),
+                Box::new(Furnace::new(&Position::new(8, 3))),
+                Box::new(Assembler::new(&Position::new(6, 3))),
             ],
             selected_structure_inventory: None,
             selected_structure_item: None,
@@ -378,29 +497,68 @@ impl FactorishState {
             }
         };
 
+        struct MutRef<'r, T: ?Sized>(&'r mut T);
+        impl<'a, 'r, T: ?Sized> IntoIterator for &'a MutRef<'r, T>
+        where
+            &'a T: IntoIterator,
+        {
+            type IntoIter = <&'a T as IntoIterator>::IntoIter;
+            type Item = <&'a T as IntoIterator>::Item;
+            fn into_iter(self) -> Self::IntoIter {
+                self.0.into_iter()
+            }
+        }
+        impl<'a, 'r, T: ?Sized> IntoIterator for &'a mut MutRef<'r, T>
+        where
+            &'a mut T: IntoIterator,
+        {
+            type IntoIter = <&'a mut T as IntoIterator>::IntoIter;
+            type Item = <&'a mut T as IntoIterator>::Item;
+            fn into_iter(self) -> Self::IntoIter {
+                self.0.into_iter()
+            }
+        }
+
+        struct Chained<S, T>(S, T);
+        impl<'a, S, T, Item: 'a> IntoIterator for &'a Chained<S, T>
+        where
+            &'a S: IntoIterator<Item = &'a Item>,
+            &'a T: IntoIterator<Item = &'a Item>,
+        {
+            type IntoIter =
+                iter::Chain<<&'a S as IntoIterator>::IntoIter, <&'a T as IntoIterator>::IntoIter>;
+            type Item = &'a Item;
+            fn into_iter(self) -> Self::IntoIter {
+                self.0.into_iter().chain(self.1.into_iter())
+            }
+        }
+        impl<'a, S, T, Item: 'a> IntoIterator for &'a mut Chained<S, T>
+        where
+            &'a mut S: IntoIterator<Item = &'a mut Item>,
+            &'a mut T: IntoIterator<Item = &'a mut Item>,
+        {
+            type IntoIter = iter::Chain<
+                <&'a mut S as IntoIterator>::IntoIter,
+                <&'a mut T as IntoIterator>::IntoIter,
+            >;
+            type Item = &'a mut Item;
+            fn into_iter(self) -> Self::IntoIter {
+                self.0.into_iter().chain(self.1.into_iter())
+            }
+        }
         // This is silly way to avoid borrow checker that temporarily move the structures
         // away from self so that they do not claim mutable borrow twice, but it works.
         let mut structures = std::mem::take(&mut self.structures);
         for i in 0..structures.len() {
-            if 0 < i {
-                let (front, mid) = structures.split_at_mut(i);
-                let (center, last) = mid
-                    .split_first_mut()
-                    .ok_or(JsValue::from_str("Structures split fail"))?;
-                frame_proc_result_to_event(
-                    center.frame_proc(self, &mut front.into_iter().chain(last.into_iter())),
-                );
-            } else {
-                let (center, last) = structures
-                    .split_first_mut()
-                    .ok_or(JsValue::from_str("Structures split fail"))?;
-                frame_proc_result_to_event(center.frame_proc(self, &mut last.iter_mut()));
-            }
+            let (front, mid) = structures.split_at_mut(i);
+            let (center, last) = mid
+                .split_first_mut()
+                .ok_or(JsValue::from_str("Structures split fail"))?;
+            frame_proc_result_to_event(
+                center.frame_proc(self, &mut Chained(MutRef(front), MutRef(last))),
+            );
         }
-        // for structure in &mut structures {
-        //     structure.frame_proc(self, &mut structures);
-        // }
-        // let mut drop_items = std::mem::take(&mut self.drop_items);
+
         let mut to_remove = vec![];
         for i in 0..self.drop_items.len() {
             let item = &self.drop_items[i];
@@ -487,6 +645,14 @@ impl FactorishState {
             .iter()
             .find(|s| s.position().x == tile[0] && s.position().y == tile[1])
             .map(|s| s.as_ref())
+    }
+
+    /// Mutable variant of find_structure_tile
+    fn find_structure_tile_mut(&mut self, tile: &[i32]) -> Option<&mut Box<dyn Structure>> {
+        self.structures
+            .iter_mut()
+            .find(|s| s.position().x == tile[0] && s.position().y == tile[1])
+        // .map(|s| s.as_mut())
     }
 
     /// Dirty hack to enable modifying a structure in an array.
@@ -707,6 +873,7 @@ impl FactorishState {
         }
     }
 
+    /// Returns currently selected structure's coordinates in 2-array or `null` if none selected
     pub fn get_selected_inventory(&self) -> Result<JsValue, JsValue> {
         if let Some(pos) = self.selected_structure_inventory {
             return Ok(JsValue::from(js_sys::Array::of2(
@@ -732,6 +899,45 @@ impl FactorishState {
         self.selected_structure_item =
             Some(str_to_item(name).ok_or_else(|| JsValue::from("Item name not valid"))?);
         Ok(())
+    }
+
+    pub fn get_structure_recipes(&self, c: i32, r: i32) -> Result<JsValue, JsValue> {
+        if let Some(structure) = self.find_structure_tile(&[c, r]) {
+            // Ok(structure.get_recipes()
+            //     .iter()
+            //     .map(|recipe| {
+            //         js_sys::Array::of2(
+            //             &recipe.input.iter().map(|pair| js_sys::Object::::of2(
+            //                 &JsValue::from_str(&item_to_str(pair.0)),
+            //                 &JsValue::from(*pair.1 as f64)
+            //             )).collect::<js_sys::Array>(),
+            //             &recipe.output.iter().map(|pair| js_sys::Array::of2(
+            //                 &JsValue::from_str(&item_to_str(pair.0)),
+            //                 &JsValue::from(*pair.1 as f64)
+            //             )).collect::<js_sys::Array>(),
+            //         )
+            //     })
+            //     .collect::<js_sys::Array>(),
+            // )
+            Ok(JsValue::from_serde(
+                &structure
+                    .get_recipes()
+                    .into_iter()
+                    .map(|v| RecipeSerial::from(v))
+                    .collect::<Vec<_>>(),
+            )
+            .unwrap())
+        } else {
+            Err(JsValue::from_str("structure is not found"))
+        }
+    }
+
+    pub fn select_recipe(&mut self, c: i32, r: i32, index: usize) -> Result<bool, JsValue> {
+        if let Some(structure) = self.find_structure_tile_mut(&[c, r]) {
+            structure.select_recipe(index)
+        } else {
+            Err(JsValue::from_str("Structure is not found"))
+        }
     }
 
     fn move_inventory_item(src: &mut Inventory, dst: &mut Inventory, item_type: &ItemType) -> bool {
@@ -776,15 +982,27 @@ impl FactorishState {
 
     fn new_structure(
         &self,
-        tool_index: usize,
+        tool: &ItemType,
         cursor: &Position,
     ) -> Result<Box<dyn Structure>, JsValue> {
-        Ok(match tool_index {
-            0 => Box::new(TransportBelt::new(cursor.x, cursor.y, self.tool_rotation)),
-            1 => Box::new(Inserter::new(cursor.x, cursor.y, self.tool_rotation)),
-            2 => Box::new(OreMine::new(cursor.x, cursor.y, self.tool_rotation)),
-            3 => Box::new(Chest::new(cursor)),
-            _ => Box::new(Furnace::new(cursor)),
+        Ok(match tool {
+            ItemType::TransportBelt => {
+                Box::new(TransportBelt::new(cursor.x, cursor.y, self.tool_rotation))
+            }
+            ItemType::Inserter => Box::new(Inserter::new(cursor.x, cursor.y, self.tool_rotation)),
+            ItemType::OreMine => Box::new(OreMine::new(cursor.x, cursor.y, self.tool_rotation)),
+            ItemType::Chest => Box::new(Chest::new(cursor)),
+            ItemType::Furnace => Box::new(Furnace::new(cursor)),
+            ItemType::Assembler => Box::new(Assembler::new(cursor)),
+            ItemType::Boiler => Box::new(Boiler::new(cursor)),
+            ItemType::WaterWell => Box::new(WaterWell::new(cursor)),
+            ItemType::Pipe => Box::new(Pipe::new(cursor)),
+            _ => {
+                return Err(JsValue::from_str(&format!(
+                    "Can't make a structure from {:?}",
+                    tool
+                )))
+            }
         })
     }
 
@@ -808,8 +1026,9 @@ impl FactorishState {
                 {
                     if 1 <= *count {
                         self.harvest(&cursor)?;
-                        self.structures
-                            .push(self.new_structure(selected_tool, &cursor)?);
+                        self.structures.push(
+                            self.new_structure(&tool_defs[selected_tool].item_type, &cursor)?,
+                        );
                         if let Some(count) = self
                             .player
                             .inventory
@@ -825,18 +1044,20 @@ impl FactorishState {
                         )));
                     }
                 }
-            } else {
-                // Select clicked structure
-                console_log!("opening inventory at {:?}", cursor);
-                if self.open_structure_inventory(cursor.x, cursor.y).is_ok() {
-                    // self.on_show_inventory.call0(&window()).unwrap();
-                    events.push(js_sys::Array::of3(
-                        &JsValue::from_str("showInventory"),
-                        &JsValue::from(cursor.x),
-                        &JsValue::from(cursor.y),
-                    ));
-                    // let inventory_elem: web_sys::HtmlElement = document().get_element_by_id("inventory2").unwrap().dyn_into().unwrap();
-                    // inventory_elem.style().set_property("display", "block").unwrap();
+            } else if let Some(structure) = self.find_structure_tile(&[cursor.x, cursor.y]) {
+                if structure.inventory().is_some() {
+                    // Select clicked structure
+                    console_log!("opening inventory at {:?}", cursor);
+                    if self.open_structure_inventory(cursor.x, cursor.y).is_ok() {
+                        // self.on_show_inventory.call0(&window()).unwrap();
+                        events.push(js_sys::Array::of3(
+                            &JsValue::from_str("showInventory"),
+                            &JsValue::from(cursor.x),
+                            &JsValue::from(cursor.y),
+                        ));
+                        // let inventory_elem: web_sys::HtmlElement = document().get_element_by_id("inventory2").unwrap().dyn_into().unwrap();
+                        // inventory_elem.style().set_property("display", "block").unwrap();
+                    }
                 }
             }
         } else {
@@ -888,23 +1109,36 @@ impl FactorishState {
         self.viewport_width = canvas.width() as f64;
         self.viewport_height = canvas.height() as f64;
         self.info_elem = Some(info_elem);
-        let load_image = |path| -> Result<_, JsValue> {
+
+        let load_image = |path| -> Result<ImageBundle, JsValue> {
             if let Some(value) = image_assets.iter().find(|value| {
                 let array = js_sys::Array::from(value);
                 array.iter().next() == Some(JsValue::from_str(path))
             }) {
-                let array = js_sys::Array::from(&value);
-                array
-                    .to_vec()
-                    .into_iter()
-                    .nth(1)
-                    .unwrap_or_else(|| {
-                        JsValue::from_str(&format!(
-                            "Couldn't convert value to ImageBitmap: {:?}",
-                            path
-                        ))
-                    })
-                    .dyn_into::<ImageBitmap>()
+                let array = js_sys::Array::from(&value).to_vec();
+                Ok(ImageBundle {
+                    url: array
+                        .get(1)
+                        .map(|v| v.clone())
+                        .ok_or_else(|| {
+                            JsValue::from_str(&format!(
+                                "Couldn't convert value to String: {:?}",
+                                path
+                            ))
+                        })?
+                        .dyn_into::<js_sys::JsString>()?
+                        .into(),
+                    bitmap: array
+                        .get(2)
+                        .map(|v| v.clone())
+                        .ok_or_else(|| {
+                            JsValue::from_str(&format!(
+                                "Couldn't convert value to ImageBitmap: {:?}",
+                                path
+                            ))
+                        })?
+                        .dyn_into::<ImageBitmap>()?,
+                })
             } else {
                 Err(JsValue::from_str(&format!("Image not found: {:?}", path)))
             }
@@ -917,6 +1151,10 @@ impl FactorishState {
         self.image_chest = Some(load_image("chest")?);
         self.image_mine = Some(load_image("mine")?);
         self.image_furnace = Some(load_image("furnace")?);
+        self.image_assembler = Some(load_image("assembler")?);
+        self.image_boiler = Some(load_image("boiler")?);
+        self.image_water_well = Some(load_image("waterWell")?);
+        self.image_pipe = Some(load_image("pipe")?);
         self.image_inserter = Some(load_image("inserter")?);
         self.image_direction = Some(load_image("direction")?);
         self.image_iron_ore = Some(load_image("ore")?);
@@ -924,6 +1162,10 @@ impl FactorishState {
         self.image_copper_ore = Some(load_image("copperOre")?);
         self.image_iron_plate = Some(load_image("ironPlate")?);
         self.image_copper_plate = Some(load_image("copperPlate")?);
+        self.image_gear = Some(load_image("gear")?);
+        self.image_copper_wire = Some(load_image("copperWire")?);
+        self.image_circuit = Some(load_image("circuit")?);
+        self.image_time = Some(load_image("time")?);
         Ok(())
     }
 
@@ -960,7 +1202,8 @@ impl FactorishState {
         context: &CanvasRenderingContext2d,
     ) -> Result<(), JsValue> {
         context.clear_rect(0., 0., 32., 32.);
-        let mut tool = self.new_structure(tool_index, &Position { x: 0, y: 0 })?;
+        let mut tool =
+            self.new_structure(&tool_defs[tool_index].item_type, &Position { x: 0, y: 0 })?;
         tool.set_rotation(&self.tool_rotation).ok();
         for depth in 0..3 {
             tool.draw(self, context, depth)?;
@@ -1009,7 +1252,7 @@ impl FactorishState {
                 for y in 0..self.viewport_height as u32 / 32 {
                     for x in 0..self.viewport_width as u32 / 32 {
                         context.draw_image_with_image_bitmap(
-                            img,
+                            &img.bitmap,
                             x as f64 * 32.,
                             y as f64 * 32.,
                         )?;
@@ -1022,11 +1265,17 @@ impl FactorishState {
                             }
                             Ok(())
                         };
-                        draw_ore(self.board[(x + y * self.width) as usize].iron_ore, img_ore)?;
-                        draw_ore(self.board[(x + y * self.width) as usize].coal_ore, img_coal)?;
+                        draw_ore(
+                            self.board[(x + y * self.width) as usize].iron_ore,
+                            &img_ore.bitmap,
+                        )?;
+                        draw_ore(
+                            self.board[(x + y * self.width) as usize].coal_ore,
+                            &img_coal.bitmap,
+                        )?;
                         draw_ore(
                             self.board[(x + y * self.width) as usize].copper_ore,
-                            img_copper,
+                            &img_copper.bitmap,
                         )?;
                     }
                 }
@@ -1061,7 +1310,8 @@ impl FactorishState {
             if let Some(selected_tool) = self.selected_tool {
                 context.save();
                 context.set_global_alpha(0.5);
-                let mut tool = self.new_structure(selected_tool, &Position::from(cursor))?;
+                let mut tool = self
+                    .new_structure(&tool_defs[selected_tool].item_type, &Position::from(cursor))?;
                 tool.set_rotation(&self.tool_rotation).ok();
                 for depth in 0..3 {
                     tool.draw(self, &context, depth)?;

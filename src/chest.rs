@@ -41,7 +41,7 @@ impl Structure for Chest {
         let (x, y) = (self.position.x as f64 * 32., self.position.y as f64 * 32.);
         match state.image_chest.as_ref() {
             Some(img) => {
-                context.draw_image_with_image_bitmap(img, x, y)?;
+                context.draw_image_with_image_bitmap(&img.bitmap, x, y)?;
                 Ok(())
             }
             None => Err(JsValue::from_str("chest image not available")),
@@ -81,28 +81,13 @@ impl Structure for Chest {
         self.inventory.len() < CHEST_CAPACITY
     }
 
-    fn output<'a>(
-        &'a mut self,
-        state: &mut FactorishState,
-        position: &Position,
-    ) -> Result<(DropItem, Box<dyn FnOnce(&DropItem) + 'a>), ()> {
-        if let Some(ref mut item) = self.inventory.iter_mut().next() {
-            if 0 < *item.1 {
-                let item_type = item.0.clone();
-                Ok((
-                    DropItem {
-                        id: state.serial_no,
-                        type_: *item.0,
-                        x: position.x * 32,
-                        y: position.y * 32,
-                    },
-                    Box::new(move |_| {
-                        self.inventory.remove_item(&item_type);
-                    }),
-                ))
-            } else {
-                Err(())
-            }
+    fn can_output(&self) -> Inventory {
+        self.inventory.clone()
+    }
+
+    fn output(&mut self, _state: &mut FactorishState, item_type: &ItemType) -> Result<(), ()> {
+        if self.inventory.remove_item(item_type) {
+            Ok(())
         } else {
             Err(())
         }

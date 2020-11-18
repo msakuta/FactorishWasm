@@ -1,37 +1,67 @@
-use super::items::item_to_str;
 use super::structure::{DynIterMut, Structure};
+use super::water_well::{FluidBox, FluidType};
 use super::{
     DropItem, FactorishState, FrameProcResult, Inventory, InventoryTrait, ItemType, Position,
     Recipe, COAL_POWER,
 };
+use super::pipe::Pipe;
 use wasm_bindgen::prelude::*;
 use web_sys::CanvasRenderingContext2d;
 
-pub(crate) struct Furnace {
+use std::collections::HashMap;
+
+pub(crate) struct Boiler {
     position: Position,
     inventory: Inventory,
     progress: Option<f64>,
     power: f64,
     max_power: f64,
     recipe: Option<Recipe>,
+    input_fluid_box: FluidBox,
+    output_fluid_box: FluidBox,
 }
 
-impl Furnace {
+impl Boiler {
     pub(crate) fn new(position: &Position) -> Self {
-        Furnace {
+        Boiler {
             position: *position,
             inventory: Inventory::new(),
             progress: None,
-            power: 20.,
+            power: 0.,
             max_power: 20.,
-            recipe: None,
+            recipe: Some(Recipe {
+                input: hash_map!(ItemType::CoalOre => 1usize),
+                output: HashMap::new(),
+                power_cost: 100.,
+                recipe_time: 30.,
+            }),
+            input_fluid_box: FluidBox::new(true, false, [false; 4]),
+            output_fluid_box: FluidBox::new(false, true, [false; 4]),
+        }
+    }
+
+    const FLUID_PER_PROGRESS: f64 = 100.;
+    const COMBUSTION_EPSILON: f64 = 1e-6;
+
+    fn combustion_rate(&self) -> f64 {
+        if let Some(ref recipe) = self.recipe {
+            (self.power / recipe.power_cost)
+                .min(1. / recipe.recipe_time)
+                .min(self.input_fluid_box.amount / Self::FLUID_PER_PROGRESS)
+                .min(
+                    (self.output_fluid_box.max_amount - self.output_fluid_box.amount)
+                        / Self::FLUID_PER_PROGRESS,
+                )
+                .min(1.)
+        } else {
+            0.
         }
     }
 }
 
-impl Structure for Furnace {
+impl Structure for Boiler {
     fn name(&self) -> &str {
-        "Furnace"
+        "Boiler"
     }
 
     fn position(&self) -> &Position {
@@ -47,10 +77,13 @@ impl Structure for Furnace {
         if depth != 0 {
             return Ok(());
         };
+        Pipe::draw_int(self, state, context, depth, false)?;
         let (x, y) = (self.position.x as f64 * 32., self.position.y as f64 * 32.);
-        match state.image_furnace.as_ref() {
+        match state.image_boiler.as_ref() {
             Some(img) => {
-                let sx = if self.progress.is_some() && 0. < self.power {
+                let sx = if self.progress.is_some()
+                    && Self::COMBUSTION_EPSILON < self.combustion_rate()
+                {
                     ((((state.sim_time * 5.) as isize) % 2 + 1) * 32) as f64
                 } else {
                     0.
@@ -78,7 +111,7 @@ impl Structure for Furnace {
             "{}<br>{}",
             if self.recipe.is_some() {
                 // Progress bar
-                format!("{}{}{}{}",
+                format!("{}{}{}{}Input fluid: {}Output fluid: {}",
                     format!("Progress: {:.0}%<br>", self.progress.unwrap_or(0.) * 100.),
                     "<div style='position: relative; width: 100px; height: 10px; background-color: #001f1f; margin: 2px; border: 1px solid #3f3f3f'>",
                     format!("<div style='position: absolute; width: {}px; height: 10px; background-color: #ff00ff'></div></div>",
@@ -87,7 +120,8 @@ impl Structure for Furnace {
                     <div style='position: absolute; width: {}px; height: 10px; background-color: #ff00ff'></div></div>"#,
                     self.power,
                     if 0. < self.max_power { (self.power) / self.max_power * 100. } else { 0. }),
-                    )
+                    self.input_fluid_box.desc(),
+                    self.output_fluid_box.desc())
             // getHTML(generateItemImage("time", true, this.recipe.time), true) + "<br>" +
             // "Outputs: <br>" +
             // getHTML(generateItemImage(this.recipe.output, true, 1), true) + "<br>";
@@ -106,10 +140,19 @@ impl Structure for Furnace {
 
     fn frame_proc(
         &mut self,
-        _state: &mut FactorishState,
-        _structures: &mut dyn DynIterMut<Item = Box<dyn Structure>>,
+        state: &mut FactorishState,
+        structures: &mut dyn DynIterMut<Item = Box<dyn Structure>>,
     ) -> Result<FrameProcResult, ()> {
+        let connections = self.connection(state, structures.as_dyn_iter());
+        self.output_fluid_box.connect_to = connections;
+        self.input_fluid_box
+            .simulate(&self.position, state, &mut structures.dyn_iter_mut());
+        self.output_fluid_box
+            .simulate(&self.position, state, &mut structures.dyn_iter_mut());
         if let Some(recipe) = &self.recipe {
+            if self.input_fluid_box.type_ == Some(FluidType::Water) {
+                self.progress = Some(0.);
+            }
             let mut ret = FrameProcResult::None;
             // First, check if we need to refill the energy buffer in order to continue the current work.
             if self.inventory.get(&ItemType::CoalOre).is_some() {
@@ -122,30 +165,9 @@ impl Structure for Furnace {
                 }
             }
 
-            if self.progress.is_none() {
-                // First, check if we have enough ingredients to finish this recipe.
-                // If we do, consume the ingredients and start the progress timer.
-                // We can't start as soon as the recipe is set because we may not have enough ingredients
-                // at the point we set the recipe.
-                if recipe
-                    .input
-                    .iter()
-                    .map(|(item, count)| count <= &self.inventory.count_item(item))
-                    .all(|b| b)
-                {
-                    for (item, count) in &recipe.input {
-                        self.inventory.remove_items(item, *count);
-                    }
-                    self.progress = Some(0.);
-                    ret = FrameProcResult::InventoryChanged(self.position);
-                }
-            }
-
             if let Some(prev_progress) = self.progress {
                 // Proceed only if we have sufficient energy in the buffer.
-                let progress = (self.power / recipe.power_cost)
-                    .min(1. / recipe.recipe_time)
-                    .min(1.);
+                let progress = self.combustion_rate();
                 if 1. <= prev_progress + progress {
                     self.progress = None;
 
@@ -154,9 +176,12 @@ impl Structure for Furnace {
                         self.inventory.add_item(&output_item.0);
                     }
                     return Ok(FrameProcResult::InventoryChanged(self.position));
-                } else {
+                } else if Self::COMBUSTION_EPSILON < progress {
                     self.progress = Some(prev_progress + progress);
                     self.power -= progress * recipe.power_cost;
+                    self.output_fluid_box.type_ = Some(FluidType::Steam);
+                    self.output_fluid_box.amount += progress * Self::FLUID_PER_PROGRESS;
+                    self.input_fluid_box.amount -= progress * Self::FLUID_PER_PROGRESS;
                 }
             }
             return Ok(ret);
@@ -165,63 +190,17 @@ impl Structure for Furnace {
     }
 
     fn input(&mut self, o: &DropItem) -> Result<(), JsValue> {
-        if self.recipe.is_none() {
-            match o.type_ {
-                ItemType::IronOre => {
-                    self.recipe = Some(Recipe {
-                        input: hash_map!(ItemType::IronOre => 1usize),
-                        output: hash_map!(ItemType::IronPlate => 1usize),
-                        power_cost: 20.,
-                        recipe_time: 50.,
-                    });
-                }
-                ItemType::CopperOre => {
-                    self.recipe = Some(Recipe {
-                        input: hash_map!(ItemType::CopperOre => 1usize),
-                        output: hash_map!(ItemType::CopperPlate => 1usize),
-                        power_cost: 20.,
-                        recipe_time: 50.,
-                    });
-                }
-                _ => {
-                    return Err(JsValue::from_str(&format!(
-                        "Cannot smelt {}",
-                        item_to_str(&o.type_)
-                    )))
-                }
-            }
-        }
-
         // Fuels are always welcome.
         if o.type_ == ItemType::CoalOre {
             self.inventory.add_item(&ItemType::CoalOre);
             return Ok(());
         }
 
-        if let Some(recipe) = &self.recipe {
-            if 0 < recipe.input.count_item(&o.type_) || 0 < recipe.output.count_item(&o.type_) {
-                self.inventory.add_item(&o.type_);
-                return Ok(());
-            } else {
-                return Err(JsValue::from_str("Item is not part of recipe"));
-            }
-        }
         Err(JsValue::from_str("Recipe is not initialized"))
     }
 
     fn can_input(&self, item_type: &ItemType) -> bool {
-        if let Some(recipe) = &self.recipe {
-            *item_type == ItemType::CoalOre || recipe.input.get(item_type).is_some()
-        } else {
-            match item_type {
-                ItemType::CoalOre | ItemType::IronOre | ItemType::CopperOre => true,
-                _ => false,
-            }
-        }
-    }
-
-    fn can_output(&self) -> Inventory {
-        self.inventory.clone()
+        *item_type == ItemType::CoalOre
     }
 
     fn output(&mut self, _state: &mut FactorishState, item_type: &ItemType) -> Result<(), ()> {
@@ -251,24 +230,16 @@ impl Structure for Furnace {
         }
         std::mem::take(&mut self.inventory)
     }
-    fn get_recipes(&self) -> Vec<Recipe> {
-        vec![
-            Recipe {
-                input: hash_map!(ItemType::IronOre => 1usize),
-                output: hash_map!(ItemType::IronPlate => 1usize),
-                power_cost: 20.,
-                recipe_time: 50.,
-            },
-            Recipe {
-                input: hash_map!(ItemType::CopperOre => 1usize),
-                output: hash_map!(ItemType::CopperPlate => 1usize),
-                power_cost: 20.,
-                recipe_time: 50.,
-            },
-        ]
-    }
 
     fn get_selected_recipe(&self) -> Option<&Recipe> {
         self.recipe.as_ref()
+    }
+
+    fn fluid_box(&self) -> Option<Vec<&FluidBox>> {
+        Some(vec![&self.input_fluid_box, &self.output_fluid_box])
+    }
+
+    fn fluid_box_mut(&mut self) -> Option<Vec<&mut FluidBox>> {
+        Some(vec![&mut self.input_fluid_box, &mut self.output_fluid_box])
     }
 }

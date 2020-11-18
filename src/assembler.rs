@@ -1,4 +1,4 @@
-use super::items::item_to_str;
+use super::items::get_item_image_url;
 use super::structure::{DynIterMut, Structure};
 use super::{
     DropItem, FactorishState, FrameProcResult, Inventory, InventoryTrait, ItemType, Position,
@@ -7,7 +7,37 @@ use super::{
 use wasm_bindgen::prelude::*;
 use web_sys::CanvasRenderingContext2d;
 
-pub(crate) struct Furnace {
+fn generate_item_image(item_image: &str, icon_size: bool, count: usize) -> String {
+    let size = 32;
+    format!("<div style=\"background-image: url('{}'); width: {}px; height: {}px; display: inline-block\"     draggable='false'>{}</div>",
+        item_image, size, size,
+    if icon_size && 0 < count {
+        format!("<span class='overlay noselect' style='position: relative; display: inline-block; width: {}px; height: {}px'>{}</span>", size, size, count)
+    } else {
+        "".to_string()
+    })
+}
+
+fn _recipe_html(state: &FactorishState, recipe: &Recipe) -> String {
+    let mut ret = String::from("");
+    ret += "<div class='recipe-box'>";
+    ret += &format!(
+        "<span style='display: inline-block; margin: 1px'>{}</span>",
+        &generate_item_image("time", true, recipe.recipe_time as usize)
+    );
+    ret += "<span style='display: inline-block; width: 50%'>";
+    for (key, value) in &recipe.input {
+        ret += &generate_item_image(get_item_image_url(state, &key), true, *value);
+    }
+    ret += "</span><img src='img/rightarrow.png' style='width: 20px; height: 32px'><span style='display: inline-block; width: 10%'>";
+    for (key, value) in &recipe.output {
+        ret += &generate_item_image(get_item_image_url(state, &key), true, *value);
+    }
+    ret += "</span></div>";
+    return ret;
+}
+
+pub(crate) struct Assembler {
     position: Position,
     inventory: Inventory,
     progress: Option<f64>,
@@ -16,9 +46,9 @@ pub(crate) struct Furnace {
     recipe: Option<Recipe>,
 }
 
-impl Furnace {
+impl Assembler {
     pub(crate) fn new(position: &Position) -> Self {
-        Furnace {
+        Assembler {
             position: *position,
             inventory: Inventory::new(),
             progress: None,
@@ -29,9 +59,9 @@ impl Furnace {
     }
 }
 
-impl Structure for Furnace {
+impl Structure for Assembler {
     fn name(&self) -> &str {
-        "Furnace"
+        "Assembler"
     }
 
     fn position(&self) -> &Position {
@@ -48,26 +78,11 @@ impl Structure for Furnace {
             return Ok(());
         };
         let (x, y) = (self.position.x as f64 * 32., self.position.y as f64 * 32.);
-        match state.image_furnace.as_ref() {
+        match state.image_assembler.as_ref() {
             Some(img) => {
-                let sx = if self.progress.is_some() && 0. < self.power {
-                    ((((state.sim_time * 5.) as isize) % 2 + 1) * 32) as f64
-                } else {
-                    0.
-                };
-                context.draw_image_with_image_bitmap_and_sw_and_sh_and_dx_and_dy_and_dw_and_dh(
-                    &img.bitmap,
-                    sx,
-                    0.,
-                    32.,
-                    32.,
-                    x,
-                    y,
-                    32.,
-                    32.,
-                )?;
+                context.draw_image_with_image_bitmap(&img.bitmap, x, y)?;
             }
-            None => return Err(JsValue::from_str("furnace image not available")),
+            None => return Err(JsValue::from_str("assembler image not available")),
         }
 
         Ok(())
@@ -76,7 +91,7 @@ impl Structure for Furnace {
     fn desc(&self, _state: &FactorishState) -> String {
         format!(
             "{}<br>{}",
-            if self.recipe.is_some() {
+            if let Some(recipe) = &self.recipe {
                 // Progress bar
                 format!("{}{}{}{}",
                     format!("Progress: {:.0}%<br>", self.progress.unwrap_or(0.) * 100.),
@@ -88,9 +103,11 @@ impl Structure for Furnace {
                     self.power,
                     if 0. < self.max_power { (self.power) / self.max_power * 100. } else { 0. }),
                     )
-            // getHTML(generateItemImage("time", true, this.recipe.time), true) + "<br>" +
-            // "Outputs: <br>" +
-            // getHTML(generateItemImage(this.recipe.output, true, 1), true) + "<br>";
+                + &generate_item_image(&_state.image_time.as_ref().unwrap().url, true, recipe.recipe_time as usize) + "<br>" +
+                "Outputs: <br>" +
+                &recipe.output.iter()
+                    .map(|item| format!("{}<br>", &generate_item_image(get_item_image_url(_state, &item.0), true, *item.1)))
+                    .fold::<String, _>("".to_string(), |a, s| a + &s)
             } else {
                 String::from("No recipe")
             },
@@ -151,7 +168,7 @@ impl Structure for Furnace {
 
                     // Produce outputs into inventory
                     for output_item in &recipe.output {
-                        self.inventory.add_item(&output_item.0);
+                        self.inventory.add_items(&output_item.0, *output_item.1);
                     }
                     return Ok(FrameProcResult::InventoryChanged(self.position));
                 } else {
@@ -165,39 +182,6 @@ impl Structure for Furnace {
     }
 
     fn input(&mut self, o: &DropItem) -> Result<(), JsValue> {
-        if self.recipe.is_none() {
-            match o.type_ {
-                ItemType::IronOre => {
-                    self.recipe = Some(Recipe {
-                        input: hash_map!(ItemType::IronOre => 1usize),
-                        output: hash_map!(ItemType::IronPlate => 1usize),
-                        power_cost: 20.,
-                        recipe_time: 50.,
-                    });
-                }
-                ItemType::CopperOre => {
-                    self.recipe = Some(Recipe {
-                        input: hash_map!(ItemType::CopperOre => 1usize),
-                        output: hash_map!(ItemType::CopperPlate => 1usize),
-                        power_cost: 20.,
-                        recipe_time: 50.,
-                    });
-                }
-                _ => {
-                    return Err(JsValue::from_str(&format!(
-                        "Cannot smelt {}",
-                        item_to_str(&o.type_)
-                    )))
-                }
-            }
-        }
-
-        // Fuels are always welcome.
-        if o.type_ == ItemType::CoalOre {
-            self.inventory.add_item(&ItemType::CoalOre);
-            return Ok(());
-        }
-
         if let Some(recipe) = &self.recipe {
             if 0 < recipe.input.count_item(&o.type_) || 0 < recipe.output.count_item(&o.type_) {
                 self.inventory.add_item(&o.type_);
@@ -207,17 +191,6 @@ impl Structure for Furnace {
             }
         }
         Err(JsValue::from_str("Recipe is not initialized"))
-    }
-
-    fn can_input(&self, item_type: &ItemType) -> bool {
-        if let Some(recipe) = &self.recipe {
-            *item_type == ItemType::CoalOre || recipe.input.get(item_type).is_some()
-        } else {
-            match item_type {
-                ItemType::CoalOre | ItemType::IronOre | ItemType::CopperOre => true,
-                _ => false,
-            }
-        }
     }
 
     fn can_output(&self) -> Inventory {
@@ -251,21 +224,62 @@ impl Structure for Furnace {
         }
         std::mem::take(&mut self.inventory)
     }
+
     fn get_recipes(&self) -> Vec<Recipe> {
         vec![
             Recipe {
-                input: hash_map!(ItemType::IronOre => 1usize),
-                output: hash_map!(ItemType::IronPlate => 1usize),
+                input: hash_map!(ItemType::IronPlate => 2usize),
+                output: hash_map!(ItemType::Gear => 1usize),
                 power_cost: 20.,
                 recipe_time: 50.,
             },
             Recipe {
-                input: hash_map!(ItemType::CopperOre => 1usize),
-                output: hash_map!(ItemType::CopperPlate => 1usize),
+                input: hash_map!(ItemType::IronPlate => 1usize, ItemType::Gear => 1usize),
+                output: hash_map!(ItemType::TransportBelt => 1usize),
                 power_cost: 20.,
                 recipe_time: 50.,
             },
+            Recipe {
+                input: hash_map!(ItemType::IronPlate => 5usize),
+                output: hash_map!(ItemType::Chest => 1usize),
+                power_cost: 20.,
+                recipe_time: 50.,
+            },
+            Recipe {
+                input: hash_map!(ItemType::CopperPlate => 1usize),
+                output: hash_map!(ItemType::CopperWire => 2usize),
+                power_cost: 20.,
+                recipe_time: 20.,
+            },
+            Recipe {
+                input: hash_map!(ItemType::IronPlate => 1, ItemType::CopperWire => 3usize),
+                output: hash_map!(ItemType::Circuit => 1usize),
+                power_cost: 20.,
+                recipe_time: 50.,
+            },
+            Recipe {
+                input: hash_map!(ItemType::IronPlate => 5, ItemType::Gear => 5, ItemType::Circuit => 3),
+                output: hash_map!(ItemType::Assembler => 1),
+                power_cost: 20.,
+                recipe_time: 120.,
+            },
+            Recipe {
+                input: hash_map!(ItemType::IronPlate => 1, ItemType::Gear => 1, ItemType::Circuit => 1),
+                output: hash_map!(ItemType::Inserter => 1),
+                power_cost: 20.,
+                recipe_time: 20.,
+            },
         ]
+    }
+
+    fn select_recipe(&mut self, index: usize) -> Result<bool, JsValue> {
+        self.recipe = Some(
+            self.get_recipes()
+                .get(index)
+                .ok_or(js_err!("recipes index out of bound {:?}", index))?
+                .clone(),
+        );
+        Ok(true)
     }
 
     fn get_selected_recipe(&self) -> Option<&Recipe> {

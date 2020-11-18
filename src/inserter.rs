@@ -1,5 +1,5 @@
 use super::items::{render_drop_item, ItemType};
-use super::structure::Structure;
+use super::structure::{DynIterMut, Structure};
 use super::{
     draw_direction_arrow, DropItem, FactorishState, FrameProcResult, Inventory, InventoryTrait,
     Position, Rotation,
@@ -60,7 +60,15 @@ impl Structure for Inserter {
                 Some(img) => {
                     context
                         .draw_image_with_image_bitmap_and_sw_and_sh_and_dx_and_dy_and_dw_and_dh(
-                            img, 0., 0., 32., 32., x, y, 32., 32.,
+                            &img.bitmap,
+                            0.,
+                            0.,
+                            32.,
+                            32.,
+                            x,
+                            y,
+                            32.,
+                            32.,
                         )?;
                 }
                 None => return Err(JsValue::from_str("inserter image not available")),
@@ -74,7 +82,15 @@ impl Structure for Inserter {
                     context.translate(-(x + 8.), -(y + 20.))?;
                     context
                         .draw_image_with_image_bitmap_and_sw_and_sh_and_dx_and_dy_and_dw_and_dh(
-                            img, 48., 0., 16., 32., x, y, 16., 32.,
+                            &img.bitmap,
+                            48.,
+                            0.,
+                            16.,
+                            32.,
+                            x,
+                            y,
+                            16.,
+                            32.,
                         )?;
                     context.translate(x + 8., y + 8.)?;
                     context.rotate(-angles.0)?;
@@ -82,7 +98,15 @@ impl Structure for Inserter {
                     context.translate(-(x + 8.), -(y + 20.))?;
                     context
                         .draw_image_with_image_bitmap_and_sw_and_sh_and_dx_and_dy_and_dw_and_dh(
-                            img, 32., 0., 16., 24., x, y, 16., 24.,
+                            &img.bitmap,
+                            32.,
+                            0.,
+                            16.,
+                            24.,
+                            x,
+                            y,
+                            16.,
+                            24.,
                         )?;
                     if let Some(item) = self.hold_item {
                         context.translate(x + 4., y + 4.)?;
@@ -103,7 +127,7 @@ impl Structure for Inserter {
     fn frame_proc(
         &mut self,
         state: &mut FactorishState,
-        structures: &mut dyn Iterator<Item = &mut Box<dyn Structure>>,
+        structures: &mut dyn DynIterMut<Item = Box<dyn Structure>>,
     ) -> Result<FrameProcResult, ()> {
         let input_position = self.position.add(self.rotation.delta_inv());
         let output_position = self.position.add(self.rotation.delta());
@@ -113,10 +137,9 @@ impl Structure for Inserter {
                 let ret = FrameProcResult::None;
 
                 let mut try_hold =
-                    |structures: &mut dyn Iterator<Item = &mut Box<dyn Structure>>,
-                     type_|
-                     -> bool {
+                    |structures: &mut dyn DynIterMut<Item = Box<dyn Structure>>, type_| -> bool {
                         if let Some((_structure_idx, structure)) = structures
+                            .dyn_iter_mut()
                             .enumerate()
                             .find(|(_idx, structure)| *structure.position() == output_position)
                         {
@@ -142,32 +165,76 @@ impl Structure for Inserter {
                         }
                     };
 
+                let mut lets_try_hold = None;
                 if let Some(&DropItem { type_, id, .. }) = state.find_item(&input_position) {
                     if try_hold(structures, type_) {
                         state.remove_item(id);
                     } else {
                         // console_log!("fail output_object: {:?}", type_);
                     }
-                } else if let Some((_, structure)) = structures.enumerate().find(|(_, s)| {
-                    s.position().x == input_position.x && s.position().y == input_position.y
-                }) {
+                } else if let Some((_, structure)) = structures
+                    .dyn_iter_mut()
+                    .enumerate()
+                    .find(|(_, s)| *s.position() == input_position)
+                {
+                    lets_try_hold = Some(structure.can_output());
                     // console_log!("outputting from a structure at {:?}", structure.position());
-                    if let Ok((item, callback)) = structure.output(state, &output_position) {
-                        if try_hold(structures, item.type_) {
-                            callback(&item);
-                            if let Some(pos) = state.selected_structure_inventory {
-                                if pos == input_position {
-                                    return Ok(FrameProcResult::InventoryChanged(input_position));
-                                    // if let Err(e) = state.on_show_inventory.call2(&window(), &JsValue::from(output_position.x), &JsValue::from(output_position.y)) {
-                                    //     console_log!("on_show_inventory fail: {:?}", e);
-                                    // }
+                    // if let Ok((item, callback)) = structure.output(state, &output_position) {
+                    //     lets_try_hold = Some((item, callback));
+                    // } else {
+                    //     // console_log!("output failed");
+                    // }
+                }
+
+                if let Some(output_items) = lets_try_hold {
+                    if let Some(type_) = (|| {
+                        if let Some((_structure_idx, structure)) = structures
+                            .dyn_iter_mut()
+                            .enumerate()
+                            .find(|(_idx, structure)| *structure.position() == output_position)
+                        {
+                            // console_log!(
+                            //     "found structure to output[{}]: {}, {}, {}",
+                            //     structure_idx,
+                            //     structure.name(),
+                            //     output_position.x,
+                            //     output_position.y
+                            // );
+                            for type_ in output_items {
+                                if structure.can_input(&type_.0) || structure.movable() {
+                                    // ret = FrameProcResult::InventoryChanged(output_position);
+                                    self.hold_item = Some(type_.0);
+                                    self.cooldown += INSERTER_TIME;
+                                    return Some(type_);
+                                } else {
+                                    return None;
                                 }
                             }
-                            // console_log!("output succeeded: {:?}", item.type_);
+                        } else if let Some(item) = output_items.iter().next() {
+                            self.hold_item = Some(*item.0);
+                            self.cooldown += INSERTER_TIME;
                         }
-                    } else {
-                        // console_log!("output failed");
+                        None
+                    })() {
+                        if let Some((_, structure)) = structures
+                            .dyn_iter_mut()
+                            .enumerate()
+                            .find(|(_, s)| *s.position() == input_position)
+                        {
+                            structure.output(state, &type_.0)?;
+                            return Ok(FrameProcResult::InventoryChanged(input_position));
+                        }
                     }
+                    // if let Some(pos) = state.selected_structure_inventory {
+                    //     if pos == input_position {
+                    //         return Ok(FrameProcResult::InventoryChanged(input_position));
+                    //         // if let Err(e) = state.on_show_inventory.call2(&window(), &JsValue::from(output_position.x), &JsValue::from(output_position.y)) {
+                    //         //     console_log!("on_show_inventory fail: {:?}", e);
+                    //         // }
+                    //     }
+                    // }
+                    // console_log!("output succeeded: {:?}", item.type_);
+                    // }
                 }
                 return Ok(ret);
             } else {
@@ -186,6 +253,7 @@ impl Structure for Inserter {
                         }
                     };
                     if let Some((_structure_idx, structure)) = structures
+                        .dyn_iter_mut()
                         .enumerate()
                         .find(|(_idx, structure)| *structure.position() == output_position)
                     {
