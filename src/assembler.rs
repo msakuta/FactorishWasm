@@ -303,6 +303,36 @@ impl Structure for Assembler {
                 20.,
                 20.,
             ),
+            Recipe::new(
+                hash_map!(ItemType::IronPlate => 1, ItemType::Gear => 5, ItemType::Circuit => 3),
+                hash_map!(ItemType::OreMine => 1),
+                100.,
+                100.,
+            ),
+            Recipe::new(
+                hash_map!(ItemType::IronPlate => 2),
+                hash_map!(ItemType::Pipe => 1),
+                20.,
+                20.,
+            ),
+            Recipe::new(
+                hash_map!(ItemType::IronPlate => 2, ItemType::CopperPlate => 3),
+                hash_map!(ItemType::WaterWell => 1),
+                100.,
+                100.,
+            ),
+            Recipe::new(
+                hash_map!(ItemType::IronPlate => 5, ItemType::CopperPlate => 5),
+                hash_map!(ItemType::Boiler => 1),
+                100.,
+                100.,
+            ),
+            Recipe::new(
+                hash_map!(ItemType::IronPlate => 5, ItemType::Gear => 5, ItemType::CopperPlate => 5),
+                hash_map!(ItemType::SteamEngine => 1),
+                200.,
+                200.,
+            ),
         ]
     }
 
