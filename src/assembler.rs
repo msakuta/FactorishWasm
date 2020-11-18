@@ -2,7 +2,7 @@ use super::items::get_item_image_url;
 use super::structure::{DynIterMut, Structure};
 use super::{
     DropItem, FactorishState, FrameProcResult, Inventory, InventoryTrait, ItemType, Position,
-    Recipe, COAL_POWER,
+    Recipe,
 };
 use wasm_bindgen::prelude::*;
 use web_sys::CanvasRenderingContext2d;
@@ -134,14 +134,17 @@ impl Structure for Assembler {
                 let mut accumulated = 0.;
                 for structure in structures.dyn_iter_mut() {
                     let target_position = structure.position();
-                    if 3 < (target_position.x - self.position.x).abs().max((target_position.y - self.position.y).abs()) {
+                    if 3 < (target_position.x - self.position.x)
+                        .abs()
+                        .max((target_position.y - self.position.y).abs())
+                    {
                         continue;
                     }
                     let demand = self.max_power - self.power - accumulated;
                     // Energy transmission is instantaneous
                     if let Some(energy) = structure.power_outlet(demand) {
                         accumulated += energy;
-                        console_log!("draining {:?}kJ of energy with {:?} demand, from {:?}, accumulated {:?}", energy, demand, structure.name(), accumulated);
+                        // console_log!("draining {:?}kJ of energy with {:?} demand, from {:?}, accumulated {:?}", energy, demand, structure.name(), accumulated);
                     }
                 }
                 self.power += accumulated;

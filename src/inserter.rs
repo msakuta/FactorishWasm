@@ -131,6 +131,16 @@ impl Structure for Inserter {
     ) -> Result<FrameProcResult, ()> {
         let input_position = self.position.add(self.rotation.delta_inv());
         let output_position = self.position.add(self.rotation.delta());
+
+        fn find_structure_at(
+            structures: &mut dyn DynIterMut<Item = Box<dyn Structure>>,
+            position: Position,
+        ) -> Option<&mut Box<dyn Structure>> {
+            structures
+                .dyn_iter_mut()
+                .find(|structure| *structure.position() == position)
+        };
+
         if self.hold_item.is_none() {
             if self.cooldown <= 1. {
                 self.cooldown = 0.;
@@ -138,11 +148,7 @@ impl Structure for Inserter {
 
                 let mut try_hold =
                     |structures: &mut dyn DynIterMut<Item = Box<dyn Structure>>, type_| -> bool {
-                        if let Some((_structure_idx, structure)) = structures
-                            .dyn_iter_mut()
-                            .enumerate()
-                            .find(|(_idx, structure)| *structure.position() == output_position)
-                        {
+                        if let Some(structure) = find_structure_at(structures, output_position) {
                             // console_log!(
                             //     "found structure to output[{}]: {}, {}, {}",
                             //     structure_idx,
@@ -172,11 +178,7 @@ impl Structure for Inserter {
                     } else {
                         // console_log!("fail output_object: {:?}", type_);
                     }
-                } else if let Some((_, structure)) = structures
-                    .dyn_iter_mut()
-                    .enumerate()
-                    .find(|(_, s)| *s.position() == input_position)
-                {
+                } else if let Some(structure) = find_structure_at(structures, input_position) {
                     lets_try_hold = Some(structure.can_output());
                     // console_log!("outputting from a structure at {:?}", structure.position());
                     // if let Ok((item, callback)) = structure.output(state, &output_position) {
@@ -188,11 +190,8 @@ impl Structure for Inserter {
 
                 if let Some(output_items) = lets_try_hold {
                     if let Some(type_) = (|| {
-                        if let Some((_structure_idx, structure)) = structures
-                            .dyn_iter_mut()
-                            .enumerate()
-                            .find(|(_idx, structure)| *structure.position() == output_position)
-                        {
+                        // First, try matching the item that the structure at the output position can accept.
+                        if let Some(structure) = find_structure_at(structures, output_position) {
                             // console_log!(
                             //     "found structure to output[{}]: {}, {}, {}",
                             //     structure_idx,
@@ -200,29 +199,32 @@ impl Structure for Inserter {
                             //     output_position.x,
                             //     output_position.y
                             // );
-                            for type_ in output_items {
-                                if structure.can_input(&type_.0) || structure.movable() {
+                            for item in output_items {
+                                if structure.can_input(&item.0) || structure.movable() {
                                     // ret = FrameProcResult::InventoryChanged(output_position);
-                                    self.hold_item = Some(type_.0);
+                                    self.hold_item = Some(item.0);
                                     self.cooldown += INSERTER_TIME;
-                                    return Some(type_);
+                                    return Some(item);
                                 } else {
                                     return None;
                                 }
                             }
-                        } else if let Some(item) = output_items.iter().next() {
-                            self.hold_item = Some(*item.0);
+                        } else if let Some(item) = output_items.into_iter().next() {
+                            // If there is no structures at the output, anything can output.
+                            self.hold_item = Some(item.0);
                             self.cooldown += INSERTER_TIME;
+                            return Some(item);
                         }
                         None
                     })() {
-                        if let Some((_, structure)) = structures
-                            .dyn_iter_mut()
-                            .enumerate()
-                            .find(|(_, s)| *s.position() == input_position)
-                        {
+                        if let Some(structure) = find_structure_at(structures, input_position) {
                             structure.output(state, &type_.0)?;
                             return Ok(FrameProcResult::InventoryChanged(input_position));
+                        } else {
+                            console_log!(
+                                "We have confirmed that there is input structure, right???"
+                            );
+                            return Err(());
                         }
                     }
                     // if let Some(pos) = state.selected_structure_inventory {
@@ -252,11 +254,7 @@ impl Structure for Inserter {
                             self.hold_item = None;
                         }
                     };
-                    if let Some((_structure_idx, structure)) = structures
-                        .dyn_iter_mut()
-                        .enumerate()
-                        .find(|(_idx, structure)| *structure.position() == output_position)
-                    {
+                    if let Some(structure) = find_structure_at(structures, output_position) {
                         if structure
                             .input(&DropItem::new(
                                 &mut state.serial_no,
