@@ -177,10 +177,10 @@ pub(crate) trait Structure {
     fn output(&mut self, _state: &mut FactorishState, _item_type: &ItemType) -> Result<(), ()> {
         Err(())
     }
-    fn inventory(&self, is_input: bool) -> Option<&Inventory> {
+    fn inventory(&self, _is_input: bool) -> Option<&Inventory> {
         None
     }
-    fn inventory_mut(&mut self, is_input: bool) -> Option<&mut Inventory> {
+    fn inventory_mut(&mut self, _is_input: bool) -> Option<&mut Inventory> {
         None
     }
     /// Some structures don't have an inventory, but still can have some item, e.g. inserter hands.

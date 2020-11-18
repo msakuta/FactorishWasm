@@ -25,6 +25,7 @@ import circuit from "../img/circuit.png";
 import gear from "../img/gear.png";
 import pipeItem from "../img/pipe-item.png";
 import steamEngine from "../img/steam-engine.png";
+import smoke from "../img/smoke.png";
 import rotateImage from "../img/rotate.png";
 import closeImage from "../img/close.png";
 import rightarrow from "../img/rightarrow.png";
@@ -69,6 +70,7 @@ function isIE(){
         ["copperWire", copperWire],
         ["circuit", circuit],
         ["time", time],
+        ["smoke", smoke],
     ].map(async ([name, src]) => {
         const res = await fetch(src);
         return [name, src, await createImageBitmap(await res.blob())];

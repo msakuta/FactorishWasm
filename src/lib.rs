@@ -51,6 +51,7 @@ use furnace::Furnace;
 use inserter::Inserter;
 use items::{item_to_str, render_drop_item, str_to_item, DropItem, ItemType};
 use ore_mine::OreMine;
+use perlin_noise::{perlin_noise_pixel, Xor128};
 use pipe::Pipe;
 use steam_engine::SteamEngine;
 use structure::{FrameProcResult, ItemResponse, Position, Rotation, Structure};
@@ -62,8 +63,6 @@ use std::collections::HashMap;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
 use web_sys::{CanvasRenderingContext2d, HtmlCanvasElement, HtmlDivElement, ImageBitmap};
-
-use perlin_noise::perlin_noise_pixel;
 
 #[wasm_bindgen]
 extern "C" {
@@ -337,6 +336,28 @@ impl<'a> Into<&'a ImageBitmap> for &'a ImageBundle {
     }
 }
 
+struct TempEnt {
+    position: (f64, f64),
+    rotation: f64,
+    life: f64,
+    max_life: f64,
+}
+
+impl TempEnt {
+    fn new(rng: &mut Xor128, position: Position) -> Self {
+        let life = rng.next() * 3. + 6.;
+        TempEnt {
+            position: (
+                (position.x as f64 + 0.5 + rng.next() * 0.5) * 32.,
+                (position.y as f64 + rng.next() * 0.5) * 32.,
+            ),
+            rotation: rng.next() * std::f64::consts::PI * 2.,
+            life,
+            max_life: life,
+        }
+    }
+}
+
 #[wasm_bindgen]
 pub struct FactorishState {
     delta_time: f64,
@@ -354,6 +375,8 @@ pub struct FactorishState {
     selected_tool: Option<usize>,
     tool_rotation: Rotation,
     player: Player,
+    temp_ents: Vec<TempEnt>,
+    rng: Xor128,
 
     // rendering states
     cursor: Option<[i32; 2]>,
@@ -384,6 +407,7 @@ pub struct FactorishState {
     image_copper_wire: Option<ImageBundle>,
     image_circuit: Option<ImageBundle>,
     image_time: Option<ImageBundle>,
+    image_smoke: Option<ImageBundle>,
 }
 
 #[derive(Debug)]
@@ -464,6 +488,7 @@ impl FactorishState {
             image_copper_wire: None,
             image_circuit: None,
             image_time: None,
+            image_smoke: None,
             board: {
                 let mut ret = vec![
                     Cell {
@@ -506,6 +531,8 @@ impl FactorishState {
             drop_items: vec![],
             serial_no: 0,
             on_player_update,
+            temp_ents: vec![],
+            rng: Xor128::new(3142125),
             // on_show_inventory,
         })
     }
@@ -643,6 +670,20 @@ impl FactorishState {
         }
 
         self.structures = structures;
+
+        // Actually, taking away, filter and collect is easier than removing expied objects
+        // one by one.
+        self.temp_ents = std::mem::take(&mut self.temp_ents)
+            .into_iter()
+            .map(|mut ent| {
+                ent.position.0 += delta_time * 1.5;
+                ent.position.1 -= delta_time * 4.2;
+                ent.life -= delta_time;
+                ent
+            })
+            .filter(|ent| 0. < ent.life)
+            .collect();
+
         // self.drop_items = drop_items;
         self.update_info();
         Ok(events.iter().collect())
@@ -1219,6 +1260,7 @@ impl FactorishState {
         self.image_copper_wire = Some(load_image("copperWire")?);
         self.image_circuit = Some(load_image("circuit")?);
         self.image_time = Some(load_image("time")?);
+        self.image_smoke = Some(load_image("smoke")?);
         Ok(())
     }
 
@@ -1357,6 +1399,25 @@ impl FactorishState {
 
         draw_structures(1)?;
         draw_structures(2)?;
+
+        for ent in &self.temp_ents {
+            if let Some(img) = &self.image_smoke {
+                let (x, y) = (ent.position.0 - 24., ent.position.1 - 24.);
+                context.save();
+                context
+                    .set_global_alpha(((ent.max_life - ent.life).min(ent.life) * 0.25).min(0.35));
+                context.translate(x + 16., y + 16.)?;
+                context.rotate(ent.rotation)?;
+                context.draw_image_with_image_bitmap_and_dw_and_dh(
+                    &img.bitmap,
+                    -16.,
+                    -16.,
+                    32.,
+                    32.,
+                )?;
+                context.restore();
+            }
+        }
 
         if let Some(ref cursor) = self.cursor {
             let (x, y) = ((cursor[0] * 32) as f64, (cursor[1] * 32) as f64);

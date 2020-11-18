@@ -2,7 +2,7 @@ use super::items::item_to_str;
 use super::structure::{DynIterMut, Structure};
 use super::{
     DropItem, FactorishState, FrameProcResult, Inventory, InventoryTrait, ItemType, Position,
-    Recipe, COAL_POWER,
+    Recipe, TempEnt, COAL_POWER,
 };
 use wasm_bindgen::prelude::*;
 use web_sys::CanvasRenderingContext2d;
@@ -103,7 +103,7 @@ impl Structure for Furnace {
 
     fn frame_proc(
         &mut self,
-        _state: &mut FactorishState,
+        state: &mut FactorishState,
         _structures: &mut dyn DynIterMut<Item = Box<dyn Structure>>,
     ) -> Result<FrameProcResult, ()> {
         if let Some(recipe) = &self.recipe {
@@ -143,6 +143,11 @@ impl Structure for Furnace {
                 let progress = (self.power / recipe.power_cost)
                     .min(1. / recipe.recipe_time)
                     .min(1.);
+                if state.rng.next() < progress * 10. {
+                    state
+                        .temp_ents
+                        .push(TempEnt::new(&mut state.rng, self.position));
+                }
                 if 1. <= prev_progress + progress {
                     self.progress = None;
 
