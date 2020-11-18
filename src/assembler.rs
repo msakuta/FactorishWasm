@@ -82,7 +82,22 @@ impl Structure for Assembler {
         let (x, y) = (self.position.x as f64 * 32., self.position.y as f64 * 32.);
         match state.image_assembler.as_ref() {
             Some(img) => {
-                context.draw_image_with_image_bitmap(&img.bitmap, x, y)?;
+                let sx = if self.progress.is_some() && 0. < self.power {
+                    ((((state.sim_time * 5.) as isize) % 4) * 32) as f64
+                } else {
+                    0.
+                };
+                context.draw_image_with_image_bitmap_and_sw_and_sh_and_dx_and_dy_and_dw_and_dh(
+                    &img.bitmap,
+                    sx,
+                    0.,
+                    32.,
+                    32.,
+                    x,
+                    y,
+                    32.,
+                    32.,
+                )?;
             }
             None => return Err(JsValue::from_str("assembler image not available")),
         }

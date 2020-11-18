@@ -280,7 +280,7 @@ function isIE(){
         case 'Furnace':
             return [furnace, 3];
         case 'Assembler':
-            return assembler;
+            return [assembler, 4];
         case 'Water Well':
             return waterWell;
         case 'Boiler':
