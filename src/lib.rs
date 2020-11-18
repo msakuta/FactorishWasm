@@ -132,6 +132,7 @@ trait InventoryTrait {
     fn add_items(&mut self, item: &ItemType, count: usize);
     fn count_item(&self, item: &ItemType) -> usize;
     fn merge(&mut self, other: Inventory);
+    fn describe(&self) -> String;
 }
 
 impl InventoryTrait for Inventory {
@@ -168,6 +169,12 @@ impl InventoryTrait for Inventory {
                 self.insert(k, v);
             }
         }
+    }
+
+    fn describe(&self) -> String {
+        self.iter()
+            .map(|item| format!("{:?}: {}<br>", item.0, item.1))
+            .fold(String::from(""), |accum, item| accum + &item)
     }
 }
 

@@ -9,7 +9,8 @@ use web_sys::CanvasRenderingContext2d;
 
 pub(crate) struct Furnace {
     position: Position,
-    inventory: Inventory,
+    input_inventory: Inventory,
+    output_inventory: Inventory,
     progress: Option<f64>,
     power: f64,
     max_power: f64,
@@ -20,7 +21,8 @@ impl Furnace {
     pub(crate) fn new(position: &Position) -> Self {
         Furnace {
             position: *position,
-            inventory: Inventory::new(),
+            input_inventory: Inventory::new(),
+            output_inventory: Inventory::new(),
             progress: None,
             power: 20.,
             max_power: 20.,
@@ -75,7 +77,7 @@ impl Structure for Furnace {
 
     fn desc(&self, _state: &FactorishState) -> String {
         format!(
-            "{}<br>{}",
+            "{}<br>{}{}",
             if self.recipe.is_some() {
                 // Progress bar
                 format!("{}{}{}{}",
@@ -94,13 +96,8 @@ impl Structure for Furnace {
             } else {
                 String::from("No recipe")
             },
-            format!(
-                "Items: \n{}",
-                self.inventory
-                    .iter()
-                    .map(|item| format!("{:?}: {}<br>", item.0, item.1))
-                    .fold(String::from(""), |accum, item| accum + &item)
-            )
+            format!("Input Items: <br>{}", self.input_inventory.describe()),
+            format!("Output Items: <br>{}", self.output_inventory.describe())
         )
     }
 
@@ -112,12 +109,12 @@ impl Structure for Furnace {
         if let Some(recipe) = &self.recipe {
             let mut ret = FrameProcResult::None;
             // First, check if we need to refill the energy buffer in order to continue the current work.
-            if self.inventory.get(&ItemType::CoalOre).is_some() {
+            if self.input_inventory.get(&ItemType::CoalOre).is_some() {
                 // Refill the energy from the fuel
                 if self.power < recipe.power_cost {
                     self.power += COAL_POWER;
                     self.max_power = self.power;
-                    self.inventory.remove_item(&ItemType::CoalOre);
+                    self.input_inventory.remove_item(&ItemType::CoalOre);
                     ret = FrameProcResult::InventoryChanged(self.position);
                 }
             }
@@ -130,11 +127,11 @@ impl Structure for Furnace {
                 if recipe
                     .input
                     .iter()
-                    .map(|(item, count)| count <= &self.inventory.count_item(item))
+                    .map(|(item, count)| count <= &self.input_inventory.count_item(item))
                     .all(|b| b)
                 {
                     for (item, count) in &recipe.input {
-                        self.inventory.remove_items(item, *count);
+                        self.input_inventory.remove_items(item, *count);
                     }
                     self.progress = Some(0.);
                     ret = FrameProcResult::InventoryChanged(self.position);
@@ -151,7 +148,7 @@ impl Structure for Furnace {
 
                     // Produce outputs into inventory
                     for output_item in &recipe.output {
-                        self.inventory.add_item(&output_item.0);
+                        self.output_inventory.add_item(&output_item.0);
                     }
                     return Ok(FrameProcResult::InventoryChanged(self.position));
                 } else {
@@ -194,13 +191,13 @@ impl Structure for Furnace {
 
         // Fuels are always welcome.
         if o.type_ == ItemType::CoalOre {
-            self.inventory.add_item(&ItemType::CoalOre);
+            self.input_inventory.add_item(&ItemType::CoalOre);
             return Ok(());
         }
 
         if let Some(recipe) = &self.recipe {
             if 0 < recipe.input.count_item(&o.type_) || 0 < recipe.output.count_item(&o.type_) {
-                self.inventory.add_item(&o.type_);
+                self.input_inventory.add_item(&o.type_);
                 return Ok(());
             } else {
                 return Err(JsValue::from_str("Item is not part of recipe"));
@@ -221,11 +218,11 @@ impl Structure for Furnace {
     }
 
     fn can_output(&self) -> Inventory {
-        self.inventory.clone()
+        self.output_inventory.clone()
     }
 
     fn output(&mut self, _state: &mut FactorishState, item_type: &ItemType) -> Result<(), ()> {
-        if self.inventory.remove_item(item_type) {
+        if self.output_inventory.remove_item(item_type) {
             Ok(())
         } else {
             Err(())
@@ -233,24 +230,25 @@ impl Structure for Furnace {
     }
 
     fn inventory(&self) -> Option<&Inventory> {
-        Some(&self.inventory)
+        Some(&self.output_inventory)
     }
 
     fn inventory_mut(&mut self) -> Option<&mut Inventory> {
-        Some(&mut self.inventory)
+        Some(&mut self.output_inventory)
     }
 
     fn destroy_inventory(&mut self) -> Inventory {
+        let mut ret = std::mem::take(&mut self.input_inventory);
+        ret.merge(std::mem::take(&mut self.output_inventory));
         // Return the ingredients if it was in the middle of processing a recipe.
-        if let Some(recipe) = self.recipe.take() {
+        if let Some(mut recipe) = self.recipe.take() {
             if self.progress.is_some() {
-                let mut ret = std::mem::take(&mut self.inventory);
-                ret.merge(recipe.input);
-                return ret;
+                ret.merge(std::mem::take(&mut recipe.input));
             }
         }
-        std::mem::take(&mut self.inventory)
+        ret
     }
+
     fn get_recipes(&self) -> Vec<Recipe> {
         vec![
             Recipe::new(
