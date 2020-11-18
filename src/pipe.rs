@@ -48,7 +48,11 @@ impl Structure for Pipe {
                 // references.
                 let structures_slice: &[Box<dyn Structure>] = state.structures.as_slice();
 
-                let connections = self.connection(state, &mut Ref(structures_slice));
+                let connection_list = self.connection(state, &mut Ref(structures_slice));
+                let connections = connection_list
+                    .iter()
+                    .enumerate()
+                    .fold(0, |acc, (i, b)| acc | ((*b as u32) << i));
                 let sx = (connections % 4 * 32) as f64;
                 let sy = ((connections / 4) * 32) as f64;
                 context.draw_image_with_image_bitmap_and_sw_and_sh_and_dx_and_dy_and_dw_and_dh(
@@ -81,23 +85,17 @@ impl Structure for Pipe {
         state: &mut FactorishState,
         structures: &mut dyn DynIterMut<Item = Box<dyn Structure>>,
     ) -> Result<FrameProcResult, ()> {
-        let connections = self.connection(state, structures.as_dyn_iter());
-        self.fluid_box.connect_to = [
-            connections & 1 != 0,
-            connections & 2 != 0,
-            connections & 4 != 0,
-            connections & 8 != 0,
-        ];
+        self.fluid_box.connect_to = self.connection(state, structures.as_dyn_iter());
         self.fluid_box
             .simulate(&self.position, state, &mut structures.dyn_iter_mut());
         Ok(FrameProcResult::None)
     }
 
-    fn fluid_box(&self) -> Option<&FluidBox> {
-        Some(&self.fluid_box)
+    fn fluid_box(&self) -> Option<Vec<&FluidBox>> {
+        Some(vec![&self.fluid_box])
     }
 
-    fn fluid_box_mut(&mut self) -> Option<&mut FluidBox> {
-        Some(&mut self.fluid_box)
+    fn fluid_box_mut(&mut self) -> Option<Vec<&mut FluidBox>> {
+        Some(vec![&mut self.fluid_box])
     }
 }

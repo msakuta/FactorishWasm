@@ -1,5 +1,5 @@
 use super::structure::{DynIterMut, Structure};
-use super::{log, FactorishState, FrameProcResult, Inventory, ItemType, Position, Recipe};
+use super::{FactorishState, FrameProcResult, Inventory, ItemType, Position, Recipe};
 use wasm_bindgen::prelude::*;
 use web_sys::CanvasRenderingContext2d;
 
@@ -9,7 +9,7 @@ use std::collections::HashMap;
 #[derive(Eq, PartialEq, Clone, Copy, Debug)]
 pub(crate) enum FluidType {
     Water,
-    // Steam,
+    Steam,
 }
 
 pub(crate) struct FluidBox {
@@ -64,7 +64,14 @@ impl FluidBox {
             return;
         }
         let rel_dir = [[-1, 0], [0, -1], [1, 0], [0, 1]];
-        for (i, _connect) in self.connect_to.iter().enumerate().filter(|(_, c)| **c) {
+        let connect_list = self
+            .connect_to
+            .iter()
+            .enumerate()
+            .map(|(i, c)| (i, *c))
+            .filter(|(_, c)| *c)
+            .collect::<Vec<_>>();
+        for (i, _connect) in connect_list {
             let dir_idx = i % 4;
             let pos = Position {
                 x: position.x + rel_dir[dir_idx][0],
@@ -75,34 +82,43 @@ impl FluidBox {
                 continue;
             }
             if let Some(structure) = structures.map(|s| s).find(|s| *s.position() == pos) {
-                if let Some(fluid_box) = structure.fluid_box_mut() {
+                let mut process_fluid_box = |self_box: &mut FluidBox, fluid_box: &mut FluidBox| {
                     // Different types of fluids won't mix
                     if 0. < fluid_box.amount
-                        && fluid_box.type_ != self.type_
+                        && fluid_box.type_ != self_box.type_
                         && fluid_box.type_.is_some()
                     {
-                        continue;
+                        return;
                     }
-                    let pressure = fluid_box.amount - self.amount;
+                    let pressure = fluid_box.amount - self_box.amount;
                     let flow = pressure * 0.1;
                     // Check input/output valve state
                     if if flow < 0. {
-                        !self.output_enable
+                        !self_box.output_enable
                             || !fluid_box.input_enable
-                            || fluid_box.filter.is_some() && fluid_box.filter != self.type_
+                            || fluid_box.filter.is_some() && fluid_box.filter != self_box.type_
                     } else {
-                        !self.input_enable
+                        !self_box.input_enable
                             || !fluid_box.output_enable
-                            || self.filter.is_some() && self.filter != fluid_box.type_
+                            || self_box.filter.is_some() && self_box.filter != fluid_box.type_
                     } {
-                        continue;
+                        return;
                     }
                     fluid_box.amount -= flow;
-                    self.amount += flow;
-                    fluid_box.type_ = self.type_;
+                    self_box.amount += flow;
+                    if flow < 0. {
+                        fluid_box.type_ = self_box.type_;
+                    } else {
+                        self_box.type_ = fluid_box.type_;
+                    }
                     if biggest_flow_amount < flow.abs() {
                         biggest_flow_amount = flow;
                         _biggest_flow_idx = i as isize;
+                    }
+                };
+                if let Some(fluid_boxes) = structure.fluid_box_mut() {
+                    for fluid_box in fluid_boxes {
+                        process_fluid_box(self, fluid_box);
                     }
                 }
             }
@@ -210,17 +226,7 @@ impl Structure for WaterWell {
         self.output_fluid_box.amount =
             (self.output_fluid_box.amount + 1.).min(self.output_fluid_box.max_amount);
         let connections = self.connection(state, structures.as_dyn_iter());
-        self.output_fluid_box.connect_to = [
-            connections & 1 != 0,
-            connections & 2 != 0,
-            connections & 4 != 0,
-            connections & 8 != 0,
-        ];
-        console_log!(
-            "WaterWell: conn: {}, {:?}",
-            connections,
-            self.output_fluid_box.connect_to
-        );
+        self.output_fluid_box.connect_to = connections;
         self.output_fluid_box
             .simulate(&self.position, state, &mut structures.dyn_iter_mut());
         Ok(FrameProcResult::None)
@@ -230,11 +236,11 @@ impl Structure for WaterWell {
         self.recipe.as_ref()
     }
 
-    fn fluid_box(&self) -> Option<&FluidBox> {
-        Some(&self.output_fluid_box)
+    fn fluid_box(&self) -> Option<Vec<&FluidBox>> {
+        Some(vec![&self.output_fluid_box])
     }
 
-    fn fluid_box_mut(&mut self) -> Option<&mut FluidBox> {
-        Some(&mut self.output_fluid_box)
+    fn fluid_box_mut(&mut self) -> Option<Vec<&mut FluidBox>> {
+        Some(vec![&mut self.output_fluid_box])
     }
 }

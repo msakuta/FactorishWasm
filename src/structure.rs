@@ -199,17 +199,17 @@ pub(crate) trait Structure {
     fn get_selected_recipe(&self) -> Option<&Recipe> {
         None
     }
-    fn fluid_box(&self) -> Option<&FluidBox> {
+    fn fluid_box(&self) -> Option<Vec<&FluidBox>> {
         None
     }
-    fn fluid_box_mut(&mut self) -> Option<&mut FluidBox> {
+    fn fluid_box_mut(&mut self) -> Option<Vec<&mut FluidBox>> {
         None
     }
     fn connection(
         &self,
         state: &FactorishState,
         structures: &dyn DynIter<Item = Box<dyn Structure>>,
-    ) -> u32 {
+    ) -> [bool; 4] {
         // let mut structures_copy = structures.clone();
         let has_fluid_box = |x, y| {
             if x < 0 || state.width <= x as u32 || y < 0 || state.height <= y as u32 {
@@ -227,10 +227,10 @@ pub(crate) trait Structure {
 
         // Fluid containers connect to other containers
         let Position { x, y } = *self.position();
-        let l = has_fluid_box(x - 1, y) as u32;
-        let t = has_fluid_box(x, y - 1) as u32;
-        let r = has_fluid_box(x + 1, y) as u32;
-        let b = has_fluid_box(x, y + 1) as u32;
-        return l | (t << 1) | (r << 2) | (b << 3);
+        let l = has_fluid_box(x - 1, y);
+        let t = has_fluid_box(x, y - 1);
+        let r = has_fluid_box(x + 1, y);
+        let b = has_fluid_box(x, y + 1);
+        return [l, t, r, b];
     }
 }
