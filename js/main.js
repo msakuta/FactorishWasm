@@ -305,8 +305,11 @@ function isIE(){
             if(!selPos || pos[0] !== selPos[0] || pos[1] !== selPos[1])
                 return;
         }
+        const position = pos ? pos : sim.get_selected_inventory();
         updateInventoryInt(inventoryContentElem, sim, false, sim.get_structure_inventory(
-            ...(pos ? pos : sim.get_selected_inventory())));
+            ...position, true));
+        updateInventoryInt(outputInventoryContentElem, sim, false, sim.get_structure_inventory(
+            ...position, false));
     }
 
     function generateItemImage(i, iconSize, count){
@@ -395,44 +398,49 @@ function isIE(){
                 selectThisItem(this.itemName);
                 ev.dataTransfer.dropEffect = 'move';
                 // Encode information to determine item to drop into a JSON
-                ev.dataTransfer.setData(textType, JSON.stringify(
-                    {type: ev.target.itemName, fromPlayer: elem === playerInventoryElem}));
+                ev.dataTransfer.setData(textType, JSON.stringify({
+                    type: ev.target.itemName,
+                    fromPlayer: elem === playerInventoryElem,
+                    fromInput: elem === inventoryContentElem,
+                }));
             };
             elem.appendChild(div);
         }
     }
 
-    inventoryElem.ondragover = function(ev){
-        var ok = false;
-        for(var i = 0; i < ev.dataTransfer.types.length; i++){
-            if(ev.dataTransfer.types[i].toUpperCase() === textType.toUpperCase())
-                ok = true;
-        }
-        if(ok){
-            ev.preventDefault();
-            // Set the dropEffect to move
-            ev.dataTransfer.dropEffect = "move";
-        }
-    }
-    inventoryElem.ondrop = function(ev){
-        ev.preventDefault();
-        var data = JSON.parse(ev.dataTransfer.getData(textType));
-        if(data.fromPlayer){
-            // The amount could have changed during dragging, so we'll query current value
-            // from the source inventory.
-            if(sim.move_selected_inventory_item(!data.fromPlayer)){
-                updateInventory(sim.get_player_inventory());
-                updateToolBar();
-                updateStructureInventory();
+    const inventoryContentElem = document.getElementById('inputInventoryContent');
+    inventoryContentElem.onclick = () => onInventoryClick(false, true);
+    const outputInventoryContentElem = document.getElementById('outputInventoryContent');
+    outputInventoryContentElem.onclick = () => onInventoryClick(false, false);
+
+    [inventoryContentElem, outputInventoryContentElem].forEach((elem, idx) => {
+        elem.ondragover = function(ev){
+            var ok = false;
+            for(var i = 0; i < ev.dataTransfer.types.length; i++){
+                if(ev.dataTransfer.types[i].toUpperCase() === textType.toUpperCase())
+                    ok = true;
+            }
+            if(ok){
+                ev.preventDefault();
+                // Set the dropEffect to move
+                ev.dataTransfer.dropEffect = "move";
             }
         }
-    }
+        elem.ondrop = function(ev){
+            ev.preventDefault();
+            var data = JSON.parse(ev.dataTransfer.getData(textType));
+            if(data.fromPlayer){
+                // The amount could have changed during dragging, so we'll query current value
+                // from the source inventory.
+                if(sim.move_selected_inventory_item(!data.fromPlayer, idx === 0)){
+                    updateInventory(sim.get_player_inventory());
+                    updateToolBar();
+                    updateStructureInventory();
+                }
+            }
+        }
+    });
     inventoryElem.style.display = 'none';
-
-    const inventoryContentElem = document.getElementById('inventory2Content');
-    inventoryContentElem.onclick = function(){
-        onInventoryClick(false);
-    };
 
     const inventory2CloseButton = document.getElementById("inventory2CloseButton");
     inventory2CloseButton.style.backgroundImage = `url(${closeImage})`;
@@ -506,7 +514,8 @@ function isIE(){
             // var recipeSelectButtonElem = document.getElementById('recipeSelectButton');
             // recipeSelectButtonElem.style.display = !inventoryTarget.recipes ? "none" : "block";
             // toolTip.style.display = "none"; // Hide the tool tip for "Click to oepn inventory"
-            updateInventoryInt(inventoryContentElem, sim, false, sim.get_structure_inventory(c, r));
+            updateInventoryInt(inventoryContentElem, sim, false, sim.get_structure_inventory(c, r, true));
+            updateInventoryInt(outputInventoryContentElem, sim, false, sim.get_structure_inventory(c, r, false));
         }
         // else{
         //     inventoryContent.innerHTML = "";
@@ -658,20 +667,20 @@ function isIE(){
         ev.preventDefault();
         var data = JSON.parse(ev.dataTransfer.getData(textType));
         if(!data.fromPlayer){
-            if(sim.move_selected_inventory_item(!data.fromPlayer)){
+            if(sim.move_selected_inventory_item(!data.fromPlayer, data.fromInput)){
                 updateInventory(sim.get_player_inventory());
                 updateToolBar();
                 updateStructureInventory();
             }
         }
     }
-    playerInventoryElem.onclick = function(){onInventoryClick(true)};
+    playerInventoryElem.onclick = function(){onInventoryClick(true, true)};
     playerElem.appendChild(playerInventoryElem);
 
-    function onInventoryClick(isPlayer){
+    function onInventoryClick(isPlayer, isInput){
         // Update only if the selected inventory is the other one from destination.
         if(sim.get_selected_inventory() !== null){
-            if(sim.move_selected_inventory_item(isPlayer)){
+            if(sim.move_selected_inventory_item(isPlayer, isInput)){
                 updateInventory(sim.get_player_inventory());
                 updateToolBar();
                 updateStructureInventory();

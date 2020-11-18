@@ -917,10 +917,21 @@ impl FactorishState {
         Ok(JsValue::null())
     }
 
-    pub fn get_structure_inventory(&self, c: i32, r: i32) -> Result<js_sys::Array, JsValue> {
+    /// Returns inventory items in selected tile.
+    /// @param c column number.
+    /// @param r row number.
+    /// @param is_input if true, returns input buffer, otherwise output. Some structures have either one but not both.
+    pub fn get_structure_inventory(
+        &self,
+        c: i32,
+        r: i32,
+        is_input: bool,
+    ) -> Result<js_sys::Array, JsValue> {
         if let Some(structure) = self.find_structure_tile(&[c, r]) {
-            if let Some(inventory) = structure.inventory() {
+            if let Some(inventory) = structure.inventory(is_input) {
                 return self.get_inventory(inventory, &self.selected_structure_item);
+            } else {
+                return self.get_inventory(&Inventory::new(), &self.selected_structure_item);
             }
         }
         Err(JsValue::from_str(
@@ -982,10 +993,17 @@ impl FactorishState {
         }
     }
 
-    pub fn move_selected_inventory_item(&mut self, to_player: bool) -> Result<bool, JsValue> {
+    /// Move inventory items between structure and player
+    /// @param to_player whether the movement happen towards player
+    /// @param is_input if true, movement is performed to/from input buffer, otherwise output
+    pub fn move_selected_inventory_item(
+        &mut self,
+        to_player: bool,
+        is_input: bool,
+    ) -> Result<bool, JsValue> {
         if let Some(pos) = self.selected_structure_inventory {
             if let Some(idx) = self.find_structure_tile_idx(&[pos.x, pos.y]) {
-                if let Some(inventory) = self.structures[idx].inventory_mut() {
+                if let Some(inventory) = self.structures[idx].inventory_mut(is_input) {
                     let (src, dst, item_name) = if to_player {
                         (
                             inventory,
@@ -1079,7 +1097,7 @@ impl FactorishState {
                     }
                 }
             } else if let Some(structure) = self.find_structure_tile(&[cursor.x, cursor.y]) {
-                if structure.inventory().is_some() {
+                if structure.inventory(true).is_some() || structure.inventory(false).is_some() {
                     // Select clicked structure
                     console_log!("opening inventory at {:?}", cursor);
                     if self.open_structure_inventory(cursor.x, cursor.y).is_ok() {

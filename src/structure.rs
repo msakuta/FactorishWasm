@@ -1,6 +1,6 @@
 use super::items::ItemType;
 use super::water_well::FluidBox;
-use super::{DropItem, FactorishState, Inventory, Recipe};
+use super::{DropItem, FactorishState, Inventory, InventoryTrait, Recipe};
 use wasm_bindgen::prelude::*;
 use web_sys::CanvasRenderingContext2d;
 
@@ -177,18 +177,24 @@ pub(crate) trait Structure {
     fn output(&mut self, _state: &mut FactorishState, _item_type: &ItemType) -> Result<(), ()> {
         Err(())
     }
-    fn inventory(&self) -> Option<&Inventory> {
+    fn inventory(&self, is_input: bool) -> Option<&Inventory> {
         None
     }
-    fn inventory_mut(&mut self) -> Option<&mut Inventory> {
+    fn inventory_mut(&mut self, is_input: bool) -> Option<&mut Inventory> {
         None
     }
     /// Some structures don't have an inventory, but still can have some item, e.g. inserter hands.
     /// We need to retrieve them when we destory such a structure, or we might lose items into void.
     /// It will take away the inventory by default, destroying the instance's inventory.
     fn destroy_inventory(&mut self) -> Inventory {
-        self.inventory_mut()
-            .map_or(Inventory::new(), |inventory| std::mem::take(inventory))
+        let mut ret = self
+            .inventory_mut(true)
+            .map_or(Inventory::new(), |inventory| std::mem::take(inventory));
+        ret.merge(
+            self.inventory_mut(false)
+                .map_or(Inventory::new(), |inventory| std::mem::take(inventory)),
+        );
+        ret
     }
     fn get_recipes(&self) -> Vec<Recipe> {
         vec![]

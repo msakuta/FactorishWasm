@@ -229,12 +229,20 @@ impl Structure for Furnace {
         }
     }
 
-    fn inventory(&self) -> Option<&Inventory> {
-        Some(&self.output_inventory)
+    fn inventory(&self, is_input: bool) -> Option<&Inventory> {
+        Some(if is_input {
+            &self.input_inventory
+        } else {
+            &self.output_inventory
+        })
     }
 
-    fn inventory_mut(&mut self) -> Option<&mut Inventory> {
-        Some(&mut self.output_inventory)
+    fn inventory_mut(&mut self, is_input: bool) -> Option<&mut Inventory> {
+        Some(if is_input {
+            &mut self.input_inventory
+        } else {
+            &mut self.output_inventory
+        })
     }
 
     fn destroy_inventory(&mut self) -> Inventory {

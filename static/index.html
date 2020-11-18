@@ -31,7 +31,7 @@
 			#inventory, #inventory2{
 				position: absolute;
 				width: 355px;
-				height: 160px;
+				height: 212px;
 				left: 50%;
 				top: 50%;
 				margin-left: -175px;
@@ -41,10 +41,17 @@
 				text-align: left;
 			}
 
-			#inventoryTitle, #inventory2Title{
+			#inventoryTitle, #inventory2Title, .inventoryTitle{
 				width: 100%;
 				height: 20px;
 				background-color: #7f7fff;
+			}
+
+			.inventoryTitle {
+				background-color: #6f6fcf;
+				width: 316px;
+				margin-left: 37px;
+				margin-right: 33px;
 			}
 
 			#inventoryClient, #inventory2Client{
@@ -53,12 +60,13 @@
 				height: 140px;
 			}
 
-			#inventoryContent, #inventory2Content{
+			#inventoryContent, #inputInventoryContent, #outputInventoryContent{
 				right: 0;
 				top: 20px;
-				width: 320px;
-				height: 100%;
-				margin-left: 35px;
+				width: 314px;
+				height: 50%;
+				border: solid 1px black;
+				margin: 2px 2px 2px 37px;
 				background-color: #ffff7f;
 			}
 
@@ -170,7 +178,10 @@
 						<img id="inventory2List" draggable="false" src="../img/list.png" style="position: absolute">
 						<img id="inventory2Icons" draggable="false" src="../img/icons.png" style="position: absolute; left: 0px; top: 32px">
 						<img id="recipeSelectButton" draggable="false" src="../img/recipe-select.png" alt="Recipe select" style="position: absolute; left: 0px; top: 80px; border: 1px solid #7f7f7f">
-						<div id="inventory2Content"></div>
+						<div class="inventoryTitle">Input inventory</div>
+						<div id="inputInventoryContent"></div>
+						<div class="inventoryTitle">Output inventory</div>
+						<div id="outputInventoryContent"></div>
 					</div>
 				</div>
 				<div id="toolBar"></div>

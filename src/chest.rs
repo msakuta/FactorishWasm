@@ -93,11 +93,19 @@ impl Structure for Chest {
         }
     }
 
-    fn inventory(&self) -> Option<&Inventory> {
-        Some(&self.inventory)
+    fn inventory(&self, is_input: bool) -> Option<&Inventory> {
+        if is_input {
+            Some(&self.inventory)
+        } else {
+            None
+        }
     }
 
-    fn inventory_mut(&mut self) -> Option<&mut Inventory> {
-        Some(&mut self.inventory)
+    fn inventory_mut(&mut self, is_input: bool) -> Option<&mut Inventory> {
+        if is_input {
+            Some(&mut self.inventory)
+        } else {
+            None
+        }
     }
 }
