@@ -287,8 +287,8 @@ function isIE(){
             return [boiler, 3];
         case 'Pipe':
             return pipeItem;
-        case 'SteamEngine':
-            return steamEngine;
+        case 'Steam Engine':
+            return [steamEngine, 3];
         default:
             return "";
         }
