@@ -17,7 +17,8 @@ impl Pipe {
         }
     }
 
-    pub(crate) fn draw_int(structure: &dyn Structure,
+    pub(crate) fn draw_int(
+        structure: &dyn Structure,
         state: &FactorishState,
         context: &CanvasRenderingContext2d,
         depth: i32,
@@ -62,7 +63,7 @@ impl Pipe {
                     32.,
                 )?;
             }
-            None => return Err(JsValue::from_str("furnace image not available")),
+            None => return Err(JsValue::from_str("pipe image not available")),
         }
 
         Ok(())

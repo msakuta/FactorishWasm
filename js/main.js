@@ -55,6 +55,7 @@ function isIE(){
         ["furnace", furnace],
         ["assembler", assembler],
         ["boiler", boiler],
+        ["steamEngine", steamEngine],
         ["waterWell", waterWell],
         ["pipe", pipe],
         ["inserter", inserter],

@@ -1,10 +1,10 @@
+use super::pipe::Pipe;
 use super::structure::{DynIterMut, Structure};
 use super::water_well::{FluidBox, FluidType};
 use super::{
     DropItem, FactorishState, FrameProcResult, Inventory, InventoryTrait, ItemType, Position,
     Recipe, COAL_POWER,
 };
-use super::pipe::Pipe;
 use wasm_bindgen::prelude::*;
 use web_sys::CanvasRenderingContext2d;
 
@@ -31,7 +31,9 @@ impl Boiler {
             max_power: 20.,
             recipe: Some(Recipe {
                 input: hash_map!(ItemType::CoalOre => 1usize),
+                input_fluid: Some(FluidType::Water),
                 output: HashMap::new(),
+                output_fluid: Some(FluidType::Steam),
                 power_cost: 100.,
                 recipe_time: 30.,
             }),

@@ -1,11 +1,10 @@
-use super::structure::{DynIterMut, Structure};
-use super::{FactorishState, FrameProcResult, Inventory, ItemType, Position, Recipe};
 use super::pipe::Pipe;
+use super::structure::{DynIterMut, Structure};
+use super::{FactorishState, FrameProcResult, Position};
 use wasm_bindgen::prelude::*;
 use web_sys::CanvasRenderingContext2d;
 
 use std::cmp::Eq;
-use std::collections::HashMap;
 
 #[derive(Eq, PartialEq, Clone, Copy, Debug)]
 pub(crate) enum FluidType {
@@ -129,10 +128,6 @@ impl FluidBox {
 
 pub(crate) struct WaterWell {
     position: Position,
-    inventory: Inventory,
-    progress: Option<f64>,
-    power: f64,
-    recipe: Option<Recipe>,
     output_fluid_box: FluidBox,
 }
 
@@ -140,15 +135,6 @@ impl WaterWell {
     pub(crate) fn new(position: &Position) -> Self {
         WaterWell {
             position: *position,
-            inventory: Inventory::new(),
-            progress: None,
-            power: 0.,
-            recipe: Some(Recipe {
-                input: hash_map!(ItemType::CoalOre => 1usize),
-                output: HashMap::new(),
-                power_cost: 0.,
-                recipe_time: 30.,
-            }),
             output_fluid_box: FluidBox::new(false, true, [false; 4]).set_type(&FluidType::Water),
         }
     }
@@ -176,22 +162,7 @@ impl Structure for WaterWell {
         let (x, y) = (self.position.x as f64 * 32., self.position.y as f64 * 32.);
         match state.image_water_well.as_ref() {
             Some(img) => {
-                let sx = if self.progress.is_some() && 0. < self.power {
-                    ((((state.sim_time * 5.) as isize) % 2 + 1) * 32) as f64
-                } else {
-                    0.
-                };
-                context.draw_image_with_image_bitmap_and_sw_and_sh_and_dx_and_dy_and_dw_and_dh(
-                    &img.bitmap,
-                    sx,
-                    0.,
-                    32.,
-                    32.,
-                    x,
-                    y,
-                    32.,
-                    32.,
-                )?;
+                context.draw_image_with_image_bitmap(&img.bitmap, x, y)?;
             }
             None => return Err(JsValue::from_str("furnace image not available")),
         }
@@ -202,21 +173,8 @@ impl Structure for WaterWell {
     fn desc(&self, _state: &FactorishState) -> String {
         format!(
             "{}<br>{}",
-            if self.recipe.is_some() {
-                self.output_fluid_box.desc()
-            // getHTML(generateItemImage("time", true, this.recipe.time), true) + "<br>" +
-            // "Outputs: <br>" +
-            // getHTML(generateItemImage(this.recipe.output, true, 1), true) + "<br>";
-            } else {
-                String::from("No recipe")
-            },
-            format!(
-                "Items: \n{}",
-                self.inventory
-                    .iter()
-                    .map(|item| format!("{:?}: {}<br>", item.0, item.1))
-                    .fold(String::from(""), |accum, item| accum + &item)
-            )
+            self.output_fluid_box.desc(),
+            "Outputs: Water<br>",
         )
     }
 
@@ -232,10 +190,6 @@ impl Structure for WaterWell {
         self.output_fluid_box
             .simulate(&self.position, state, &mut structures.dyn_iter_mut());
         Ok(FrameProcResult::None)
-    }
-
-    fn get_selected_recipe(&self) -> Option<&Recipe> {
-        self.recipe.as_ref()
     }
 
     fn fluid_box(&self) -> Option<Vec<&FluidBox>> {

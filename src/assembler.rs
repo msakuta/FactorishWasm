@@ -227,48 +227,48 @@ impl Structure for Assembler {
 
     fn get_recipes(&self) -> Vec<Recipe> {
         vec![
-            Recipe {
-                input: hash_map!(ItemType::IronPlate => 2usize),
-                output: hash_map!(ItemType::Gear => 1usize),
-                power_cost: 20.,
-                recipe_time: 50.,
-            },
-            Recipe {
-                input: hash_map!(ItemType::IronPlate => 1usize, ItemType::Gear => 1usize),
-                output: hash_map!(ItemType::TransportBelt => 1usize),
-                power_cost: 20.,
-                recipe_time: 50.,
-            },
-            Recipe {
-                input: hash_map!(ItemType::IronPlate => 5usize),
-                output: hash_map!(ItemType::Chest => 1usize),
-                power_cost: 20.,
-                recipe_time: 50.,
-            },
-            Recipe {
-                input: hash_map!(ItemType::CopperPlate => 1usize),
-                output: hash_map!(ItemType::CopperWire => 2usize),
-                power_cost: 20.,
-                recipe_time: 20.,
-            },
-            Recipe {
-                input: hash_map!(ItemType::IronPlate => 1, ItemType::CopperWire => 3usize),
-                output: hash_map!(ItemType::Circuit => 1usize),
-                power_cost: 20.,
-                recipe_time: 50.,
-            },
-            Recipe {
-                input: hash_map!(ItemType::IronPlate => 5, ItemType::Gear => 5, ItemType::Circuit => 3),
-                output: hash_map!(ItemType::Assembler => 1),
-                power_cost: 20.,
-                recipe_time: 120.,
-            },
-            Recipe {
-                input: hash_map!(ItemType::IronPlate => 1, ItemType::Gear => 1, ItemType::Circuit => 1),
-                output: hash_map!(ItemType::Inserter => 1),
-                power_cost: 20.,
-                recipe_time: 20.,
-            },
+            Recipe::new(
+                hash_map!(ItemType::IronPlate => 2usize),
+                hash_map!(ItemType::Gear => 1usize),
+                20.,
+                50.,
+            ),
+            Recipe::new(
+                hash_map!(ItemType::IronPlate => 1usize, ItemType::Gear => 1usize),
+                hash_map!(ItemType::TransportBelt => 1usize),
+                20.,
+                50.,
+            ),
+            Recipe::new(
+                hash_map!(ItemType::IronPlate => 5usize),
+                hash_map!(ItemType::Chest => 1usize),
+                20.,
+                50.,
+            ),
+            Recipe::new(
+                hash_map!(ItemType::CopperPlate => 1usize),
+                hash_map!(ItemType::CopperWire => 2usize),
+                20.,
+                20.,
+            ),
+            Recipe::new(
+                hash_map!(ItemType::IronPlate => 1, ItemType::CopperWire => 3usize),
+                hash_map!(ItemType::Circuit => 1usize),
+                20.,
+                50.,
+            ),
+            Recipe::new(
+                hash_map!(ItemType::IronPlate => 5, ItemType::Gear => 5, ItemType::Circuit => 3),
+                hash_map!(ItemType::Assembler => 1),
+                20.,
+                120.,
+            ),
+            Recipe::new(
+                hash_map!(ItemType::IronPlate => 1, ItemType::Gear => 1, ItemType::Circuit => 1),
+                hash_map!(ItemType::Inserter => 1),
+                20.,
+                20.,
+            ),
         ]
     }
 

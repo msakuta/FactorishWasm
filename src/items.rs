@@ -22,6 +22,7 @@ pub(crate) enum ItemType {
     Boiler,
     WaterWell,
     Pipe,
+    SteamEngine,
 }
 
 pub(crate) fn item_to_str(type_: &ItemType) -> String {
@@ -44,6 +45,7 @@ pub(crate) fn item_to_str(type_: &ItemType) -> String {
         ItemType::Boiler => "Boiler".to_string(),
         ItemType::WaterWell => "Water Well".to_string(),
         ItemType::Pipe => "Pipe".to_string(),
+        ItemType::SteamEngine => "Steam Engine".to_string(),
     }
 }
 
@@ -67,6 +69,7 @@ pub(crate) fn str_to_item(name: &str) -> Option<ItemType> {
         "Boiler" => Some(ItemType::Boiler),
         "Water Well" => Some(ItemType::WaterWell),
         "Pipe" => Some(ItemType::Pipe),
+        "Steam Engine" => Some(ItemType::SteamEngine),
 
         _ => None,
     }
@@ -147,6 +150,7 @@ pub(crate) fn render_drop_item(
         ItemType::Boiler => render16(&state.image_boiler),
         ItemType::WaterWell => render16(&state.image_water_well),
         ItemType::Pipe => render16(&state.image_pipe),
+        ItemType::SteamEngine => render16(&state.image_steam_engine),
     }
 }
 
@@ -170,5 +174,6 @@ pub(crate) fn get_item_image_url<'a>(state: &'a FactorishState, item_type: &Item
         ItemType::Boiler => &state.image_boiler.as_ref().unwrap().url,
         ItemType::WaterWell => &state.image_water_well.as_ref().unwrap().url,
         ItemType::Pipe => &state.image_pipe.as_ref().unwrap().url,
+        ItemType::SteamEngine => &state.image_steam_engine.as_ref().unwrap().url,
     }
 }

@@ -168,20 +168,20 @@ impl Structure for Furnace {
         if self.recipe.is_none() {
             match o.type_ {
                 ItemType::IronOre => {
-                    self.recipe = Some(Recipe {
-                        input: hash_map!(ItemType::IronOre => 1usize),
-                        output: hash_map!(ItemType::IronPlate => 1usize),
-                        power_cost: 20.,
-                        recipe_time: 50.,
-                    });
+                    self.recipe = Some(Recipe::new(
+                        hash_map!(ItemType::IronOre => 1usize),
+                        hash_map!(ItemType::IronPlate => 1usize),
+                        20.,
+                        50.,
+                    ));
                 }
                 ItemType::CopperOre => {
-                    self.recipe = Some(Recipe {
-                        input: hash_map!(ItemType::CopperOre => 1usize),
-                        output: hash_map!(ItemType::CopperPlate => 1usize),
-                        power_cost: 20.,
-                        recipe_time: 50.,
-                    });
+                    self.recipe = Some(Recipe::new(
+                        hash_map!(ItemType::CopperOre => 1usize),
+                        hash_map!(ItemType::CopperPlate => 1usize),
+                        20.,
+                        50.,
+                    ));
                 }
                 _ => {
                     return Err(JsValue::from_str(&format!(
@@ -253,18 +253,18 @@ impl Structure for Furnace {
     }
     fn get_recipes(&self) -> Vec<Recipe> {
         vec![
-            Recipe {
-                input: hash_map!(ItemType::IronOre => 1usize),
-                output: hash_map!(ItemType::IronPlate => 1usize),
-                power_cost: 20.,
-                recipe_time: 50.,
-            },
-            Recipe {
-                input: hash_map!(ItemType::CopperOre => 1usize),
-                output: hash_map!(ItemType::CopperPlate => 1usize),
-                power_cost: 20.,
-                recipe_time: 50.,
-            },
+            Recipe::new(
+                hash_map!(ItemType::IronOre => 1usize),
+                hash_map!(ItemType::IronPlate => 1usize),
+                20.,
+                50.,
+            ),
+            Recipe::new(
+                hash_map!(ItemType::CopperOre => 1usize),
+                hash_map!(ItemType::CopperPlate => 1usize),
+                20.,
+                50.,
+            ),
         ]
     }
 
