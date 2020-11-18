@@ -864,7 +864,7 @@ impl FactorishState {
         Err(NewObjectErr::OutOfMap)
     }
 
-    fn harvest(&mut self, position: &Position) -> Result<bool, JsValue> {
+    fn harvest(&mut self, position: &Position, clear_item: bool) -> Result<bool, JsValue> {
         if let Some((index, structure)) = self
             .structures
             .iter()
@@ -884,7 +884,7 @@ impl FactorishState {
                 .call1(&window(), &JsValue::from(self.get_player_inventory()?))
                 .unwrap_or(JsValue::from(true));
             Ok(true)
-        } else {
+        } else if clear_item {
             // Pick up dropped items in the cell
             let mut ret = false;
             while let Some(item_index) = self
@@ -897,6 +897,8 @@ impl FactorishState {
                 ret = true;
             }
             Ok(ret)
+        } else {
+            Ok(false)
         }
     }
 
@@ -1118,10 +1120,10 @@ impl FactorishState {
                     .get(&tool_defs[selected_tool].item_type)
                 {
                     if 1 <= *count {
-                        self.harvest(&cursor)?;
-                        self.structures.push(
-                            self.new_structure(&tool_defs[selected_tool].item_type, &cursor)?,
-                        );
+                        let new_s =
+                            self.new_structure(&tool_defs[selected_tool].item_type, &cursor)?;
+                        self.harvest(&cursor, !new_s.movable())?;
+                        self.structures.push(new_s);
                         if let Some(count) = self
                             .player
                             .inventory
@@ -1154,7 +1156,8 @@ impl FactorishState {
                 }
             }
         } else {
-            self.harvest(&cursor)?;
+            // Right click means explicit cleanup, so we pick up items no matter what.
+            self.harvest(&cursor, true)?;
             events.push(js_sys::Array::of1(&JsValue::from_str(
                 "updatePlayerInventory",
             )));
