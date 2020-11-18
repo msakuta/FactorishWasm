@@ -29,7 +29,7 @@ impl SteamEngine {
                 output: HashMap::new(),
                 output_fluid: None,
                 power_cost: -100.,
-                recipe_time: 30.,
+                recipe_time: 100.,
             }),
             input_fluid_box: FluidBox::new(true, false, [false; 4]),
         }
@@ -162,5 +162,11 @@ impl Structure for SteamEngine {
 
     fn fluid_box_mut(&mut self) -> Option<Vec<&mut FluidBox>> {
         Some(vec![&mut self.input_fluid_box])
+    }
+
+    fn power_outlet(&mut self, demand: f64) -> Option<f64> {
+        let energy = demand.min(self.power);
+        self.power -= energy;
+        Some(energy)
     }
 }

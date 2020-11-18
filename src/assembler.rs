@@ -52,7 +52,7 @@ impl Assembler {
             position: *position,
             inventory: Inventory::new(),
             progress: None,
-            power: 20.,
+            power: 0.,
             max_power: 20.,
             recipe: None,
         }
@@ -124,19 +124,29 @@ impl Structure for Assembler {
     fn frame_proc(
         &mut self,
         _state: &mut FactorishState,
-        _structures: &mut dyn DynIterMut<Item = Box<dyn Structure>>,
+        structures: &mut dyn DynIterMut<Item = Box<dyn Structure>>,
     ) -> Result<FrameProcResult, ()> {
         if let Some(recipe) = &self.recipe {
             let mut ret = FrameProcResult::None;
             // First, check if we need to refill the energy buffer in order to continue the current work.
-            if self.inventory.get(&ItemType::CoalOre).is_some() {
-                // Refill the energy from the fuel
-                if self.power < recipe.power_cost {
-                    self.power += COAL_POWER;
-                    self.max_power = self.power;
-                    self.inventory.remove_item(&ItemType::CoalOre);
-                    ret = FrameProcResult::InventoryChanged(self.position);
+            // Refill the energy from the fuel
+            if self.power < recipe.power_cost {
+                let mut accumulated = 0.;
+                for structure in structures.dyn_iter_mut() {
+                    let target_position = structure.position();
+                    if 3 < (target_position.x - self.position.x).abs().max((target_position.y - self.position.y).abs()) {
+                        continue;
+                    }
+                    let demand = self.max_power - self.power - accumulated;
+                    // Energy transmission is instantaneous
+                    if let Some(energy) = structure.power_outlet(demand) {
+                        accumulated += energy;
+                        console_log!("draining {:?}kJ of energy with {:?} demand, from {:?}, accumulated {:?}", energy, demand, structure.name(), accumulated);
+                    }
                 }
+                self.power += accumulated;
+                self.inventory.remove_item(&ItemType::CoalOre);
+                ret = FrameProcResult::InventoryChanged(self.position);
             }
 
             if self.progress.is_none() {

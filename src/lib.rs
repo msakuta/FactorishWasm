@@ -2,10 +2,10 @@
 
 macro_rules! console_log {
     ($fmt:expr, $($arg1:expr),*) => {
-        log(&format!($fmt, $($arg1),+))
+        crate::log(&format!($fmt, $($arg1),+))
     };
     ($fmt:expr) => {
-        log($fmt)
+        crate::log($fmt)
     }
 }
 macro_rules! js_err {

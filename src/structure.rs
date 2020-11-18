@@ -233,4 +233,10 @@ pub(crate) trait Structure {
         let b = has_fluid_box(x, y + 1);
         return [l, t, r, b];
     }
+    /// Try to drain power from this structure.
+    /// @param demand in kilojoules.
+    /// @returns None if it does not support power supply.
+    fn power_outlet(&mut self, _demand: f64) -> Option<f64> {
+        None
+    }
 }
