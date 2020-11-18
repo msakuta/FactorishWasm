@@ -4,6 +4,7 @@ use super::{
     DropItem, FactorishState, FrameProcResult, Inventory, InventoryTrait, ItemType, Position,
     Recipe, COAL_POWER,
 };
+use super::pipe::Pipe;
 use wasm_bindgen::prelude::*;
 use web_sys::CanvasRenderingContext2d;
 
@@ -76,6 +77,7 @@ impl Structure for Boiler {
         if depth != 0 {
             return Ok(());
         };
+        Pipe::draw_int(self, state, context, depth, false)?;
         let (x, y) = (self.position.x as f64 * 32., self.position.y as f64 * 32.);
         match state.image_boiler.as_ref() {
             Some(img) => {

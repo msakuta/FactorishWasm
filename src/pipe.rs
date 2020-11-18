@@ -16,27 +16,18 @@ impl Pipe {
             fluid_box: FluidBox::new(true, true, [false; 4]),
         }
     }
-}
 
-impl Structure for Pipe {
-    fn name(&self) -> &str {
-        "Pipe"
-    }
-
-    fn position(&self) -> &Position {
-        &self.position
-    }
-
-    fn draw(
-        &self,
+    pub(crate) fn draw_int(structure: &dyn Structure,
         state: &FactorishState,
         context: &CanvasRenderingContext2d,
         depth: i32,
+        draw_center: bool,
     ) -> Result<(), JsValue> {
         if depth != 0 {
             return Ok(());
         };
-        let (x, y) = (self.position.x as f64 * 32., self.position.y as f64 * 32.);
+        let position = structure.position();
+        let (x, y) = (position.x as f64 * 32., position.y as f64 * 32.);
         match state.image_pipe.as_ref() {
             Some(img) => {
                 // let (front, mid) = state.structures.split_at_mut(i);
@@ -48,11 +39,15 @@ impl Structure for Pipe {
                 // references.
                 let structures_slice: &[Box<dyn Structure>] = state.structures.as_slice();
 
-                let connection_list = self.connection(state, &mut Ref(structures_slice));
+                let connection_list = structure.connection(state, &mut Ref(structures_slice));
                 let connections = connection_list
                     .iter()
                     .enumerate()
                     .fold(0, |acc, (i, b)| acc | ((*b as u32) << i));
+                // Skip drawing center dot? if there are no connections
+                if !draw_center && connections == 0 {
+                    return Ok(());
+                }
                 let sx = (connections % 4 * 32) as f64;
                 let sy = ((connections / 4) * 32) as f64;
                 context.draw_image_with_image_bitmap_and_sw_and_sh_and_dx_and_dy_and_dw_and_dh(
@@ -71,6 +66,25 @@ impl Structure for Pipe {
         }
 
         Ok(())
+    }
+}
+
+impl Structure for Pipe {
+    fn name(&self) -> &str {
+        "Pipe"
+    }
+
+    fn position(&self) -> &Position {
+        &self.position
+    }
+
+    fn draw(
+        &self,
+        state: &FactorishState,
+        context: &CanvasRenderingContext2d,
+        depth: i32,
+    ) -> Result<(), JsValue> {
+        Self::draw_int(self, state, context, depth, true)
     }
 
     fn desc(&self, _state: &FactorishState) -> String {
