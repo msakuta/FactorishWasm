@@ -377,6 +377,8 @@ pub struct FactorishState {
     height: u32,
     viewport_width: f64,
     viewport_height: f64,
+    viewport_x: f64,
+    viewport_y: f64,
     board: Vec<Cell>,
     structures: Vec<Box<dyn Structure>>,
     selected_structure_inventory: Option<Position>,
@@ -438,13 +440,12 @@ enum RotateErr {
 impl FactorishState {
     #[wasm_bindgen(constructor)]
     pub fn new(
+        width: u32,
+        height: u32,
         on_player_update: js_sys::Function,
         // on_show_inventory: js_sys::Function,
     ) -> Result<FactorishState, JsValue> {
         console_log!("FactorishState constructor");
-
-        let width = 64;
-        let height = 64;
 
         Ok(FactorishState {
             delta_time: 0.1,
@@ -453,6 +454,8 @@ impl FactorishState {
             height,
             viewport_height: 0.,
             viewport_width: 0.,
+            viewport_x: 0.,
+            viewport_y: 0.,
             cursor: None,
             selected_tool: None,
             tool_rotation: Rotation::Left,
@@ -1117,8 +1120,8 @@ impl FactorishState {
             return Err(JsValue::from_str("position must have 2 elements"));
         }
         let cursor = Position {
-            x: (pos[0] / 32.) as i32,
-            y: (pos[1] / 32.) as i32,
+            x: (pos[0] / 32. - self.viewport_x) as i32,
+            y: (pos[1] / 32. - self.viewport_y) as i32,
         };
 
         let mut events = vec![];
@@ -1182,7 +1185,10 @@ impl FactorishState {
         if pos.len() < 2 {
             return Err(JsValue::from_str("position must have 2 elements"));
         }
-        let cursor = [(pos[0] / 32.) as i32, (pos[1] / 32.) as i32];
+        let cursor = [
+            (pos[0] / 32. - self.viewport_x) as i32,
+            (pos[1] / 32. - self.viewport_y) as i32,
+        ];
         self.cursor = Some(cursor);
         // console_log!("cursor: {}, {}", cursor[0], cursor[1]);
         self.update_info();
@@ -1200,14 +1206,35 @@ impl FactorishState {
 
     pub fn on_key_down(&mut self, key_code: i32) -> Result<bool, JsValue> {
         match key_code {
-            82 => self.rotate()
+            82 => self
+                .rotate()
                 .map_err(|err| JsValue::from(format!("Rotate failed: {:?}", err))),
             // Detect keys through '0'..'9', that's a shame char literal cannot be used in place of i32
             code @ 48..=58 => {
                 self.select_tool((code - '0' as i32 + 9) % 10);
                 Ok(true)
             }
-            _ => Ok(false)
+            37 => {
+                // Left
+                self.viewport_x = (self.viewport_x + 1.).min(0.);
+                Ok(true)
+            }
+            38 => {
+                // Up
+                self.viewport_y = (self.viewport_y + 1.).min(0.);
+                Ok(true)
+            }
+            39 => {
+                // Right
+                self.viewport_x = (self.viewport_x - 1.).max(-(self.width as f64));
+                Ok(true)
+            }
+            40 => {
+                // Down
+                self.viewport_y = (self.viewport_y - 1.).max(-(self.height as f64));
+                Ok(true)
+            }
+            _ => Ok(false),
         }
     }
 
@@ -1285,10 +1312,12 @@ impl FactorishState {
     pub fn tool_defs(&self) -> Result<js_sys::Array, JsValue> {
         Ok(tool_defs
             .iter()
-            .map(|tool| js_sys::Array::of2(
-                &JsValue::from_str(&item_to_str(&tool.item_type)),
-                &JsValue::from_str(&tool.desc),
-            ))
+            .map(|tool| {
+                js_sys::Array::of2(
+                    &JsValue::from_str(&item_to_str(&tool.item_type)),
+                    &JsValue::from_str(&tool.desc),
+                )
+            })
             .collect::<js_sys::Array>())
     }
 
@@ -1361,10 +1390,19 @@ impl FactorishState {
             .collect()
     }
 
+    pub fn set_viewport_pos(&mut self, x: f64, y: f64) -> Result<(), JsValue> {
+        self.viewport_x = -x;
+        self.viewport_y = -y;
+        Ok(())
+    }
+
     pub fn render(&self, context: CanvasRenderingContext2d) -> Result<(), JsValue> {
         use std::f64;
 
         context.clear_rect(0., 0., self.viewport_width, self.viewport_height);
+
+        context.save();
+        context.translate(self.viewport_x * 32., self.viewport_y * 32.)?;
 
         match self
             .image_dirt
@@ -1374,8 +1412,14 @@ impl FactorishState {
             .zip(self.image_copper.as_ref())
         {
             Some((((img, img_ore), img_coal), img_copper)) => {
-                for y in 0..self.viewport_height as u32 / 32 {
-                    for x in 0..self.viewport_width as u32 / 32 {
+                let mut cell_draws = 0;
+                let left = (-self.viewport_x).max(0.) as u32;
+                let top = (-self.viewport_y).max(0.) as u32;
+                let right = ((self.viewport_width / 32. - self.viewport_x) as u32).min(self.width);
+                let bottom =
+                    ((self.viewport_height / 32. - self.viewport_y) as u32).min(self.height);
+                for y in top..bottom {
+                    for x in left..right {
                         context.draw_image_with_image_bitmap(
                             &img.bitmap,
                             x as f64 * 32.,
@@ -1402,12 +1446,14 @@ impl FactorishState {
                             self.board[(x + y * self.width) as usize].copper_ore,
                             &img_copper.bitmap,
                         )?;
+                        cell_draws += 1;
                     }
                 }
-                // console_log!(
-                //     "iron ore: {}",
-                //     self.board.iter().fold(0, |accum, val| accum + val.iron_ore)
-                // );
+                console_log!(
+                    "cell_draws: {} []: {:?}",
+                    cell_draws,
+                    [left, top, right, bottom] // self.board.iter().fold(0, |accum, val| accum + val.iron_ore)
+                );
             }
             _ => {
                 return Err(JsValue::from_str("image not available"));
@@ -1467,6 +1513,54 @@ impl FactorishState {
             context.stroke_rect(x, y, 32., 32.);
         }
 
+        context.restore();
+
+        Ok(())
+    }
+
+    pub fn render_minimap(&self, context: CanvasRenderingContext2d) -> Result<(), JsValue> {
+        let width = 200.;
+        let height = 200.;
+        context.set_fill_style(&JsValue::from_str("#7f7f7f"));
+        context.fill_rect(0., 0., width, height);
+
+        let scale = width / self.width as f64;
+
+        context.save();
+        context.scale(scale, scale)?;
+
+        for y in 0..self.height as i32 {
+            for x in 0..self.width as i32 {
+                let cell = self.tile_at(&[x, y]).unwrap();
+                let color = if 0 < cell.iron_ore {
+                    "#3fafff"
+                } else if 0 < cell.coal_ore {
+                    "#1f1f1f"
+                } else if 0 < cell.copper_ore {
+                    "#7f3f00"
+                } else {
+                    continue;
+                };
+                context.set_fill_style(&JsValue::from_str(color));
+                context.fill_rect(x as f64, y as f64, 1., 1.);
+            }
+        }
+
+        context.set_fill_style(&JsValue::from_str("#00ff7f"));
+        for structure in &self.structures {
+            let position = structure.position();
+            context.fill_rect(position.x as f64, position.y as f64, 1., 1.);
+        }
+
+        context.set_stroke_style(&JsValue::from_str("blue"));
+        context.set_line_width(0.2);
+        context.stroke_rect(
+            -self.viewport_x,
+            -self.viewport_y,
+            self.viewport_width / 32.,
+            self.viewport_height / 32.,
+        );
+        context.restore();
         Ok(())
     }
 }

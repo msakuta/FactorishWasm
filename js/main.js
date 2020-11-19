@@ -42,6 +42,8 @@ function isIE(){
 }
 
 const tooltipZIndex = 10000;
+const xsize = 64;
+const ysize = 64;
 
 (async function(){
     // We could fetch and await in Rust code, but it's far easier to do in JavaScript runtime.
@@ -80,10 +82,12 @@ const tooltipZIndex = 10000;
 
     let paused = false;
 
-    let sim = new FactorishState(updateInventory);
+    let sim = new FactorishState(xsize, ysize, updateInventory);
 
     const canvas = document.getElementById('canvas');
     const canvasSize = canvas.getBoundingClientRect();
+    const viewPortWidth = canvasSize.width / 32;
+    const viewPortHeight = canvasSize.height / 32;
     const ctx = canvas.getContext('2d');
     const container = document.getElementById('container2');
     const containerRect = container.getBoundingClientRect();
@@ -111,21 +115,24 @@ const tooltipZIndex = 10000;
     const objViewSize = tilesize / 2; // View size is slightly greater than hit detection radius
     const tableMargin = 10.;
     const miniMapSize = 200;
-    const miniMapElem = document.createElement('div');
+    const miniMapElem = document.createElement('canvas');
     miniMapElem.style.position = 'absolute';
     miniMapElem.style.border = '1px solid #000';
     miniMapElem.onclick = function(evt){
         var rect = this.getBoundingClientRect();
-        scrollPos[0] = Math.min(xsize - viewPortWidth - 1, Math.max(0, Math.floor((evt.clientX - rect.left) / rect.width * xsize - viewPortWidth / 2.)));
-        scrollPos[1] = Math.min(ysize - viewPortHeight - 1, Math.max(0, Math.floor((evt.clientY - rect.top) / rect.height * ysize - viewPortHeight / 2.)));
-        updateAllTiles();
+        sim.set_viewport_pos(
+            Math.min(xsize - viewPortWidth - 1, Math.max(0, Math.floor((evt.clientX - rect.left) / rect.width * xsize - viewPortWidth / 2.))),
+            Math.min(ysize - viewPortHeight - 1, Math.max(0, Math.floor((evt.clientY - rect.top) / rect.height * ysize - viewPortHeight / 2.))));
     };
     container.appendChild(miniMapElem);
+    miniMapElem.setAttribute("width", miniMapSize);
+    miniMapElem.setAttribute("height", miniMapSize);
     miniMapElem.style.width = miniMapSize + 'px';
     miniMapElem.style.height = miniMapSize + 'px';
     miniMapElem.style.left = (canvasSize.right - containerRect.left + tableMargin) + 'px';
     miniMapElem.style.top = (canvasSize.top - containerRect.top) + 'px';
     const mrect = miniMapElem.getBoundingClientRect();
+    const miniMapContext = miniMapElem.getContext('2d');
 
     infoElem.style.left = (canvasSize.right + tableMargin) + 'px';
     infoElem.style.top = (mrect.bottom - containerRect.top + tableMargin) + 'px';
@@ -763,6 +770,7 @@ const tooltipZIndex = 10000;
         if(!paused)
             processEvents(sim.simulate(0.05));
         let result = sim.render(ctx);
+        sim.render_minimap(miniMapContext);
         // console.log(result);
     }, 50);
     // simulate()
