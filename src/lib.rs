@@ -60,9 +60,10 @@ use water_well::{FluidType, WaterWell};
 
 use serde::Serialize;
 use std::collections::HashMap;
+use std::cell::RefCell;
 use wasm_bindgen::prelude::*;
-use wasm_bindgen::JsCast;
-use web_sys::{CanvasRenderingContext2d, HtmlCanvasElement, HtmlDivElement, ImageBitmap};
+use wasm_bindgen::{JsCast, Clamped};
+use web_sys::{CanvasRenderingContext2d, HtmlCanvasElement, HtmlDivElement, ImageBitmap, ImageData};
 
 #[wasm_bindgen]
 extern "C" {
@@ -395,6 +396,7 @@ pub struct FactorishState {
     cursor: Option<[i32; 2]>,
     info_elem: Option<HtmlDivElement>,
     on_player_update: js_sys::Function,
+    minimap_buffer: RefCell<Vec<u8>>,
     // on_show_inventory: js_sys::Function,
     image_dirt: Option<ImageBundle>,
     image_ore: Option<ImageBundle>,
@@ -478,6 +480,7 @@ impl FactorishState {
                 selected_item: None,
             },
             info_elem: None,
+            minimap_buffer: RefCell::new(vec![]),
             image_dirt: None,
             image_ore: None,
             image_coal: None,
@@ -1248,6 +1251,40 @@ impl FactorishState {
         self.viewport_height = canvas.height() as f64;
         self.info_elem = Some(info_elem);
 
+        if let Ok(ref mut data) = self.minimap_buffer.try_borrow_mut() {
+            **data = vec![0u8; (self.width * self.height * 4) as usize];
+            for y in 0..self.height as i32 {
+                for x in 0..self.width as i32 {
+                    let cell = self.tile_at(&[x, y]).unwrap();
+                    data[((x + y * self.width as i32) * 4 + 3) as usize] = 255;
+                    let color = if 0 < cell.iron_ore {
+                        [0x3f, 0xaf, 0xff]
+                    } else if 0 < cell.coal_ore {
+                        [0x1f, 0x1f, 0x1f]
+                    } else if 0 < cell.copper_ore {
+                        [0x7f, 0x3f, 0x00]
+                    } else {
+                        [0x7f, 0x7f, 0x7f]
+                    };
+                    data[((x + y * self.width as i32) * 4 + 0) as usize] = color[0];
+                    data[((x + y * self.width as i32) * 4 + 1) as usize] = color[1];
+                    data[((x + y * self.width as i32) * 4 + 2) as usize] = color[2];
+                    // context.set_fill_style(&JsValue::from_str(color));
+                    // context.fill_rect(x as f64, y as f64, 1., 1.);
+                }
+            }
+
+            // context.set_fill_style(&JsValue::from_str("#00ff7f"));
+            let color = [0x00, 0xff, 0x7f];
+            for structure in &self.structures {
+                let Position{ x, y} = structure.position();
+                data[((x + y * self.width as i32) * 4 + 0) as usize] = color[0];
+                data[((x + y * self.width as i32) * 4 + 1) as usize] = color[1];
+                data[((x + y * self.width as i32) * 4 + 2) as usize] = color[2];
+            // context.fill_rect(position.x as f64, position.y as f64, 1., 1.);
+            }
+        }
+
         let load_image = |path| -> Result<ImageBundle, JsValue> {
             if let Some(value) = image_assets.iter().find(|value| {
                 let array = js_sys::Array::from(value);
@@ -1529,27 +1566,10 @@ impl FactorishState {
         context.save();
         context.scale(scale, scale)?;
 
-        for y in 0..self.height as i32 {
-            for x in 0..self.width as i32 {
-                let cell = self.tile_at(&[x, y]).unwrap();
-                let color = if 0 < cell.iron_ore {
-                    "#3fafff"
-                } else if 0 < cell.coal_ore {
-                    "#1f1f1f"
-                } else if 0 < cell.copper_ore {
-                    "#7f3f00"
-                } else {
-                    continue;
-                };
-                context.set_fill_style(&JsValue::from_str(color));
-                context.fill_rect(x as f64, y as f64, 1., 1.);
-            }
-        }
+        if let Ok(ref mut data) = self.minimap_buffer.try_borrow_mut() {
+            let image_data = ImageData::new_with_u8_clamped_array_and_sh(Clamped::<_>(&mut *data), self.width as u32, self.height as u32)?;
 
-        context.set_fill_style(&JsValue::from_str("#00ff7f"));
-        for structure in &self.structures {
-            let position = structure.position();
-            context.fill_rect(position.x as f64, position.y as f64, 1., 1.);
+            context.put_image_data(&image_data, 0., 0.)?;
         }
 
         context.set_stroke_style(&JsValue::from_str("blue"));
