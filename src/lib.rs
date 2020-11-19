@@ -1199,11 +1199,15 @@ impl FactorishState {
     }
 
     pub fn on_key_down(&mut self, key_code: i32) -> Result<bool, JsValue> {
-        if key_code == 82 {
-            self.rotate()
-                .map_err(|err| JsValue::from(format!("Rotate failed: {:?}", err)))
-        } else {
-            Ok(false)
+        match key_code {
+            82 => self.rotate()
+                .map_err(|err| JsValue::from(format!("Rotate failed: {:?}", err))),
+            // Detect keys through '0'..'9', that's a shame char literal cannot be used in place of i32
+            code @ 48..=58 => {
+                self.select_tool((code - '0' as i32 + 9) % 10);
+                Ok(true)
+            }
+            _ => Ok(false)
         }
     }
 
@@ -1321,6 +1325,15 @@ impl FactorishState {
             tool.draw(self, context, depth)?;
         }
         Ok(())
+    }
+
+    /// @returns (number|null) selected tool internally in the FactorishState (number) or null if unselected.
+    pub fn get_selected_tool(&self) -> JsValue {
+        if let Some(value) = self.selected_tool {
+            JsValue::from(value as i32)
+        } else {
+            JsValue::null()
+        }
     }
 
     pub fn select_tool(&mut self, tool: i32) -> bool {

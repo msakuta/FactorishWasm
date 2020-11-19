@@ -137,6 +137,23 @@ const tooltipZIndex = 10000;
     var toolElems = [];
     var toolOverlays = [];
     var toolCursorElem;
+
+    function updateToolCursor(){
+        var currentTool = sim.get_selected_tool();
+        if(!toolCursorElem){
+            toolCursorElem = document.createElement('div');
+            toolCursorElem.style.border = '2px blue solid';
+            toolCursorElem.style.pointerEvents = 'none';
+            toolBarElem.appendChild(toolCursorElem);
+        }
+        toolCursorElem.style.position = 'absolute';
+        toolCursorElem.style.top = '4px';
+        toolCursorElem.style.left = (tilesize * currentTool + 4) + 'px';
+        toolCursorElem.style.width = '30px';
+        toolCursorElem.style.height = '30px';
+        toolCursorElem.style.display = currentTool !== null ? 'block' : 'none';
+    }
+
     // Tool bar
     var toolBarElem = document.getElementById('toolBar');
     toolBarElem.style.borderStyle = 'solid';
@@ -177,19 +194,8 @@ const tooltipZIndex = 10000;
         toolElem.style.textAlign = 'center';
         toolElem.onmousedown = function(e){
             var currentTool = toolElems.indexOf(this);
-            var state = sim.select_tool(currentTool);
-            if(!toolCursorElem){
-                toolCursorElem = document.createElement('div');
-                toolCursorElem.style.border = '2px blue solid';
-                toolCursorElem.style.pointerEvents = 'none';
-                toolBarElem.appendChild(toolCursorElem);
-            }
-            toolCursorElem.style.position = 'absolute';
-            toolCursorElem.style.top = '4px';
-            toolCursorElem.style.left = (tilesize * currentTool + 4) + 'px';
-            toolCursorElem.style.width = '30px';
-            toolCursorElem.style.height = '30px';
-            toolCursorElem.style.display = state ? 'block' : 'none';
+            sim.select_tool(currentTool);
+            updateToolCursor(currentTool);
         }
         toolElem.onmouseenter = function(e){
             var idx = toolElems.indexOf(this);
@@ -204,7 +210,8 @@ const tooltipZIndex = 10000;
             var desc = tool[1];
             if(0 < desc.length)
                 desc = '<br>' + desc;
-            toolTip.innerHTML = '<b>' + tool[0] + '</b>' + desc;
+            toolTip.innerHTML = '<b>' + tool[0] + '</b>'
+                + `<br><i>Shortcut: '${(idx + 1) % 10}'` + desc;
         };
         toolElem.onmouseleave = (_e) => toolTip.style.display = 'none';
         toolContainer.appendChild(toolElem);
@@ -719,8 +726,10 @@ const tooltipZIndex = 10000;
     });
 
     function onKeyDown(event){
-        if(sim.on_key_down(event.keyCode))
+        if(sim.on_key_down(event.keyCode)){
             updateToolBarImage();
+            updateToolCursor();
+        }
         else if(event.keyCode === 80)
             paused = !paused;
     }
