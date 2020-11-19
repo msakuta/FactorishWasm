@@ -211,7 +211,7 @@ const tooltipZIndex = 10000;
             if(0 < desc.length)
                 desc = '<br>' + desc;
             toolTip.innerHTML = '<b>' + tool[0] + '</b>'
-                + `<br><i>Shortcut: '${(idx + 1) % 10}'` + desc;
+                + `<br><i>Shortcut: '${(idx + 1) % 10}'</i>` + desc;
         };
         toolElem.onmouseleave = (_e) => toolTip.style.display = 'none';
         toolContainer.appendChild(toolElem);
