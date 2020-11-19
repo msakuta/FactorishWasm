@@ -204,37 +204,48 @@ where
 const tilesize: i32 = 32;
 struct ToolDef {
     item_type: ItemType,
+    desc: &'static str,
 }
 const tool_defs: [ToolDef; 10] = [
     ToolDef {
         item_type: ItemType::TransportBelt,
+        desc: "Transports items on ground",
     },
     ToolDef {
         item_type: ItemType::Inserter,
+        desc: "Picks items from one side and puts on the other side<br>in the direction indicated by an arrow.<br>Costs no energy to operate.",
     },
     ToolDef {
         item_type: ItemType::OreMine,
+        desc: "Mines ores and puts them to adjacent ground<br>or a structure in the direction indicated by an arrow.<br>Requires coal ores to operate.",
     },
     ToolDef {
         item_type: ItemType::Chest,
+        desc: "Can store 100 items.<br>Use inserters to automatically store/retrieve items.",
     },
     ToolDef {
         item_type: ItemType::Furnace,
+        desc: "Smelts metal ores into metal bars.<br>Requires coal ores to operate.",
     },
     ToolDef {
         item_type: ItemType::Assembler,
+        desc: "Assembles items from ingredients with recipes.<br>Set a recipe in the inventory GUI to operate.<br>Requires electricity to operate.",
     },
     ToolDef {
         item_type: ItemType::Boiler,
+        desc: "Burns coal ores and use the generated heat to convert water into steam.",
     },
     ToolDef {
         item_type: ItemType::WaterWell,
+        desc: "Pumps underground water at a fixed rate of 0.01 units per tick.",
     },
     ToolDef {
         item_type: ItemType::Pipe,
+        desc: "Conveys fluid such as water or steam.",
     },
     ToolDef {
         item_type: ItemType::SteamEngine,
+        desc: "Consumes steam and transmits electricity within a range of 3 tiles.",
     },
 ];
 
@@ -1270,7 +1281,10 @@ impl FactorishState {
     pub fn tool_defs(&self) -> Result<js_sys::Array, JsValue> {
         Ok(tool_defs
             .iter()
-            .map(|_| JsValue::null())
+            .map(|tool| js_sys::Array::of2(
+                &JsValue::from_str(&item_to_str(&tool.item_type)),
+                &JsValue::from_str(&tool.desc),
+            ))
             .collect::<js_sys::Array>())
     }
 

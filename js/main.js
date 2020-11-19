@@ -41,6 +41,8 @@ function isIE(){
     return msie > 0 || trident > 0;
 }
 
+const tooltipZIndex = 10000;
+
 (async function(){
     // We could fetch and await in Rust code, but it's far easier to do in JavaScript runtime.
     // We initiate promises at the very beginning of the initialization, and by the time we initialize everything
@@ -86,6 +88,14 @@ function isIE(){
     const container = document.getElementById('container2');
     const containerRect = container.getBoundingClientRect();
     const inventoryElem = document.getElementById('inventory2');
+
+    const toolTip = document.createElement('dim');
+    toolTip.setAttribute('id', 'tooltip');
+    toolTip.setAttribute('class', 'noselect');
+    toolTip.innerHTML = 'hello there';
+    toolTip.style.zIndex = tooltipZIndex; // Usually comes on top of all the other elements
+    toolTip.style.display = 'none'; // Initially invisible
+    container.appendChild(toolTip);
 
     const infoElem = document.createElement('div');
     infoElem.style.position = 'absolute';
@@ -186,24 +196,23 @@ function isIE(){
             if(idx < 0 || toolDefs.length <= idx)
                 return;
             var tool = toolDefs[idx];
-            // var r = this.getBoundingClientRect();
-            // var cr = container.getBoundingClientRect();
-            // toolTip.style.left = (r.left - cr.left) + 'px';
-            // toolTip.style.top = (r.bottom - cr.top) + 'px';
-            // toolTip.style.display = 'block';
-            // var desc = tool.prototype.toolDesc();
-            // if(0 < desc.length)
-            //     desc = '<br>' + desc;
-            // toolTip.innerHTML = '<b>' + tool.prototype.name + '</b>' + desc;
+            var r = this.getBoundingClientRect();
+            var cr = container.getBoundingClientRect();
+            toolTip.style.left = (r.left - cr.left) + 'px';
+            toolTip.style.top = (r.bottom - cr.top) + 'px';
+            toolTip.style.display = 'block';
+            var desc = tool[1];
+            if(0 < desc.length)
+                desc = '<br>' + desc;
+            toolTip.innerHTML = '<b>' + tool[0] + '</b>' + desc;
         };
-        toolElem.onmouseleave = function(e){
-            // toolTip.style.display = 'none';
-        };
+        toolElem.onmouseleave = (_e) => toolTip.style.display = 'none';
         toolContainer.appendChild(toolElem);
         toolBarCanvases.push(toolElem);
         toolContainer.appendChild(overlay);
         toolBarElem.appendChild(toolContainer);
     }
+
     var rotateButton = document.createElement('div');
     rotateButton.style.width = '31px';
     rotateButton.style.height = '31px';
