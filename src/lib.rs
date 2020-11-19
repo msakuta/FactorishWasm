@@ -59,11 +59,13 @@ use transport_belt::TransportBelt;
 use water_well::{FluidType, WaterWell};
 
 use serde::Serialize;
-use std::collections::HashMap;
 use std::cell::RefCell;
+use std::collections::HashMap;
 use wasm_bindgen::prelude::*;
-use wasm_bindgen::{JsCast, Clamped};
-use web_sys::{CanvasRenderingContext2d, HtmlCanvasElement, HtmlDivElement, ImageBitmap, ImageData};
+use wasm_bindgen::{Clamped, JsCast};
+use web_sys::{
+    CanvasRenderingContext2d, HtmlCanvasElement, HtmlDivElement, ImageBitmap, ImageData,
+};
 
 #[wasm_bindgen]
 extern "C" {
@@ -894,6 +896,9 @@ impl FactorishState {
                     JsValue::from_str(&format!("wrong structure name: {:?}", structure.name()))
                 })?);
             let mut structure = self.structures.remove(index);
+            if let Ok(ref mut data) = self.minimap_buffer.try_borrow_mut() {
+                self.render_minimap_data_pixel(data, position);
+            }
             for (name, count) in structure.destroy_inventory() {
                 self.player.add_item(&name, count)
             }
@@ -1141,6 +1146,9 @@ impl FactorishState {
                             self.new_structure(&tool_defs[selected_tool].item_type, &cursor)?;
                         self.harvest(&cursor, !new_s.movable())?;
                         self.structures.push(new_s);
+                        if let Ok(ref mut data) = self.minimap_buffer.try_borrow_mut() {
+                            self.render_minimap_data_pixel(data, &cursor);
+                        }
                         if let Some(count) = self
                             .player
                             .inventory
@@ -1241,6 +1249,61 @@ impl FactorishState {
         }
     }
 
+    fn color_of_cell(cell: &Cell) -> [u8; 3] {
+        if 0 < cell.iron_ore {
+            [0x3f, 0xaf, 0xff]
+        } else if 0 < cell.coal_ore {
+            [0x1f, 0x1f, 0x1f]
+        } else if 0 < cell.copper_ore {
+            [0x7f, 0x3f, 0x00]
+        } else {
+            [0x7f, 0x7f, 0x7f]
+        }
+    }
+
+    fn render_minimap_data(&self, data: &mut Vec<u8>) {
+        for y in 0..self.height as i32 {
+            for x in 0..self.width as i32 {
+                let cell = self.tile_at(&[x, y]).unwrap();
+                data[((x + y * self.width as i32) * 4 + 3) as usize] = 255;
+                let color = Self::color_of_cell(&cell);
+                data[((x + y * self.width as i32) * 4 + 0) as usize] = color[0];
+                data[((x + y * self.width as i32) * 4 + 1) as usize] = color[1];
+                data[((x + y * self.width as i32) * 4 + 2) as usize] = color[2];
+            }
+        }
+
+        // context.set_fill_style(&JsValue::from_str("#00ff7f"));
+        let color = [0x00, 0xff, 0x7f];
+        for structure in &self.structures {
+            let Position { x, y } = structure.position();
+            data[((x + y * self.width as i32) * 4 + 0) as usize] = color[0];
+            data[((x + y * self.width as i32) * 4 + 1) as usize] = color[1];
+            data[((x + y * self.width as i32) * 4 + 2) as usize] = color[2];
+        }
+    }
+
+    fn render_minimap_data_pixel(&self, data: &mut Vec<u8>, position: &Position) {
+        let Position { x, y } = *position;
+        if self
+            .structures
+            .iter()
+            .find(|structure| *structure.position() == *position)
+            .is_some()
+        {
+            let color = [0x00, 0xff, 0x7f];
+            data[((x + y * self.width as i32) * 4 + 0) as usize] = color[0];
+            data[((x + y * self.width as i32) * 4 + 1) as usize] = color[1];
+            data[((x + y * self.width as i32) * 4 + 2) as usize] = color[2];
+        } else {
+            let cell = self.tile_at(&[x, y]).unwrap();
+            let color = Self::color_of_cell(&cell);
+            data[((x + y * self.width as i32) * 4 + 0) as usize] = color[0];
+            data[((x + y * self.width as i32) * 4 + 1) as usize] = color[1];
+            data[((x + y * self.width as i32) * 4 + 2) as usize] = color[2];
+        }
+    }
+
     pub fn render_init(
         &mut self,
         canvas: HtmlCanvasElement,
@@ -1253,36 +1316,7 @@ impl FactorishState {
 
         if let Ok(ref mut data) = self.minimap_buffer.try_borrow_mut() {
             **data = vec![0u8; (self.width * self.height * 4) as usize];
-            for y in 0..self.height as i32 {
-                for x in 0..self.width as i32 {
-                    let cell = self.tile_at(&[x, y]).unwrap();
-                    data[((x + y * self.width as i32) * 4 + 3) as usize] = 255;
-                    let color = if 0 < cell.iron_ore {
-                        [0x3f, 0xaf, 0xff]
-                    } else if 0 < cell.coal_ore {
-                        [0x1f, 0x1f, 0x1f]
-                    } else if 0 < cell.copper_ore {
-                        [0x7f, 0x3f, 0x00]
-                    } else {
-                        [0x7f, 0x7f, 0x7f]
-                    };
-                    data[((x + y * self.width as i32) * 4 + 0) as usize] = color[0];
-                    data[((x + y * self.width as i32) * 4 + 1) as usize] = color[1];
-                    data[((x + y * self.width as i32) * 4 + 2) as usize] = color[2];
-                    // context.set_fill_style(&JsValue::from_str(color));
-                    // context.fill_rect(x as f64, y as f64, 1., 1.);
-                }
-            }
-
-            // context.set_fill_style(&JsValue::from_str("#00ff7f"));
-            let color = [0x00, 0xff, 0x7f];
-            for structure in &self.structures {
-                let Position{ x, y} = structure.position();
-                data[((x + y * self.width as i32) * 4 + 0) as usize] = color[0];
-                data[((x + y * self.width as i32) * 4 + 1) as usize] = color[1];
-                data[((x + y * self.width as i32) * 4 + 2) as usize] = color[2];
-            // context.fill_rect(position.x as f64, position.y as f64, 1., 1.);
-            }
+            self.render_minimap_data(data)
         }
 
         let load_image = |path| -> Result<ImageBundle, JsValue> {
@@ -1567,7 +1601,11 @@ impl FactorishState {
         context.scale(scale, scale)?;
 
         if let Ok(ref mut data) = self.minimap_buffer.try_borrow_mut() {
-            let image_data = ImageData::new_with_u8_clamped_array_and_sh(Clamped::<_>(&mut *data), self.width as u32, self.height as u32)?;
+            let image_data = ImageData::new_with_u8_clamped_array_and_sh(
+                Clamped::<_>(&mut *data),
+                self.width as u32,
+                self.height as u32,
+            )?;
 
             context.put_image_data(&image_data, 0., 0.)?;
         }
