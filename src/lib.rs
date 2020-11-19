@@ -1590,15 +1590,12 @@ impl FactorishState {
     }
 
     pub fn render_minimap(&self, context: CanvasRenderingContext2d) -> Result<(), JsValue> {
-        let width = 200.;
-        let height = 200.;
+        let width = self.width as f64;
+        let height = self.height as f64;
+        context.save();
+
         context.set_fill_style(&JsValue::from_str("#7f7f7f"));
         context.fill_rect(0., 0., width, height);
-
-        let scale = width / self.width as f64;
-
-        context.save();
-        context.scale(scale, scale)?;
 
         if let Ok(ref mut data) = self.minimap_buffer.try_borrow_mut() {
             let image_data = ImageData::new_with_u8_clamped_array_and_sh(
@@ -1611,7 +1608,7 @@ impl FactorishState {
         }
 
         context.set_stroke_style(&JsValue::from_str("blue"));
-        context.set_line_width(0.2);
+        context.set_line_width(1.);
         context.stroke_rect(
             -self.viewport_x,
             -self.viewport_y,
