@@ -109,6 +109,7 @@ const ysize = 64;
 
     var selectedInventory = null;
 
+    let miniMapDrag = false;
     const tilesize = 32;
     const textType = isIE() ? "Text" : "text/plain";
     var windowZIndex = 1000;
@@ -118,12 +119,19 @@ const ysize = 64;
     const miniMapElem = document.createElement('canvas');
     miniMapElem.style.position = 'absolute';
     miniMapElem.style.border = '1px solid #000';
-    miniMapElem.onclick = function(evt){
-        var rect = this.getBoundingClientRect();
-        sim.set_viewport_pos(
-            Math.min(xsize - viewPortWidth - 1, Math.max(0, Math.floor((evt.clientX - rect.left) / rect.width * xsize - viewPortWidth / 2.))),
-            Math.min(ysize - viewPortHeight - 1, Math.max(0, Math.floor((evt.clientY - rect.top) / rect.height * ysize - viewPortHeight / 2.))));
+    miniMapElem.onmousedown = (evt) => {
+        miniMapDrag = true;
     };
+    miniMapElem.onmousemove = function(evt){
+        if(miniMapDrag){
+            var rect = this.getBoundingClientRect();
+            sim.set_viewport_pos(
+                Math.min(xsize - viewPortWidth - 1, Math.max(0, Math.floor((evt.clientX - rect.left) / rect.width * xsize - viewPortWidth / 2.))),
+                Math.min(ysize - viewPortHeight - 1, Math.max(0, Math.floor((evt.clientY - rect.top) / rect.height * ysize - viewPortHeight / 2.))));
+        }
+    };
+    miniMapElem.onmouseup = (evt) => miniMapDrag = false;
+    miniMapElem.onmouseleave = (evt) => miniMapDrag = false;
     container.appendChild(miniMapElem);
     miniMapElem.setAttribute("width", xsize);
     miniMapElem.setAttribute("height", ysize);
