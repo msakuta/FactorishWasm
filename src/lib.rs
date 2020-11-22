@@ -1217,13 +1217,16 @@ impl FactorishState {
         Ok(())
     }
 
-    pub fn mouse_wheel(&mut self, delta: i32) -> Result<(), JsValue> {
+    pub fn mouse_wheel(&mut self, delta: i32, x: f64, y: f64) -> Result<(), JsValue> {
         let base = (2_f64).powf(1. / 5.);
-        if delta < 0 {
-            self.view_scale = (self.view_scale * base).min(8.);
+        let new_scale = if delta < 0 {
+            (self.view_scale * base).min(8.)
         } else {
-            self.view_scale = (self.view_scale / base).max(0.5);
-        }
+            (self.view_scale / base).max(0.5)
+        };
+        self.viewport_x += (x as f64 / self.view_scale / 32.) * (1. - new_scale / self.view_scale);
+        self.viewport_y += (y as f64 / self.view_scale / 32.) * (1. - new_scale / self.view_scale);
+        self.view_scale = new_scale;
         Ok(())
     }
 

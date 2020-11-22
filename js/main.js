@@ -742,7 +742,7 @@ const ysize = 64;
 
     canvas.addEventListener("wheel", function(evt){
         if(!paused){
-            sim.mouse_wheel(evt.deltaY);
+            sim.mouse_wheel(evt.deltaY, evt.offsetX, evt.offsetY);
         }
         evt.preventDefault();
     });
@@ -751,6 +751,7 @@ const ysize = 64;
         if(sim.on_key_down(event.keyCode)){
             updateToolBarImage();
             updateToolCursor();
+            event.preventDefault();
         }
         else if(event.keyCode === 80)
             paused = !paused;
