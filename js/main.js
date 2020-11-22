@@ -86,8 +86,8 @@ const ysize = 64;
 
     const canvas = document.getElementById('canvas');
     const canvasSize = canvas.getBoundingClientRect();
-    const viewPortWidth = canvasSize.width / 32;
-    const viewPortHeight = canvasSize.height / 32;
+    let viewPortWidth = canvasSize.width / 32;
+    let viewPortHeight = canvasSize.height / 32;
     const ctx = canvas.getContext('2d');
     const container = document.getElementById('container2');
     const containerRect = container.getBoundingClientRect();
@@ -125,9 +125,9 @@ const ysize = 64;
     miniMapElem.onmousemove = function(evt){
         if(miniMapDrag){
             var rect = this.getBoundingClientRect();
-            sim.set_viewport_pos(
-                Math.min(xsize - viewPortWidth - 1, Math.max(0, Math.floor((evt.clientX - rect.left) / rect.width * xsize - viewPortWidth / 2.))),
-                Math.min(ysize - viewPortHeight - 1, Math.max(0, Math.floor((evt.clientY - rect.top) / rect.height * ysize - viewPortHeight / 2.))));
+            const viewport = sim.set_viewport_pos((evt.clientX - rect.left) / rect.width * xsize,
+                (evt.clientY - rect.top) / rect.height * ysize);
+            [viewPortWidth, viewPortHeight] = [viewport[0] / 32., viewport[1] / 32.];
         }
     };
     miniMapElem.onmouseup = (evt) => miniMapDrag = false;
@@ -738,6 +738,13 @@ const ysize = 64;
     canvas.addEventListener("mouseleave", function(evt){
         if(!paused)
             sim.mouse_leave([evt.offsetX, evt.offsetY]);
+    });
+
+    canvas.addEventListener("wheel", function(evt){
+        if(!paused){
+            sim.mouse_wheel(evt.deltaY);
+        }
+        evt.preventDefault();
     });
 
     function onKeyDown(event){

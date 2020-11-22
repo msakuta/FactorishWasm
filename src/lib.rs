@@ -382,6 +382,7 @@ pub struct FactorishState {
     viewport_height: f64,
     viewport_x: f64,
     viewport_y: f64,
+    view_scale: f64,
     board: Vec<Cell>,
     structures: Vec<Box<dyn Structure>>,
     selected_structure_inventory: Option<Position>,
@@ -460,6 +461,7 @@ impl FactorishState {
             viewport_width: 0.,
             viewport_x: 0.,
             viewport_y: 0.,
+            view_scale: 1.,
             cursor: None,
             selected_tool: None,
             tool_rotation: Rotation::Left,
@@ -1082,7 +1084,7 @@ impl FactorishState {
                             &self.player.selected_item,
                         )
                     };
-                    console_log!("moving {:?}", item_name);
+                    // console_log!("moving {:?}", item_name);
                     if let Some(item_name) = item_name {
                         if FactorishState::move_inventory_item(src, dst, item_name) {
                             self.on_player_update
@@ -1128,8 +1130,8 @@ impl FactorishState {
             return Err(JsValue::from_str("position must have 2 elements"));
         }
         let cursor = Position {
-            x: (pos[0] / 32. - self.viewport_x) as i32,
-            y: (pos[1] / 32. - self.viewport_y) as i32,
+            x: (pos[0] / self.view_scale / 32. - self.viewport_x) as i32,
+            y: (pos[1] / self.view_scale / 32. - self.viewport_y) as i32,
         };
 
         let mut events = vec![];
@@ -1197,11 +1199,11 @@ impl FactorishState {
             return Err(JsValue::from_str("position must have 2 elements"));
         }
         let cursor = [
-            (pos[0] / 32. - self.viewport_x) as i32,
-            (pos[1] / 32. - self.viewport_y) as i32,
+            (pos[0] / self.view_scale / 32. - self.viewport_x) as i32,
+            (pos[1] / self.view_scale / 32. - self.viewport_y) as i32,
         ];
         self.cursor = Some(cursor);
-        // console_log!("cursor: {}, {}", cursor[0], cursor[1]);
+        // console_log!("mouse_move: cursor: {}, {}", cursor[0], cursor[1]);
         self.update_info();
         Ok(())
     }
@@ -1212,6 +1214,16 @@ impl FactorishState {
             elem.set_inner_html("");
         }
         console_log!("mouse_leave");
+        Ok(())
+    }
+
+    pub fn mouse_wheel(&mut self, delta: i32) -> Result<(), JsValue> {
+        let base = (2_f64).powf(1. / 5.);
+        if delta < 0 {
+            self.view_scale = (self.view_scale * base).min(8.);
+        } else {
+            self.view_scale = (self.view_scale / base).max(0.5);
+        }
         Ok(())
     }
 
@@ -1461,10 +1473,25 @@ impl FactorishState {
             .collect()
     }
 
-    pub fn set_viewport_pos(&mut self, x: f64, y: f64) -> Result<(), JsValue> {
-        self.viewport_x = -x;
-        self.viewport_y = -y;
-        Ok(())
+    fn get_viewport(&self) -> (f64, f64) {
+        (
+            self.viewport_width / self.view_scale,
+            self.viewport_height / self.view_scale,
+        )
+    }
+
+    pub fn set_viewport_pos(&mut self, x: f64, y: f64) -> Result<js_sys::Array, JsValue> {
+        let viewport = self.get_viewport();
+        self.viewport_x = -(x - viewport.0 / 32. / 2.)
+            .max(0.)
+            .min(self.width as f64 - viewport.0 / 32. - 1.);
+        self.viewport_y = -(y - viewport.1 / 32. / 2.)
+            .max(0.)
+            .min(self.height as f64 - viewport.1 / 32. - 1.);
+        Ok(js_sys::Array::of2(
+            &JsValue::from_f64(viewport.0),
+            &JsValue::from_f64(viewport.1),
+        ))
     }
 
     pub fn render(&self, context: CanvasRenderingContext2d) -> Result<(), JsValue> {
@@ -1473,6 +1500,7 @@ impl FactorishState {
         context.clear_rect(0., 0., self.viewport_width, self.viewport_height);
 
         context.save();
+        context.scale(self.view_scale, self.view_scale)?;
         context.translate(self.viewport_x * 32., self.viewport_y * 32.)?;
 
         match self
@@ -1486,9 +1514,12 @@ impl FactorishState {
                 let mut cell_draws = 0;
                 let left = (-self.viewport_x).max(0.) as u32;
                 let top = (-self.viewport_y).max(0.) as u32;
-                let right = ((self.viewport_width / 32. - self.viewport_x) as u32).min(self.width);
-                let bottom =
-                    ((self.viewport_height / 32. - self.viewport_y) as u32).min(self.height);
+                let right = (((self.viewport_width / 32. / self.view_scale - self.viewport_x) + 1.)
+                    as u32)
+                    .min(self.width);
+                let bottom = (((self.viewport_height / 32. / self.view_scale - self.viewport_y)
+                    + 1.) as u32)
+                    .min(self.height);
                 for y in top..bottom {
                     for x in left..right {
                         context.draw_image_with_image_bitmap(
@@ -1520,11 +1551,13 @@ impl FactorishState {
                         cell_draws += 1;
                     }
                 }
-                console_log!(
-                    "cell_draws: {} []: {:?}",
-                    cell_draws,
-                    [left, top, right, bottom] // self.board.iter().fold(0, |accum, val| accum + val.iron_ore)
-                );
+                // console_log!(
+                //     "size: {:?}, scale: {:?}, cell_draws: {} []: {:?}",
+                //     self.get_viewport(),
+                //     self.view_scale,
+                //     cell_draws,
+                //     [left, top, right, bottom] // self.board.iter().fold(0, |accum, val| accum + val.iron_ore)
+                // );
             }
             _ => {
                 return Err(JsValue::from_str("image not available"));
@@ -1609,11 +1642,12 @@ impl FactorishState {
 
         context.set_stroke_style(&JsValue::from_str("blue"));
         context.set_line_width(1.);
+        let viewport = self.get_viewport();
         context.stroke_rect(
             -self.viewport_x,
             -self.viewport_y,
-            self.viewport_width / 32.,
-            self.viewport_height / 32.,
+            viewport.0 / 32.,
+            viewport.1 / 32.,
         );
         context.restore();
         Ok(())
