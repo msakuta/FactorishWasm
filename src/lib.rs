@@ -1202,6 +1202,9 @@ impl FactorishState {
             (pos[0] / self.view_scale / 32. - self.viewport_x) as i32,
             (pos[1] / self.view_scale / 32. - self.viewport_y) as i32,
         ];
+        if cursor[0] < 0 || self.width as i32 <= cursor[0] || cursor[1] < 0 || self.height as i32 <= cursor[1] {
+            return Err(js_err!("invalid mouse position: {:?}", cursor));
+        }
         self.cursor = Some(cursor);
         // console_log!("mouse_move: cursor: {}, {}", cursor[0], cursor[1]);
         self.update_info();
