@@ -721,8 +721,10 @@ const ysize = 64;
         }
     }
 
+    let dragging = null;
     canvas.addEventListener("mousedown", function(evt){
         processEvents(sim.mouse_down([evt.offsetX, evt.offsetY], evt.button));
+        dragging = [evt.offsetX, evt.offsetY, false];
         evt.stopPropagation();
         evt.preventDefault();
         return false;
@@ -733,11 +735,23 @@ const ysize = 64;
     canvas.addEventListener("mousemove", function(evt){
         if(!paused)
             sim.mouse_move([evt.offsetX, evt.offsetY]);
+        if(dragging){
+            sim.delta_viewport_pos(evt.offsetX - dragging[0], evt.offsetY - dragging[1]);
+            dragging = [evt.offsetX, evt.offsetY, true];
+        }
     });
+    canvas.addEventListener("mouseup", (evt) => {
+        if(!dragging || !dragging[2]){
+            if(!paused)
+                processEvents(sim.mouse_up([evt.offsetX, evt.offsetY], evt.button));
+        }
+        dragging = null;
+    })
 
     canvas.addEventListener("mouseleave", function(evt){
         if(!paused)
             sim.mouse_leave([evt.offsetX, evt.offsetY]);
+        dragging = null;
     });
 
     canvas.addEventListener("wheel", function(evt){

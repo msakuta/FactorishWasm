@@ -1134,6 +1134,19 @@ impl FactorishState {
             y: (pos[1] / self.view_scale / 32. - self.viewport_y) as i32,
         };
 
+        console_log!("mouse_down: {}, {}", cursor.x, cursor.y);
+        self.update_info();
+        Ok(JsValue::from(js_sys::Array::new()))
+    }
+
+    pub fn mouse_up(&mut self, pos: &[f64], button: i32) -> Result<JsValue, JsValue> {
+        if pos.len() < 2 {
+            return Err(JsValue::from_str("position must have 2 elements"));
+        }
+        let cursor = Position {
+            x: (pos[0] / self.view_scale / 32. - self.viewport_x) as i32,
+            y: (pos[1] / self.view_scale / 32. - self.viewport_y) as i32,
+        };
         let mut events = vec![];
 
         if button == 0 {
@@ -1189,7 +1202,8 @@ impl FactorishState {
                 "updatePlayerInventory",
             )));
         }
-        console_log!("clicked: {}, {}", cursor.x, cursor.y);
+
+        console_log!("mouse_up: {}, {}", cursor.x, cursor.y);
         self.update_info();
         Ok(JsValue::from(events.iter().collect::<js_sys::Array>()))
     }
@@ -1202,7 +1216,11 @@ impl FactorishState {
             (pos[0] / self.view_scale / 32. - self.viewport_x) as i32,
             (pos[1] / self.view_scale / 32. - self.viewport_y) as i32,
         ];
-        if cursor[0] < 0 || self.width as i32 <= cursor[0] || cursor[1] < 0 || self.height as i32 <= cursor[1] {
+        if cursor[0] < 0
+            || self.width as i32 <= cursor[0]
+            || cursor[1] < 0
+            || self.height as i32 <= cursor[1]
+        {
             return Err(js_err!("invalid mouse position: {:?}", cursor));
         }
         self.cursor = Some(cursor);
@@ -1498,6 +1516,12 @@ impl FactorishState {
             &JsValue::from_f64(viewport.0),
             &JsValue::from_f64(viewport.1),
         ))
+    }
+
+    pub fn delta_viewport_pos(&mut self, x: f64, y: f64) -> Result<(), JsValue> {
+        self.viewport_x += x / self.view_scale / 32.;
+        self.viewport_y += y / self.view_scale / 32.;
+        Ok(())
     }
 
     pub fn render(&self, context: CanvasRenderingContext2d) -> Result<(), JsValue> {
