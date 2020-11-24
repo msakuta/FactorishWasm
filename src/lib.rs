@@ -598,8 +598,14 @@ impl FactorishState {
             );
             map.insert(
                 "items".to_string(),
-                serde_json::to_value(self.drop_items.clone())
-                    .map_err(|e| js_str!("Serialize error: {}", e))?,
+                serde_json::to_value(
+                    self.drop_items
+                        .iter()
+                        .map(|item| serde_json::to_value(item))
+                        .collect::<serde_json::Result<Vec<serde_json::Value>>>()
+                        .map_err(|e| js_str!("Serialize error: {}", e))?,
+                )
+                .map_err(|e|  js_str!("Serialize error: {}", e))?,
             );
             storage.set_item(
                 "FactorishWasmGameSave",
