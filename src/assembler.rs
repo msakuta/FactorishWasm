@@ -342,7 +342,7 @@ impl Structure for Assembler {
         self.recipe = Some(
             self.get_recipes()
                 .get(index)
-                .ok_or(js_err!("recipes index out of bound {:?}", index))?
+                .ok_or(js_str!("recipes index out of bound {:?}", index))?
                 .clone(),
         );
         Ok(true)

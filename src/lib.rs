@@ -8,12 +8,24 @@ macro_rules! console_log {
         crate::log($fmt)
     }
 }
-macro_rules! js_err {
+
+/// format-like macro that returns js_sys::String
+macro_rules! js_str {
     ($fmt:expr, $($arg1:expr),*) => {
         JsValue::from_str(&format!($fmt, $($arg1),+))
     };
     ($fmt:expr) => {
         JsValue::from_str($fmt)
+    }
+}
+
+/// format-like macro that returns Err(js_sys::String)
+macro_rules! js_err {
+    ($fmt:expr, $($arg1:expr),*) => {
+        Err(JsValue::from_str(&format!($fmt, $($arg1),+)))
+    };
+    ($fmt:expr) => {
+        Err(JsValue::from_str($fmt))
     }
 }
 
@@ -563,27 +575,31 @@ impl FactorishState {
             console_log!("Serializing...");
             storage.set_item(
                 "FactorishWasmGameSave",
-                &(self
-                    .structures
-                    .iter()
-                    .try_fold::<String, _, Result<String, JsValue>>(
-                        "[".to_string(),
-                        |mut s, structure| {
-                            if 1 < s.len() {
-                                s += ",";
-                            }
-                            s += &format!(r#"{{"type": "{}""#, structure.name());
-                            let serialized = structure
-                                .serialize()
-                                .or_else(|e| Err(js_err!("Serialize error: {}", e)))?;
-                            if !serialized.is_empty() {
-                                s += r#", "payload":"#;
-                                s += &serialized;
-                            }
-                            Ok(s + "}")
-                        },
-                    )?
-                    + "]"),
+                &(format!(
+                    r#"{{"structures": {}, "items": {}}}"#,
+                    self.structures
+                        .iter()
+                        .try_fold::<String, _, Result<String, JsValue>>(
+                            "[".to_string(),
+                            |mut s, structure| {
+                                if 1 < s.len() {
+                                    s += ",";
+                                }
+                                s += &format!(r#"{{"type": "{}""#, structure.name());
+                                let serialized = structure
+                                    .serialize()
+                                    .or_else(|e| js_err!("Serialize error: {}", e))?;
+                                if !serialized.is_empty() {
+                                    s += r#", "payload":"#;
+                                    s += &serialized;
+                                }
+                                Ok(s + "}")
+                            },
+                        )?
+                        + "]",
+                    serde_json::to_string(&self.drop_items)
+                        .or_else(|e| js_err!("Serialize error: {}", e))?
+                )),
             )?;
         }
         Ok(())
@@ -1258,7 +1274,7 @@ impl FactorishState {
             || cursor[1] < 0
             || self.height as i32 <= cursor[1]
         {
-            return Err(js_err!("invalid mouse position: {:?}", cursor));
+            return Err(js_str!("invalid mouse position: {:?}", cursor));
         }
         self.cursor = Some(cursor);
         // console_log!("mouse_move: cursor: {}, {}", cursor[0], cursor[1]);
