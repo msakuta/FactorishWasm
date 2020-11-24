@@ -1250,7 +1250,7 @@ impl FactorishState {
         })
     }
 
-    pub fn mouse_down(&mut self, pos: &[f64], button: i32) -> Result<JsValue, JsValue> {
+    pub fn mouse_down(&mut self, pos: &[f64], _button: i32) -> Result<JsValue, JsValue> {
         if pos.len() < 2 {
             return Err(JsValue::from_str("position must have 2 elements"));
         }
@@ -1666,7 +1666,7 @@ impl FactorishState {
             .zip(self.image_copper.as_ref())
         {
             Some((((img, img_ore), img_coal), img_copper)) => {
-                let mut cell_draws = 0;
+                // let mut cell_draws = 0;
                 let left = (-self.viewport_x).max(0.) as u32;
                 let top = (-self.viewport_y).max(0.) as u32;
                 let right = (((self.viewport_width / 32. / self.view_scale - self.viewport_x) + 1.)
@@ -1703,7 +1703,7 @@ impl FactorishState {
                             self.board[(x + y * self.width) as usize].copper_ore,
                             &img_copper.bitmap,
                         )?;
-                        cell_draws += 1;
+                        // cell_draws += 1;
                     }
                 }
                 // console_log!(
