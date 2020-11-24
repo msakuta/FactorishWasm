@@ -622,13 +622,16 @@ impl FactorishState {
                 .ok_or_else(|| js_str!("structures not found in saved data"))?
             {
                 for structure in structures {
-                    let newstr = Self::structure_from_json(structure)?;
-                    self.structures.push(newstr);
+                    self.structures.push(Self::structure_from_json(structure)?);
                 }
             }
 
-            self.drop_items = serde_json::from_value(json.get_mut("items").unwrap().take())
-                .map_err(|_| js_str!("drop items deserialization error"))?;
+            self.drop_items = serde_json::from_value(
+                json.get_mut("items")
+                    .ok_or(js_str!("\"items\" not found"))?
+                    .take(),
+            )
+            .map_err(|_| js_str!("drop items deserialization error"))?;
         }
         Ok(())
     }
@@ -1203,7 +1206,11 @@ impl FactorishState {
 
     /// Destructively converts serde_json::Value into a Box<dyn Structure>.
     fn structure_from_json(value: &mut serde_json::Value) -> Result<Box<dyn Structure>, JsValue> {
-        let type_str = if let serde_json::Value::String(s) = value.get_mut("type").unwrap().take() {
+        let type_str = if let serde_json::Value::String(s) = value
+            .get_mut("type")
+            .ok_or(js_str!("\"type\" not found"))?
+            .take()
+        {
             s
         } else {
             return js_err!("Type must be a string");
@@ -1213,7 +1220,10 @@ impl FactorishState {
         let item_type = str_to_item(&type_str)
             .ok_or_else(|| js_str!("The structure type {} is not defined", type_str))?;
 
-        let payload = value.get_mut("payload").unwrap().take();
+        let payload = value
+            .get_mut("payload")
+            .ok_or(js_str!("\"payload\" not found"))?
+            .take();
 
         fn map_err<T: Structure>(result: serde_json::Result<T>) -> Result<T, JsValue> {
             result.map_err(|s| js_str!("structure deserialization error: {}", s))
