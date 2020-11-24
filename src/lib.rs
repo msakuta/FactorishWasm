@@ -622,16 +622,7 @@ impl FactorishState {
                 .ok_or_else(|| js_str!("structures not found in saved data"))?
             {
                 for structure in structures {
-                    let type_str = if let Value::String(s) = structure.get("type").unwrap() {
-                        s.to_owned()
-                    } else {
-                        return js_err!("Type must be a string");
-                    };
-                    console_log!("deserializing str {}", type_str);
-                    let newstr = Self::structure_from_json(
-                        &type_str,
-                        structure.get_mut("payload").unwrap().take(),
-                    )?;
+                    let newstr = Self::structure_from_json(structure)?;
                     self.structures.push(newstr);
                 }
             }
@@ -1210,12 +1201,19 @@ impl FactorishState {
         })
     }
 
-    fn structure_from_json(
-        type_: &str,
-        value: serde_json::Value,
-    ) -> Result<Box<dyn Structure>, JsValue> {
-        let item_type = str_to_item(type_)
-            .ok_or_else(|| js_str!("The structure type {} is not defined", type_))?;
+    /// Destructively converts serde_json::Value into a Box<dyn Structure>.
+    fn structure_from_json(value: &mut serde_json::Value) -> Result<Box<dyn Structure>, JsValue> {
+        let type_str = if let serde_json::Value::String(s) = value.get_mut("type").unwrap().take() {
+            s
+        } else {
+            return js_err!("Type must be a string");
+        };
+        console_log!("deserializing str {}", type_str);
+
+        let item_type = str_to_item(&type_str)
+            .ok_or_else(|| js_str!("The structure type {} is not defined", type_str))?;
+
+        let payload = value.get_mut("payload").unwrap().take();
 
         fn map_err<T: Structure>(result: serde_json::Result<T>) -> Result<T, JsValue> {
             result.map_err(|s| js_str!("structure deserialization error: {}", s))
@@ -1223,20 +1221,20 @@ impl FactorishState {
 
         Ok(match item_type {
             ItemType::TransportBelt => {
-                Box::new(map_err(serde_json::from_value::<TransportBelt>(value))?)
+                Box::new(map_err(serde_json::from_value::<TransportBelt>(payload))?)
             }
-            ItemType::Inserter => Box::new(map_err(serde_json::from_value::<Inserter>(value))?),
-            ItemType::OreMine => Box::new(map_err(serde_json::from_value::<OreMine>(value))?),
-            ItemType::Chest => Box::new(map_err(serde_json::from_value::<Chest>(value))?),
-            ItemType::Furnace => Box::new(map_err(serde_json::from_value::<Furnace>(value))?),
-            ItemType::Assembler => Box::new(map_err(serde_json::from_value::<Assembler>(value))?),
-            ItemType::Boiler => Box::new(map_err(serde_json::from_value::<Boiler>(value))?),
-            ItemType::WaterWell => Box::new(map_err(serde_json::from_value::<WaterWell>(value))?),
-            ItemType::Pipe => Box::new(map_err(serde_json::from_value::<Pipe>(value))?),
+            ItemType::Inserter => Box::new(map_err(serde_json::from_value::<Inserter>(payload))?),
+            ItemType::OreMine => Box::new(map_err(serde_json::from_value::<OreMine>(payload))?),
+            ItemType::Chest => Box::new(map_err(serde_json::from_value::<Chest>(payload))?),
+            ItemType::Furnace => Box::new(map_err(serde_json::from_value::<Furnace>(payload))?),
+            ItemType::Assembler => Box::new(map_err(serde_json::from_value::<Assembler>(payload))?),
+            ItemType::Boiler => Box::new(map_err(serde_json::from_value::<Boiler>(payload))?),
+            ItemType::WaterWell => Box::new(map_err(serde_json::from_value::<WaterWell>(payload))?),
+            ItemType::Pipe => Box::new(map_err(serde_json::from_value::<Pipe>(payload))?),
             ItemType::SteamEngine => {
-                Box::new(map_err(serde_json::from_value::<SteamEngine>(value))?)
+                Box::new(map_err(serde_json::from_value::<SteamEngine>(payload))?)
             }
-            _ => return js_err!("Can't make a structure from {:?}", type_),
+            _ => return js_err!("Can't make a structure from {:?}", type_str),
         })
     }
 
