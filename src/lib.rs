@@ -573,25 +573,37 @@ impl FactorishState {
     fn save_game(&self) -> Result<(), JsValue> {
         if let Some(storage) = window().local_storage()? {
             console_log!("Serializing...");
-            storage.set_item(
-                "FactorishWasmGameSave",
-                &(format!(
-                    r#"{{"structures": {}, "items": {}}}"#,
-                    serde_json::to_string(&self.structures
+            let mut map = serde_json::Map::new();
+            map.insert(
+                "structures".to_string(),
+                serde_json::Value::from(
+                    self.structures
                         .iter()
                         .map(|structure| {
                             let mut map = serde_json::Map::new();
-                            map.insert("type".to_string(), serde_json::Value::String(structure.name().to_string()));
-                            map.insert("payload".to_string(), structure
+                            map.insert(
+                                "type".to_string(),
+                                serde_json::Value::String(structure.name().to_string()),
+                            );
+                            map.insert(
+                                "payload".to_string(),
+                                structure
                                     .serialize()
-                                    .or_else(|e| js_err!("Serialize error: {}", e))?);
+                                    .or_else(|e| js_err!("Serialize error: {}", e))?,
+                            );
                             Ok(serde_json::Value::Object(map))
-                            },
-                        )
-                        .collect::<Result<Vec<serde_json::Value>, JsValue>>()?).or_else(|e| js_err!("Serialize error: {}", e))?,
-                    serde_json::to_string(&self.drop_items)
-                        .or_else(|e| js_err!("Serialize error: {}", e))?
-                )),
+                        })
+                        .collect::<Result<Vec<serde_json::Value>, JsValue>>()?,
+                ),
+            );
+            map.insert(
+                "items".to_string(),
+                serde_json::to_value(self.drop_items.clone())
+                    .map_err(|e| js_str!("Serialize error: {}", e))?,
+            );
+            storage.set_item(
+                "FactorishWasmGameSave",
+                &serde_json::to_string(&map).map_err(|e| js_str!("Serialize error: {}", e))?,
             )?;
         }
         Ok(())

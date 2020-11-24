@@ -76,7 +76,7 @@ pub(crate) fn str_to_item(name: &str) -> Option<ItemType> {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Copy, Clone, Serialize, Deserialize)]
 pub(crate) struct DropItem {
     pub id: u32,
     pub type_: ItemType,

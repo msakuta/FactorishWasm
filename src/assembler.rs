@@ -1,8 +1,8 @@
 use super::items::get_item_image_url;
 use super::structure::{DynIterMut, Structure};
 use super::{
-    DropItem, FactorishState, FrameProcResult, Inventory, InventoryTrait, ItemType, Position,
-    Recipe, serialize_impl,
+    serialize_impl, DropItem, FactorishState, FrameProcResult, Inventory, InventoryTrait, ItemType,
+    Position, Recipe,
 };
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;

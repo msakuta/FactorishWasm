@@ -2,8 +2,8 @@ use super::pipe::Pipe;
 use super::structure::{DynIterMut, Structure};
 use super::water_well::{FluidBox, FluidType};
 use super::{
-    DropItem, FactorishState, FrameProcResult, Inventory, InventoryTrait, ItemType, Position,
-    Recipe, TempEnt, COAL_POWER, serialize_impl
+    serialize_impl, DropItem, FactorishState, FrameProcResult, Inventory, InventoryTrait, ItemType,
+    Position, Recipe, TempEnt, COAL_POWER,
 };
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
