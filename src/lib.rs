@@ -605,6 +605,43 @@ impl FactorishState {
         Ok(())
     }
 
+    pub fn load_game(&mut self) -> Result<(), JsValue> {
+        use serde_json::Value;
+
+        if let Some(storage) = window().local_storage()? {
+            let data = storage
+                .get_item("FactorishWasmGameSave")?
+                .ok_or(js_str!("save data not found!"))?;
+            self.structures.clear();
+            self.drop_items.clear();
+            let mut json: Value =
+                serde_json::from_str(&data).map_err(|_| js_str!("Deserialize error"))?;
+
+            if let Value::Array(structures) = json
+                .get_mut("structures")
+                .ok_or_else(|| js_str!("structures not found in saved data"))?
+            {
+                for structure in structures {
+                    let type_str = if let Value::String(s) = structure.get("type").unwrap() {
+                        s.to_owned()
+                    } else {
+                        return js_err!("Type must be a string");
+                    };
+                    console_log!("deserializing str {}", type_str);
+                    let newstr = Self::structure_from_json(
+                        &type_str,
+                        structure.get_mut("payload").unwrap().take(),
+                    )?;
+                    self.structures.push(newstr);
+                }
+            }
+
+            self.drop_items = serde_json::from_value(json.get_mut("items").unwrap().take())
+                .map_err(|_| js_str!("drop items deserialization error"))?;
+        }
+        Ok(())
+    }
+
     pub fn simulate(&mut self, delta_time: f64) -> Result<js_sys::Array, JsValue> {
         // console_log!("simulating delta_time {}, {}", delta_time, self.sim_time);
         const SERIALIZE_PERIOD: f64 = 1.;
@@ -1169,12 +1206,37 @@ impl FactorishState {
             ItemType::WaterWell => Box::new(WaterWell::new(cursor)),
             ItemType::Pipe => Box::new(Pipe::new(cursor)),
             ItemType::SteamEngine => Box::new(SteamEngine::new(cursor)),
-            _ => {
-                return Err(JsValue::from_str(&format!(
-                    "Can't make a structure from {:?}",
-                    tool
-                )))
+            _ => return js_err!("Can't make a structure from {:?}", tool),
+        })
+    }
+
+    fn structure_from_json(
+        type_: &str,
+        value: serde_json::Value,
+    ) -> Result<Box<dyn Structure>, JsValue> {
+        let item_type = str_to_item(type_)
+            .ok_or_else(|| js_str!("The structure type {} is not defined", type_))?;
+
+        fn map_err<T: Structure>(result: serde_json::Result<T>) -> Result<T, JsValue> {
+            result.map_err(|s| js_str!("structure deserialization error: {}", s))
+        }
+
+        Ok(match item_type {
+            ItemType::TransportBelt => {
+                Box::new(map_err(serde_json::from_value::<TransportBelt>(value))?)
             }
+            ItemType::Inserter => Box::new(map_err(serde_json::from_value::<Inserter>(value))?),
+            ItemType::OreMine => Box::new(map_err(serde_json::from_value::<OreMine>(value))?),
+            ItemType::Chest => Box::new(map_err(serde_json::from_value::<Chest>(value))?),
+            ItemType::Furnace => Box::new(map_err(serde_json::from_value::<Furnace>(value))?),
+            ItemType::Assembler => Box::new(map_err(serde_json::from_value::<Assembler>(value))?),
+            ItemType::Boiler => Box::new(map_err(serde_json::from_value::<Boiler>(value))?),
+            ItemType::WaterWell => Box::new(map_err(serde_json::from_value::<WaterWell>(value))?),
+            ItemType::Pipe => Box::new(map_err(serde_json::from_value::<Pipe>(value))?),
+            ItemType::SteamEngine => {
+                Box::new(map_err(serde_json::from_value::<SteamEngine>(value))?)
+            }
+            _ => return js_err!("Can't make a structure from {:?}", type_),
         })
     }
 

@@ -4,11 +4,11 @@ use super::{
     DropItem, FactorishState, FrameProcResult, Inventory, InventoryTrait, ItemType, Position,
     Recipe, TempEnt, COAL_POWER,
 };
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 use web_sys::CanvasRenderingContext2d;
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 pub(crate) struct Furnace {
     position: Position,
     input_inventory: Inventory,

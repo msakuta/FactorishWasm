@@ -772,6 +772,8 @@ const ysize = 64;
     }
     window.addEventListener( 'keydown', onKeyDown, false );
 
+    sim.load_game();
+
     updateToolBar();
 
     updateInventory(sim.get_player_inventory());
