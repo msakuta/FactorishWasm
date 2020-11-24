@@ -3,7 +3,7 @@ use super::structure::{DynIterMut, Structure};
 use super::water_well::{FluidBox, FluidType};
 use super::{
     DropItem, FactorishState, FrameProcResult, Inventory, InventoryTrait, ItemType, Position,
-    Recipe, TempEnt, COAL_POWER,
+    Recipe, TempEnt, COAL_POWER, serialize_impl
 };
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
@@ -260,7 +260,5 @@ impl Structure for Boiler {
         Some(vec![&mut self.input_fluid_box, &mut self.output_fluid_box])
     }
 
-    fn serialize(&self) -> serde_json::Result<String> {
-        serde_json::to_string(self)
-    }
+    serialize_impl!();
 }

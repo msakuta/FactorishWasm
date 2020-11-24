@@ -116,7 +116,5 @@ impl Structure for Pipe {
         Some(vec![&mut self.fluid_box])
     }
 
-    fn serialize(&self) -> serde_json::Result<String> {
-        serde_json::to_string(self)
-    }
+    crate::serialize_impl!();
 }

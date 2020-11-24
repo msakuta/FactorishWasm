@@ -126,7 +126,7 @@ fn body() -> web_sys::HtmlElement {
 
 const COAL_POWER: f64 = 100.; // kilojoules
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Serialize, Deserialize)]
 struct Cell {
     iron_ore: u32,
     coal_ore: u32,
@@ -577,26 +577,18 @@ impl FactorishState {
                 "FactorishWasmGameSave",
                 &(format!(
                     r#"{{"structures": {}, "items": {}}}"#,
-                    self.structures
+                    serde_json::to_string(&self.structures
                         .iter()
-                        .try_fold::<String, _, Result<String, JsValue>>(
-                            "[".to_string(),
-                            |mut s, structure| {
-                                if 1 < s.len() {
-                                    s += ",";
-                                }
-                                s += &format!(r#"{{"type": "{}""#, structure.name());
-                                let serialized = structure
+                        .map(|structure| {
+                            let mut map = serde_json::Map::new();
+                            map.insert("type".to_string(), serde_json::Value::String(structure.name().to_string()));
+                            map.insert("payload".to_string(), structure
                                     .serialize()
-                                    .or_else(|e| js_err!("Serialize error: {}", e))?;
-                                if !serialized.is_empty() {
-                                    s += r#", "payload":"#;
-                                    s += &serialized;
-                                }
-                                Ok(s + "}")
+                                    .or_else(|e| js_err!("Serialize error: {}", e))?);
+                            Ok(serde_json::Value::Object(map))
                             },
-                        )?
-                        + "]",
+                        )
+                        .collect::<Result<Vec<serde_json::Value>, JsValue>>()?).or_else(|e| js_err!("Serialize error: {}", e))?,
                     serde_json::to_string(&self.drop_items)
                         .or_else(|e| js_err!("Serialize error: {}", e))?
                 )),

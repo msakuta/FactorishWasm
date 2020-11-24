@@ -301,7 +301,5 @@ impl Structure for Inserter {
         ret
     }
 
-    fn serialize(&self) -> serde_json::Result<String> {
-        serde_json::to_string(self)
-    }
+    crate::serialize_impl!();
 }

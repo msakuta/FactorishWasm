@@ -1,7 +1,7 @@
 use super::pipe::Pipe;
 use super::structure::{DynIterMut, Structure};
 use super::water_well::{FluidBox, FluidType};
-use super::{FactorishState, FrameProcResult, Position, Recipe};
+use super::{FactorishState, FrameProcResult, Position, Recipe, serialize_impl};
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 use web_sys::CanvasRenderingContext2d;
@@ -172,7 +172,5 @@ impl Structure for SteamEngine {
         Some(energy)
     }
 
-    fn serialize(&self) -> serde_json::Result<String> {
-        serde_json::to_string(self)
-    }
+    serialize_impl!();
 }

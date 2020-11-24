@@ -5,6 +5,15 @@ use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 use web_sys::CanvasRenderingContext2d;
 
+#[macro_export]
+macro_rules! serialize_impl {
+    () => {
+        fn serialize(&self) -> serde_json::Result<serde_json::Value> {
+            serde_json::to_value(self)
+        }
+    };
+}
+
 #[derive(Eq, PartialEq, Copy, Clone, Debug, Serialize, Deserialize)]
 pub(crate) struct Position {
     pub x: i32,
@@ -246,5 +255,5 @@ pub(crate) trait Structure {
     fn power_outlet(&mut self, _demand: f64) -> Option<f64> {
         None
     }
-    fn serialize(&self) -> serde_json::Result<String>;
+    fn serialize(&self) -> serde_json::Result<serde_json::Value>;
 }

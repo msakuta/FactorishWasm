@@ -247,7 +247,5 @@ impl Structure for OreMine {
         *item_type == ItemType::CoalOre && self.power == 0.
     }
 
-    fn serialize(&self) -> serde_json::Result<String> {
-        serde_json::to_string(self)
-    }
+    crate::serialize_impl!();
 }

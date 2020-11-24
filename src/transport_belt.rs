@@ -86,7 +86,5 @@ impl Structure for TransportBelt {
         Ok((ItemResponse::Move(moved_x, moved_y), None))
     }
 
-    fn serialize(&self) -> serde_json::Result<String> {
-        serde_json::to_string(self)
-    }
+    crate::serialize_impl!();
 }

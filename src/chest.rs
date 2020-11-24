@@ -111,7 +111,5 @@ impl Structure for Chest {
         }
     }
 
-    fn serialize(&self) -> serde_json::Result<String> {
-        serde_json::to_string(self)
-    }
+    super::serialize_impl!();
 }

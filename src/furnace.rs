@@ -285,7 +285,7 @@ impl Structure for Furnace {
         self.recipe.as_ref()
     }
 
-    fn serialize(&self) -> serde_json::Result<String> {
-        serde_json::to_string(self)
+    fn serialize(&self) -> serde_json::Result<serde_json::Value> {
+        serde_json::to_value(self)
     }
 }

@@ -2,7 +2,7 @@ use super::items::get_item_image_url;
 use super::structure::{DynIterMut, Structure};
 use super::{
     DropItem, FactorishState, FrameProcResult, Inventory, InventoryTrait, ItemType, Position,
-    Recipe,
+    Recipe, serialize_impl,
 };
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
@@ -352,7 +352,5 @@ impl Structure for Assembler {
         self.recipe.as_ref()
     }
 
-    fn serialize(&self) -> serde_json::Result<String> {
-        serde_json::to_string(self)
-    }
+    serialize_impl!();
 }
