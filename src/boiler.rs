@@ -5,11 +5,13 @@ use super::{
     DropItem, FactorishState, FrameProcResult, Inventory, InventoryTrait, ItemType, Position,
     Recipe, TempEnt, COAL_POWER,
 };
+use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 use web_sys::CanvasRenderingContext2d;
 
 use std::collections::HashMap;
 
+#[derive(Serialize, Deserialize)]
 pub(crate) struct Boiler {
     position: Position,
     inventory: Inventory,
@@ -256,5 +258,9 @@ impl Structure for Boiler {
 
     fn fluid_box_mut(&mut self) -> Option<Vec<&mut FluidBox>> {
         Some(vec![&mut self.input_fluid_box, &mut self.output_fluid_box])
+    }
+
+    fn serialize(&self) -> serde_json::Result<String> {
+        serde_json::to_string(self)
     }
 }

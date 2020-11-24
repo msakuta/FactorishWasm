@@ -1,8 +1,9 @@
 use super::{tilesize, FactorishState, ImageBundle};
+use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 use web_sys::CanvasRenderingContext2d;
 
-#[derive(Copy, Clone, Eq, PartialEq, Debug, Hash)]
+#[derive(Copy, Clone, Eq, PartialEq, Debug, Hash, Serialize, Deserialize)]
 pub(crate) enum ItemType {
     IronOre,
     CoalOre,

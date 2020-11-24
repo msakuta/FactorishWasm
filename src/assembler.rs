@@ -4,6 +4,7 @@ use super::{
     DropItem, FactorishState, FrameProcResult, Inventory, InventoryTrait, ItemType, Position,
     Recipe,
 };
+use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 use web_sys::CanvasRenderingContext2d;
 
@@ -37,6 +38,7 @@ fn _recipe_html(state: &FactorishState, recipe: &Recipe) -> String {
     return ret;
 }
 
+#[derive(Serialize, Deserialize)]
 pub(crate) struct Assembler {
     position: Position,
     input_inventory: Inventory,
@@ -348,5 +350,9 @@ impl Structure for Assembler {
 
     fn get_selected_recipe(&self) -> Option<&Recipe> {
         self.recipe.as_ref()
+    }
+
+    fn serialize(&self) -> serde_json::Result<String> {
+        serde_json::to_string(self)
     }
 }

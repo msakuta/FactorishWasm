@@ -2,11 +2,13 @@ use super::pipe::Pipe;
 use super::structure::{DynIterMut, Structure};
 use super::water_well::{FluidBox, FluidType};
 use super::{FactorishState, FrameProcResult, Position, Recipe};
+use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 use web_sys::CanvasRenderingContext2d;
 
 use std::collections::HashMap;
 
+#[derive(Serialize, Deserialize)]
 pub(crate) struct SteamEngine {
     position: Position,
     progress: Option<f64>,
@@ -168,5 +170,9 @@ impl Structure for SteamEngine {
         let energy = demand.min(self.power);
         self.power -= energy;
         Some(energy)
+    }
+
+    fn serialize(&self) -> serde_json::Result<String> {
+        serde_json::to_string(self)
     }
 }

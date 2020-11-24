@@ -58,7 +58,7 @@ use structure::{FrameProcResult, ItemResponse, Position, Rotation, Structure};
 use transport_belt::TransportBelt;
 use water_well::{FluidType, WaterWell};
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use wasm_bindgen::prelude::*;
@@ -274,7 +274,7 @@ fn draw_direction_arrow(
 
 type ItemSet = HashMap<ItemType, usize>;
 
-#[derive(Clone)]
+#[derive(Clone, Serialize, Deserialize)]
 struct Recipe {
     input: ItemSet,
     input_fluid: Option<FluidType>,
@@ -558,9 +558,46 @@ impl FactorishState {
         })
     }
 
-    #[wasm_bindgen]
+    fn save_game(&self) -> Result<(), JsValue> {
+        if let Some(storage) = window().local_storage()? {
+            console_log!("Serializing...");
+            storage.set_item(
+                "FactorishWasmGameSave",
+                &(self
+                    .structures
+                    .iter()
+                    .try_fold::<String, _, Result<String, JsValue>>(
+                        "[".to_string(),
+                        |mut s, structure| {
+                            if 1 < s.len() {
+                                s += ",";
+                            }
+                            s += &format!(r#"{{"type": "{}""#, structure.name());
+                            let serialized = structure
+                                .serialize()
+                                .or_else(|e| Err(js_err!("Serialize error: {}", e)))?;
+                            if !serialized.is_empty() {
+                                s += r#", "payload":"#;
+                                s += &serialized;
+                            }
+                            Ok(s + "}")
+                        },
+                    )?
+                    + "]"),
+            )?;
+        }
+        Ok(())
+    }
+
     pub fn simulate(&mut self, delta_time: f64) -> Result<js_sys::Array, JsValue> {
         // console_log!("simulating delta_time {}, {}", delta_time, self.sim_time);
+        const SERIALIZE_PERIOD: f64 = 1.;
+        if (self.sim_time / SERIALIZE_PERIOD).floor()
+            < ((self.sim_time + delta_time) / SERIALIZE_PERIOD).floor()
+        {
+            self.save_game()?;
+        }
+
         self.delta_time = delta_time;
         self.sim_time += delta_time;
 

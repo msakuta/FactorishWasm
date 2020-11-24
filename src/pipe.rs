@@ -1,9 +1,11 @@
 use super::structure::{DynIterMut, Structure};
 use super::water_well::FluidBox;
 use super::{FactorishState, FrameProcResult, Position, Ref};
+use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 use web_sys::CanvasRenderingContext2d;
 
+#[derive(Serialize, Deserialize)]
 pub(crate) struct Pipe {
     position: Position,
     fluid_box: FluidBox,
@@ -112,5 +114,9 @@ impl Structure for Pipe {
 
     fn fluid_box_mut(&mut self) -> Option<Vec<&mut FluidBox>> {
         Some(vec![&mut self.fluid_box])
+    }
+
+    fn serialize(&self) -> serde_json::Result<String> {
+        serde_json::to_string(self)
     }
 }

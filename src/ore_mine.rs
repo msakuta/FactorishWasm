@@ -4,10 +4,12 @@ use super::{
     draw_direction_arrow, DropItem, FactorishState, FrameProcResult, Position, Recipe, Rotation,
     TempEnt, COAL_POWER,
 };
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use wasm_bindgen::prelude::*;
 use web_sys::CanvasRenderingContext2d;
 
+#[derive(Serialize, Deserialize)]
 pub(crate) struct OreMine {
     position: Position,
     rotation: Rotation,
@@ -243,5 +245,9 @@ impl Structure for OreMine {
 
     fn can_input(&self, item_type: &ItemType) -> bool {
         *item_type == ItemType::CoalOre && self.power == 0.
+    }
+
+    fn serialize(&self) -> serde_json::Result<String> {
+        serde_json::to_string(self)
     }
 }

@@ -1,10 +1,11 @@
 use super::items::ItemType;
 use super::water_well::FluidBox;
 use super::{DropItem, FactorishState, Inventory, InventoryTrait, Recipe};
+use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 use web_sys::CanvasRenderingContext2d;
 
-#[derive(Eq, PartialEq, Copy, Clone, Debug)]
+#[derive(Eq, PartialEq, Copy, Clone, Debug, Serialize, Deserialize)]
 pub(crate) struct Position {
     pub x: i32,
     pub y: i32,
@@ -28,7 +29,7 @@ impl From<&[i32; 2]> for Position {
     }
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Serialize, Deserialize)]
 pub(crate) enum Rotation {
     Left,
     Top,
@@ -245,4 +246,5 @@ pub(crate) trait Structure {
     fn power_outlet(&mut self, _demand: f64) -> Option<f64> {
         None
     }
+    fn serialize(&self) -> serde_json::Result<String>;
 }
