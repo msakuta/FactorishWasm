@@ -617,9 +617,11 @@ impl FactorishState {
             let mut json: Value =
                 serde_json::from_str(&data).map_err(|_| js_str!("Deserialize error"))?;
 
-            if let Value::Array(structures) = json
+            let structures = json
                 .get_mut("structures")
                 .ok_or_else(|| js_str!("structures not found in saved data"))?
+                .as_array_mut()
+                .ok_or(js_str!("structures in saved data is not an array"))?;
             {
                 for structure in structures {
                     self.structures.push(Self::structure_from_json(structure)?);
