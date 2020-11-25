@@ -772,7 +772,12 @@ const ysize = 64;
     }
     window.addEventListener( 'keydown', onKeyDown, false );
 
-    sim.load_game();
+    try{
+        sim.load_game();
+    }
+    catch(e){
+        console.error(e);
+    }
 
     updateToolBar();
 
