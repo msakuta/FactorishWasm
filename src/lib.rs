@@ -574,6 +574,7 @@ impl FactorishState {
         if let Some(storage) = window().local_storage()? {
             console_log!("Serializing...");
             let mut map = serde_json::Map::new();
+            map.insert("sim_time".to_string(), serde_json::Value::from(self.sim_time));
             map.insert(
                 "structures".to_string(),
                 serde_json::Value::from(
@@ -627,6 +628,9 @@ impl FactorishState {
             let mut json: Value =
                 serde_json::from_str(&data).map_err(|_| js_str!("Deserialize error"))?;
 
+            self.sim_time = json.get("sim_time").ok_or_else(|| js_str!("sim_time not found"))?
+                .as_f64().ok_or(js_str!("sim_time is not float"))?;
+
             let structures = json
                 .get_mut("structures")
                 .ok_or_else(|| js_str!("structures not found in saved data"))?
@@ -650,7 +654,7 @@ impl FactorishState {
 
     pub fn simulate(&mut self, delta_time: f64) -> Result<js_sys::Array, JsValue> {
         // console_log!("simulating delta_time {}, {}", delta_time, self.sim_time);
-        const SERIALIZE_PERIOD: f64 = 1.;
+        const SERIALIZE_PERIOD: f64 = 10.;
         if (self.sim_time / SERIALIZE_PERIOD).floor()
             < ((self.sim_time + delta_time) / SERIALIZE_PERIOD).floor()
         {
