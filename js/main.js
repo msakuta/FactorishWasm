@@ -779,6 +779,8 @@ const ysize = 64;
         console.error(e);
     }
 
+    window.addEventListener( "beforeunload", () => sim.save_game());
+
     updateToolBar();
 
     updateInventory(sim.get_player_inventory());

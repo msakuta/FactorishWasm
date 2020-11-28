@@ -464,7 +464,6 @@ impl FactorishState {
         // on_show_inventory: js_sys::Function,
     ) -> Result<FactorishState, JsValue> {
         console_log!("FactorishState constructor");
-
         Ok(FactorishState {
             delta_time: 0.1,
             sim_time: 0.0,
@@ -571,7 +570,7 @@ impl FactorishState {
         })
     }
 
-    fn save_game(&self) -> Result<(), JsValue> {
+    pub fn save_game(&self) -> Result<(), JsValue> {
         if let Some(storage) = window().local_storage()? {
             console_log!("Serializing...");
             let mut map = serde_json::Map::new();
@@ -743,7 +742,7 @@ impl FactorishState {
 
     pub fn simulate(&mut self, delta_time: f64) -> Result<js_sys::Array, JsValue> {
         // console_log!("simulating delta_time {}, {}", delta_time, self.sim_time);
-        const SERIALIZE_PERIOD: f64 = 10.;
+        const SERIALIZE_PERIOD: f64 = 100.;
         if (self.sim_time / SERIALIZE_PERIOD).floor()
             < ((self.sim_time + delta_time) / SERIALIZE_PERIOD).floor()
         {
