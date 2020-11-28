@@ -578,6 +578,8 @@ impl FactorishState {
                 "sim_time".to_string(),
                 serde_json::Value::from(self.sim_time),
             );
+            map.insert("width".to_string(), serde_json::Value::from(self.width));
+            map.insert("height".to_string(), serde_json::Value::from(self.height));
             map.insert(
                 "structures".to_string(),
                 serde_json::Value::from(
@@ -686,6 +688,9 @@ impl FactorishState {
             self.sim_time = json_get(&json, "sim_time")?
                 .as_f64()
                 .ok_or(js_str!("sim_time is not float"))?;
+
+            self.width = json_as_u64(json_get(&json, "width")?)? as u32;
+            self.height = json_as_u64(json_get(&json, "height")?)? as u32;
 
             let tiles = json
                 .get_mut("board")
