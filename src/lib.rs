@@ -330,6 +330,7 @@ impl From<Recipe> for RecipeSerial {
 
 const objsize: i32 = 8;
 
+#[derive(Serialize, Deserialize)]
 struct Player {
     inventory: Inventory,
     selected_item: Option<ItemType>,
@@ -578,6 +579,11 @@ impl FactorishState {
                 "sim_time".to_string(),
                 serde_json::Value::from(self.sim_time),
             );
+            map.insert(
+                "player".to_string(),
+                serde_json::to_value(&self.player)
+                    .map_err(|e| js_str!("serialize failed for player: {}", e))?,
+            );
             map.insert("width".to_string(), serde_json::Value::from(self.width));
             map.insert("height".to_string(), serde_json::Value::from(self.height));
             map.insert(
@@ -688,6 +694,8 @@ impl FactorishState {
             self.sim_time = json_get(&json, "sim_time")?
                 .as_f64()
                 .ok_or(js_str!("sim_time is not float"))?;
+
+            self.player = from_value(json_take(&mut json, "player")?)?;
 
             self.width = json_as_u64(json_get(&json, "width")?)? as u32;
             self.height = json_as_u64(json_get(&json, "height")?)? as u32;
