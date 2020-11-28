@@ -574,7 +574,10 @@ impl FactorishState {
         if let Some(storage) = window().local_storage()? {
             console_log!("Serializing...");
             let mut map = serde_json::Map::new();
-            map.insert("sim_time".to_string(), serde_json::Value::from(self.sim_time));
+            map.insert(
+                "sim_time".to_string(),
+                serde_json::Value::from(self.sim_time),
+            );
             map.insert(
                 "structures".to_string(),
                 serde_json::Value::from(
@@ -606,7 +609,29 @@ impl FactorishState {
                         .collect::<serde_json::Result<Vec<serde_json::Value>>>()
                         .map_err(|e| js_str!("Serialize error: {}", e))?,
                 )
-                .map_err(|e|  js_str!("Serialize error: {}", e))?,
+                .map_err(|e| js_str!("Serialize error: {}", e))?,
+            );
+            map.insert(
+                "board".to_string(),
+                serde_json::to_value(
+                    self.board
+                        .iter()
+                        .enumerate()
+                        .filter(|(_, cell)| {
+                            0 < cell.coal_ore || 0 < cell.iron_ore || 0 < cell.copper_ore
+                        })
+                        .map(|(idx, cell)| {
+                            let mut map = serde_json::Map::new();
+                            let x = idx % self.width as usize;
+                            let y = idx / self.height as usize;
+                            map.insert("position".to_string(), serde_json::to_value((x, y))?);
+                            map.insert("cell".to_string(), serde_json::to_value(cell)?);
+                            Ok(serde_json::to_value(map)?)
+                        })
+                        .collect::<serde_json::Result<Vec<serde_json::Value>>>()
+                        .map_err(|e| js_str!("Serialize error on board: {}", e))?,
+                )
+                .map_err(|e| js_str!("Serialize error on board: {}", e))?,
             );
             storage.set_item(
                 "FactorishWasmGameSave",
@@ -628,8 +653,59 @@ impl FactorishState {
             let mut json: Value =
                 serde_json::from_str(&data).map_err(|_| js_str!("Deserialize error"))?;
 
-            self.sim_time = json.get("sim_time").ok_or_else(|| js_str!("sim_time not found"))?
-                .as_f64().ok_or(js_str!("sim_time is not float"))?;
+            fn json_get<I: serde_json::value::Index + std::fmt::Display + Copy>(
+                value: &serde_json::Value,
+                key: I,
+            ) -> Result<&serde_json::Value, JsValue> {
+                Ok(value.get(key).ok_or_else(|| js_str!("{} not found", key))?)
+            }
+
+            fn json_take<I: serde_json::value::Index + std::fmt::Display + Copy>(
+                value: &mut serde_json::Value,
+                key: I,
+            ) -> Result<serde_json::Value, JsValue> {
+                Ok(value
+                    .get_mut(key)
+                    .ok_or_else(|| js_str!("{} not found", key))?
+                    .take())
+            }
+
+            fn json_as_u64(value: &serde_json::Value) -> Result<u64, JsValue> {
+                Ok(value
+                    .as_u64()
+                    .ok_or_else(|| js_str!("value could not be converted to u64"))?)
+            }
+
+            fn from_value<T: serde::de::DeserializeOwned>(
+                value: serde_json::Value,
+            ) -> Result<T, JsValue> {
+                Ok(serde_json::from_value(value)
+                    .map_err(|e| js_str!("deserialization error {}", e))?)
+            }
+
+            self.sim_time = json_get(&json, "sim_time")?
+                .as_f64()
+                .ok_or(js_str!("sim_time is not float"))?;
+
+            let tiles = json
+                .get_mut("board")
+                .ok_or_else(|| js_str!("board not found in saved data"))?
+                .as_array_mut()
+                .ok_or(js_str!("board in saved data is not an array"))?;
+            self.board = vec![
+                Cell {
+                    coal_ore: 0,
+                    iron_ore: 0,
+                    copper_ore: 0
+                };
+                (self.width * self.height) as usize
+            ];
+            for tile in tiles {
+                let position = json_get(tile, "position")?;
+                let x: usize = json_as_u64(json_get(&position, 0)?)? as usize;
+                let y: usize = json_as_u64(json_get(&position, 1)?)? as usize;
+                self.board[x + y * self.width as usize] = from_value(json_take(tile, "cell")?)?;
+            }
 
             let structures = json
                 .get_mut("structures")
