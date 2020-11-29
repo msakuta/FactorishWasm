@@ -8,12 +8,24 @@ macro_rules! console_log {
         crate::log($fmt)
     }
 }
-macro_rules! js_err {
+
+/// format-like macro that returns js_sys::String
+macro_rules! js_str {
     ($fmt:expr, $($arg1:expr),*) => {
         JsValue::from_str(&format!($fmt, $($arg1),+))
     };
     ($fmt:expr) => {
         JsValue::from_str($fmt)
+    }
+}
+
+/// format-like macro that returns Err(js_sys::String)
+macro_rules! js_err {
+    ($fmt:expr, $($arg1:expr),*) => {
+        Err(JsValue::from_str(&format!($fmt, $($arg1),+)))
+    };
+    ($fmt:expr) => {
+        Err(JsValue::from_str($fmt))
     }
 }
 
@@ -58,7 +70,7 @@ use structure::{FrameProcResult, ItemResponse, Position, Rotation, Structure};
 use transport_belt::TransportBelt;
 use water_well::{FluidType, WaterWell};
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use wasm_bindgen::prelude::*;
@@ -114,7 +126,7 @@ fn body() -> web_sys::HtmlElement {
 
 const COAL_POWER: f64 = 100.; // kilojoules
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Serialize, Deserialize)]
 struct Cell {
     iron_ore: u32,
     coal_ore: u32,
@@ -274,7 +286,7 @@ fn draw_direction_arrow(
 
 type ItemSet = HashMap<ItemType, usize>;
 
-#[derive(Clone)]
+#[derive(Clone, Serialize, Deserialize)]
 struct Recipe {
     input: ItemSet,
     input_fluid: Option<FluidType>,
@@ -318,6 +330,7 @@ impl From<Recipe> for RecipeSerial {
 
 const objsize: i32 = 8;
 
+#[derive(Serialize, Deserialize)]
 struct Player {
     inventory: Inventory,
     selected_item: Option<ItemType>,
@@ -451,7 +464,6 @@ impl FactorishState {
         // on_show_inventory: js_sys::Function,
     ) -> Result<FactorishState, JsValue> {
         console_log!("FactorishState constructor");
-
         Ok(FactorishState {
             delta_time: 0.1,
             sim_time: 0.0,
@@ -558,9 +570,197 @@ impl FactorishState {
         })
     }
 
-    #[wasm_bindgen]
+    pub fn serialize_game(&self) -> Result<String, JsValue> {
+        console_log!("Serializing...");
+        let mut map = serde_json::Map::new();
+        map.insert(
+            "sim_time".to_string(),
+            serde_json::Value::from(self.sim_time),
+        );
+        map.insert(
+            "player".to_string(),
+            serde_json::to_value(&self.player)
+                .map_err(|e| js_str!("serialize failed for player: {}", e))?,
+        );
+        map.insert("width".to_string(), serde_json::Value::from(self.width));
+        map.insert("height".to_string(), serde_json::Value::from(self.height));
+        map.insert(
+            "structures".to_string(),
+            serde_json::Value::from(
+                self.structures
+                    .iter()
+                    .map(|structure| {
+                        let mut map = serde_json::Map::new();
+                        map.insert(
+                            "type".to_string(),
+                            serde_json::Value::String(structure.name().to_string()),
+                        );
+                        map.insert(
+                            "payload".to_string(),
+                            structure
+                                .serialize()
+                                .or_else(|e| js_err!("Serialize error: {}", e))?,
+                        );
+                        Ok(serde_json::Value::Object(map))
+                    })
+                    .collect::<Result<Vec<serde_json::Value>, JsValue>>()?,
+            ),
+        );
+        map.insert(
+            "items".to_string(),
+            serde_json::to_value(
+                self.drop_items
+                    .iter()
+                    .map(|item| serde_json::to_value(item))
+                    .collect::<serde_json::Result<Vec<serde_json::Value>>>()
+                    .map_err(|e| js_str!("Serialize error: {}", e))?,
+            )
+            .map_err(|e| js_str!("Serialize error: {}", e))?,
+        );
+        map.insert(
+            "board".to_string(),
+            serde_json::to_value(
+                self.board
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, cell)| {
+                        0 < cell.coal_ore || 0 < cell.iron_ore || 0 < cell.copper_ore
+                    })
+                    .map(|(idx, cell)| {
+                        let mut map = serde_json::Map::new();
+                        let x = idx % self.width as usize;
+                        let y = idx / self.height as usize;
+                        map.insert("position".to_string(), serde_json::to_value((x, y))?);
+                        map.insert("cell".to_string(), serde_json::to_value(cell)?);
+                        Ok(serde_json::to_value(map)?)
+                    })
+                    .collect::<serde_json::Result<Vec<serde_json::Value>>>()
+                    .map_err(|e| js_str!("Serialize error on board: {}", e))?,
+            )
+            .map_err(|e| js_str!("Serialize error on board: {}", e))?,
+        );
+        Ok(serde_json::to_string(&map).map_err(|e| js_str!("Serialize error: {}", e))?)
+    }
+
+    pub fn save_game(&self) -> Result<(), JsValue> {
+        if let Some(storage) = window().local_storage()? {
+            storage.set_item("FactorishWasmGameSave", &self.serialize_game()?)?;
+            Ok(())
+        } else {
+            js_err!("The subsystem does not support localStorage")
+        }
+    }
+
+    pub fn deserialize_game(&mut self, data: &str) -> Result<(), JsValue> {
+        use serde_json::Value;
+
+        self.structures.clear();
+        self.drop_items.clear();
+        let mut json: Value =
+            serde_json::from_str(&data).map_err(|_| js_str!("Deserialize error"))?;
+
+        fn json_get<I: serde_json::value::Index + std::fmt::Display + Copy>(
+            value: &serde_json::Value,
+            key: I,
+        ) -> Result<&serde_json::Value, JsValue> {
+            Ok(value.get(key).ok_or_else(|| js_str!("{} not found", key))?)
+        }
+
+        fn json_take<I: serde_json::value::Index + std::fmt::Display + Copy>(
+            value: &mut serde_json::Value,
+            key: I,
+        ) -> Result<serde_json::Value, JsValue> {
+            Ok(value
+                .get_mut(key)
+                .ok_or_else(|| js_str!("{} not found", key))?
+                .take())
+        }
+
+        fn json_as_u64(value: &serde_json::Value) -> Result<u64, JsValue> {
+            Ok(value
+                .as_u64()
+                .ok_or_else(|| js_str!("value could not be converted to u64"))?)
+        }
+
+        fn from_value<T: serde::de::DeserializeOwned>(
+            value: serde_json::Value,
+        ) -> Result<T, JsValue> {
+            Ok(
+                serde_json::from_value(value)
+                    .map_err(|e| js_str!("deserialization error {}", e))?,
+            )
+        }
+
+        self.sim_time = json_get(&json, "sim_time")?
+            .as_f64()
+            .ok_or(js_str!("sim_time is not float"))?;
+
+        self.player = from_value(json_take(&mut json, "player")?)?;
+
+        self.width = json_as_u64(json_get(&json, "width")?)? as u32;
+        self.height = json_as_u64(json_get(&json, "height")?)? as u32;
+
+        let tiles = json
+            .get_mut("board")
+            .ok_or_else(|| js_str!("board not found in saved data"))?
+            .as_array_mut()
+            .ok_or(js_str!("board in saved data is not an array"))?;
+        self.board = vec![
+            Cell {
+                coal_ore: 0,
+                iron_ore: 0,
+                copper_ore: 0
+            };
+            (self.width * self.height) as usize
+        ];
+        for tile in tiles {
+            let position = json_get(tile, "position")?;
+            let x: usize = json_as_u64(json_get(&position, 0)?)? as usize;
+            let y: usize = json_as_u64(json_get(&position, 1)?)? as usize;
+            self.board[x + y * self.width as usize] = from_value(json_take(tile, "cell")?)?;
+        }
+
+        let structures = json
+            .get_mut("structures")
+            .ok_or_else(|| js_str!("structures not found in saved data"))?
+            .as_array_mut()
+            .ok_or(js_str!("structures in saved data is not an array"))?;
+        {
+            for structure in structures {
+                self.structures.push(Self::structure_from_json(structure)?);
+            }
+        }
+
+        self.drop_items = serde_json::from_value(
+            json.get_mut("items")
+                .ok_or(js_str!("\"items\" not found"))?
+                .take(),
+        )
+        .map_err(|_| js_str!("drop items deserialization error"))?;
+
+        Ok(())
+    }
+
+    pub fn load_game(&mut self) -> Result<(), JsValue> {
+        if let Some(storage) = window().local_storage()? {
+            let data = storage
+                .get_item("FactorishWasmGameSave")?
+                .ok_or(js_str!("save data not found!"))?;
+            self.deserialize_game(&data)
+        } else {
+            js_err!("The subsystem does not support localStorage")
+        }
+    }
+
     pub fn simulate(&mut self, delta_time: f64) -> Result<js_sys::Array, JsValue> {
         // console_log!("simulating delta_time {}, {}", delta_time, self.sim_time);
+        const SERIALIZE_PERIOD: f64 = 100.;
+        if (self.sim_time / SERIALIZE_PERIOD).floor()
+            < ((self.sim_time + delta_time) / SERIALIZE_PERIOD).floor()
+        {
+            self.save_game()?;
+        }
+
         self.delta_time = delta_time;
         self.sim_time += delta_time;
 
@@ -1116,16 +1316,55 @@ impl FactorishState {
             ItemType::WaterWell => Box::new(WaterWell::new(cursor)),
             ItemType::Pipe => Box::new(Pipe::new(cursor)),
             ItemType::SteamEngine => Box::new(SteamEngine::new(cursor)),
-            _ => {
-                return Err(JsValue::from_str(&format!(
-                    "Can't make a structure from {:?}",
-                    tool
-                )))
-            }
+            _ => return js_err!("Can't make a structure from {:?}", tool),
         })
     }
 
-    pub fn mouse_down(&mut self, pos: &[f64], button: i32) -> Result<JsValue, JsValue> {
+    /// Destructively converts serde_json::Value into a Box<dyn Structure>.
+    fn structure_from_json(value: &mut serde_json::Value) -> Result<Box<dyn Structure>, JsValue> {
+        let type_str = if let serde_json::Value::String(s) = value
+            .get_mut("type")
+            .ok_or(js_str!("\"type\" not found"))?
+            .take()
+        {
+            s
+        } else {
+            return js_err!("Type must be a string");
+        };
+        console_log!("deserializing str {}", type_str);
+
+        let item_type = str_to_item(&type_str)
+            .ok_or_else(|| js_str!("The structure type {} is not defined", type_str))?;
+
+        let payload = value
+            .get_mut("payload")
+            .ok_or(js_str!("\"payload\" not found"))?
+            .take();
+
+        fn map_err<T: Structure>(result: serde_json::Result<T>) -> Result<T, JsValue> {
+            result.map_err(|s| js_str!("structure deserialization error: {}", s))
+        }
+
+        Ok(match item_type {
+            ItemType::TransportBelt => {
+                Box::new(map_err(serde_json::from_value::<TransportBelt>(payload))?)
+            }
+            ItemType::Inserter => Box::new(map_err(serde_json::from_value::<Inserter>(payload))?),
+            ItemType::OreMine => Box::new(map_err(serde_json::from_value::<OreMine>(payload))?),
+            ItemType::Chest => Box::new(map_err(serde_json::from_value::<Chest>(payload))?),
+            ItemType::Furnace => Box::new(map_err(serde_json::from_value::<Furnace>(payload))?),
+            ItemType::Assembler => Box::new(map_err(serde_json::from_value::<Assembler>(payload))?),
+            ItemType::Boiler => Box::new(map_err(serde_json::from_value::<Boiler>(payload))?),
+            ItemType::WaterWell => Box::new(map_err(serde_json::from_value::<WaterWell>(payload))?),
+            ItemType::Pipe => Box::new(map_err(serde_json::from_value::<Pipe>(payload))?),
+            ItemType::SteamEngine => {
+                Box::new(map_err(serde_json::from_value::<SteamEngine>(payload))?)
+            }
+            _ => return js_err!("Can't make a structure from {:?}", type_str),
+        })
+    }
+
+    pub fn mouse_down(&mut self, pos: &[f64], _button: i32) -> Result<JsValue, JsValue> {
         if pos.len() < 2 {
             return Err(JsValue::from_str("position must have 2 elements"));
         }
@@ -1221,7 +1460,7 @@ impl FactorishState {
             || cursor[1] < 0
             || self.height as i32 <= cursor[1]
         {
-            return Err(js_err!("invalid mouse position: {:?}", cursor));
+            return Err(js_str!("invalid mouse position: {:?}", cursor));
         }
         self.cursor = Some(cursor);
         // console_log!("mouse_move: cursor: {}, {}", cursor[0], cursor[1]);
@@ -1541,7 +1780,7 @@ impl FactorishState {
             .zip(self.image_copper.as_ref())
         {
             Some((((img, img_ore), img_coal), img_copper)) => {
-                let mut cell_draws = 0;
+                // let mut cell_draws = 0;
                 let left = (-self.viewport_x).max(0.) as u32;
                 let top = (-self.viewport_y).max(0.) as u32;
                 let right = (((self.viewport_width / 32. / self.view_scale - self.viewport_x) + 1.)
@@ -1578,7 +1817,7 @@ impl FactorishState {
                             self.board[(x + y * self.width) as usize].copper_ore,
                             &img_copper.bitmap,
                         )?;
-                        cell_draws += 1;
+                        // cell_draws += 1;
                     }
                 }
                 // console_log!(

@@ -1,17 +1,19 @@
 use super::pipe::Pipe;
 use super::structure::{DynIterMut, Structure};
 use super::{FactorishState, FrameProcResult, Position};
+use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 use web_sys::CanvasRenderingContext2d;
 
 use std::cmp::Eq;
 
-#[derive(Eq, PartialEq, Clone, Copy, Debug)]
+#[derive(Eq, PartialEq, Clone, Copy, Debug, Serialize, Deserialize)]
 pub(crate) enum FluidType {
     Water,
     Steam,
 }
 
+#[derive(Serialize, Deserialize)]
 pub(crate) struct FluidBox {
     pub type_: Option<FluidType>,
     pub amount: f64,
@@ -126,6 +128,7 @@ impl FluidBox {
     }
 }
 
+#[derive(Serialize, Deserialize)]
 pub(crate) struct WaterWell {
     position: Position,
     output_fluid_box: FluidBox,
@@ -199,4 +202,6 @@ impl Structure for WaterWell {
     fn fluid_box_mut(&mut self) -> Option<Vec<&mut FluidBox>> {
         Some(vec![&mut self.output_fluid_box])
     }
+
+    crate::serialize_impl!();
 }

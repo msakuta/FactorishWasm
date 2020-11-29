@@ -4,9 +4,11 @@ use super::{
     draw_direction_arrow, DropItem, FactorishState, FrameProcResult, Inventory, InventoryTrait,
     Position, Rotation,
 };
+use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 use web_sys::CanvasRenderingContext2d;
 
+#[derive(Serialize, Deserialize)]
 pub(crate) struct Inserter {
     position: Position,
     rotation: Rotation,
@@ -298,4 +300,6 @@ impl Structure for Inserter {
         }
         ret
     }
+
+    crate::serialize_impl!();
 }

@@ -4,9 +4,11 @@ use super::{
     DropItem, FactorishState, FrameProcResult, Inventory, InventoryTrait, ItemType, Position,
     Recipe, TempEnt, COAL_POWER,
 };
+use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 use web_sys::CanvasRenderingContext2d;
 
+#[derive(Serialize, Deserialize)]
 pub(crate) struct Furnace {
     position: Position,
     input_inventory: Inventory,
@@ -281,5 +283,9 @@ impl Structure for Furnace {
 
     fn get_selected_recipe(&self) -> Option<&Recipe> {
         self.recipe.as_ref()
+    }
+
+    fn serialize(&self) -> serde_json::Result<serde_json::Value> {
+        serde_json::to_value(self)
     }
 }

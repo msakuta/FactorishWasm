@@ -1,12 +1,14 @@
 use super::pipe::Pipe;
 use super::structure::{DynIterMut, Structure};
 use super::water_well::{FluidBox, FluidType};
-use super::{FactorishState, FrameProcResult, Position, Recipe};
+use super::{serialize_impl, FactorishState, FrameProcResult, Position, Recipe};
+use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 use web_sys::CanvasRenderingContext2d;
 
 use std::collections::HashMap;
 
+#[derive(Serialize, Deserialize)]
 pub(crate) struct SteamEngine {
     position: Position,
     progress: Option<f64>,
@@ -169,4 +171,6 @@ impl Structure for SteamEngine {
         self.power -= energy;
         Some(energy)
     }
+
+    serialize_impl!();
 }

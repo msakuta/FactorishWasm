@@ -1,11 +1,13 @@
 use super::items::{DropItem, ItemType};
 use super::structure::{ItemResponse, ItemResponseResult, Structure};
 use super::{FactorishState, FrameProcResult, Inventory, InventoryTrait, Position};
+use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 use web_sys::CanvasRenderingContext2d;
 
 const CHEST_CAPACITY: usize = 100;
 
+#[derive(Serialize, Deserialize)]
 pub(crate) struct Chest {
     position: Position,
     inventory: Inventory,
@@ -108,4 +110,6 @@ impl Structure for Chest {
             None
         }
     }
+
+    super::serialize_impl!();
 }

@@ -1,8 +1,10 @@
 use super::structure::{ItemResponse, ItemResponseResult, Structure};
 use super::{DropItem, FactorishState, Position, Rotation};
+use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 use web_sys::CanvasRenderingContext2d;
 
+#[derive(Serialize, Deserialize)]
 pub(crate) struct TransportBelt {
     position: Position,
     rotation: Rotation,
@@ -83,4 +85,6 @@ impl Structure for TransportBelt {
         let moved_y = item.y + self.rotation.delta().1;
         Ok((ItemResponse::Move(moved_x, moved_y), None))
     }
+
+    crate::serialize_impl!();
 }

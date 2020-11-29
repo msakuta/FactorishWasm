@@ -1,9 +1,10 @@
 use super::items::get_item_image_url;
 use super::structure::{DynIterMut, Structure};
 use super::{
-    DropItem, FactorishState, FrameProcResult, Inventory, InventoryTrait, ItemType, Position,
-    Recipe,
+    serialize_impl, DropItem, FactorishState, FrameProcResult, Inventory, InventoryTrait, ItemType,
+    Position, Recipe,
 };
+use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 use web_sys::CanvasRenderingContext2d;
 
@@ -37,6 +38,7 @@ fn _recipe_html(state: &FactorishState, recipe: &Recipe) -> String {
     return ret;
 }
 
+#[derive(Serialize, Deserialize)]
 pub(crate) struct Assembler {
     position: Position,
     input_inventory: Inventory,
@@ -340,7 +342,7 @@ impl Structure for Assembler {
         self.recipe = Some(
             self.get_recipes()
                 .get(index)
-                .ok_or(js_err!("recipes index out of bound {:?}", index))?
+                .ok_or(js_str!("recipes index out of bound {:?}", index))?
                 .clone(),
         );
         Ok(true)
@@ -349,4 +351,6 @@ impl Structure for Assembler {
     fn get_selected_recipe(&self) -> Option<&Recipe> {
         self.recipe.as_ref()
     }
+
+    serialize_impl!();
 }

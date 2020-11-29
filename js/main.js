@@ -772,6 +772,67 @@ const ysize = 64;
     }
     window.addEventListener( 'keydown', onKeyDown, false );
 
+    try{
+        sim.load_game();
+    }
+    catch(e){
+        console.error(e);
+    }
+
+    window.addEventListener( "beforeunload", () => sim.save_game());
+
+    const copyButton = document.getElementById("copyButton");
+    copyButton.onclick = () => {
+        const copyText = document.getElementById('saveText');
+        copyText.value = sim.serialize_game();
+
+        copyText.select();
+        copyText.setSelectionRange(0, 99999); /*For mobile devices*/
+
+        document.execCommand("copy");
+    };
+
+    const saveButton = document.getElementById("saveButton");
+    saveButton.onclick = () => {
+        var textFileAsBlob = new Blob([sim.serialize_game()], {
+            type: 'text/json'
+        });
+        var fileNameToSaveAs = "save.json";
+    
+        var downloadLink = document.createElement("a");
+        downloadLink.download = fileNameToSaveAs;
+        downloadLink.innerHTML = "Download File";
+        let appended = false;
+        if (window.webkitURL != null) {
+            downloadLink.href = window.webkitURL.createObjectURL(textFileAsBlob);
+        }
+        else {
+            downloadLink.href = window.URL.createObjectURL(textFileAsBlob);
+            downloadLink.style.display = "none";
+            document.body.appendChild(downloadLink);
+            appended = true;
+        }
+        downloadLink.click();
+        if(appended) {
+            document.body.removeChild(downloadLink);
+        }
+    };
+
+    const loadFile = document.getElementById('loadFile');
+    loadFile.addEventListener('change', (event) => {
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            console.log(event.target.result);
+            sim.deserialize_game(event.target.result);
+        };
+        reader.readAsText(event.target.files[0]);
+    });
+
+    const loadButton = document.getElementById("loadButton");
+    loadButton.onclick = () => {
+        loadFile.click();
+    };
+
     updateToolBar();
 
     updateInventory(sim.get_player_inventory());
