@@ -1331,7 +1331,6 @@ impl FactorishState {
         } else {
             return js_err!("Type must be a string");
         };
-        console_log!("deserializing str {}", type_str);
 
         let item_type = str_to_item(&type_str)
             .ok_or_else(|| js_str!("The structure type {} is not defined", type_str))?;

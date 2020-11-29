@@ -822,7 +822,6 @@ const ysize = 64;
     loadFile.addEventListener('change', (event) => {
         const reader = new FileReader();
         reader.onload = (event) => {
-            console.log(event.target.result);
             sim.deserialize_game(event.target.result);
         };
         reader.readAsText(event.target.files[0]);
