@@ -2,7 +2,7 @@ use super::items::get_item_image_url;
 use super::structure::{DynIter, DynIterMut, Structure};
 use super::{
     serialize_impl, DropItem, FactorishState, FrameProcResult, Inventory, InventoryTrait, ItemType,
-    Position, Recipe, TILE_SIZE,
+    Position, Recipe, TILE_SIZE, Ref,
 };
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
@@ -230,7 +230,7 @@ impl Structure for Assembler {
         Ok(FrameProcResult::None)
     }
 
-    fn on_construction(&mut self, other: &dyn Structure, construct: bool) -> Result<(), JsValue> {
+    fn on_construction(&mut self, other: &dyn Structure, state: &FactorishState, construct: bool) -> Result<(), JsValue> {
         if construct {
             if self.position().distance(other.position()) <= 3 {
                 if other.power_source() {
@@ -243,6 +243,9 @@ impl Structure for Assembler {
                 if other.position() == old_position {
                     self.power_wire = None;
                 }
+            }
+            if self.power_wire.is_none() {
+                return self.on_construction_self(&mut Ref(&state.structures), true);
             }
             Ok(())
         }

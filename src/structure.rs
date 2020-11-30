@@ -156,7 +156,7 @@ pub(crate) trait Structure {
         Ok(FrameProcResult::None)
     }
     /// event handler for costruction events around the structure.
-    fn on_construction(&mut self, _other: &dyn Structure, _construct: bool) -> Result<(), JsValue> {
+    fn on_construction(&mut self, _other: &dyn Structure, _state: &FactorishState, _construct: bool) -> Result<(), JsValue> {
         Ok(())
     }
     /// event handler for costruction events for this structure itself.

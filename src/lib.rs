@@ -66,7 +66,7 @@ use ore_mine::OreMine;
 use perlin_noise::{perlin_noise_pixel, Xor128};
 use pipe::Pipe;
 use steam_engine::SteamEngine;
-use structure::{FrameProcResult, ItemResponse, Position, Rotation, Structure};
+use structure::{FrameProcResult, ItemResponse, Position, Rotation, Structure, DynIterMut};
 use transport_belt::TransportBelt;
 use water_well::{FluidType, WaterWell};
 
@@ -753,31 +753,8 @@ impl FactorishState {
         }
     }
 
-    pub fn simulate(&mut self, delta_time: f64) -> Result<js_sys::Array, JsValue> {
-        // console_log!("simulating delta_time {}, {}", delta_time, self.sim_time);
-        const SERIALIZE_PERIOD: f64 = 100.;
-        if (self.sim_time / SERIALIZE_PERIOD).floor()
-            < ((self.sim_time + delta_time) / SERIALIZE_PERIOD).floor()
-        {
-            self.save_game()?;
-        }
-
-        self.delta_time = delta_time;
-        self.sim_time += delta_time;
-
-        // Since we cannot use callbacks to report events to the JavaScript environment,
-        // we need to accumulate events during simulation and return them as an array.
-        let mut events = vec![];
-
-        let mut frame_proc_result_to_event = |result: Result<FrameProcResult, ()>| {
-            if let Ok(FrameProcResult::InventoryChanged(pos)) = result {
-                events.push(js_sys::Array::of3(
-                    &JsValue::from_str("updateStructureInventory"),
-                    &JsValue::from(pos.x),
-                    &JsValue::from(pos.y),
-                ))
-            }
-        };
+    fn process_structures<F>(&mut self, f: &mut F) -> Result<(), JsValue> 
+        where F : FnMut(&mut dyn Structure, &mut FactorishState, &mut dyn DynIterMut<Item = Box<dyn Structure>>){
 
         struct MutRef<'r, T: ?Sized>(&'r mut T);
         impl<'a, 'r, T: ?Sized> IntoIterator for &'a MutRef<'r, T>
@@ -828,6 +805,7 @@ impl FactorishState {
                 self.0.into_iter().chain(self.1.into_iter())
             }
         }
+
         // This is silly way to avoid borrow checker that temporarily move the structures
         // away from self so that they do not claim mutable borrow twice, but it works.
         let mut structures = std::mem::take(&mut self.structures);
@@ -836,11 +814,48 @@ impl FactorishState {
             let (center, last) = mid
                 .split_first_mut()
                 .ok_or(JsValue::from_str("Structures split fail"))?;
-            frame_proc_result_to_event(
-                center.frame_proc(self, &mut Chained(MutRef(front), MutRef(last))),
-            );
+            f(center.as_mut(), self, &mut Chained(MutRef(front), MutRef(last)));
         }
 
+        self.structures = structures;
+        Ok(())
+    }
+
+    pub fn simulate(&mut self, delta_time: f64) -> Result<js_sys::Array, JsValue> {
+        // console_log!("simulating delta_time {}, {}", delta_time, self.sim_time);
+        const SERIALIZE_PERIOD: f64 = 100.;
+        if (self.sim_time / SERIALIZE_PERIOD).floor()
+            < ((self.sim_time + delta_time) / SERIALIZE_PERIOD).floor()
+        {
+            self.save_game()?;
+        }
+
+        self.delta_time = delta_time;
+        self.sim_time += delta_time;
+
+        // Since we cannot use callbacks to report events to the JavaScript environment,
+        // we need to accumulate events during simulation and return them as an array.
+        let mut events = vec![];
+
+        let mut frame_proc_result_to_event = |result: Result<FrameProcResult, ()>| {
+            if let Ok(FrameProcResult::InventoryChanged(pos)) = result {
+                events.push(js_sys::Array::of3(
+                    &JsValue::from_str("updateStructureInventory"),
+                    &JsValue::from(pos.x),
+                    &JsValue::from(pos.y),
+                ))
+            }
+        };
+
+        // This is silly way to avoid borrow checker that temporarily move the structures
+        // away from self so that they do not claim mutable borrow twice, but it works.
+        self.process_structures(&mut |s: &mut dyn Structure, state, structures| 
+            frame_proc_result_to_event(
+                s.frame_proc(state, structures),
+            )
+        );
+
+        let mut structures = std::mem::take(&mut self.structures);
         let mut to_remove = vec![];
         for i in 0..self.drop_items.len() {
             let item = &self.drop_items[i];
@@ -1099,9 +1114,10 @@ impl FactorishState {
                     JsValue::from_str(&format!("wrong structure name: {:?}", structure.name()))
                 })?);
             let mut structure = self.structures.remove(index);
-            for notify_structure in &mut self.structures {
-                notify_structure.on_construction(structure.as_mut(), false)?;
-            }
+            let mut closure = |notify_structure: &mut dyn Structure, state: &mut FactorishState, structures: &mut dyn DynIterMut<Item = Box<dyn Structure>>| {
+                notify_structure.on_construction(structure.as_mut(), state, false).or(Ok(())).unwrap();
+            };
+            self.process_structures(&mut closure);
             structure.on_construction_self(&mut Ref(&self.structures), false)?;
             if let Ok(ref mut data) = self.minimap_buffer.try_borrow_mut() {
                 self.render_minimap_data_pixel(data, position);
@@ -1403,9 +1419,11 @@ impl FactorishState {
                         let mut new_s =
                             self.new_structure(&tool_defs[selected_tool].item_type, &cursor)?;
                         self.harvest(&cursor, !new_s.movable())?;
-                        for structure in &mut self.structures {
-                            structure.on_construction(new_s.as_mut(), true)?;
+                        let mut structures = std::mem::take(&mut self.structures);
+                        for structure in &mut structures {
+                            structure.on_construction(new_s.as_mut(), self, true)?;
                         }
+                        self.structures = structures;
                         new_s.on_construction_self(&mut Ref(&self.structures), true)?;
                         self.structures.push(new_s);
                         if let Ok(ref mut data) = self.minimap_buffer.try_borrow_mut() {
