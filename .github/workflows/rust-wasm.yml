@@ -2,7 +2,7 @@ name: Rust-wasm
 
 on:
   push:
-    branches: [ master ]
+    branches: [ master, proper-notify ]
   pull_request:
     branches: [ master ]
 
