@@ -2,7 +2,7 @@ use super::items::get_item_image_url;
 use super::structure::{DynIterMut, Structure};
 use super::{
     serialize_impl, DropItem, FactorishState, FrameProcResult, Inventory, InventoryTrait, ItemType,
-    Position, Recipe,
+    Position, Recipe, TILE_SIZE
 };
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
@@ -47,6 +47,7 @@ pub(crate) struct Assembler {
     power: f64,
     max_power: f64,
     recipe: Option<Recipe>,
+    power_wire: Option<Position>,
 }
 
 impl Assembler {
@@ -59,6 +60,7 @@ impl Assembler {
             power: 0.,
             max_power: 20.,
             recipe: None,
+            power_wire: None,
         }
     }
 }
@@ -78,31 +80,47 @@ impl Structure for Assembler {
         context: &CanvasRenderingContext2d,
         depth: i32,
     ) -> Result<(), JsValue> {
-        if depth != 0 {
-            return Ok(());
-        };
-        let (x, y) = (self.position.x as f64 * 32., self.position.y as f64 * 32.);
-        match state.image_assembler.as_ref() {
-            Some(img) => {
-                let sx = if self.progress.is_some() && 0. < self.power {
-                    ((((state.sim_time * 5.) as isize) % 4) * 32) as f64
-                } else {
-                    0.
-                };
-                context.draw_image_with_image_bitmap_and_sw_and_sh_and_dx_and_dy_and_dw_and_dh(
-                    &img.bitmap,
-                    sx,
-                    0.,
-                    32.,
-                    32.,
-                    x,
-                    y,
-                    32.,
-                    32.,
-                )?;
+        if depth == 0 {
+            let (x, y) = (self.position.x as f64 * TILE_SIZE, self.position.y as f64 * TILE_SIZE);
+            match state.image_assembler.as_ref() {
+                Some(img) => {
+                    let sx = if self.progress.is_some() && 0. < self.power {
+                        ((((state.sim_time * 5.) as isize) % 4) * 32) as f64
+                    } else {
+                        0.
+                    };
+                    context.draw_image_with_image_bitmap_and_sw_and_sh_and_dx_and_dy_and_dw_and_dh(
+                        &img.bitmap,
+                        sx,
+                        0.,
+                        TILE_SIZE,
+                        TILE_SIZE,
+                        x,
+                        y,
+                        TILE_SIZE,
+                        TILE_SIZE,
+                    )?;
+                }
+                None => return Err(JsValue::from_str("assembler image not available")),
             }
-            None => return Err(JsValue::from_str("assembler image not available")),
+            return Ok(());
+        } else if depth == 1 {
+            const WIRE_ATTACH_X: f64 = 28.;
+            const WIRE_ATTACH_Y: f64 = 8.;
+            if let Some(target_position) = self.power_wire {
+                console_log!("Assembler wire drawing: {:?}", target_position);
+                context.set_stroke_style(&js_str!("rgb(191,127,0)"));
+                context.begin_path();
+                context.move_to(self.position.x as f64 * TILE_SIZE + WIRE_ATTACH_X,
+                    self.position.y as f64 * TILE_SIZE + WIRE_ATTACH_Y);
+                context.quadratic_curve_to((self.position.x + target_position.x) as f64 / 2. * TILE_SIZE + WIRE_ATTACH_X,
+                    (self.position.y + target_position.y) as f64 / 1.9 * TILE_SIZE + WIRE_ATTACH_Y,
+                    target_position.x as f64 * TILE_SIZE + WIRE_ATTACH_X,
+                    target_position.y as f64 * TILE_SIZE + WIRE_ATTACH_Y);
+                context.stroke();
+            }
         }
+
 
         Ok(())
     }
@@ -155,9 +173,11 @@ impl Structure for Assembler {
                         continue;
                     }
                     let demand = self.max_power - self.power - accumulated;
+                    let position = *target_position;
                     // Energy transmission is instantaneous
                     if let Some(energy) = structure.power_outlet(demand) {
                         accumulated += energy;
+                        self.power_wire = Some(position);
                         // console_log!("draining {:?}kJ of energy with {:?} demand, from {:?}, accumulated {:?}", energy, demand, structure.name(), accumulated);
                     }
                 }

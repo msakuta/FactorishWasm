@@ -124,6 +124,7 @@ fn body() -> web_sys::HtmlElement {
     document().body().expect("document should have a body")
 }
 
+const TILE_SIZE: f64 = 32.;
 const COAL_POWER: f64 = 100.; // kilojoules
 
 #[derive(Copy, Clone, Serialize, Deserialize)]
