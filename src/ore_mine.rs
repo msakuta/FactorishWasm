@@ -2,7 +2,7 @@ use super::items::ItemType;
 use super::structure::{DynIterMut, Structure};
 use super::{
     draw_direction_arrow, DropItem, FactorishState, FrameProcResult, Position, Recipe, Rotation,
-    TempEnt, COAL_POWER,
+    TempEnt, COAL_POWER, TILE_SIZE,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -47,11 +47,37 @@ impl Structure for OreMine {
         context: &CanvasRenderingContext2d,
         depth: i32,
     ) -> Result<(), JsValue> {
-        let (x, y) = (self.position.x as f64 * 32., self.position.y as f64 * 32.);
+        let (x, y) = (
+            self.position.x as f64 * TILE_SIZE,
+            self.position.y as f64 * TILE_SIZE,
+        );
         match depth {
             0 => match state.image_mine.as_ref() {
                 Some(img) => {
-                    context.draw_image_with_image_bitmap(&img.bitmap, x, y)?;
+                    let progress = if let Some(ref recipe) = self.recipe {
+                        (self.power / recipe.power_cost)
+                            .min(1. / recipe.recipe_time)
+                            .min(1. - self.progress)
+                    } else {
+                        0.
+                    };
+                    let sx = if 0. < progress {
+                        (((state.sim_time * 5.) as isize) % 2 + 1) as f64 * TILE_SIZE
+                    } else {
+                        0.
+                    };
+                    context
+                        .draw_image_with_image_bitmap_and_sw_and_sh_and_dx_and_dy_and_dw_and_dh(
+                            &img.bitmap,
+                            sx,
+                            0.,
+                            TILE_SIZE,
+                            TILE_SIZE,
+                            x,
+                            y,
+                            TILE_SIZE,
+                            TILE_SIZE,
+                        )?;
                 }
                 None => return Err(JsValue::from_str("mine image not available")),
             },
