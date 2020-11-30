@@ -1099,6 +1099,10 @@ impl FactorishState {
                     JsValue::from_str(&format!("wrong structure name: {:?}", structure.name()))
                 })?);
             let mut structure = self.structures.remove(index);
+            for notify_structure in &mut self.structures {
+                notify_structure.on_construction(structure.as_mut(), false)?;
+            }
+            structure.on_construction_self(&mut Ref(&self.structures), false)?;
             if let Ok(ref mut data) = self.minimap_buffer.try_borrow_mut() {
                 self.render_minimap_data_pixel(data, position);
             }
@@ -1396,9 +1400,13 @@ impl FactorishState {
                     .get(&tool_defs[selected_tool].item_type)
                 {
                     if 1 <= *count {
-                        let new_s =
+                        let mut new_s =
                             self.new_structure(&tool_defs[selected_tool].item_type, &cursor)?;
                         self.harvest(&cursor, !new_s.movable())?;
+                        for structure in &mut self.structures {
+                            structure.on_construction(new_s.as_mut(), true)?;
+                        }
+                        new_s.on_construction_self(&mut Ref(&self.structures), true)?;
                         self.structures.push(new_s);
                         if let Ok(ref mut data) = self.minimap_buffer.try_borrow_mut() {
                             self.render_minimap_data_pixel(data, &cursor);

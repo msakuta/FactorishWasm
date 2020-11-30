@@ -166,6 +166,10 @@ impl Structure for SteamEngine {
         Some(vec![&mut self.input_fluid_box])
     }
 
+    fn power_source(&self) -> bool {
+        true
+    }
+
     fn power_outlet(&mut self, demand: f64) -> Option<f64> {
         let energy = demand.min(self.power);
         self.power -= energy;

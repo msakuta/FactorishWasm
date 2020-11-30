@@ -30,6 +30,9 @@ impl Position {
             y: self.y + o.1,
         }
     }
+    pub(crate) fn distance(&self, position: &Position) -> i32 {
+        (position.x - self.x).abs().max((position.y - self.y).abs())
+    }
 }
 
 impl From<&[i32; 2]> for Position {
@@ -152,6 +155,18 @@ pub(crate) trait Structure {
     ) -> Result<FrameProcResult, ()> {
         Ok(FrameProcResult::None)
     }
+    /// event handler for costruction events around the structure.
+    fn on_construction(&mut self, _other: &dyn Structure, _construct: bool) -> Result<(), JsValue> {
+        Ok(())
+    }
+    /// event handler for costruction events for this structure itself.
+    fn on_construction_self(
+        &mut self,
+        _others: &dyn DynIter<Item = Box<dyn Structure>>,
+        _construct: bool,
+    ) -> Result<(), JsValue> {
+        Ok(())
+    }
     fn movable(&self) -> bool {
         false
     }
@@ -248,6 +263,14 @@ pub(crate) trait Structure {
         let r = has_fluid_box(x + 1, y);
         let b = has_fluid_box(x, y + 1);
         return [l, t, r, b];
+    }
+    /// If this structure can connect to power grid.
+    fn power_source(&self) -> bool {
+        false
+    }
+    /// If this structure drains power from the grid
+    fn power_sink(&self) -> bool {
+        false
     }
     /// Try to drain power from this structure.
     /// @param demand in kilojoules.

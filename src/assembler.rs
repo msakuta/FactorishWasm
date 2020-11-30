@@ -1,8 +1,8 @@
 use super::items::get_item_image_url;
-use super::structure::{DynIterMut, Structure};
+use super::structure::{DynIter, DynIterMut, Structure};
 use super::{
     serialize_impl, DropItem, FactorishState, FrameProcResult, Inventory, InventoryTrait, ItemType,
-    Position, Recipe, TILE_SIZE
+    Position, Recipe, TILE_SIZE,
 };
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
@@ -81,7 +81,10 @@ impl Structure for Assembler {
         depth: i32,
     ) -> Result<(), JsValue> {
         if depth == 0 {
-            let (x, y) = (self.position.x as f64 * TILE_SIZE, self.position.y as f64 * TILE_SIZE);
+            let (x, y) = (
+                self.position.x as f64 * TILE_SIZE,
+                self.position.y as f64 * TILE_SIZE,
+            );
             match state.image_assembler.as_ref() {
                 Some(img) => {
                     let sx = if self.progress.is_some() && 0. < self.power {
@@ -89,17 +92,18 @@ impl Structure for Assembler {
                     } else {
                         0.
                     };
-                    context.draw_image_with_image_bitmap_and_sw_and_sh_and_dx_and_dy_and_dw_and_dh(
-                        &img.bitmap,
-                        sx,
-                        0.,
-                        TILE_SIZE,
-                        TILE_SIZE,
-                        x,
-                        y,
-                        TILE_SIZE,
-                        TILE_SIZE,
-                    )?;
+                    context
+                        .draw_image_with_image_bitmap_and_sw_and_sh_and_dx_and_dy_and_dw_and_dh(
+                            &img.bitmap,
+                            sx,
+                            0.,
+                            TILE_SIZE,
+                            TILE_SIZE,
+                            x,
+                            y,
+                            TILE_SIZE,
+                            TILE_SIZE,
+                        )?;
                 }
                 None => return Err(JsValue::from_str("assembler image not available")),
             }
@@ -108,19 +112,21 @@ impl Structure for Assembler {
             const WIRE_ATTACH_X: f64 = 28.;
             const WIRE_ATTACH_Y: f64 = 8.;
             if let Some(target_position) = self.power_wire {
-                console_log!("Assembler wire drawing: {:?}", target_position);
                 context.set_stroke_style(&js_str!("rgb(191,127,0)"));
                 context.begin_path();
-                context.move_to(self.position.x as f64 * TILE_SIZE + WIRE_ATTACH_X,
-                    self.position.y as f64 * TILE_SIZE + WIRE_ATTACH_Y);
-                context.quadratic_curve_to((self.position.x + target_position.x) as f64 / 2. * TILE_SIZE + WIRE_ATTACH_X,
+                context.move_to(
+                    self.position.x as f64 * TILE_SIZE + WIRE_ATTACH_X,
+                    self.position.y as f64 * TILE_SIZE + WIRE_ATTACH_Y,
+                );
+                context.quadratic_curve_to(
+                    (self.position.x + target_position.x) as f64 / 2. * TILE_SIZE + WIRE_ATTACH_X,
                     (self.position.y + target_position.y) as f64 / 1.9 * TILE_SIZE + WIRE_ATTACH_Y,
                     target_position.x as f64 * TILE_SIZE + WIRE_ATTACH_X,
-                    target_position.y as f64 * TILE_SIZE + WIRE_ATTACH_Y);
+                    target_position.y as f64 * TILE_SIZE + WIRE_ATTACH_Y,
+                );
                 context.stroke();
             }
         }
-
 
         Ok(())
     }
@@ -166,18 +172,13 @@ impl Structure for Assembler {
                 let mut accumulated = 0.;
                 for structure in structures.dyn_iter_mut() {
                     let target_position = structure.position();
-                    if 3 < (target_position.x - self.position.x)
-                        .abs()
-                        .max((target_position.y - self.position.y).abs())
-                    {
+                    if 3 < self.position.distance(target_position) {
                         continue;
                     }
                     let demand = self.max_power - self.power - accumulated;
-                    let position = *target_position;
                     // Energy transmission is instantaneous
                     if let Some(energy) = structure.power_outlet(demand) {
                         accumulated += energy;
-                        self.power_wire = Some(position);
                         // console_log!("draining {:?}kJ of energy with {:?} demand, from {:?}, accumulated {:?}", energy, demand, structure.name(), accumulated);
                     }
                 }
@@ -227,6 +228,44 @@ impl Structure for Assembler {
             return Ok(ret);
         }
         Ok(FrameProcResult::None)
+    }
+
+    fn on_construction(&mut self, other: &dyn Structure, construct: bool) -> Result<(), JsValue> {
+        if construct {
+            if self.position().distance(other.position()) <= 3 {
+                if other.power_source() {
+                    self.power_wire = Some(*other.position());
+                }
+            }
+            Ok(())
+        } else {
+            if let Some(ref old_position) = self.power_wire {
+                if other.position() == old_position {
+                    self.power_wire = None;
+                }
+            }
+            Ok(())
+        }
+    }
+
+    fn on_construction_self(
+        &mut self,
+        others: &dyn DynIter<Item = Box<dyn Structure>>,
+        construct: bool,
+    ) -> Result<(), JsValue> {
+        if construct {
+            for other in others.dyn_iter() {
+                if self.position().distance(other.position()) <= 3 {
+                    if other.power_source() {
+                        self.power_wire = Some(*other.position());
+                        return Ok(());
+                    }
+                }
+            }
+            Ok(())
+        } else {
+            Ok(())
+        }
     }
 
     fn input(&mut self, o: &DropItem) -> Result<(), JsValue> {
@@ -370,6 +409,10 @@ impl Structure for Assembler {
 
     fn get_selected_recipe(&self) -> Option<&Recipe> {
         self.recipe.as_ref()
+    }
+
+    fn power_sink(&self) -> bool {
+        true
     }
 
     serialize_impl!();
