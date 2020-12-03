@@ -25,6 +25,7 @@ import circuit from "../img/circuit.png";
 import gear from "../img/gear.png";
 import pipeItem from "../img/pipe-item.png";
 import steamEngine from "../img/steam-engine.png";
+import electPole from "../img/elect-pole.png";
 import smoke from "../img/smoke.png";
 import rotateImage from "../img/rotate.png";
 import closeImage from "../img/close.png";
@@ -61,6 +62,7 @@ const ysize = 64;
         ["assembler", assembler],
         ["boiler", boiler],
         ["steamEngine", steamEngine],
+        ["electPole", electPole],
         ["waterWell", waterWell],
         ["pipe", pipe],
         ["inserter", inserter],
@@ -309,7 +311,7 @@ const ysize = 64;
         case 'Chest':
             return chest;
         case 'Ore Mine':
-            return mine;
+            return [mine, 3];
         case 'Furnace':
             return [furnace, 3];
         case 'Assembler':
@@ -322,6 +324,8 @@ const ysize = 64;
             return pipeItem;
         case 'Steam Engine':
             return [steamEngine, 3];
+        case 'Electric Pole':
+            return electPole;
         default:
             return "";
         }

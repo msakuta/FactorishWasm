@@ -1,5 +1,5 @@
 use super::items::get_item_image_url;
-use super::structure::{DynIter, DynIterMut, Structure};
+use super::structure::{DynIterMut, Structure};
 use super::{
     serialize_impl, DropItem, FactorishState, FrameProcResult, Inventory, InventoryTrait, ItemType,
     Position, Recipe, TILE_SIZE,
@@ -47,7 +47,6 @@ pub(crate) struct Assembler {
     power: f64,
     max_power: f64,
     recipe: Option<Recipe>,
-    power_wire: Option<Position>,
 }
 
 impl Assembler {
@@ -60,7 +59,6 @@ impl Assembler {
             power: 0.,
             max_power: 20.,
             recipe: None,
-            power_wire: None,
         }
     }
 }
@@ -108,24 +106,6 @@ impl Structure for Assembler {
                 None => return Err(JsValue::from_str("assembler image not available")),
             }
             return Ok(());
-        } else if depth == 1 {
-            const WIRE_ATTACH_X: f64 = 28.;
-            const WIRE_ATTACH_Y: f64 = 8.;
-            if let Some(target_position) = self.power_wire {
-                context.set_stroke_style(&js_str!("rgb(191,127,0)"));
-                context.begin_path();
-                context.move_to(
-                    self.position.x as f64 * TILE_SIZE + WIRE_ATTACH_X,
-                    self.position.y as f64 * TILE_SIZE + WIRE_ATTACH_Y,
-                );
-                context.quadratic_curve_to(
-                    (self.position.x + target_position.x) as f64 / 2. * TILE_SIZE + WIRE_ATTACH_X,
-                    (self.position.y + target_position.y) as f64 / 1.9 * TILE_SIZE + WIRE_ATTACH_Y,
-                    target_position.x as f64 * TILE_SIZE + WIRE_ATTACH_X,
-                    target_position.y as f64 * TILE_SIZE + WIRE_ATTACH_Y,
-                );
-                context.stroke();
-            }
         }
 
         Ok(())
@@ -228,44 +208,6 @@ impl Structure for Assembler {
             return Ok(ret);
         }
         Ok(FrameProcResult::None)
-    }
-
-    fn on_construction(&mut self, other: &dyn Structure, construct: bool) -> Result<(), JsValue> {
-        if construct {
-            if self.position().distance(other.position()) <= 3 {
-                if other.power_source() {
-                    self.power_wire = Some(*other.position());
-                }
-            }
-            Ok(())
-        } else {
-            if let Some(ref old_position) = self.power_wire {
-                if other.position() == old_position {
-                    self.power_wire = None;
-                }
-            }
-            Ok(())
-        }
-    }
-
-    fn on_construction_self(
-        &mut self,
-        others: &dyn DynIter<Item = Box<dyn Structure>>,
-        construct: bool,
-    ) -> Result<(), JsValue> {
-        if construct {
-            for other in others.dyn_iter() {
-                if self.position().distance(other.position()) <= 3 {
-                    if other.power_source() {
-                        self.power_wire = Some(*other.position());
-                        return Ok(());
-                    }
-                }
-            }
-            Ok(())
-        } else {
-            Ok(())
-        }
     }
 
     fn input(&mut self, o: &DropItem) -> Result<(), JsValue> {
@@ -393,6 +335,12 @@ impl Structure for Assembler {
                 hash_map!(ItemType::SteamEngine => 1),
                 200.,
                 200.,
+            ),
+            Recipe::new(
+                hash_map!(ItemType::IronPlate => 2, ItemType::CopperWire => 2),
+                hash_map!(ItemType::ElectPole => 1),
+                20.,
+                20.,
             ),
         ]
     }

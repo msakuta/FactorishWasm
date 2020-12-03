@@ -278,5 +278,8 @@ pub(crate) trait Structure {
     fn power_outlet(&mut self, _demand: f64) -> Option<f64> {
         None
     }
+    fn wire_reach(&self) -> u32 {
+        3
+    }
     fn serialize(&self) -> serde_json::Result<serde_json::Value>;
 }

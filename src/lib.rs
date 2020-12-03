@@ -44,6 +44,7 @@ macro_rules! hash_map {
 mod assembler;
 mod boiler;
 mod chest;
+mod elect_pole;
 mod furnace;
 mod inserter;
 mod items;
@@ -59,6 +60,7 @@ mod water_well;
 use assembler::Assembler;
 use boiler::Boiler;
 use chest::Chest;
+use elect_pole::ElectPole;
 use furnace::Furnace;
 use inserter::Inserter;
 use items::{item_to_str, render_drop_item, str_to_item, DropItem, ItemType};
@@ -222,7 +224,7 @@ struct ToolDef {
     item_type: ItemType,
     desc: &'static str,
 }
-const tool_defs: [ToolDef; 10] = [
+const tool_defs: [ToolDef; 11] = [
     ToolDef {
         item_type: ItemType::TransportBelt,
         desc: "Transports items on ground",
@@ -262,6 +264,10 @@ const tool_defs: [ToolDef; 10] = [
     ToolDef {
         item_type: ItemType::SteamEngine,
         desc: "Consumes steam and transmits electricity within a range of 3 tiles.",
+    },
+    ToolDef {
+        item_type: ItemType::ElectPole,
+        desc: "Electric pole.",
     },
 ];
 
@@ -386,6 +392,9 @@ impl TempEnt {
     }
 }
 
+#[derive(Eq, PartialEq)]
+struct PowerWire(Position, Position);
+
 #[wasm_bindgen]
 pub struct FactorishState {
     delta_time: f64,
@@ -414,6 +423,7 @@ pub struct FactorishState {
     info_elem: Option<HtmlDivElement>,
     on_player_update: js_sys::Function,
     minimap_buffer: RefCell<Vec<u8>>,
+    power_wires: Vec<PowerWire>,
     // on_show_inventory: js_sys::Function,
     image_dirt: Option<ImageBundle>,
     image_ore: Option<ImageBundle>,
@@ -428,6 +438,7 @@ pub struct FactorishState {
     image_steam_engine: Option<ImageBundle>,
     image_water_well: Option<ImageBundle>,
     image_pipe: Option<ImageBundle>,
+    image_elect_pole: Option<ImageBundle>,
     image_inserter: Option<ImageBundle>,
     image_direction: Option<ImageBundle>,
     image_iron_ore: Option<ImageBundle>,
@@ -498,6 +509,7 @@ impl FactorishState {
             },
             info_elem: None,
             minimap_buffer: RefCell::new(vec![]),
+            power_wires: vec![],
             image_dirt: None,
             image_ore: None,
             image_coal: None,
@@ -511,6 +523,7 @@ impl FactorishState {
             image_steam_engine: None,
             image_water_well: None,
             image_pipe: None,
+            image_elect_pole: None,
             image_inserter: None,
             image_direction: None,
             image_iron_ore: None,
@@ -1102,9 +1115,14 @@ impl FactorishState {
             for notify_structure in &mut self.structures {
                 notify_structure.on_construction(structure.as_mut(), false)?;
             }
+            let position = *structure.position();
+            self.power_wires = std::mem::take(&mut self.power_wires)
+                .into_iter()
+                .filter(|power_wire| power_wire.0 != position && power_wire.1 != position)
+                .collect();
             structure.on_construction_self(&mut Ref(&self.structures), false)?;
             if let Ok(ref mut data) = self.minimap_buffer.try_borrow_mut() {
-                self.render_minimap_data_pixel(data, position);
+                self.render_minimap_data_pixel(data, &position);
             }
             for (name, count) in structure.destroy_inventory() {
                 self.player.add_item(&name, count)
@@ -1321,6 +1339,7 @@ impl FactorishState {
             ItemType::WaterWell => Box::new(WaterWell::new(cursor)),
             ItemType::Pipe => Box::new(Pipe::new(cursor)),
             ItemType::SteamEngine => Box::new(SteamEngine::new(cursor)),
+            ItemType::ElectPole => Box::new(ElectPole::new(cursor)),
             _ => return js_err!("Can't make a structure from {:?}", tool),
         })
     }
@@ -1364,6 +1383,7 @@ impl FactorishState {
             ItemType::SteamEngine => {
                 Box::new(map_err(serde_json::from_value::<SteamEngine>(payload))?)
             }
+            ItemType::ElectPole => Box::new(map_err(serde_json::from_value::<ElectPole>(payload))?),
             _ => return js_err!("Can't make a structure from {:?}", type_str),
         })
     }
@@ -1380,6 +1400,20 @@ impl FactorishState {
         console_log!("mouse_down: {}, {}", cursor.x, cursor.y);
         self.update_info();
         Ok(JsValue::from(js_sys::Array::new()))
+    }
+
+    fn add_power_wire(&mut self, power_wire: PowerWire) -> Result<(), JsValue> {
+        if self
+            .power_wires
+            .iter()
+            .find(|p| **p == power_wire)
+            .is_some()
+        {
+            return Ok(());
+        }
+        console_log!("power_wires: {}", self.power_wires.len());
+        self.power_wires.push(power_wire);
+        Ok(())
     }
 
     pub fn mouse_up(&mut self, pos: &[f64], button: i32) -> Result<JsValue, JsValue> {
@@ -1406,6 +1440,20 @@ impl FactorishState {
                         for structure in &mut self.structures {
                             structure.on_construction(new_s.as_mut(), true)?;
                         }
+                        let structures = std::mem::take(&mut self.structures);
+                        for structure in &structures {
+                            if (new_s.power_sink() && structure.power_source()
+                                || new_s.power_source() && structure.power_sink())
+                                && new_s.position().distance(structure.position())
+                                    <= new_s.wire_reach().min(structure.wire_reach()) as i32
+                            {
+                                self.add_power_wire(PowerWire(
+                                    *new_s.position(),
+                                    *structure.position(),
+                                ))?;
+                            }
+                        }
+                        self.structures = structures;
                         new_s.on_construction_self(&mut Ref(&self.structures), true)?;
                         self.structures.push(new_s);
                         if let Ok(ref mut data) = self.minimap_buffer.try_borrow_mut() {
@@ -1648,6 +1696,7 @@ impl FactorishState {
         self.image_steam_engine = Some(load_image("steamEngine")?);
         self.image_water_well = Some(load_image("waterWell")?);
         self.image_pipe = Some(load_image("pipe")?);
+        self.image_elect_pole = Some(load_image("electPole")?);
         self.image_inserter = Some(load_image("inserter")?);
         self.image_direction = Some(load_image("direction")?);
         self.image_iron_ore = Some(load_image("ore")?);
@@ -1852,6 +1901,24 @@ impl FactorishState {
 
         for item in &self.drop_items {
             render_drop_item(self, &context, &item.type_, item.x, item.y)?;
+        }
+
+        const WIRE_ATTACH_X: f64 = 28.;
+        const WIRE_ATTACH_Y: f64 = 8.;
+        for power_wire in &self.power_wires {
+            context.set_stroke_style(&js_str!("rgb(191,127,0)"));
+            context.begin_path();
+            context.move_to(
+                power_wire.0.x as f64 * TILE_SIZE + WIRE_ATTACH_X,
+                power_wire.0.y as f64 * TILE_SIZE + WIRE_ATTACH_Y,
+            );
+            context.quadratic_curve_to(
+                (power_wire.0.x + power_wire.1.x) as f64 / 2. * TILE_SIZE + WIRE_ATTACH_X,
+                (power_wire.0.y + power_wire.1.y) as f64 / 1.9 * TILE_SIZE + WIRE_ATTACH_Y,
+                power_wire.1.x as f64 * TILE_SIZE + WIRE_ATTACH_X,
+                power_wire.1.y as f64 * TILE_SIZE + WIRE_ATTACH_Y,
+            );
+            context.stroke();
         }
 
         draw_structures(1)?;
