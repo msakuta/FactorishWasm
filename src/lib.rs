@@ -128,6 +128,7 @@ fn body() -> web_sys::HtmlElement {
 
 const TILE_SIZE: f64 = 32.;
 const COAL_POWER: f64 = 100.; // kilojoules
+const SAVE_VERSION: i32 = 1;
 
 #[derive(Copy, Clone, Serialize, Deserialize)]
 struct Cell {
@@ -392,7 +393,7 @@ impl TempEnt {
     }
 }
 
-#[derive(Eq, PartialEq)]
+#[derive(Eq, PartialEq, Serialize, Deserialize)]
 struct PowerWire(Position, Position);
 
 #[wasm_bindgen]
@@ -585,16 +586,26 @@ impl FactorishState {
     }
 
     pub fn serialize_game(&self) -> Result<String, JsValue> {
+        use serde_json::Value as SValue;
         console_log!("Serializing...");
+        fn map_err(
+            result: Result<SValue, serde_json::Error>,
+            name: &str,
+        ) -> Result<SValue, JsValue> {
+            result.map_err(|e| js_str!("serialize failed for {}: {}", name, e))
+        }
         let mut map = serde_json::Map::new();
+        map.insert(
+            "version".to_string(),
+            map_err(serde_json::to_value(&SAVE_VERSION), "version")?,
+        );
         map.insert(
             "sim_time".to_string(),
             serde_json::Value::from(self.sim_time),
         );
         map.insert(
             "player".to_string(),
-            serde_json::to_value(&self.player)
-                .map_err(|e| js_str!("serialize failed for player: {}", e))?,
+            map_err(serde_json::to_value(&self.player), "player")?,
         );
         map.insert("width".to_string(), serde_json::Value::from(self.width));
         map.insert("height".to_string(), serde_json::Value::from(self.height));
@@ -619,6 +630,11 @@ impl FactorishState {
                     })
                     .collect::<Result<Vec<serde_json::Value>, JsValue>>()?,
             ),
+        );
+        map.insert(
+            "power_wires".to_string(),
+            serde_json::to_value(&self.power_wires)
+                .map_err(|e| js_str!("Serialize error: {}", e))?,
         );
         map.insert(
             "items".to_string(),
@@ -734,16 +750,53 @@ impl FactorishState {
             self.board[x + y * self.width as usize] = from_value(json_take(tile, "cell")?)?;
         }
 
+        let version = if let Some(version) = json.get("version") {
+            version
+                .as_i64()
+                .ok_or_else(|| js_str!("Version string cannot be parsed as int"))?
+        } else {
+            0
+        };
+
         let structures = json
             .get_mut("structures")
             .ok_or_else(|| js_str!("structures not found in saved data"))?
             .as_array_mut()
-            .ok_or(js_str!("structures in saved data is not an array"))?;
-        {
-            for structure in structures {
-                self.structures.push(Self::structure_from_json(structure)?);
+            .ok_or(js_str!("structures in saved data is not an array"))?
+            .into_iter()
+            .map(|structure| Ok(Self::structure_from_json(structure)?))
+            .collect::<Result<Vec<Box<dyn Structure>>, JsValue>>()?;
+
+        if version == 0 {
+            console_log!(
+                "Migrating save file from {} to {}...",
+                version,
+                SAVE_VERSION
+            );
+            for structure in &structures {
+                if structure.power_sink() || structure.power_source() {
+                    for structure2 in &structures {
+                        if structure.power_sink() && structure2.power_source()
+                            || structure.power_source() && structure2.power_sink()
+                        {
+                            self.add_power_wire(PowerWire(
+                                *structure.position(),
+                                *structure2.position(),
+                            ))?;
+                        }
+                    }
+                }
             }
+        } else {
+            self.power_wires = serde_json::from_value(
+                json.get_mut("power_wires")
+                    .ok_or_else(|| js_str!("power_wires not found in saved data"))?
+                    .take(),
+            )
+            .map_err(|e| js_str!("power_wires deserialization error: {}", e))?;
         }
+
+        self.structures = structures;
 
         self.drop_items = serde_json::from_value(
             json.get_mut("items")
