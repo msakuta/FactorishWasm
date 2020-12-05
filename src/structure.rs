@@ -14,7 +14,7 @@ macro_rules! serialize_impl {
     };
 }
 
-#[derive(Eq, PartialEq, Copy, Clone, Debug, Serialize, Deserialize)]
+#[derive(Eq, PartialEq, Hash, Copy, Clone, Debug, Serialize, Deserialize)]
 pub(crate) struct Position {
     pub x: i32,
     pub y: i32,

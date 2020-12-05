@@ -393,7 +393,7 @@ impl TempEnt {
     }
 }
 
-#[derive(Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Eq, PartialEq, Hash, Copy, Clone, Serialize, Deserialize)]
 struct PowerWire(Position, Position);
 
 #[wasm_bindgen]
