@@ -106,6 +106,17 @@ impl Rotation {
     pub fn angle_rad(&self) -> f64 {
         self.angle_deg() as f64 * std::f64::consts::PI / 180.
     }
+
+    pub fn is_horizontal(&self) -> bool {
+        match self {
+            Rotation::Left | Rotation::Right => true,
+            _ => false,
+        }
+    }
+
+    pub fn is_vertial(&self) -> bool {
+        !self.is_horizontal()
+    }
 }
 
 pub(crate) enum FrameProcResult {

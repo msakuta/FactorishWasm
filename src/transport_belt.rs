@@ -1,5 +1,5 @@
 use super::structure::{ItemResponse, ItemResponseResult, Structure};
-use super::{DropItem, FactorishState, Position, Rotation};
+use super::{DropItem, FactorishState, Position, Rotation, TILE_SIZE};
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 use web_sys::CanvasRenderingContext2d;
@@ -81,8 +81,20 @@ impl Structure for TransportBelt {
     }
 
     fn item_response(&mut self, item: &DropItem) -> Result<ItemResponseResult, ()> {
-        let moved_x = item.x + self.rotation.delta().0;
-        let moved_y = item.y + self.rotation.delta().1;
+        let vx = self.rotation.delta().0;
+        let vy = self.rotation.delta().1;
+        let ax = if self.rotation.is_vertial() {
+            (item.x as f64 / TILE_SIZE).floor() * TILE_SIZE + TILE_SIZE / 2.
+        } else {
+            item.x as f64
+        };
+        let ay = if self.rotation.is_horizontal() {
+            (item.y as f64 / TILE_SIZE).floor() * TILE_SIZE + TILE_SIZE / 2.
+        } else {
+            item.y as f64
+        };
+        let moved_x = ax as i32 + vx;
+        let moved_y = ay as i32 + vy;
         Ok((ItemResponse::Move(moved_x, moved_y), None))
     }
 
