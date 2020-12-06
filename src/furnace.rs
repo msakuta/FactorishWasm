@@ -73,6 +73,7 @@ impl Structure for Furnace {
             }
             None => return Err(JsValue::from_str("furnace image not available")),
         }
+        crate::draw_fuel_alarm!(self, state, context);
 
         Ok(())
     }

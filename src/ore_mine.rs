@@ -81,7 +81,10 @@ impl Structure for OreMine {
                 }
                 None => return Err(JsValue::from_str("mine image not available")),
             },
-            2 => draw_direction_arrow((x, y), &self.rotation, state, context)?,
+            2 => {
+                draw_direction_arrow((x, y), &self.rotation, state, context)?;
+                crate::draw_fuel_alarm!(self, state, context);
+            }
             _ => (),
         }
 
