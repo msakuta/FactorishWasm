@@ -453,6 +453,7 @@ pub struct FactorishState {
     image_time: Option<ImageBundle>,
     image_smoke: Option<ImageBundle>,
     image_fuel_alarm: Option<ImageBundle>,
+    image_electricity_alarm: Option<ImageBundle>,
 }
 
 #[derive(Debug)]
@@ -539,6 +540,7 @@ impl FactorishState {
             image_time: None,
             image_smoke: None,
             image_fuel_alarm: None,
+            image_electricity_alarm: None,
             board: {
                 let mut ret = vec![
                     Cell {
@@ -1765,6 +1767,7 @@ impl FactorishState {
         self.image_time = Some(load_image("time")?);
         self.image_smoke = Some(load_image("smoke")?);
         self.image_fuel_alarm = Some(load_image("fuelAlarm")?);
+        self.image_electricity_alarm = Some(load_image("electricityAlarm")?);
         Ok(())
     }
 

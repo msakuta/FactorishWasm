@@ -28,6 +28,7 @@ import steamEngine from "../img/steam-engine.png";
 import electPole from "../img/elect-pole.png";
 import smoke from "../img/smoke.png";
 import fuelAlarm from '../img/fuel-alarm.png';
+import electricityAlarm from '../img/electricity-alarm.png';
 import rotateImage from "../img/rotate.png";
 import closeImage from "../img/close.png";
 import rightarrow from "../img/rightarrow.png";
@@ -79,6 +80,7 @@ const ysize = 64;
         ["time", time],
         ["smoke", smoke],
         ["fuelAlarm", fuelAlarm],
+        ["electricityAlarm", electricityAlarm],
     ].map(async ([name, src]) => {
         const res = await fetch(src);
         return [name, src, await createImageBitmap(await res.blob())];

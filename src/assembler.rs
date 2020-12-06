@@ -162,6 +162,14 @@ impl Structure for Assembler {
             }
             return Ok(());
         }
+        if self.recipe.is_some() && self.power == 0. && state.sim_time % 1. < 0.5 {
+            if let Some(img) = state.image_electricity_alarm.as_ref() {
+                let (x, y) = (self.position.x as f64 * 32., self.position.y as f64 * 32.);
+                context.draw_image_with_image_bitmap(&img.bitmap, x, y)?;
+            } else {
+                return js_err!("electricity alarm image not available");
+            }
+        }
 
         Ok(())
     }
