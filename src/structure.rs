@@ -196,7 +196,7 @@ pub(crate) trait Structure {
     }
     fn contains(&self, pos: &Position) -> bool {
         let bb = self.bounding_box();
-        bb.x0 <= pos.x / 32 && pos.x / 32 < bb.x1 && bb.y0 <= pos.y / 32 && pos.y / 32 < bb.y1
+        bb.x0 <= pos.x && pos.x < bb.x1 && bb.y0 <= pos.y && pos.y < bb.y1
     }
     fn draw(
         &self,

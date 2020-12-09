@@ -129,6 +129,7 @@ fn body() -> web_sys::HtmlElement {
 }
 
 const TILE_SIZE: f64 = 32.;
+const TILE_SIZE_I: i32 = TILE_SIZE as i32;
 const COAL_POWER: f64 = 100.; // kilojoules
 const SAVE_VERSION: i32 = 1;
 
@@ -934,8 +935,8 @@ impl FactorishState {
                     .iter_mut()
                     .find(|s| {
                         s.contains(&Position {
-                            x: item.x / TILE_SIZE as i32,
-                            y: item.y / TILE_SIZE as i32,
+                            x: item.x / TILE_SIZE_I,
+                            y: item.y / TILE_SIZE_I,
                         })
                     })
                     .and_then(|structure| structure.item_response(item).ok())
