@@ -51,6 +51,7 @@ mod items;
 mod ore_mine;
 mod perlin_noise;
 mod pipe;
+mod splitter;
 mod steam_engine;
 mod structure;
 mod transport_belt;
@@ -67,6 +68,7 @@ use items::{item_to_str, render_drop_item, str_to_item, DropItem, ItemType};
 use ore_mine::OreMine;
 use perlin_noise::{perlin_noise_pixel, Xor128};
 use pipe::Pipe;
+use splitter::Splitter;
 use steam_engine::SteamEngine;
 use structure::{FrameProcResult, ItemResponse, Position, Rotation, Structure};
 use transport_belt::TransportBelt;
@@ -225,7 +227,7 @@ struct ToolDef {
     item_type: ItemType,
     desc: &'static str,
 }
-const tool_defs: [ToolDef; 11] = [
+const tool_defs: [ToolDef; 12] = [
     ToolDef {
         item_type: ItemType::TransportBelt,
         desc: "Transports items on ground",
@@ -233,6 +235,10 @@ const tool_defs: [ToolDef; 11] = [
     ToolDef {
         item_type: ItemType::Inserter,
         desc: "Picks items from one side and puts on the other side<br>in the direction indicated by an arrow.<br>Costs no energy to operate.",
+    },
+    ToolDef {
+        item_type: ItemType::Splitter,
+        desc: "Connects to transport belt. Splits inputs and outputs into two lanes.",
     },
     ToolDef {
         item_type: ItemType::OreMine,
@@ -425,6 +431,8 @@ pub struct FactorishState {
     on_player_update: js_sys::Function,
     minimap_buffer: RefCell<Vec<u8>>,
     power_wires: Vec<PowerWire>,
+    debug_bbox: bool,
+
     // on_show_inventory: js_sys::Function,
     image_dirt: Option<ImageBundle>,
     image_ore: Option<ImageBundle>,
@@ -440,6 +448,7 @@ pub struct FactorishState {
     image_water_well: Option<ImageBundle>,
     image_pipe: Option<ImageBundle>,
     image_elect_pole: Option<ImageBundle>,
+    image_splitter: Option<ImageBundle>,
     image_inserter: Option<ImageBundle>,
     image_direction: Option<ImageBundle>,
     image_iron_ore: Option<ImageBundle>,
@@ -513,6 +522,7 @@ impl FactorishState {
             info_elem: None,
             minimap_buffer: RefCell::new(vec![]),
             power_wires: vec![],
+            debug_bbox: false,
             image_dirt: None,
             image_ore: None,
             image_coal: None,
@@ -527,6 +537,7 @@ impl FactorishState {
             image_water_well: None,
             image_pipe: None,
             image_elect_pole: None,
+            image_splitter: None,
             image_inserter: None,
             image_direction: None,
             image_iron_ore: None,
@@ -921,7 +932,12 @@ impl FactorishState {
             {
                 if let Some(item_response_result) = structures
                     .iter_mut()
-                    .find(|s| s.position().x == item.x / 32 && s.position().y == item.y / 32)
+                    .find(|s| {
+                        s.contains(&Position {
+                            x: item.x / TILE_SIZE as i32,
+                            y: item.y / TILE_SIZE as i32,
+                        })
+                    })
                     .and_then(|structure| structure.item_response(item).ok())
                 {
                     match item_response_result.0 {
@@ -930,11 +946,10 @@ impl FactorishState {
                                 continue;
                             }
                             if let Some(s) = structures.iter().find(|s| {
-                                s.position()
-                                    == &Position {
-                                        x: moved_x / 32,
-                                        y: moved_y / 32,
-                                    }
+                                s.contains(&Position {
+                                    x: moved_x / 32,
+                                    y: moved_y / 32,
+                                })
                             }) {
                                 if !s.movable() {
                                     continue;
@@ -1340,6 +1355,10 @@ impl FactorishState {
         }
     }
 
+    pub fn set_debug_bbox(&mut self, value: bool) {
+        self.debug_bbox = value;
+    }
+
     /// Move inventory items between structure and player
     /// @param to_player whether the movement happen towards player
     /// @param is_input if true, movement is performed to/from input buffer, otherwise output
@@ -1388,6 +1407,7 @@ impl FactorishState {
                 Box::new(TransportBelt::new(cursor.x, cursor.y, self.tool_rotation))
             }
             ItemType::Inserter => Box::new(Inserter::new(cursor.x, cursor.y, self.tool_rotation)),
+            ItemType::Splitter => Box::new(Splitter::new(cursor.x, cursor.y, self.tool_rotation)),
             ItemType::OreMine => Box::new(OreMine::new(cursor.x, cursor.y, self.tool_rotation)),
             ItemType::Chest => Box::new(Chest::new(cursor)),
             ItemType::Furnace => Box::new(Furnace::new(cursor)),
@@ -1430,6 +1450,7 @@ impl FactorishState {
                 Box::new(map_err(serde_json::from_value::<TransportBelt>(payload))?)
             }
             ItemType::Inserter => Box::new(map_err(serde_json::from_value::<Inserter>(payload))?),
+            ItemType::Splitter => Box::new(map_err(serde_json::from_value::<Splitter>(payload))?),
             ItemType::OreMine => Box::new(map_err(serde_json::from_value::<OreMine>(payload))?),
             ItemType::Chest => Box::new(map_err(serde_json::from_value::<Chest>(payload))?),
             ItemType::Furnace => Box::new(map_err(serde_json::from_value::<Furnace>(payload))?),
@@ -1754,6 +1775,7 @@ impl FactorishState {
         self.image_water_well = Some(load_image("waterWell")?);
         self.image_pipe = Some(load_image("pipe")?);
         self.image_elect_pole = Some(load_image("electPole")?);
+        self.image_splitter = Some(load_image("splitter")?);
         self.image_inserter = Some(load_image("inserter")?);
         self.image_direction = Some(load_image("direction")?);
         self.image_iron_ore = Some(load_image("ore")?);
@@ -1982,6 +2004,22 @@ impl FactorishState {
 
         draw_structures(1)?;
         draw_structures(2)?;
+
+        if self.debug_bbox {
+            context.save();
+            context.set_stroke_style(&JsValue::from_str("red"));
+            context.set_line_width(1.);
+            for structure in &self.structures {
+                let bb = structure.bounding_box();
+                context.stroke_rect(
+                    bb.x0 as f64 * TILE_SIZE,
+                    bb.y0 as f64 * TILE_SIZE,
+                    (bb.x1 - bb.x0) as f64 * TILE_SIZE,
+                    (bb.y1 - bb.y0) as f64 * TILE_SIZE,
+                );
+            }
+            context.restore();
+        }
 
         for ent in &self.temp_ents {
             if let Some(img) = &self.image_smoke {

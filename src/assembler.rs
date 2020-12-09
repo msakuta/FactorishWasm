@@ -340,6 +340,12 @@ impl Structure for Assembler {
                 50.,
             ),
             Recipe::new(
+                hash_map!(ItemType::TransportBelt => 2, ItemType::Gear => 2),
+                hash_map!(ItemType::Splitter => 1),
+                25.,
+                40.,
+            ),
+            Recipe::new(
                 hash_map!(ItemType::IronPlate => 5usize),
                 hash_map!(ItemType::Chest => 1usize),
                 20.,

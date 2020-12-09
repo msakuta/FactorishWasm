@@ -25,6 +25,7 @@ pub(crate) enum ItemType {
     Pipe,
     SteamEngine,
     ElectPole,
+    Splitter,
 }
 
 pub(crate) fn item_to_str(type_: &ItemType) -> String {
@@ -49,6 +50,7 @@ pub(crate) fn item_to_str(type_: &ItemType) -> String {
         ItemType::Pipe => "Pipe".to_string(),
         ItemType::SteamEngine => "Steam Engine".to_string(),
         ItemType::ElectPole => "Electric Pole".to_string(),
+        ItemType::Splitter => "Splitter".to_string(),
     }
 }
 
@@ -74,6 +76,7 @@ pub(crate) fn str_to_item(name: &str) -> Option<ItemType> {
         "Pipe" => Some(ItemType::Pipe),
         "Steam Engine" => Some(ItemType::SteamEngine),
         "Electric Pole" => Some(ItemType::ElectPole),
+        "Splitter" => Some(ItemType::Splitter),
 
         _ => None,
     }
@@ -157,6 +160,7 @@ pub(crate) fn render_drop_item(
         ItemType::Pipe => render16(&state.image_pipe),
         ItemType::SteamEngine => render16(&state.image_steam_engine),
         ItemType::ElectPole => render16(&state.image_elect_pole),
+        ItemType::Splitter => render16(&state.image_splitter),
     }
 }
 
@@ -182,5 +186,6 @@ pub(crate) fn get_item_image_url<'a>(state: &'a FactorishState, item_type: &Item
         ItemType::Pipe => &state.image_pipe.as_ref().unwrap().url,
         ItemType::SteamEngine => &state.image_steam_engine.as_ref().unwrap().url,
         ItemType::ElectPole => &state.image_elect_pole.as_ref().unwrap().url,
+        ItemType::Splitter => &state.image_splitter.as_ref().unwrap().url,
     }
 }
