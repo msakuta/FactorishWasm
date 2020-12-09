@@ -73,16 +73,17 @@ impl Structure for Splitter {
         context: &CanvasRenderingContext2d,
         depth: i32,
     ) -> Result<(), JsValue> {
-        if depth != 0 {
+        if depth != 0 && depth != 1 {
             return Ok(());
-        };
-        match state.image_belt.as_ref().zip(state.image_splitter.as_ref()) {
-            Some((belt, splitter)) => {
-                let (x, y) = (self.position.x as f64 * 32., self.position.y as f64 * 32.);
-                context.save();
-                context.translate(x + 16., y + 16.)?;
-                context.rotate(self.rotation.angle_rad())?;
-                context.translate(-(x + 16.), -(y + 16.))?;
+        }
+        let mut ret = Ok(());
+        let (x, y) = (self.position.x as f64 * 32., self.position.y as f64 * 32.);
+        context.save();
+        context.translate(x + 16., y + 16.)?;
+        context.rotate(self.rotation.angle_rad())?;
+        context.translate(-(x + 16.), -(y + 16.))?;
+        if depth == 0 {
+            if let Some(belt) = state.image_belt.as_ref() {
                 for n in 0..2 {
                     for i in 0..2 {
                         context
@@ -99,17 +100,25 @@ impl Structure for Splitter {
                             )?;
                     }
                 }
-                context.draw_image_with_image_bitmap(
-                    &splitter.bitmap,
-                    self.position.x as f64 * TILE_SIZE,
-                    self.position.y as f64 * TILE_SIZE,
-                )?;
-                context.restore();
+            } else {
+                ret = js_err!("belt image not available");
             }
-            None => return Err(JsValue::from_str("belt image not available")),
+        } else if depth == 1 {
+            if let Some(splitter) = state.image_splitter.as_ref() {
+                if depth == 1 {
+                    context.draw_image_with_image_bitmap(
+                        &splitter.bitmap,
+                        self.position.x as f64 * TILE_SIZE,
+                        self.position.y as f64 * TILE_SIZE,
+                    )?;
+                }
+            } else {
+                ret = js_err!("splitter image not available");
+            }
         }
+        context.restore();
 
-        Ok(())
+        ret
     }
 
     fn movable(&self) -> bool {
