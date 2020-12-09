@@ -2018,6 +2018,10 @@ impl FactorishState {
                     (bb.y1 - bb.y0) as f64 * TILE_SIZE,
                 );
             }
+            context.set_stroke_style(&JsValue::from_str("purple"));
+            for item in &self.drop_items {
+                context.stroke_rect(item.x as f64 - 8., item.y as f64 - 8., 16., 16.);
+            }
             context.restore();
         }
 
