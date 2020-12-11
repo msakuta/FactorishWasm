@@ -130,6 +130,9 @@ fn body() -> web_sys::HtmlElement {
 
 const TILE_SIZE: f64 = 32.;
 const TILE_SIZE_I: i32 = TILE_SIZE as i32;
+const DROP_ITEM_SIZE: f64 = 8.;
+const DROP_ITEM_SIZE_I: i32 = DROP_ITEM_SIZE as i32;
+
 const COAL_POWER: f64 = 100.; // kilojoules
 const SAVE_VERSION: i32 = 1;
 
@@ -342,8 +345,6 @@ impl From<Recipe> for RecipeSerial {
         }
     }
 }
-
-const objsize: i32 = 8;
 
 #[derive(Serialize, Deserialize)]
 struct Player {
@@ -1128,7 +1129,7 @@ impl FactorishState {
                     continue;
                 }
             }
-            if (x - item.x).abs() < objsize && (y - item.y).abs() < objsize {
+            if (x - item.x).abs() < DROP_ITEM_SIZE_I && (y - item.y).abs() < DROP_ITEM_SIZE_I {
                 return true;
             }
         }
@@ -2021,7 +2022,12 @@ impl FactorishState {
             }
             context.set_stroke_style(&JsValue::from_str("purple"));
             for item in &self.drop_items {
-                context.stroke_rect(item.x as f64 - 8., item.y as f64 - 8., 16., 16.);
+                context.stroke_rect(
+                    item.x as f64 - DROP_ITEM_SIZE / 2.,
+                    item.y as f64 - DROP_ITEM_SIZE / 2.,
+                    DROP_ITEM_SIZE,
+                    DROP_ITEM_SIZE,
+                );
             }
             context.restore();
         }
