@@ -106,11 +106,19 @@ impl Structure for Splitter {
         } else if depth == 1 {
             if let Some(splitter) = state.image_splitter.as_ref() {
                 if depth == 1 {
-                    context.draw_image_with_image_bitmap(
-                        &splitter.bitmap,
-                        self.position.x as f64 * TILE_SIZE,
-                        self.position.y as f64 * TILE_SIZE,
-                    )?;
+                    for x in 0..2 {
+                        context.draw_image_with_image_bitmap_and_sw_and_sh_and_dx_and_dy_and_dw_and_dh(
+                            &splitter.bitmap,
+                            0.,
+                            (if self.direction == 0 { 1 - x } else { x }) as f64 * TILE_SIZE,
+                            TILE_SIZE,
+                            TILE_SIZE,
+                            self.position.x as f64 * TILE_SIZE,
+                            (self.position.y + x) as f64 * TILE_SIZE,
+                            TILE_SIZE,
+                            TILE_SIZE,
+                        )?;
+                    }
                 }
             } else {
                 ret = js_err!("splitter image not available");
