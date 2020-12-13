@@ -204,6 +204,7 @@ pub(crate) trait Structure {
         state: &FactorishState,
         context: &CanvasRenderingContext2d,
         depth: i32,
+        is_tooptip: bool,
     ) -> Result<(), JsValue>;
     fn desc(&self, _state: &FactorishState) -> String {
         String::from("")

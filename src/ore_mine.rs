@@ -46,6 +46,7 @@ impl Structure for OreMine {
         state: &FactorishState,
         context: &CanvasRenderingContext2d,
         depth: i32,
+        is_toolbar: bool,
     ) -> Result<(), JsValue> {
         let (x, y) = (
             self.position.x as f64 * TILE_SIZE,
@@ -83,7 +84,9 @@ impl Structure for OreMine {
             },
             2 => {
                 draw_direction_arrow((x, y), &self.rotation, state, context)?;
-                crate::draw_fuel_alarm!(self, state, context);
+                if !is_toolbar {
+                    crate::draw_fuel_alarm!(self, state, context);
+                }
             }
             _ => (),
         }

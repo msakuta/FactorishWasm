@@ -1842,7 +1842,7 @@ impl FactorishState {
             self.new_structure(&tool_defs[tool_index].item_type, &Position { x: 0, y: 0 })?;
         tool.set_rotation(&self.tool_rotation).ok();
         for depth in 0..3 {
-            tool.draw(self, context, depth)?;
+            tool.draw(self, context, depth, true)?;
         }
         Ok(())
     }
@@ -1980,7 +1980,7 @@ impl FactorishState {
 
         let draw_structures = |depth| -> Result<(), JsValue> {
             for structure in &self.structures {
-                structure.draw(&self, &context, depth)?;
+                structure.draw(&self, &context, depth, false)?;
             }
             Ok(())
         };
@@ -2065,7 +2065,7 @@ impl FactorishState {
                     .new_structure(&tool_defs[selected_tool].item_type, &Position::from(cursor))?;
                 tool.set_rotation(&self.tool_rotation).ok();
                 for depth in 0..3 {
-                    tool.draw(self, &context, depth)?;
+                    tool.draw(self, &context, depth, false)?;
                 }
                 context.restore();
             }

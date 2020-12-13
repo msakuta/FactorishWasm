@@ -77,6 +77,7 @@ impl Structure for Boiler {
         state: &FactorishState,
         context: &CanvasRenderingContext2d,
         depth: i32,
+        is_tooltip: bool,
     ) -> Result<(), JsValue> {
         if depth != 0 {
             return Ok(());
@@ -106,7 +107,9 @@ impl Structure for Boiler {
             }
             None => return Err(JsValue::from_str("furnace image not available")),
         }
-        crate::draw_fuel_alarm!(self, state, context);
+        if !is_tooltip {
+            crate::draw_fuel_alarm!(self, state, context);
+        }
 
         Ok(())
     }

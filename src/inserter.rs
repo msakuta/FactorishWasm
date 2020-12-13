@@ -55,6 +55,7 @@ impl Structure for Inserter {
         state: &FactorishState,
         context: &CanvasRenderingContext2d,
         depth: i32,
+        _is_toolbar: bool,
     ) -> Result<(), JsValue> {
         let (x, y) = (self.position.x as f64 * 32., self.position.y as f64 * 32.);
         match depth {
