@@ -1173,11 +1173,12 @@ impl FactorishState {
     }
 
     fn harvest(&mut self, position: &Position, clear_item: bool) -> Result<bool, JsValue> {
-        if let Some((index, structure)) = self
+        let mut harvested_structure = false;
+        while let Some((index, structure)) = self
             .structures
             .iter()
             .enumerate()
-            .find(|(_, structure)| structure.position() == position)
+            .find(|(_, structure)| structure.contains(position))
         {
             self.player
                 .inventory
@@ -1203,8 +1204,9 @@ impl FactorishState {
             self.on_player_update
                 .call1(&window(), &JsValue::from(self.get_player_inventory()?))
                 .unwrap_or(JsValue::from(true));
-            Ok(true)
-        } else if clear_item {
+            harvested_structure = true;
+        }
+        if !harvested_structure && clear_item {
             // Pick up dropped items in the cell
             let mut ret = false;
             while let Some(item_index) = self
@@ -1216,10 +1218,9 @@ impl FactorishState {
                     .add_item(&self.drop_items.remove(item_index).type_, 1);
                 ret = true;
             }
-            Ok(ret)
-        } else {
-            Ok(false)
+            return Ok(ret);
         }
+        Ok(harvested_structure)
     }
 
     fn get_inventory(
@@ -1515,7 +1516,12 @@ impl FactorishState {
                     if 1 <= *count {
                         let mut new_s =
                             self.new_structure(&tool_defs[selected_tool].item_type, &cursor)?;
-                        self.harvest(&cursor, !new_s.movable())?;
+                        let bbox = new_s.bounding_box();
+                        for y in bbox.y0..bbox.y1 {
+                            for x in bbox.x0..bbox.x1 {
+                                self.harvest(&Position { x, y }, !new_s.movable())?;
+                            }
+                        }
                         for structure in &mut self.structures {
                             structure.on_construction(new_s.as_mut(), true)?;
                         }
