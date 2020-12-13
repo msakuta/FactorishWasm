@@ -58,6 +58,18 @@ impl From<&[i32; 2]> for Position {
     }
 }
 
+pub(crate) struct Size {
+    pub width: i32,
+    pub height: i32,
+}
+
+pub(crate) struct BoundingBox {
+    pub x0: i32,
+    pub y0: i32,
+    pub x1: i32,
+    pub y1: i32,
+}
+
 #[derive(Copy, Clone, Serialize, Deserialize)]
 pub(crate) enum Rotation {
     Left,
@@ -81,13 +93,14 @@ impl Rotation {
         (-delta.0, -delta.1)
     }
 
-    pub fn next(&mut self) {
+    pub fn next(&mut self) -> &Self {
         *self = match self {
             Rotation::Left => Rotation::Top,
             Rotation::Top => Rotation::Right,
             Rotation::Right => Rotation::Bottom,
             Rotation::Bottom => Rotation::Left,
-        }
+        };
+        self
     }
 
     pub fn angle_deg(&self) -> i32 {
@@ -167,6 +180,25 @@ where
 pub(crate) trait Structure {
     fn name(&self) -> &str;
     fn position(&self) -> &Position;
+    fn size(&self) -> Size {
+        Size {
+            width: 1,
+            height: 1,
+        }
+    }
+    fn bounding_box(&self) -> BoundingBox {
+        let (position, size) = (self.position(), self.size());
+        BoundingBox {
+            x0: position.x,
+            y0: position.y,
+            x1: position.x + size.width,
+            y1: position.y + size.height,
+        }
+    }
+    fn contains(&self, pos: &Position) -> bool {
+        let bb = self.bounding_box();
+        bb.x0 <= pos.x && pos.x < bb.x1 && bb.y0 <= pos.y && pos.y < bb.y1
+    }
     fn draw(
         &self,
         state: &FactorishState,

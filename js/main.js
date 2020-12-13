@@ -65,6 +65,7 @@ const ysize = 64;
         ["boiler", boiler],
         ["steamEngine", steamEngine],
         ["electPole", electPole],
+        ["splitter", splitter],
         ["waterWell", waterWell],
         ["pipe", pipe],
         ["inserter", inserter],
@@ -863,6 +864,9 @@ const ysize = 64;
             }
         }
     }
+
+    const showDebugBBox = document.getElementById("showDebugBBox");
+    showDebugBBox.addEventListener("click", () => sim.set_debug_bbox(showDebugBBox.checked));
 
     window.setInterval(function(){
         if(!paused)
