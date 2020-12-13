@@ -947,12 +947,11 @@ impl FactorishState {
                             if self.hit_check(moved_x, moved_y, Some(item.id)) {
                                 continue;
                             }
-                            if let Some(s) = structures.iter().find(|s| {
-                                s.contains(&Position {
-                                    x: moved_x / 32,
-                                    y: moved_y / 32,
-                                })
-                            }) {
+                            let position = Position {
+                                x: moved_x / 32,
+                                y: moved_y / 32,
+                            };
+                            if let Some(s) = structures.iter().find(|s| s.contains(&position)) {
                                 if !s.movable() {
                                     continue;
                                 }

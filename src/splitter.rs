@@ -107,17 +107,18 @@ impl Structure for Splitter {
             if let Some(splitter) = state.image_splitter.as_ref() {
                 if depth == 1 {
                     for x in 0..2 {
-                        context.draw_image_with_image_bitmap_and_sw_and_sh_and_dx_and_dy_and_dw_and_dh(
-                            &splitter.bitmap,
-                            0.,
-                            (if self.direction == 0 { 1 - x } else { x }) as f64 * TILE_SIZE,
-                            TILE_SIZE,
-                            TILE_SIZE,
-                            self.position.x as f64 * TILE_SIZE,
-                            (self.position.y + x) as f64 * TILE_SIZE,
-                            TILE_SIZE,
-                            TILE_SIZE,
-                        )?;
+                        context
+                            .draw_image_with_image_bitmap_and_sw_and_sh_and_dx_and_dy_and_dw_and_dh(
+                                &splitter.bitmap,
+                                0.,
+                                (if self.direction == 0 { 1 - x } else { x }) as f64 * TILE_SIZE,
+                                TILE_SIZE,
+                                TILE_SIZE,
+                                self.position.x as f64 * TILE_SIZE,
+                                (self.position.y + x) as f64 * TILE_SIZE,
+                                TILE_SIZE,
+                                TILE_SIZE,
+                            )?;
                     }
                 }
             } else {
@@ -159,18 +160,21 @@ impl Structure for Splitter {
         let Position { x: tx, y: ty } = self.position;
         let halftilesize = TILE_SIZE / 2.;
         let mut postdirection = false;
+        let shift_direction = self.rotation.clone().next().delta();
         if self.rotation.is_horizontal() {
             // Detect the point where the item passes over the mid point of this entity.
             if ((ax + halftilesize) / TILE_SIZE).floor()
                 != ((ax + vx as f64 + halftilesize) / TILE_SIZE).floor()
             {
-                ay = (ty + self.direction as i32) as f64 * TILE_SIZE + TILE_SIZE / 2.;
+                ay = (ty + self.direction as i32 * shift_direction.1) as f64 * TILE_SIZE
+                    + TILE_SIZE / 2.;
                 postdirection = true; // Signal to switch direction
             }
         } else if ((ay + halftilesize) / TILE_SIZE).floor()
             != ((ay + vy as f64 + halftilesize) / TILE_SIZE).floor()
         {
-            ax = (tx + self.direction as i32) as f64 * TILE_SIZE + TILE_SIZE / 2.;
+            ax = (tx + self.direction as i32 * shift_direction.0) as f64 * TILE_SIZE
+                + TILE_SIZE / 2.;
             postdirection = true; // Signal to switch direction
         }
 

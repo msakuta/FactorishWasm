@@ -93,13 +93,14 @@ impl Rotation {
         (-delta.0, -delta.1)
     }
 
-    pub fn next(&mut self) {
+    pub fn next(&mut self) -> &Self {
         *self = match self {
             Rotation::Left => Rotation::Top,
             Rotation::Top => Rotation::Right,
             Rotation::Right => Rotation::Bottom,
             Rotation::Bottom => Rotation::Left,
-        }
+        };
+        self
     }
 
     pub fn angle_deg(&self) -> i32 {
