@@ -867,6 +867,8 @@ const ysize = 64;
 
     const showDebugBBox = document.getElementById("showDebugBBox");
     showDebugBBox.addEventListener("click", () => sim.set_debug_bbox(showDebugBBox.checked));
+    const showDebugFluidBox = document.getElementById("showDebugFluidBox");
+    showDebugFluidBox.addEventListener("click", () => sim.set_debug_fluidbox(showDebugFluidBox.checked));
 
     window.setInterval(function(){
         if(!paused)

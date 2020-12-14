@@ -434,6 +434,7 @@ pub struct FactorishState {
     minimap_buffer: RefCell<Vec<u8>>,
     power_wires: Vec<PowerWire>,
     debug_bbox: bool,
+    debug_fluidbox: bool,
 
     // on_show_inventory: js_sys::Function,
     image_dirt: Option<ImageBundle>,
@@ -525,6 +526,7 @@ impl FactorishState {
             minimap_buffer: RefCell::new(vec![]),
             power_wires: vec![],
             debug_bbox: false,
+            debug_fluidbox: false,
             image_dirt: None,
             image_ore: None,
             image_coal: None,
@@ -1361,6 +1363,10 @@ impl FactorishState {
         self.debug_bbox = value;
     }
 
+    pub fn set_debug_fluidbox(&mut self, value: bool) {
+        self.debug_fluidbox = value;
+    }
+
     /// Move inventory items between structure and player
     /// @param to_player whether the movement happen towards player
     /// @param is_input if true, movement is performed to/from input buffer, otherwise output
@@ -2014,7 +2020,7 @@ impl FactorishState {
 
         if self.debug_bbox {
             context.save();
-            context.set_stroke_style(&JsValue::from_str("red"));
+            context.set_stroke_style(&js_str!("red"));
             context.set_line_width(1.);
             for structure in &self.structures {
                 let bb = structure.bounding_box();
@@ -2025,7 +2031,7 @@ impl FactorishState {
                     (bb.y1 - bb.y0) as f64 * TILE_SIZE,
                 );
             }
-            context.set_stroke_style(&JsValue::from_str("purple"));
+            context.set_stroke_style(&js_str!("purple"));
             for item in &self.drop_items {
                 context.stroke_rect(
                     item.x as f64 - DROP_ITEM_SIZE / 2.,
@@ -2033,6 +2039,45 @@ impl FactorishState {
                     DROP_ITEM_SIZE,
                     DROP_ITEM_SIZE,
                 );
+            }
+            context.restore();
+        }
+
+        if self.debug_fluidbox {
+            context.save();
+            for structure in &self.structures {
+                if let Some(fluid_boxes) = structure.fluid_box() {
+                    let bb = structure.bounding_box();
+                    for (i, fb) in fluid_boxes.iter().enumerate() {
+                        context.set_stroke_style(&js_str!("red"));
+                        context.set_fill_style(&js_str!("black"));
+                        context.fill_rect(
+                            bb.x0 as f64 * TILE_SIZE + 4. + 6. * i as f64,
+                            bb.y0 as f64 * TILE_SIZE + 4.,
+                            4.,
+                            (bb.y1 - bb.y0) as f64 * TILE_SIZE - 8.,
+                        );
+                        context.stroke_rect(
+                            bb.x0 as f64 * TILE_SIZE + 4. + 6. * i as f64,
+                            bb.y0 as f64 * TILE_SIZE + 4.,
+                            4.,
+                            (bb.y1 - bb.y0) as f64 * TILE_SIZE - 8.,
+                        );
+                        context.set_fill_style(&js_str!(match fb.type_ {
+                            Some(FluidType::Water) => "#00ffff",
+                            Some(FluidType::Steam) => "#afafaf",
+                            _ => "#7f7f7f",
+                        }));
+                        let bar_height =
+                            fb.amount / fb.max_amount * (bb.y1 - bb.y0) as f64 * TILE_SIZE - 8.;
+                        context.fill_rect(
+                            bb.x0 as f64 * TILE_SIZE + 4. + 6. * i as f64,
+                            bb.y1 as f64 * TILE_SIZE - 4. - bar_height,
+                            4.,
+                            bar_height,
+                        );
+                    }
+                }
             }
             context.restore();
         }
