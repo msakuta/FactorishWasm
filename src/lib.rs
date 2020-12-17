@@ -2049,30 +2049,32 @@ impl FactorishState {
                 if let Some(fluid_boxes) = structure.fluid_box() {
                     let bb = structure.bounding_box();
                     for (i, fb) in fluid_boxes.iter().enumerate() {
+                        const BAR_MARGIN: f64 = 4.;
+                        const BAR_WIDTH: f64 = 4.;
                         context.set_stroke_style(&js_str!("red"));
                         context.set_fill_style(&js_str!("black"));
                         context.fill_rect(
-                            bb.x0 as f64 * TILE_SIZE + 4. + 6. * i as f64,
-                            bb.y0 as f64 * TILE_SIZE + 4.,
-                            4.,
-                            (bb.y1 - bb.y0) as f64 * TILE_SIZE - 8.,
+                            bb.x0 as f64 * TILE_SIZE + BAR_MARGIN + 6. * i as f64,
+                            bb.y0 as f64 * TILE_SIZE + BAR_MARGIN,
+                            BAR_WIDTH,
+                            (bb.y1 - bb.y0) as f64 * TILE_SIZE - BAR_MARGIN * 2.,
                         );
                         context.stroke_rect(
-                            bb.x0 as f64 * TILE_SIZE + 4. + 6. * i as f64,
-                            bb.y0 as f64 * TILE_SIZE + 4.,
-                            4.,
-                            (bb.y1 - bb.y0) as f64 * TILE_SIZE - 8.,
+                            bb.x0 as f64 * TILE_SIZE + BAR_MARGIN + 6. * i as f64,
+                            bb.y0 as f64 * TILE_SIZE + BAR_MARGIN,
+                            BAR_WIDTH,
+                            (bb.y1 - bb.y0) as f64 * TILE_SIZE - BAR_MARGIN * 2.,
                         );
                         context.set_fill_style(&js_str!(match fb.type_ {
                             Some(FluidType::Water) => "#00ffff",
                             Some(FluidType::Steam) => "#afafaf",
                             _ => "#7f7f7f",
                         }));
-                        let bar_height =
-                            fb.amount / fb.max_amount * (bb.y1 - bb.y0) as f64 * TILE_SIZE - 8.;
+                        let bar_height = fb.amount / fb.max_amount
+                            * ((bb.y1 - bb.y0) as f64 * TILE_SIZE - BAR_MARGIN * 2.);
                         context.fill_rect(
-                            bb.x0 as f64 * TILE_SIZE + 4. + 6. * i as f64,
-                            bb.y1 as f64 * TILE_SIZE - 4. - bar_height,
+                            bb.x0 as f64 * TILE_SIZE + BAR_MARGIN + 6. * i as f64,
+                            bb.y1 as f64 * TILE_SIZE - BAR_MARGIN - bar_height,
                             4.,
                             bar_height,
                         );
