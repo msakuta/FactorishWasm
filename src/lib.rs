@@ -1667,7 +1667,25 @@ impl FactorishState {
                 self.viewport_y = (self.viewport_y - 1.).max(-(self.height as f64));
                 Ok(true)
             }
-            _ => Ok(false),
+            81 => {
+                // 'q'
+                if self.selected_tool.is_some() {
+                    self.selected_tool = None;
+                } else if let Some(cursor) = self.cursor {
+                    if let Some(structure) = self.find_structure_tile(&cursor) {
+                        self.selected_tool = tool_defs
+                            .iter()
+                            .enumerate()
+                            .find(|(_, tool)| Some(tool.item_type) == str_to_item(structure.name()))
+                            .map(|(index, _)| index);
+                    }
+                }
+                Ok(true)
+            }
+            _ => {
+                console_log!("unrecognized key: {}", key_code);
+                Ok(false)
+            }
         }
     }
 
