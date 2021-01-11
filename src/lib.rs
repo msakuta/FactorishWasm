@@ -824,6 +824,9 @@ impl FactorishState {
         )
         .map_err(|_| js_str!("drop items deserialization error"))?;
 
+        // Redraw minimap
+        self.render_minimap_data()?;
+
         Ok(())
     }
 
@@ -1701,7 +1704,13 @@ impl FactorishState {
         }
     }
 
-    fn render_minimap_data(&self, data: &mut Vec<u8>) {
+    fn render_minimap_data(&mut self) -> Result<(), JsValue> {
+        let mut data = self
+            .minimap_buffer
+            .try_borrow_mut()
+            .or_else(|_| js_err!("Couldn't acquire mutable ref for minimap buffer"))?;
+        *data = vec![0u8; (self.width * self.height * 4) as usize];
+
         for y in 0..self.height as i32 {
             for x in 0..self.width as i32 {
                 let cell = self.tile_at(&[x, y]).unwrap();
@@ -1721,6 +1730,8 @@ impl FactorishState {
             data[((x + y * self.width as i32) * 4 + 1) as usize] = color[1];
             data[((x + y * self.width as i32) * 4 + 2) as usize] = color[2];
         }
+
+        Ok(())
     }
 
     fn render_minimap_data_pixel(&self, data: &mut Vec<u8>, position: &Position) {
@@ -1754,10 +1765,7 @@ impl FactorishState {
         self.viewport_height = canvas.height() as f64;
         self.info_elem = Some(info_elem);
 
-        if let Ok(ref mut data) = self.minimap_buffer.try_borrow_mut() {
-            **data = vec![0u8; (self.width * self.height * 4) as usize];
-            self.render_minimap_data(data)
-        }
+        self.render_minimap_data()?;
 
         let load_image = |path| -> Result<ImageBundle, JsValue> {
             if let Some(value) = image_assets.iter().find(|value| {
