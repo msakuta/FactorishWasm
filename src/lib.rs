@@ -1142,7 +1142,7 @@ impl FactorishState {
 
     fn rotate(&mut self) -> Result<bool, RotateErr> {
         if let Some(_selected_tool) = self.selected_tool {
-            self.tool_rotation.next();
+            self.tool_rotation = self.tool_rotation.next();
             Ok(true)
         } else {
             if let Some(ref cursor) = self.cursor {

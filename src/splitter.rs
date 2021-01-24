@@ -136,7 +136,7 @@ impl Structure for Splitter {
     }
 
     fn rotate(&mut self) -> Result<(), ()> {
-        self.rotation.next();
+        self.rotation = self.rotation.next();
         Ok(())
     }
 

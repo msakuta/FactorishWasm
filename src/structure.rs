@@ -1,6 +1,7 @@
 use super::items::ItemType;
 use super::water_well::FluidBox;
 use super::{DropItem, FactorishState, Inventory, InventoryTrait, Recipe};
+use rotate_enum::RotateEnum;
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 use web_sys::CanvasRenderingContext2d;
@@ -70,7 +71,7 @@ pub(crate) struct BoundingBox {
     pub y1: i32,
 }
 
-#[derive(Copy, Clone, Serialize, Deserialize)]
+#[derive(Copy, Clone, Serialize, Deserialize, RotateEnum)]
 pub(crate) enum Rotation {
     Left,
     Top,
@@ -91,16 +92,6 @@ impl Rotation {
     pub fn delta_inv(&self) -> (i32, i32) {
         let delta = self.delta();
         (-delta.0, -delta.1)
-    }
-
-    pub fn next(&mut self) -> &Self {
-        *self = match self {
-            Rotation::Left => Rotation::Top,
-            Rotation::Top => Rotation::Right,
-            Rotation::Right => Rotation::Bottom,
-            Rotation::Bottom => Rotation::Left,
-        };
-        self
     }
 
     pub fn angle_deg(&self) -> i32 {
