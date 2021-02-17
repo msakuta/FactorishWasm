@@ -155,7 +155,7 @@ const ysize = 64;
     infoElem.style.height = (canvasSize.height - mrect.height - tableMargin) + 'px';
     infoElem.style.textAlign = 'left';
 
-    var toolDefs = sim.tool_defs();
+    const toolBeltSize = 10;
     var toolElems = [];
     var toolOverlays = [];
     var toolCursorElem;
@@ -176,6 +176,26 @@ const ysize = 64;
         toolCursorElem.style.display = currentTool !== null ? 'block' : 'none';
     }
 
+    function renderToolTip(elem, idx){
+        var tool = sim.get_tool_desc(idx);
+        var r = elem.getBoundingClientRect();
+        var cr = container.getBoundingClientRect();
+        toolTip.style.left = (r.left - cr.left) + 'px';
+        toolTip.style.top = (r.bottom - cr.top) + 'px';
+        toolTip.style.display = 'block';
+        if(!tool){
+            toolTip.innerHTML = "<b>Empty slot</b><br>"
+                + "Select an item in the inventory and click here to put the item into this slot.";
+        }
+        else{
+            var desc = tool[1];
+            if(0 < desc.length)
+                desc = '<br>' + desc;
+            toolTip.innerHTML = '<b>' + tool[0] + '</b>'
+                + `<br><i>Shortcut: '${(idx + 1) % 10}'</i>` + desc;
+        }
+    }
+
     // Tool bar
     var toolBarElem = document.getElementById('toolBar');
     toolBarElem.style.borderStyle = 'solid';
@@ -185,10 +205,10 @@ const ysize = 64;
     toolBarElem.margin = '3px';
     toolBarElem.style.top = '480px';
     toolBarElem.style.left = '50%';
-    toolBarElem.style.width = ((toolDefs.length + 1) * tilesize + 8) + 'px';
+    toolBarElem.style.width = ((toolBeltSize + 1) * tilesize + 8) + 'px';
     toolBarElem.style.height = (tilesize + 8) + 'px';
     var toolBarCanvases = [];
-    for(var i = 0; i < toolDefs.length; i++){
+    for(var i = 0; i < toolBeltSize; i++){
         var toolContainer = document.createElement('span');
         toolContainer.style.position = 'absolute';
         toolContainer.style.display = 'inline-block';
@@ -216,24 +236,18 @@ const ysize = 64;
         toolElem.style.textAlign = 'center';
         toolElem.onmousedown = function(e){
             var currentTool = toolElems.indexOf(this);
-            sim.select_tool(currentTool);
+            if(sim.select_tool(currentTool)){
+                updateToolBarImage();
+                updateToolBar();
+                renderToolTip(this, currentTool);
+            }
             updateToolCursor(currentTool);
         }
         toolElem.onmouseenter = function(e){
             var idx = toolElems.indexOf(this);
-            if(idx < 0 || toolDefs.length <= idx)
+            if(idx < 0 || toolBeltSize <= idx)
                 return;
-            var tool = toolDefs[idx];
-            var r = this.getBoundingClientRect();
-            var cr = container.getBoundingClientRect();
-            toolTip.style.left = (r.left - cr.left) + 'px';
-            toolTip.style.top = (r.bottom - cr.top) + 'px';
-            toolTip.style.display = 'block';
-            var desc = tool[1];
-            if(0 < desc.length)
-                desc = '<br>' + desc;
-            toolTip.innerHTML = '<b>' + tool[0] + '</b>'
-                + `<br><i>Shortcut: '${(idx + 1) % 10}'</i>` + desc;
+            renderToolTip(this, idx);
         };
         toolElem.onmouseleave = (_e) => toolTip.style.display = 'none';
         toolContainer.appendChild(toolElem);
