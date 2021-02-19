@@ -99,6 +99,7 @@ const ysize = 64;
     const container = document.getElementById('container2');
     const containerRect = container.getBoundingClientRect();
     const inventoryElem = document.getElementById('inventory2');
+    const mouseIcon = document.getElementById("mouseIcon");
 
     const toolTip = document.createElement('dim');
     toolTip.setAttribute('id', 'tooltip');
@@ -114,7 +115,8 @@ const ysize = 64;
     infoElem.style.border = '1px solid #00f';
     container.appendChild(infoElem);
 
-    var selectedInventory = null;
+    let selectedInventory = null;
+    let selectedInventoryItem = null;
 
     let miniMapDrag = false;
     const tilesize = 32;
@@ -199,6 +201,7 @@ const ysize = 64;
     function deselectPlayerInventory(){
         selectedInventory = null;
         sim.deselect_player_inventory();
+        mouseIcon.style.display = "none";
     }
 
     // Tool bar
@@ -405,7 +408,7 @@ const ysize = 64;
         return img;
     }
 
-    function updateInventoryInt(elem, owner, icons, [inventory, selectedInventoryItem]){
+    function updateInventoryInt(elem, owner, icons, [inventory, item]){
         // Local function to update DOM elements based on selection
         function updateInventorySelection(elem){
             for(var i = 0; i < elem.children.length; i++){
@@ -414,7 +417,9 @@ const ysize = 64;
                     celem.itemName === selectedInventoryItem ? "#00ffff" : "";
             }
         }
-    
+
+        selectedInventoryItem = item;
+
         // Clear the elements first
         while(elem.firstChild)
             elem.removeChild(elem.firstChild);
@@ -451,6 +456,11 @@ const ysize = 64;
                 selectedInventoryItem = itemName;
                 if(elem === playerInventoryElem){
                     sim.select_player_inventory(selectedInventoryItem);
+                    mouseIcon.style.display = "block";
+                    let imageFile = getImageFile(selectedInventoryItem);
+                    if(imageFile instanceof Array)
+                        imageFile = imageFile[0];
+                    mouseIcon.style.backgroundImage = `url(${imageFile})`;
                 }
                 else{
                     sim.select_structure_inventory(selectedInventoryItem);
@@ -853,6 +863,13 @@ const ysize = 64;
             document.body.removeChild(downloadLink);
         }
     };
+
+    const body = document.body;
+    body.addEventListener("mousemove", (evt) => {
+        let mousePos = [evt.clientX, evt.clientY];
+        mouseIcon.style.left = `${mousePos[0]}px`;
+        mouseIcon.style.top = `${mousePos[1]}px`;
+    });
 
     const loadFile = document.getElementById('loadFile');
     loadFile.addEventListener('change', (event) => {
