@@ -357,13 +357,18 @@ impl Player {
         self.inventory.add_items(name, count);
     }
 
-    fn select_item(&mut self, name: &ItemType) -> Result<(), JsValue> {
-        if self.inventory.get(name).is_some() {
-            self.selected_item = Some(*name);
-            Ok(())
+    fn select_item(&mut self, item: Option<&ItemType>) -> Result<(), JsValue> {
+        if let Some(item) = item {
+            if self.inventory.get(item).is_some() {
+                self.selected_item = Some(*item);
+                Ok(())
+            } else {
+                self.selected_item = None;
+                Err(JsValue::from_str("item not found"))
+            }
         } else {
             self.selected_item = None;
-            Err(JsValue::from_str("item not found"))
+            Ok(())
         }
     }
 }
@@ -1266,9 +1271,14 @@ impl FactorishState {
     }
 
     pub fn select_player_inventory(&mut self, name: &str) -> Result<(), JsValue> {
-        self.player.select_item(
+        self.player.select_item(Some(
             &str_to_item(name).ok_or_else(|| JsValue::from_str("Item name not identified"))?,
-        )
+        ))
+    }
+
+    /// Deselect is a separate function from select because wasm-bindgen cannot overload Option
+    pub fn deselect_player_inventory(&mut self) -> Result<(), JsValue> {
+        self.player.select_item(None)
     }
 
     pub fn open_structure_inventory(&mut self, c: i32, r: i32) -> Result<(), JsValue> {

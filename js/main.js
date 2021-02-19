@@ -196,6 +196,11 @@ const ysize = 64;
         }
     }
 
+    function deselectPlayerInventory(){
+        selectedInventory = null;
+        sim.deselect_player_inventory();
+    }
+
     // Tool bar
     var toolBarElem = document.getElementById('toolBar');
     toolBarElem.style.borderStyle = 'solid';
@@ -241,6 +246,8 @@ const ysize = 64;
                 updateToolBar();
                 renderToolTip(this, currentTool);
             }
+            deselectPlayerInventory();
+            updateInventory(sim.get_player_inventory());
             updateToolCursor(currentTool);
         }
         toolElem.onmouseenter = function(e){
@@ -434,6 +441,12 @@ const ysize = 64;
             /// Either clicking or start dragging will select the item, so that
             /// it can be moved on drop
             function selectThisItem(itemName){
+                if(selectedInventory === owner && selectedInventoryItem === itemName){
+                    deselectPlayerInventory();
+                    selectedInventoryItem = null;
+                    updateInventorySelection(elem);
+                    return;
+                }
                 selectedInventory = owner;
                 selectedInventoryItem = itemName;
                 if(elem === playerInventoryElem){
