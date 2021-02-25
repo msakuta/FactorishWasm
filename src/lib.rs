@@ -1394,29 +1394,30 @@ impl FactorishState {
         to_player: bool,
         is_input: bool,
     ) -> Result<bool, JsValue> {
-        if let Some(pos) = self.selected_structure_inventory {
-            if let Some(idx) = self.find_structure_tile_idx(&[pos.x, pos.y]) {
-                if let Some(inventory) = self.structures[idx].inventory_mut(is_input) {
-                    let (src, dst, item_name) = if to_player {
-                        (
-                            inventory,
-                            &mut self.player.inventory,
-                            &self.selected_structure_item,
-                        )
-                    } else {
-                        (
-                            &mut self.player.inventory,
-                            inventory,
-                            &self.player.selected_item,
-                        )
-                    };
-                    // console_log!("moving {:?}", item_name);
-                    if let Some(item_name) = item_name {
-                        if FactorishState::move_inventory_item(src, dst, item_name) {
-                            self.on_player_update
-                                .call1(&window(), &JsValue::from(self.get_player_inventory()?))?;
-                            return Ok(true);
-                        }
+        if let Some(idx) = self
+            .selected_structure_inventory
+            .and_then(|pos| self.find_structure_tile_idx(&[pos.x, pos.y]))
+        {
+            if let Some(inventory) = self.structures.get_mut(idx).expect("structure out of bounds").inventory_mut(is_input) {
+                let (src, dst, item_name) = if to_player {
+                    (
+                        inventory,
+                        &mut self.player.inventory,
+                        &self.selected_structure_item,
+                    )
+                } else {
+                    (
+                        &mut self.player.inventory,
+                        inventory,
+                        &self.player.selected_item,
+                    )
+                };
+                // console_log!("moving {:?}", item_name);
+                if let Some(item_name) = item_name {
+                    if FactorishState::move_inventory_item(src, dst, item_name) {
+                        self.on_player_update
+                            .call1(&window(), &JsValue::from(self.get_player_inventory()?))?;
+                        return Ok(true);
                     }
                 }
             }

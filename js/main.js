@@ -176,6 +176,10 @@ const ysize = 64;
         toolCursorElem.style.width = '30px';
         toolCursorElem.style.height = '30px';
         toolCursorElem.style.display = currentTool !== null ? 'block' : 'none';
+        if(currentTool || sim.selected_item())
+            mouseIcon.style.display = "block";
+        else
+            mouseIcon.style.display = "none";
     }
 
     function renderToolTip(elem, idx){
@@ -249,7 +253,6 @@ const ysize = 64;
                 updateToolBar();
                 renderToolTip(this, currentTool);
             }
-            deselectPlayerInventory();
             updateInventory(sim.get_player_inventory());
             updateToolCursor(currentTool);
         }
