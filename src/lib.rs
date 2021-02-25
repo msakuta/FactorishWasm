@@ -1533,7 +1533,7 @@ impl FactorishState {
         let mut events = vec![];
 
         if button == 0 {
-            if let Some(selected_tool) = self.get_selected_tool_or_item() {
+            if let Some(selected_tool) = self.get_selected_tool_or_item_opt() {
                 if let Some(count) = self.player.inventory.get(&selected_tool) {
                     if 1 <= *count {
                         let mut new_s = self.new_structure(&selected_tool, &cursor)?;
@@ -1876,6 +1876,23 @@ impl FactorishState {
         }
     }
 
+    /// Returns count of selected item or null
+    pub fn get_selected_item(&self) -> JsValue {
+        if let Some(selected_item) = self.player.selected_item {
+            JsValue::from_f64(*self.player.inventory.get(&selected_item).unwrap_or(&0) as f64)
+        } else {
+            JsValue::null()
+        }
+    }
+
+    pub fn get_selected_tool_or_item(&self) -> JsValue {
+        if let Some(selected_item) = self.get_selected_tool_or_item_opt() {
+            JsValue::from_str(&item_to_str(&selected_item))
+        } else {
+            JsValue::null()
+        }
+    }
+
     /// Renders a tool item on the toolbar icon.
     pub fn render_tool(
         &self,
@@ -1923,7 +1940,7 @@ impl FactorishState {
         }
     }
 
-    fn get_selected_tool_or_item(&self) -> Option<ItemType> {
+    fn get_selected_tool_or_item_opt(&self) -> Option<ItemType> {
         self.selected_tool
             .and_then(|tool| self.tool_belt[tool])
             .or_else(|| {
@@ -2203,7 +2220,7 @@ impl FactorishState {
 
         if let Some(ref cursor) = self.cursor {
             let (x, y) = ((cursor[0] * 32) as f64, (cursor[1] * 32) as f64);
-            if let Some(selected_tool) = self.get_selected_tool_or_item() {
+            if let Some(selected_tool) = self.get_selected_tool_or_item_opt() {
                 context.save();
                 context.set_global_alpha(0.5);
                 let mut tool = self.new_structure(&selected_tool, &Position::from(cursor))?;

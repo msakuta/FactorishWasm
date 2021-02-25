@@ -176,8 +176,18 @@ const ysize = 64;
         toolCursorElem.style.width = '30px';
         toolCursorElem.style.height = '30px';
         toolCursorElem.style.display = currentTool !== null ? 'block' : 'none';
-        if(currentTool || sim.selected_item())
+        updateMouseIcon();
+    }
+
+    function updateMouseIcon(){
+        const item = sim.get_selected_tool_or_item();
+        if(item){
             mouseIcon.style.display = "block";
+            let imageFile = getImageFile(item);
+            if(imageFile instanceof Array)
+                imageFile = imageFile[0];
+            mouseIcon.style.backgroundImage = `url(${imageFile})`;
+        }
         else
             mouseIcon.style.display = "none";
     }
@@ -364,7 +374,11 @@ const ysize = 64;
     }
 
     function updateInventory(inventory){
-        updateInventoryInt(playerInventoryElem, sim, false, inventory);
+        try{
+            updateInventoryInt(playerInventoryElem, sim, false, inventory);
+        }catch(e){
+            console.log(e);
+        }
     }
 
     function updateStructureInventory(pos){
@@ -411,6 +425,10 @@ const ysize = 64;
         return img;
     }
 
+    function microTask(f){
+        Promise.resolve().then(f);
+    }
+
     function updateInventoryInt(elem, owner, icons, [inventory, item]){
         // Local function to update DOM elements based on selection
         function updateInventorySelection(elem){
@@ -420,6 +438,10 @@ const ysize = 64;
                     celem.itemName === selectedInventoryItem ? "#00ffff" : "";
             }
         }
+
+        // Defer execution of updateMouseIcon in order to avoid 
+        // "recursive use of an object detected which would lead to unsafe aliasing in rust"
+        microTask(updateMouseIcon);
 
         selectedInventoryItem = item;
 
@@ -459,11 +481,7 @@ const ysize = 64;
                 selectedInventoryItem = itemName;
                 if(elem === playerInventoryElem){
                     sim.select_player_inventory(selectedInventoryItem);
-                    mouseIcon.style.display = "block";
-                    let imageFile = getImageFile(selectedInventoryItem);
-                    if(imageFile instanceof Array)
-                        imageFile = imageFile[0];
-                    mouseIcon.style.backgroundImage = `url(${imageFile})`;
+                    updateMouseIcon();
                 }
                 else{
                     sim.select_structure_inventory(selectedInventoryItem);
