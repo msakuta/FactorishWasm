@@ -402,6 +402,20 @@ enum SelectedItem {
     StructInventory(Position, ItemType),
 }
 
+impl SelectedItem {
+    fn map_struct(&self, position: &Position) -> Option<ItemType> {
+        if let SelectedItem::StructInventory(self_pos, item) = self {
+            if self_pos == position {
+                Some(*item)
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    }
+}
+
 #[wasm_bindgen]
 pub struct FactorishState {
     delta_time: f64,
@@ -416,7 +430,6 @@ pub struct FactorishState {
     board: Vec<Cell>,
     structures: Vec<Box<dyn Structure>>,
     selected_structure_inventory: Option<Position>,
-    selected_structure_item: Option<ItemType>,
     drop_items: Vec<DropItem>,
     serial_no: u32,
     tool_belt: [Option<ItemType>; 10],
@@ -595,7 +608,6 @@ impl FactorishState {
                 Box::new(SteamEngine::new(&Position::new(12, 5))),
             ],
             selected_structure_inventory: None,
-            selected_structure_item: None,
             drop_items: vec![],
             serial_no: 0,
             on_player_update,
@@ -1315,9 +1327,14 @@ impl FactorishState {
     ) -> Result<js_sys::Array, JsValue> {
         if let Some(structure) = self.find_structure_tile(&[c, r]) {
             if let Some(inventory) = structure.inventory(is_input) {
-                return self.get_inventory(inventory, &self.selected_structure_item);
+                return self.get_inventory(
+                    inventory,
+                    &self
+                        .selected_item
+                        .and_then(|item| item.map_struct(&Position { x: c, y: r })),
+                );
             } else {
-                return self.get_inventory(&Inventory::new(), &self.selected_structure_item);
+                return self.get_inventory(&Inventory::new(), &None);
             }
         }
         Err(JsValue::from_str(
@@ -1326,8 +1343,11 @@ impl FactorishState {
     }
 
     pub fn select_structure_inventory(&mut self, name: &str) -> Result<(), JsValue> {
-        self.selected_structure_item =
-            Some(str_to_item(name).ok_or_else(|| JsValue::from("Item name not valid"))?);
+        self.selected_item = Some(SelectedItem::StructInventory(
+            self.selected_structure_inventory
+                .ok_or_else(|| js_str!("Structure not selected"))?,
+            str_to_item(name).ok_or_else(|| JsValue::from("Item name not valid"))?,
+        ));
         Ok(())
     }
 
@@ -1395,10 +1415,12 @@ impl FactorishState {
         to_player: bool,
         is_input: bool,
     ) -> Result<bool, JsValue> {
-        if let Some(idx) = self
-            .selected_structure_inventory
-            .and_then(|pos| self.find_structure_tile_idx(&[pos.x, pos.y]))
-        {
+        let pos = if let Some(pos) = self.selected_structure_inventory {
+            pos
+        } else {
+            return Ok(false);
+        };
+        if let Some(idx) = self.find_structure_tile_idx(&[pos.x, pos.y]) {
             if let Some(inventory) = self
                 .structures
                 .get_mut(idx)
@@ -1409,7 +1431,7 @@ impl FactorishState {
                     (
                         inventory,
                         &mut self.player.inventory,
-                        self.selected_structure_item,
+                        self.selected_item.and_then(|item| item.map_struct(&pos)),
                     )
                 } else {
                     (
