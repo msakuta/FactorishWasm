@@ -533,6 +533,7 @@ const ysize = 64;
                 // The amount could have changed during dragging, so we'll query current value
                 // from the source inventory.
                 if(sim.move_selected_inventory_item(!data.fromPlayer, idx === 0)){
+                    deselectPlayerInventory();
                     updateInventory(sim.get_player_inventory());
                     updateToolBar();
                     updateStructureInventory();
@@ -768,6 +769,7 @@ const ysize = 64;
         var data = JSON.parse(ev.dataTransfer.getData(textType));
         if(!data.fromPlayer){
             if(sim.move_selected_inventory_item(!data.fromPlayer, data.fromInput)){
+                deselectPlayerInventory();
                 updateInventory(sim.get_player_inventory());
                 updateToolBar();
                 updateStructureInventory();
@@ -781,6 +783,7 @@ const ysize = 64;
         // Update only if the selected inventory is the other one from destination.
         if(sim.get_selected_inventory() !== null){
             if(sim.move_selected_inventory_item(isPlayer, isInput)){
+                deselectPlayerInventory();
                 updateInventory(sim.get_player_inventory());
                 updateToolBar();
                 updateStructureInventory();
