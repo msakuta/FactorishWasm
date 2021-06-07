@@ -362,9 +362,9 @@ struct ImageBundle {
     bitmap: ImageBitmap,
 }
 
-impl<'a> Into<&'a ImageBitmap> for &'a ImageBundle {
-    fn into(self) -> &'a ImageBitmap {
-        &self.bitmap
+impl<'a> From<&'a ImageBundle> for &'a ImageBitmap {
+    fn from(o: &'a ImageBundle) -> Self {
+        &o.bitmap
     }
 }
 
@@ -534,7 +534,7 @@ impl FactorishState {
                     (ItemType::SteamEngine, 2usize),
                 ]
                 .iter()
-                .map(|v| *v)
+                .copied()
                 .collect(),
             },
             info_elem: None,
@@ -657,7 +657,7 @@ impl FactorishState {
                             "payload".to_string(),
                             structure
                                 .serialize()
-                                .or_else(|e| js_err!("Serialize error: {}", e))?,
+                                .map_err(|e| js_str!("Serialize error: {}", e))?,
                         );
                         Ok(serde_json::Value::Object(map))
                     })
@@ -674,7 +674,7 @@ impl FactorishState {
             serde_json::to_value(
                 self.drop_items
                     .iter()
-                    .map(|item| serde_json::to_value(item))
+                    .map(serde_json::to_value)
                     .collect::<serde_json::Result<Vec<serde_json::Value>>>()
                     .map_err(|e| js_str!("Serialize error: {}", e))?,
             )
@@ -699,14 +699,14 @@ impl FactorishState {
                         let y = idx / self.height as usize;
                         map.insert("position".to_string(), serde_json::to_value((x, y))?);
                         map.insert("cell".to_string(), serde_json::to_value(cell)?);
-                        Ok(serde_json::to_value(map)?)
+                        serde_json::to_value(map)
                     })
                     .collect::<serde_json::Result<Vec<serde_json::Value>>>()
                     .map_err(|e| js_str!("Serialize error on board: {}", e))?,
             )
             .map_err(|e| js_str!("Serialize error on board: {}", e))?,
         );
-        Ok(serde_json::to_string(&map).map_err(|e| js_str!("Serialize error: {}", e))?)
+        serde_json::to_string(&map).map_err(|e| js_str!("Serialize error: {}", e))
     }
 
     pub fn save_game(&self) -> Result<(), JsValue> {
@@ -730,7 +730,7 @@ impl FactorishState {
             value: &serde_json::Value,
             key: I,
         ) -> Result<&serde_json::Value, JsValue> {
-            Ok(value.get(key).ok_or_else(|| js_str!("{} not found", key))?)
+            value.get(key).ok_or_else(|| js_str!("{} not found", key))
         }
 
         fn json_take<I: serde_json::value::Index + std::fmt::Display + Copy>(
@@ -744,23 +744,20 @@ impl FactorishState {
         }
 
         fn json_as_u64(value: &serde_json::Value) -> Result<u64, JsValue> {
-            Ok(value
+            value
                 .as_u64()
-                .ok_or_else(|| js_str!("value could not be converted to u64"))?)
+                .ok_or_else(|| js_str!("value could not be converted to u64"))
         }
 
         fn from_value<T: serde::de::DeserializeOwned>(
             value: serde_json::Value,
         ) -> Result<T, JsValue> {
-            Ok(
-                serde_json::from_value(value)
-                    .map_err(|e| js_str!("deserialization error {}", e))?,
-            )
+            serde_json::from_value(value).map_err(|e| js_str!("deserialization error {}", e))
         }
 
         self.sim_time = json_get(&json, "sim_time")?
             .as_f64()
-            .ok_or(js_str!("sim_time is not float"))?;
+            .ok_or_else(|| js_str!("sim_time is not float"))?;
 
         self.player = from_value(json_take(&mut json, "player")?)?;
 
@@ -771,7 +768,7 @@ impl FactorishState {
             .get_mut("board")
             .ok_or_else(|| js_str!("board not found in saved data"))?
             .as_array_mut()
-            .ok_or(js_str!("board in saved data is not an array"))?;
+            .ok_or_else(|| js_str!("board in saved data is not an array"))?;
         self.board = vec![
             Cell {
                 coal_ore: 0,
@@ -799,9 +796,9 @@ impl FactorishState {
             .get_mut("structures")
             .ok_or_else(|| js_str!("structures not found in saved data"))?
             .as_array_mut()
-            .ok_or(js_str!("structures in saved data is not an array"))?
-            .into_iter()
-            .map(|structure| Ok(Self::structure_from_json(structure)?))
+            .ok_or_else(|| js_str!("structures in saved data is not an array"))?
+            .iter_mut()
+            .map(|structure| Self::structure_from_json(structure))
             .collect::<Result<Vec<Box<dyn Structure>>, JsValue>>()?;
 
         if version == 0 {
@@ -837,7 +834,7 @@ impl FactorishState {
 
         self.drop_items = serde_json::from_value(
             json.get_mut("items")
-                .ok_or(js_str!("\"items\" not found"))?
+                .ok_or_else(|| js_str!("\"items\" not found"))?
                 .take(),
         )
         .map_err(|_| js_str!("drop items deserialization error"))?;
@@ -854,7 +851,7 @@ impl FactorishState {
         if let Some(storage) = window().local_storage()? {
             let data = storage
                 .get_item("FactorishWasmGameSave")?
-                .ok_or(js_str!("save data not found!"))?;
+                .ok_or_else(|| js_str!("save data not found!"))?;
             self.deserialize_game(&data)
         } else {
             js_err!("The subsystem does not support localStorage")
@@ -943,7 +940,7 @@ impl FactorishState {
             let (front, mid) = structures.split_at_mut(i);
             let (center, last) = mid
                 .split_first_mut()
-                .ok_or(JsValue::from_str("Structures split fail"))?;
+                .ok_or_else(|| JsValue::from_str("Structures split fail"))?;
             frame_proc_result_to_event(
                 center.frame_proc(self, &mut Chained(MutRef(front), MutRef(last))),
             );
@@ -1099,8 +1096,7 @@ impl FactorishState {
             .enumerate()
             .find(|item| item.1.id == id)
         {
-            let ret = Some(self.drop_items.remove(i));
-            ret
+            Some(self.drop_items.remove(i))
         } else {
             None
         }
@@ -1167,10 +1163,10 @@ impl FactorishState {
         } else {
             if let Some(ref cursor) = self.cursor {
                 if let Some(idx) = self.find_structure_tile_idx(cursor) {
-                    return Ok(self.structures[idx]
+                    return self.structures[idx]
                         .rotate()
                         .map_err(|()| RotateErr::NotSupported)
-                        .map(|_| false)?);
+                        .map(|_| false);
                 }
             }
             Err(RotateErr::NotFound)
@@ -1219,7 +1215,7 @@ impl FactorishState {
                 .into_iter()
                 .filter(|power_wire| power_wire.0 != position && power_wire.1 != position)
                 .collect();
-            structure.on_construction_self(&mut Ref(&self.structures), false)?;
+            structure.on_construction_self(&Ref(&self.structures), false)?;
             if let Ok(ref mut data) = self.minimap_buffer.try_borrow_mut() {
                 self.render_minimap_data_pixel(data, &position);
             }
@@ -1228,7 +1224,7 @@ impl FactorishState {
             }
             self.on_player_update
                 .call1(&window(), &JsValue::from(self.get_player_inventory()?))
-                .unwrap_or(JsValue::from(true));
+                .unwrap_or_else(|_| JsValue::from(true));
             harvested_structure = true;
         }
         if !harvested_structure && clear_item {
@@ -1269,7 +1265,7 @@ impl FactorishState {
                 &selected_item
                     .as_ref()
                     .map(|s| item_to_str(s))
-                    .unwrap_or("".to_string()),
+                    .unwrap_or_else(|| "".to_string()),
             ),
         ))
     }
@@ -1380,7 +1376,7 @@ impl FactorishState {
                 &structure
                     .get_recipes()
                     .into_iter()
-                    .map(|v| RecipeSerial::from(v))
+                    .map(RecipeSerial::from)
                     .collect::<Vec<_>>(),
             )
             .unwrap())
@@ -1494,7 +1490,7 @@ impl FactorishState {
     fn structure_from_json(value: &mut serde_json::Value) -> Result<Box<dyn Structure>, JsValue> {
         let type_str = if let serde_json::Value::String(s) = value
             .get_mut("type")
-            .ok_or(js_str!("\"type\" not found"))?
+            .ok_or_else(|| js_str!("\"type\" not found"))?
             .take()
         {
             s
@@ -1507,7 +1503,7 @@ impl FactorishState {
 
         let payload = value
             .get_mut("payload")
-            .ok_or(js_str!("\"payload\" not found"))?
+            .ok_or_else(|| js_str!("\"payload\" not found"))?
             .take();
 
         fn map_err<T: Structure>(result: serde_json::Result<T>) -> Result<T, JsValue> {
@@ -1550,12 +1546,7 @@ impl FactorishState {
     }
 
     fn add_power_wire(&mut self, power_wire: PowerWire) -> Result<(), JsValue> {
-        if self
-            .power_wires
-            .iter()
-            .find(|p| **p == power_wire)
-            .is_some()
-        {
+        if self.power_wires.iter().any(|p| *p == power_wire) {
             return Ok(());
         }
         console_log!("power_wires: {}", self.power_wires.len());
@@ -1601,7 +1592,7 @@ impl FactorishState {
                             }
                         }
                         self.structures = structures;
-                        new_s.on_construction_self(&mut Ref(&self.structures), true)?;
+                        new_s.on_construction_self(&Ref(&self.structures), true)?;
                         self.structures.push(new_s);
                         if let Ok(ref mut data) = self.minimap_buffer.try_borrow_mut() {
                             self.render_minimap_data_pixel(data, &cursor);
@@ -1611,7 +1602,7 @@ impl FactorishState {
                         }
                         self.on_player_update
                             .call1(&window(), &JsValue::from(self.get_player_inventory()?))
-                            .unwrap_or(JsValue::from(true));
+                            .unwrap_or_else(|_| JsValue::from(true));
                         events.push(js_sys::Array::of1(&JsValue::from_str(
                             "updatePlayerInventory",
                         )));
@@ -1761,17 +1752,16 @@ impl FactorishState {
         let mut data = self
             .minimap_buffer
             .try_borrow_mut()
-            .or_else(|_| js_err!("Couldn't acquire mutable ref for minimap buffer"))?;
+            .map_err(|_| js_str!("Couldn't acquire mutable ref for minimap buffer"))?;
         *data = vec![0u8; (self.width * self.height * 4) as usize];
 
         for y in 0..self.height as i32 {
             for x in 0..self.width as i32 {
                 let cell = self.tile_at(&[x, y]).unwrap();
-                data[((x + y * self.width as i32) * 4 + 3) as usize] = 255;
+                let start = ((x + y * self.width as i32) * 4) as usize;
+                data[start + 3] = 255;
                 let color = Self::color_of_cell(&cell);
-                data[((x + y * self.width as i32) * 4 + 0) as usize] = color[0];
-                data[((x + y * self.width as i32) * 4 + 1) as usize] = color[1];
-                data[((x + y * self.width as i32) * 4 + 2) as usize] = color[2];
+                data[start..start + 3].copy_from_slice(&color);
             }
         }
 
@@ -1779,9 +1769,8 @@ impl FactorishState {
         let color = [0x00, 0xff, 0x7f];
         for structure in &self.structures {
             let Position { x, y } = structure.position();
-            data[((x + y * self.width as i32) * 4 + 0) as usize] = color[0];
-            data[((x + y * self.width as i32) * 4 + 1) as usize] = color[1];
-            data[((x + y * self.width as i32) * 4 + 2) as usize] = color[2];
+            let start = ((x + y * self.width as i32) * 4) as usize;
+            data[start..start + 3].copy_from_slice(&color);
         }
 
         Ok(())
@@ -1789,23 +1778,19 @@ impl FactorishState {
 
     fn render_minimap_data_pixel(&self, data: &mut Vec<u8>, position: &Position) {
         let Position { x, y } = *position;
+        let color;
         if self
             .structures
             .iter()
-            .find(|structure| *structure.position() == *position)
-            .is_some()
+            .any(|structure| *structure.position() == *position)
         {
-            let color = [0x00, 0xff, 0x7f];
-            data[((x + y * self.width as i32) * 4 + 0) as usize] = color[0];
-            data[((x + y * self.width as i32) * 4 + 1) as usize] = color[1];
-            data[((x + y * self.width as i32) * 4 + 2) as usize] = color[2];
+            color = [0x00, 0xff, 0x7f];
         } else {
             let cell = self.tile_at(&[x, y]).unwrap();
-            let color = Self::color_of_cell(&cell);
-            data[((x + y * self.width as i32) * 4 + 0) as usize] = color[0];
-            data[((x + y * self.width as i32) * 4 + 1) as usize] = color[1];
-            data[((x + y * self.width as i32) * 4 + 2) as usize] = color[2];
+            color = Self::color_of_cell(&cell);
         }
+        let start = ((x + y * self.width as i32) * 4) as usize;
+        data[start..start + 3].copy_from_slice(&color);
     }
 
     pub fn render_init(
@@ -1829,7 +1814,7 @@ impl FactorishState {
                 Ok(ImageBundle {
                     url: array
                         .get(1)
-                        .map(|v| v.clone())
+                        .cloned()
                         .ok_or_else(|| {
                             JsValue::from_str(&format!(
                                 "Couldn't convert value to String: {:?}",
@@ -1840,7 +1825,7 @@ impl FactorishState {
                         .into(),
                     bitmap: array
                         .get(2)
-                        .map(|v| v.clone())
+                        .cloned()
                         .ok_or_else(|| {
                             JsValue::from_str(&format!(
                                 "Couldn't convert value to ImageBitmap: {:?}",
@@ -1967,7 +1952,7 @@ impl FactorishState {
                     .collect::<js_sys::Array>(),
                 )
             })
-            .unwrap_or(JsValue::null()))
+            .unwrap_or_else(JsValue::null))
     }
 
     /// @returns (number|null) selected tool internally in the FactorishState (number) or null if unselected.
@@ -2005,7 +1990,7 @@ impl FactorishState {
         if let Some(SelectedItem::PlayerInventory(item)) = self.selected_item {
             // We allow only items in tool_defs to present on the tool belt
             // This behavior is different from Factorio, maybe we can allow it
-            if tool_defs.iter().find(|i| i.item_type == item).is_some() {
+            if tool_defs.iter().any(|i| i.item_type == item) {
                 self.tool_belt[tool as usize] = Some(item);
                 // Deselect the item for the player to let him select from tool belt.
                 self.selected_item = None;

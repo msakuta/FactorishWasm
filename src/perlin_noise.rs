@@ -16,7 +16,7 @@ pub fn perlin_noise_pixel(x: f64, y: f64, bit: u32) -> f64 {
         maxv += f;
         f *= persistence;
     }
-    return sum / maxv;
+    sum / maxv
 }
 
 fn noise_pixel(x: f64, y: f64, bit: u32) -> f64 {
@@ -24,7 +24,7 @@ fn noise_pixel(x: f64, y: f64, bit: u32) -> f64 {
     // to the RNG state vector.
     let seed = crc32_gp(&[x.floor() as u32, y.floor() as u32, bit]);
     let mut rs = Xor128::new(seed);
-    return rs.next();
+    rs.next()
 }
 
 const fn make_crc_table() -> [u8; 256] {
@@ -51,8 +51,7 @@ fn crc32_gp(str: &[u32]) -> u32 {
     const table: [u8; 256] = make_crc_table();
     let mut crc = 0xffffffff; //0 ^ (-1);
 
-    for i in 0..str.len() {
-        let val = str[i];
+    for val in str {
         for j in 0..4 {
             crc = (crc >> 8) ^ table[((crc ^ (val >> j)) & 0xFF) as usize] as u32;
         }

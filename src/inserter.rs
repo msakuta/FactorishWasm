@@ -121,7 +121,7 @@ impl Structure for Inserter {
                 None => return Err(JsValue::from_str("inserter-arm image not available")),
             },
             2 => draw_direction_arrow((x, y), &self.rotation, state, context)?,
-            _ => assert!(false),
+            _ => panic!(),
         }
 
         Ok(())
@@ -208,8 +208,6 @@ impl Structure for Inserter {
                                     self.hold_item = Some(item.0);
                                     self.cooldown += INSERTER_TIME;
                                     return Some(item);
-                                } else {
-                                    return None;
                                 }
                             }
                         } else if let Some(item) = output_items.into_iter().next() {
@@ -245,41 +243,39 @@ impl Structure for Inserter {
             } else {
                 self.cooldown -= 1.;
             }
-        } else {
-            if self.cooldown < 1. {
-                self.cooldown = 0.;
-                if let Some(item_type) = self.hold_item {
-                    let mut try_move = |state: &mut FactorishState| {
-                        if let Ok(()) =
-                            state.new_object(output_position.x, output_position.y, item_type)
-                        {
-                            self.cooldown += INSERTER_TIME;
-                            self.hold_item = None;
-                        }
-                    };
-                    if let Some(structure) = find_structure_at(structures, output_position) {
-                        if structure
-                            .input(&DropItem::new(
-                                &mut state.serial_no,
-                                item_type,
-                                output_position.x,
-                                output_position.y,
-                            ))
-                            .is_ok()
-                        {
-                            self.cooldown += INSERTER_TIME;
-                            self.hold_item = None;
-                            return Ok(FrameProcResult::InventoryChanged(output_position));
-                        } else if structure.movable() {
-                            try_move(state)
-                        }
-                    } else {
-                        try_move(state);
+        } else if self.cooldown < 1. {
+            self.cooldown = 0.;
+            if let Some(item_type) = self.hold_item {
+                let mut try_move = |state: &mut FactorishState| {
+                    if let Ok(()) =
+                        state.new_object(output_position.x, output_position.y, item_type)
+                    {
+                        self.cooldown += INSERTER_TIME;
+                        self.hold_item = None;
                     }
+                };
+                if let Some(structure) = find_structure_at(structures, output_position) {
+                    if structure
+                        .input(&DropItem::new(
+                            &mut state.serial_no,
+                            item_type,
+                            output_position.x,
+                            output_position.y,
+                        ))
+                        .is_ok()
+                    {
+                        self.cooldown += INSERTER_TIME;
+                        self.hold_item = None;
+                        return Ok(FrameProcResult::InventoryChanged(output_position));
+                    } else if structure.movable() {
+                        try_move(state)
+                    }
+                } else {
+                    try_move(state);
                 }
-            } else {
-                self.cooldown -= 1.;
             }
+        } else {
+            self.cooldown -= 1.;
         }
         Ok(FrameProcResult::None)
     }

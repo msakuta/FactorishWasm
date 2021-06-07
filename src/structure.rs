@@ -112,10 +112,7 @@ impl Rotation {
     }
 
     pub fn is_horizontal(&self) -> bool {
-        match self {
-            Rotation::Left | Rotation::Right => true,
-            _ => false,
-        }
+        matches!(self, Rotation::Left | Rotation::Right)
     }
 
     pub fn is_vertial(&self) -> bool {
@@ -300,12 +297,11 @@ pub(crate) trait Structure {
             }
             if let Some(structure) = structures
                 .dyn_iter()
-                .map(|s| s)
                 .find(|s| *s.position() == Position { x, y })
             {
                 return structure.fluid_box().is_some();
             }
-            return false;
+            false
         };
 
         // Fluid containers connect to other containers
@@ -314,7 +310,7 @@ pub(crate) trait Structure {
         let t = has_fluid_box(x, y - 1);
         let r = has_fluid_box(x + 1, y);
         let b = has_fluid_box(x, y + 1);
-        return [l, t, r, b];
+        [l, t, r, b]
     }
     /// If this structure can connect to power grid.
     fn power_source(&self) -> bool {

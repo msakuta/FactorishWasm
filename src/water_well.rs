@@ -46,7 +46,7 @@ impl FluidBox {
         let amount_ratio = self.amount / self.max_amount * 100.;
         // Progress bar
         format!("{}{}{}",
-            format!("{}: {:.0}%<br>", self.type_.map(|v| format!("{:?}", v)).unwrap_or("None".to_string()), amount_ratio),
+            format!("{}: {:.0}%<br>", self.type_.map(|v| format!("{:?}", v)).unwrap_or_else(|| "None".to_string()), amount_ratio),
             "<div style='position: relative; width: 100px; height: 10px; background-color: #001f1f; margin: 2px; border: 1px solid #3f3f3f'>",
             format!("<div style='position: absolute; width: {}px; height: 10px; background-color: #ff00ff'></div></div>",
                 amount_ratio),

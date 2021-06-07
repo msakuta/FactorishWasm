@@ -36,7 +36,7 @@ fn _recipe_html(state: &FactorishState, recipe: &Recipe) -> String {
         ret += &generate_item_image(get_item_image_url(state, &key), true, *value);
     }
     ret += "</span></div>";
-    return ret;
+    ret
 }
 
 #[derive(Serialize, Deserialize)]
@@ -75,8 +75,7 @@ impl Assembler {
         let mut check_struct = |position: &Position| {
             if structures
                 .dyn_iter()
-                .find(|structure| structure.power_source() && *structure.position() == *position)
-                .is_some()
+                .any(|structure| structure.power_source() && *structure.position() == *position)
             {
                 ret.push(*position);
             }
@@ -419,7 +418,7 @@ impl Structure for Assembler {
         self.recipe = Some(
             self.get_recipes()
                 .get(index)
-                .ok_or(js_str!("recipes index out of bound {:?}", index))?
+                .ok_or_else(|| js_str!("recipes index out of bound {:?}", index))?
                 .clone(),
         );
         Ok(true)

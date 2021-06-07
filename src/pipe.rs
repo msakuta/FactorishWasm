@@ -42,7 +42,7 @@ impl Pipe {
                 // references.
                 let structures_slice: &[Box<dyn Structure>] = state.structures.as_slice();
 
-                let connection_list = structure.connection(state, &mut Ref(structures_slice));
+                let connection_list = structure.connection(state, &Ref(structures_slice));
                 let connections = connection_list
                     .iter()
                     .enumerate()

@@ -198,7 +198,7 @@ impl Structure for OreMine {
             if 1. <= self.progress + progress {
                 self.progress = 0.;
                 let output_position = self.position.add(self.rotation.delta());
-                let mut str_iter = structures.dyn_iter_mut().map(|v| v);
+                let mut str_iter = structures.dyn_iter_mut();
                 if let Some(structure) = str_iter.find(|s| *s.position() == output_position) {
                     let mut it = recipe.output.iter();
                     if let Some(item) = it.next() {
@@ -212,7 +212,7 @@ impl Structure for OreMine {
                                         x: output_position.x,
                                         y: output_position.y,
                                     })
-                                    .or_else(|_| Err(()))?;
+                                    .map_err(|_| ())?;
                                 if val == 0 {
                                     self.recipe = None;
                                 }
@@ -236,11 +236,9 @@ impl Structure for OreMine {
                             state.new_object(output_position.x, output_position.y, *item.0)
                         {
                             // console_log!("Failed to create object: {:?}", code);
-                        } else {
-                            if let Ok(val) = output(state, *item.0, &self.position) {
-                                if val == 0 {
-                                    self.recipe = None;
-                                }
+                        } else if let Ok(val) = output(state, *item.0, &self.position) {
+                            if val == 0 {
+                                self.recipe = None;
                             }
                         }
                     } else {

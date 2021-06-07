@@ -221,10 +221,10 @@ impl Structure for Furnace {
         if let Some(recipe) = &self.recipe {
             *item_type == ItemType::CoalOre || recipe.input.get(item_type).is_some()
         } else {
-            match item_type {
-                ItemType::CoalOre | ItemType::IronOre | ItemType::CopperOre => true,
-                _ => false,
-            }
+            matches!(
+                item_type,
+                ItemType::CoalOre | ItemType::IronOre | ItemType::CopperOre
+            )
         }
     }
 
