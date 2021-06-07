@@ -418,6 +418,7 @@ impl SelectedItem {
 
 #[wasm_bindgen]
 pub struct FactorishState {
+    #[allow(dead_code)]
     delta_time: f64,
     sim_time: f64,
     width: u32,

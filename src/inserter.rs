@@ -142,7 +142,7 @@ impl Structure for Inserter {
             structures
                 .dyn_iter_mut()
                 .find(|structure| *structure.position() == position)
-        };
+        }
 
         if self.hold_item.is_none() {
             if self.cooldown <= 1. {
