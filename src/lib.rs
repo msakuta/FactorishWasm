@@ -349,22 +349,11 @@ impl From<Recipe> for RecipeSerial {
 #[derive(Serialize, Deserialize)]
 struct Player {
     inventory: Inventory,
-    selected_item: Option<ItemType>,
 }
 
 impl Player {
     fn add_item(&mut self, name: &ItemType, count: usize) {
         self.inventory.add_items(name, count);
-    }
-
-    fn select_item(&mut self, name: &ItemType) -> Result<(), JsValue> {
-        if self.inventory.get(name).is_some() {
-            self.selected_item = Some(*name);
-            Ok(())
-        } else {
-            self.selected_item = None;
-            Err(JsValue::from_str("item not found"))
-        }
     }
 }
 
@@ -404,8 +393,32 @@ impl TempEnt {
 #[derive(Eq, PartialEq, Hash, Copy, Clone, Serialize, Deserialize)]
 struct PowerWire(Position, Position);
 
+#[derive(Eq, PartialEq, Copy, Clone, Debug)]
+enum SelectedItem {
+    /// This is index into `tool_belt`. It is kind of duplicate of `player.selected_item`,
+    /// but we make it separate field because multiple tool belt slots refer to the same item type.
+    ToolBelt(usize),
+    PlayerInventory(ItemType),
+    StructInventory(Position, ItemType),
+}
+
+impl SelectedItem {
+    fn map_struct(&self, position: &Position) -> Option<ItemType> {
+        if let SelectedItem::StructInventory(self_pos, item) = self {
+            if self_pos == position {
+                Some(*item)
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    }
+}
+
 #[wasm_bindgen]
 pub struct FactorishState {
+    #[allow(dead_code)]
     delta_time: f64,
     sim_time: f64,
     width: u32,
@@ -418,10 +431,12 @@ pub struct FactorishState {
     board: Vec<Cell>,
     structures: Vec<Box<dyn Structure>>,
     selected_structure_inventory: Option<Position>,
-    selected_structure_item: Option<ItemType>,
     drop_items: Vec<DropItem>,
     serial_no: u32,
-    selected_tool: Option<usize>,
+    tool_belt: [Option<ItemType>; 10],
+
+    selected_item: Option<SelectedItem>,
+
     tool_rotation: Rotation,
     player: Player,
     temp_ents: Vec<TempEnt>,
@@ -502,7 +517,8 @@ impl FactorishState {
             viewport_y: 0.,
             view_scale: 1.,
             cursor: None,
-            selected_tool: None,
+            tool_belt: [None; 10],
+            selected_item: None,
             tool_rotation: Rotation::Left,
             player: Player {
                 inventory: [
@@ -520,7 +536,6 @@ impl FactorishState {
                 .iter()
                 .map(|v| *v)
                 .collect(),
-                selected_item: None,
             },
             info_elem: None,
             minimap_buffer: RefCell::new(vec![]),
@@ -594,7 +609,6 @@ impl FactorishState {
                 Box::new(SteamEngine::new(&Position::new(12, 5))),
             ],
             selected_structure_inventory: None,
-            selected_structure_item: None,
             drop_items: vec![],
             serial_no: 0,
             on_player_update,
@@ -665,6 +679,10 @@ impl FactorishState {
                     .map_err(|e| js_str!("Serialize error: {}", e))?,
             )
             .map_err(|e| js_str!("Serialize error: {}", e))?,
+        );
+        map.insert(
+            "tool_belt".to_string(),
+            map_err(serde_json::to_value(self.tool_belt), "toolbelt")?,
         );
         map.insert(
             "board".to_string(),
@@ -823,6 +841,8 @@ impl FactorishState {
                 .take(),
         )
         .map_err(|_| js_str!("drop items deserialization error"))?;
+
+        self.tool_belt = from_value(json_take(&mut json, "tool_belt")?)?;
 
         // Redraw minimap
         self.render_minimap_data()?;
@@ -1141,7 +1161,7 @@ impl FactorishState {
     }
 
     fn rotate(&mut self) -> Result<bool, RotateErr> {
-        if let Some(_selected_tool) = self.selected_tool {
+        if let Some(SelectedItem::ToolBelt(_selected_tool)) = self.selected_item {
             self.tool_rotation = self.tool_rotation.next();
             Ok(true)
         } else {
@@ -1256,13 +1276,29 @@ impl FactorishState {
 
     /// Returns [[itemName, itemCount]*, selectedItemName]
     pub fn get_player_inventory(&self) -> Result<js_sys::Array, JsValue> {
-        self.get_inventory(&self.player.inventory, &self.player.selected_item)
+        self.get_inventory(
+            &self.player.inventory,
+            &self.selected_item.and_then(|item| {
+                if let SelectedItem::PlayerInventory(i) = item {
+                    Some(i)
+                } else {
+                    None
+                }
+            }),
+        )
     }
 
     pub fn select_player_inventory(&mut self, name: &str) -> Result<(), JsValue> {
-        self.player.select_item(
-            &str_to_item(name).ok_or_else(|| JsValue::from_str("Item name not identified"))?,
-        )
+        self.selected_item = Some(SelectedItem::PlayerInventory(
+            str_to_item(name).ok_or_else(|| JsValue::from_str("Item name not identified"))?,
+        ));
+        Ok(())
+    }
+
+    /// Deselect is a separate function from select because wasm-bindgen cannot overload Option
+    pub fn deselect_player_inventory(&mut self) -> Result<(), JsValue> {
+        self.selected_item = None;
+        Ok(())
     }
 
     pub fn open_structure_inventory(&mut self, c: i32, r: i32) -> Result<(), JsValue> {
@@ -1298,9 +1334,14 @@ impl FactorishState {
     ) -> Result<js_sys::Array, JsValue> {
         if let Some(structure) = self.find_structure_tile(&[c, r]) {
             if let Some(inventory) = structure.inventory(is_input) {
-                return self.get_inventory(inventory, &self.selected_structure_item);
+                return self.get_inventory(
+                    inventory,
+                    &self
+                        .selected_item
+                        .and_then(|item| item.map_struct(&Position { x: c, y: r })),
+                );
             } else {
-                return self.get_inventory(&Inventory::new(), &self.selected_structure_item);
+                return self.get_inventory(&Inventory::new(), &None);
             }
         }
         Err(JsValue::from_str(
@@ -1309,8 +1350,11 @@ impl FactorishState {
     }
 
     pub fn select_structure_inventory(&mut self, name: &str) -> Result<(), JsValue> {
-        self.selected_structure_item =
-            Some(str_to_item(name).ok_or_else(|| JsValue::from("Item name not valid"))?);
+        self.selected_item = Some(SelectedItem::StructInventory(
+            self.selected_structure_inventory
+                .ok_or_else(|| js_str!("Structure not selected"))?,
+            str_to_item(name).ok_or_else(|| JsValue::from("Item name not valid"))?,
+        ));
         Ok(())
     }
 
@@ -1378,29 +1422,43 @@ impl FactorishState {
         to_player: bool,
         is_input: bool,
     ) -> Result<bool, JsValue> {
-        if let Some(pos) = self.selected_structure_inventory {
-            if let Some(idx) = self.find_structure_tile_idx(&[pos.x, pos.y]) {
-                if let Some(inventory) = self.structures[idx].inventory_mut(is_input) {
-                    let (src, dst, item_name) = if to_player {
-                        (
-                            inventory,
-                            &mut self.player.inventory,
-                            &self.selected_structure_item,
-                        )
-                    } else {
-                        (
-                            &mut self.player.inventory,
-                            inventory,
-                            &self.player.selected_item,
-                        )
-                    };
-                    // console_log!("moving {:?}", item_name);
-                    if let Some(item_name) = item_name {
-                        if FactorishState::move_inventory_item(src, dst, item_name) {
-                            self.on_player_update
-                                .call1(&window(), &JsValue::from(self.get_player_inventory()?))?;
-                            return Ok(true);
-                        }
+        let pos = if let Some(pos) = self.selected_structure_inventory {
+            pos
+        } else {
+            return Ok(false);
+        };
+        if let Some(idx) = self.find_structure_tile_idx(&[pos.x, pos.y]) {
+            if let Some(inventory) = self
+                .structures
+                .get_mut(idx)
+                .expect("structure out of bounds")
+                .inventory_mut(is_input)
+            {
+                let (src, dst, item_name) = if to_player {
+                    (
+                        inventory,
+                        &mut self.player.inventory,
+                        self.selected_item.and_then(|item| item.map_struct(&pos)),
+                    )
+                } else {
+                    (
+                        &mut self.player.inventory,
+                        inventory,
+                        self.selected_item.and_then(|item| {
+                            if let SelectedItem::PlayerInventory(i) = item {
+                                Some(i)
+                            } else {
+                                None
+                            }
+                        }),
+                    )
+                };
+                // console_log!("moving {:?}", item_name);
+                if let Some(item_name) = item_name {
+                    if FactorishState::move_inventory_item(src, dst, &item_name) {
+                        self.on_player_update
+                            .call1(&window(), &JsValue::from(self.get_player_inventory()?))?;
+                        return Ok(true);
                     }
                 }
             }
@@ -1516,15 +1574,10 @@ impl FactorishState {
         let mut events = vec![];
 
         if button == 0 {
-            if let Some(selected_tool) = self.selected_tool {
-                if let Some(count) = self
-                    .player
-                    .inventory
-                    .get(&tool_defs[selected_tool].item_type)
-                {
+            if let Some(selected_tool) = self.get_selected_tool_or_item_opt() {
+                if let Some(count) = self.player.inventory.get(&selected_tool) {
                     if 1 <= *count {
-                        let mut new_s =
-                            self.new_structure(&tool_defs[selected_tool].item_type, &cursor)?;
+                        let mut new_s = self.new_structure(&selected_tool, &cursor)?;
                         let bbox = new_s.bounding_box();
                         for y in bbox.y0..bbox.y1 {
                             for x in bbox.x0..bbox.x1 {
@@ -1553,11 +1606,7 @@ impl FactorishState {
                         if let Ok(ref mut data) = self.minimap_buffer.try_borrow_mut() {
                             self.render_minimap_data_pixel(data, &cursor);
                         }
-                        if let Some(count) = self
-                            .player
-                            .inventory
-                            .get_mut(&tool_defs[selected_tool].item_type)
-                        {
+                        if let Some(count) = self.player.inventory.get_mut(&selected_tool) {
                             *count -= 1;
                         }
                         self.on_player_update
@@ -1672,15 +1721,19 @@ impl FactorishState {
             }
             81 => {
                 // 'q'
-                if self.selected_tool.is_some() {
-                    self.selected_tool = None;
+                if self.selected_item.is_some() {
+                    self.selected_item = None;
                 } else if let Some(cursor) = self.cursor {
-                    if let Some(structure) = self.find_structure_tile(&cursor) {
-                        self.selected_tool = tool_defs
-                            .iter()
-                            .enumerate()
-                            .find(|(_, tool)| Some(tool.item_type) == str_to_item(structure.name()))
-                            .map(|(index, _)| index);
+                    if let Some(structure) = self
+                        .find_structure_tile(&cursor)
+                        .and_then(|s| str_to_item(s.name()))
+                    {
+                        self.selected_item = if self.player.inventory.count_item(&structure) > 0 {
+                            Some(SelectedItem::PlayerInventory(structure))
+                        } else {
+                            None
+                        };
+                        console_log!("q: selected_tool is {:?}", self.selected_item);
                     }
                 }
                 Ok(true)
@@ -1846,14 +1899,12 @@ impl FactorishState {
 
     /// Returns 2-array with [selected_tool, inventory_count]
     pub fn selected_tool(&self) -> js_sys::Array {
-        if let Some(selected_tool) = self.selected_tool {
+        if let Some(SelectedItem::ToolBelt(selected_tool)) = self.selected_item {
             [
                 JsValue::from(selected_tool as f64),
                 JsValue::from(
-                    *self
-                        .player
-                        .inventory
-                        .get(&tool_defs[selected_tool].item_type)
+                    *self.tool_belt[selected_tool]
+                        .and_then(|item| self.player.inventory.get(&item))
                         .unwrap_or(&0) as f64,
                 ),
             ]
@@ -1864,39 +1915,116 @@ impl FactorishState {
         }
     }
 
+    /// Returns count of selected item or null
+    pub fn get_selected_item(&self) -> JsValue {
+        if let Some(SelectedItem::PlayerInventory(selected_item)) = self.selected_item {
+            JsValue::from_f64(*self.player.inventory.get(&selected_item).unwrap_or(&0) as f64)
+        } else {
+            JsValue::null()
+        }
+    }
+
+    pub fn get_selected_tool_or_item(&self) -> JsValue {
+        if let Some(selected_item) = self.get_selected_tool_or_item_opt() {
+            JsValue::from_str(&item_to_str(&selected_item))
+        } else {
+            JsValue::null()
+        }
+    }
+
+    /// Renders a tool item on the toolbar icon.
     pub fn render_tool(
         &self,
         tool_index: usize,
         context: &CanvasRenderingContext2d,
     ) -> Result<(), JsValue> {
         context.clear_rect(0., 0., 32., 32.);
-        let mut tool =
-            self.new_structure(&tool_defs[tool_index].item_type, &Position { x: 0, y: 0 })?;
-        tool.set_rotation(&self.tool_rotation).ok();
-        for depth in 0..3 {
-            tool.draw(self, context, depth, true)?;
+        if let Some(item) = self.tool_belt.get(tool_index).unwrap_or(&None) {
+            let mut tool = self.new_structure(item, &Position { x: 0, y: 0 })?;
+            tool.set_rotation(&self.tool_rotation).ok();
+            for depth in 0..3 {
+                tool.draw(self, context, depth, true)?;
+            }
         }
         Ok(())
     }
 
+    /// Returns [item_name, desc] if there is an item on the tool belt slot at `index`,
+    /// otherwise null.
+    pub fn get_tool_desc(&self, index: usize) -> Result<JsValue, JsValue> {
+        Ok(self
+            .tool_belt
+            .get(index)
+            .unwrap_or(&None)
+            .and_then(|item| tool_defs.iter().find(|tool| tool.item_type == item))
+            .map(|def| {
+                JsValue::from(
+                    [
+                        JsValue::from(&item_to_str(&def.item_type)),
+                        JsValue::from(def.desc),
+                    ]
+                    .iter()
+                    .collect::<js_sys::Array>(),
+                )
+            })
+            .unwrap_or(JsValue::null()))
+    }
+
     /// @returns (number|null) selected tool internally in the FactorishState (number) or null if unselected.
     pub fn get_selected_tool(&self) -> JsValue {
-        if let Some(value) = self.selected_tool {
+        if let Some(SelectedItem::ToolBelt(value)) = self.selected_item {
             JsValue::from(value as i32)
         } else {
             JsValue::null()
         }
     }
 
+    fn get_selected_tool_or_item_opt(&self) -> Option<ItemType> {
+        match self.selected_item {
+            Some(SelectedItem::ToolBelt(tool)) => self.tool_belt[tool],
+            Some(SelectedItem::PlayerInventory(item)) => tool_defs
+                .iter()
+                .find(|def| def.item_type == item)
+                .and(Some(item)),
+            Some(SelectedItem::StructInventory(pos, item)) => self
+                .structures
+                .iter()
+                .find(|s| *s.position() == pos)
+                .and_then(|s| s.inventory(false))
+                .and_then(|inventory| inventory.get(&item))
+                .and(Some(item)),
+            None => None,
+        }
+    }
+
+    /// Attempts to select or set a tool if the player is holding an item
+    ///
+    /// @param tool the index of the tool item, [0,9]
+    /// @returns whether the tool bar item should be re-rendered
     pub fn select_tool(&mut self, tool: i32) -> bool {
-        self.selected_tool = if 0 <= tool
-            && !(self.selected_tool.is_some() && self.selected_tool.unwrap() as i32 == tool)
-        {
-            Some(tool as usize)
-        } else {
-            None
-        };
-        self.selected_tool.is_some()
+        if let Some(SelectedItem::PlayerInventory(item)) = self.selected_item {
+            // We allow only items in tool_defs to present on the tool belt
+            // This behavior is different from Factorio, maybe we can allow it
+            if tool_defs.iter().find(|i| i.item_type == item).is_some() {
+                self.tool_belt[tool as usize] = Some(item);
+                // Deselect the item for the player to let him select from tool belt.
+                self.selected_item = None;
+                return true;
+            } else {
+                console_log!(
+                    "select_tool could not find tool_def with item type: {:?}",
+                    item
+                );
+                return false;
+            }
+        }
+        self.selected_item =
+            if 0 <= tool && Some(SelectedItem::ToolBelt(tool as usize)) != self.selected_item {
+                Some(SelectedItem::ToolBelt(tool as usize))
+            } else {
+                None
+            };
+        self.selected_item.is_some()
     }
 
     pub fn rotate_tool(&mut self) -> i32 {
@@ -1904,11 +2032,16 @@ impl FactorishState {
         self.tool_rotation.angle_4()
     }
 
+    /// Returns an array of item count for tool bar items
     pub fn tool_inventory(&self) -> js_sys::Array {
-        tool_defs
+        self.tool_belt
             .iter()
-            .map(|tool| {
-                JsValue::from(*self.player.inventory.get(&tool.item_type).unwrap_or(&0) as f64)
+            .map(|item| {
+                JsValue::from(
+                    *item
+                        .and_then(|item| self.player.inventory.get(&item))
+                        .unwrap_or(&0) as f64,
+                )
             })
             .collect()
     }
@@ -2131,11 +2264,10 @@ impl FactorishState {
 
         if let Some(ref cursor) = self.cursor {
             let (x, y) = ((cursor[0] * 32) as f64, (cursor[1] * 32) as f64);
-            if let Some(selected_tool) = self.selected_tool {
+            if let Some(selected_tool) = self.get_selected_tool_or_item_opt() {
                 context.save();
                 context.set_global_alpha(0.5);
-                let mut tool = self
-                    .new_structure(&tool_defs[selected_tool].item_type, &Position::from(cursor))?;
+                let mut tool = self.new_structure(&selected_tool, &Position::from(cursor))?;
                 tool.set_rotation(&self.tool_rotation).ok();
                 for depth in 0..3 {
                     tool.draw(self, &context, depth, false)?;

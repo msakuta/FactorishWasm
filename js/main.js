@@ -99,6 +99,7 @@ const ysize = 64;
     const container = document.getElementById('container2');
     const containerRect = container.getBoundingClientRect();
     const inventoryElem = document.getElementById('inventory2');
+    const mouseIcon = document.getElementById("mouseIcon");
 
     const toolTip = document.createElement('dim');
     toolTip.setAttribute('id', 'tooltip');
@@ -114,7 +115,8 @@ const ysize = 64;
     infoElem.style.border = '1px solid #00f';
     container.appendChild(infoElem);
 
-    var selectedInventory = null;
+    let selectedInventory = null;
+    let selectedInventoryItem = null;
 
     let miniMapDrag = false;
     const tilesize = 32;
@@ -155,7 +157,7 @@ const ysize = 64;
     infoElem.style.height = (canvasSize.height - mrect.height - tableMargin) + 'px';
     infoElem.style.textAlign = 'left';
 
-    var toolDefs = sim.tool_defs();
+    const toolBeltSize = 10;
     var toolElems = [];
     var toolOverlays = [];
     var toolCursorElem;
@@ -174,6 +176,46 @@ const ysize = 64;
         toolCursorElem.style.width = '30px';
         toolCursorElem.style.height = '30px';
         toolCursorElem.style.display = currentTool !== null ? 'block' : 'none';
+        updateMouseIcon();
+    }
+
+    function updateMouseIcon(){
+        const item = sim.get_selected_tool_or_item();
+        if(item){
+            mouseIcon.style.display = "block";
+            let imageFile = getImageFile(item);
+            if(imageFile instanceof Array)
+                imageFile = imageFile[0];
+            mouseIcon.style.backgroundImage = `url(${imageFile})`;
+        }
+        else
+            mouseIcon.style.display = "none";
+    }
+
+    function renderToolTip(elem, idx){
+        var tool = sim.get_tool_desc(idx);
+        var r = elem.getBoundingClientRect();
+        var cr = container.getBoundingClientRect();
+        toolTip.style.left = (r.left - cr.left) + 'px';
+        toolTip.style.top = (r.bottom - cr.top) + 'px';
+        toolTip.style.display = 'block';
+        if(!tool){
+            toolTip.innerHTML = "<b>Empty slot</b><br>"
+                + "Select an item in the inventory and click here to put the item into this slot.";
+        }
+        else{
+            var desc = tool[1];
+            if(0 < desc.length)
+                desc = '<br>' + desc;
+            toolTip.innerHTML = '<b>' + tool[0] + '</b>'
+                + `<br><i>Shortcut: '${(idx + 1) % 10}'</i>` + desc;
+        }
+    }
+
+    function deselectPlayerInventory(){
+        selectedInventory = null;
+        sim.deselect_player_inventory();
+        mouseIcon.style.display = "none";
     }
 
     // Tool bar
@@ -185,10 +227,10 @@ const ysize = 64;
     toolBarElem.margin = '3px';
     toolBarElem.style.top = '480px';
     toolBarElem.style.left = '50%';
-    toolBarElem.style.width = ((toolDefs.length + 1) * tilesize + 8) + 'px';
+    toolBarElem.style.width = ((toolBeltSize + 1) * tilesize + 8) + 'px';
     toolBarElem.style.height = (tilesize + 8) + 'px';
     var toolBarCanvases = [];
-    for(var i = 0; i < toolDefs.length; i++){
+    for(var i = 0; i < toolBeltSize; i++){
         var toolContainer = document.createElement('span');
         toolContainer.style.position = 'absolute';
         toolContainer.style.display = 'inline-block';
@@ -216,24 +258,19 @@ const ysize = 64;
         toolElem.style.textAlign = 'center';
         toolElem.onmousedown = function(e){
             var currentTool = toolElems.indexOf(this);
-            sim.select_tool(currentTool);
+            if(sim.select_tool(currentTool)){
+                updateToolBarImage();
+                updateToolBar();
+                renderToolTip(this, currentTool);
+            }
+            updateInventory(sim.get_player_inventory());
             updateToolCursor(currentTool);
         }
         toolElem.onmouseenter = function(e){
             var idx = toolElems.indexOf(this);
-            if(idx < 0 || toolDefs.length <= idx)
+            if(idx < 0 || toolBeltSize <= idx)
                 return;
-            var tool = toolDefs[idx];
-            var r = this.getBoundingClientRect();
-            var cr = container.getBoundingClientRect();
-            toolTip.style.left = (r.left - cr.left) + 'px';
-            toolTip.style.top = (r.bottom - cr.top) + 'px';
-            toolTip.style.display = 'block';
-            var desc = tool[1];
-            if(0 < desc.length)
-                desc = '<br>' + desc;
-            toolTip.innerHTML = '<b>' + tool[0] + '</b>'
-                + `<br><i>Shortcut: '${(idx + 1) % 10}'</i>` + desc;
+            renderToolTip(this, idx);
         };
         toolElem.onmouseleave = (_e) => toolTip.style.display = 'none';
         toolContainer.appendChild(toolElem);
@@ -263,8 +300,6 @@ const ysize = 64;
     } catch(e) {
         alert(`FactorishState.render_init failed: ${e}`);
     }
-
-    updateToolBarImage();
 
     function updateToolBarImage(){
         for(var i = 0; i < toolBarCanvases.length; i++){
@@ -337,7 +372,11 @@ const ysize = 64;
     }
 
     function updateInventory(inventory){
-        updateInventoryInt(playerInventoryElem, sim, false, inventory);
+        try{
+            updateInventoryInt(playerInventoryElem, sim, false, inventory);
+        }catch(e){
+            console.log(e);
+        }
     }
 
     function updateStructureInventory(pos){
@@ -384,7 +423,11 @@ const ysize = 64;
         return img;
     }
 
-    function updateInventoryInt(elem, owner, icons, [inventory, selectedInventoryItem]){
+    function microTask(f){
+        Promise.resolve().then(f);
+    }
+
+    function updateInventoryInt(elem, owner, icons, [inventory, item]){
         // Local function to update DOM elements based on selection
         function updateInventorySelection(elem){
             for(var i = 0; i < elem.children.length; i++){
@@ -393,7 +436,13 @@ const ysize = 64;
                     celem.itemName === selectedInventoryItem ? "#00ffff" : "";
             }
         }
-    
+
+        // Defer execution of updateMouseIcon in order to avoid 
+        // "recursive use of an object detected which would lead to unsafe aliasing in rust"
+        microTask(updateMouseIcon);
+
+        selectedInventoryItem = item;
+
         // Clear the elements first
         while(elem.firstChild)
             elem.removeChild(elem.firstChild);
@@ -420,10 +469,17 @@ const ysize = 64;
             /// Either clicking or start dragging will select the item, so that
             /// it can be moved on drop
             function selectThisItem(itemName){
+                if(selectedInventory === owner && selectedInventoryItem === itemName){
+                    deselectPlayerInventory();
+                    selectedInventoryItem = null;
+                    updateInventorySelection(elem);
+                    return;
+                }
                 selectedInventory = owner;
                 selectedInventoryItem = itemName;
                 if(elem === playerInventoryElem){
                     sim.select_player_inventory(selectedInventoryItem);
+                    updateMouseIcon();
                 }
                 else{
                     sim.select_structure_inventory(selectedInventoryItem);
@@ -475,6 +531,7 @@ const ysize = 64;
                 // The amount could have changed during dragging, so we'll query current value
                 // from the source inventory.
                 if(sim.move_selected_inventory_item(!data.fromPlayer, idx === 0)){
+                    deselectPlayerInventory();
                     updateInventory(sim.get_player_inventory());
                     updateToolBar();
                     updateStructureInventory();
@@ -710,6 +767,7 @@ const ysize = 64;
         var data = JSON.parse(ev.dataTransfer.getData(textType));
         if(!data.fromPlayer){
             if(sim.move_selected_inventory_item(!data.fromPlayer, data.fromInput)){
+                deselectPlayerInventory();
                 updateInventory(sim.get_player_inventory());
                 updateToolBar();
                 updateStructureInventory();
@@ -723,6 +781,7 @@ const ysize = 64;
         // Update only if the selected inventory is the other one from destination.
         if(sim.get_selected_inventory() !== null){
             if(sim.move_selected_inventory_item(isPlayer, isInput)){
+                deselectPlayerInventory();
                 updateInventory(sim.get_player_inventory());
                 updateToolBar();
                 updateStructureInventory();
@@ -788,6 +847,8 @@ const ysize = 64;
         console.error(e);
     }
 
+    updateToolBarImage();
+
     window.addEventListener( "beforeunload", () => sim.save_game());
 
     const copyButton = document.getElementById("copyButton");
@@ -826,6 +887,13 @@ const ysize = 64;
             document.body.removeChild(downloadLink);
         }
     };
+
+    const body = document.body;
+    body.addEventListener("mousemove", (evt) => {
+        let mousePos = [evt.clientX, evt.clientY];
+        mouseIcon.style.left = `${mousePos[0]}px`;
+        mouseIcon.style.top = `${mousePos[1]}px`;
+    });
 
     const loadFile = document.getElementById('loadFile');
     loadFile.addEventListener('change', (event) => {
