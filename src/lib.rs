@@ -680,6 +680,10 @@ impl FactorishState {
             .map_err(|e| js_str!("Serialize error: {}", e))?,
         );
         map.insert(
+            "tool_belt".to_string(),
+            map_err(serde_json::to_value(self.tool_belt), "toolbelt")?,
+        );
+        map.insert(
             "board".to_string(),
             serde_json::to_value(
                 self.board
@@ -836,6 +840,8 @@ impl FactorishState {
                 .take(),
         )
         .map_err(|_| js_str!("drop items deserialization error"))?;
+
+        self.tool_belt = from_value(json_take(&mut json, "tool_belt")?)?;
 
         // Redraw minimap
         self.render_minimap_data()?;
