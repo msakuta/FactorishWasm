@@ -301,8 +301,6 @@ const ysize = 64;
         alert(`FactorishState.render_init failed: ${e}`);
     }
 
-    updateToolBarImage();
-
     function updateToolBarImage(){
         for(var i = 0; i < toolBarCanvases.length; i++){
             var canvasElem = toolBarCanvases[i];
@@ -848,6 +846,8 @@ const ysize = 64;
     catch(e){
         console.error(e);
     }
+
+    updateToolBarImage();
 
     window.addEventListener( "beforeunload", () => sim.save_game());
 
