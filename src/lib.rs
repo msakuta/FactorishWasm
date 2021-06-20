@@ -936,7 +936,7 @@ impl FactorishState {
                                 .call1(&window(), &JsValue::from(self.get_player_inventory()?))
                                 .unwrap_or_else(|_| JsValue::from(true));
                             self.new_popup_text(
-                                &format!("+1 {:?}", ore_harvesting.ore_type),
+                                format!("+1 {:?}", ore_harvesting.ore_type),
                                 ore_harvesting.pos.x as f64 * TILE_SIZE,
                                 ore_harvesting.pos.y as f64 * TILE_SIZE,
                             );
@@ -1277,6 +1277,7 @@ impl FactorishState {
 
     fn harvest(&mut self, position: &Position, clear_item: bool) -> Result<bool, JsValue> {
         let mut harvested_structure = false;
+        let mut popup_text = String::new();
         while let Some((index, structure)) = self
             .structures
             .iter()
@@ -1288,6 +1289,7 @@ impl FactorishState {
                 .add_item(&str_to_item(&structure.name()).ok_or_else(|| {
                     JsValue::from_str(&format!("wrong structure name: {:?}", structure.name()))
                 })?);
+            popup_text += &format!("+1 {}\n", structure.name());
             let mut structure = self.structures.remove(index);
             for notify_structure in &mut self.structures {
                 notify_structure.on_construction(structure.as_mut(), false)?;
@@ -1301,29 +1303,41 @@ impl FactorishState {
             if let Ok(ref mut data) = self.minimap_buffer.try_borrow_mut() {
                 self.render_minimap_data_pixel(data, &position);
             }
-            for (name, count) in structure.destroy_inventory() {
-                self.player.add_item(&name, count)
+            for (item_type, count) in structure.destroy_inventory() {
+                popup_text += &format!("+{} {}\n", count, &item_to_str(&item_type));
+                self.player.add_item(&item_type, count)
             }
             self.on_player_update
                 .call1(&window(), &JsValue::from(self.get_player_inventory()?))
                 .unwrap_or_else(|_| JsValue::from(true));
             harvested_structure = true;
         }
+        let mut harvested_items = false;
         if !harvested_structure && clear_item {
             // Pick up dropped items in the cell
-            let mut ret = false;
+            let mut picked_items = Inventory::new();
             while let Some(item_index) = self
                 .drop_items
                 .iter()
                 .position(|item| item.x / 32 == position.x && item.y / 32 == position.y)
             {
-                self.player
-                    .add_item(&self.drop_items.remove(item_index).type_, 1);
-                ret = true;
+                let item_type = self.drop_items.remove(item_index).type_;
+                picked_items.add_item(&item_type);
+                self.player.add_item(&item_type, 1);
+                harvested_items = true;
             }
-            return Ok(ret);
+            for (item_type, count) in picked_items {
+                popup_text += &format!("+{} {}\n", count, &item_to_str(&item_type));
+            }
         }
-        Ok(harvested_structure)
+        if !popup_text.is_empty() {
+            self.new_popup_text(
+                popup_text,
+                position.x as f64 * TILE_SIZE,
+                position.y as f64 * TILE_SIZE,
+            );
+        }
+        Ok(harvested_structure || harvested_items)
     }
 
     fn get_inventory(
@@ -1623,7 +1637,7 @@ impl FactorishState {
         };
 
         console_log!("mouse_down: {}, {}, button: {}", cursor.x, cursor.y, button);
-        if button == 2 {
+        if button == 2 && self.find_structure_tile(&[cursor.x, cursor.y]).is_none() {
             if let Some(tile) = self.tile_at(&[cursor.x, cursor.y]) {
                 if let Some(ore_type) = tile.get_ore_type() {
                     self.ore_harvesting = Some(OreHarvesting {
@@ -2158,7 +2172,10 @@ impl FactorishState {
         Ok(())
     }
 
-    fn new_popup_text(&mut self, text: &str, x: f64, y: f64) {
+    /// Add a new popup text that will show for a moment and automatically disappears
+    ///
+    /// @param text Is given as owned string because the text is most likely dynamic.
+    fn new_popup_text(&mut self, text: String, x: f64, y: f64) {
         let pop = PopupText {
             text: text.to_string(),
             x: (x + self.viewport_x * TILE_SIZE) * self.view_scale,
