@@ -45,8 +45,8 @@ function isIE(){
 }
 
 const tooltipZIndex = 10000;
-const xsize = 64;
-const ysize = 64;
+let xsize = 64;
+let ysize = 64;
 
 (async function(){
     // We could fetch and await in Rust code, but it's far easier to do in JavaScript runtime.
@@ -294,8 +294,9 @@ const ysize = 64;
     // Set the margin after contents are initialized
     toolBarElem.style.marginLeft = (-(toolBarElem.getBoundingClientRect().width + miniMapSize + tableMargin) / 2) + 'px';
 
+    let loadedImages;
     try{
-        const loadedImages = await Promise.all(loadImages);
+        loadedImages = await Promise.all(loadImages);
         sim.render_init(canvas, infoElem, loadedImages);
     } catch(e) {
         alert(`FactorishState.render_init failed: ${e}`);
@@ -933,6 +934,17 @@ const ysize = 64;
             }
         }
     }
+
+    const generateBoard = document.getElementById("generateBoard");
+    generateBoard.addEventListener("click", () => {
+        xsize = ysize = parseInt(document.getElementById("sizeSelect").value);
+        sim = new FactorishState(xsize, ysize, updateInventory);
+        try{
+            sim.render_init(canvas, infoElem, loadedImages);
+        } catch(e) {
+            alert(`FactorishState.render_init failed: ${e}`);
+        }
+    });
 
     const showDebugBBox = document.getElementById("showDebugBBox");
     showDebugBBox.addEventListener("click", () => sim.set_debug_bbox(showDebugBBox.checked));
