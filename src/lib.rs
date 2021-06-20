@@ -538,6 +538,11 @@ impl FactorishState {
         // on_show_inventory: js_sys::Function,
     ) -> Result<FactorishState, JsValue> {
         console_log!("FactorishState constructor");
+        let mut tool_belt = [None; 10];
+        tool_belt[0] = Some(ItemType::OreMine);
+        tool_belt[1] = Some(ItemType::Inserter);
+        tool_belt[2] = Some(ItemType::TransportBelt);
+        tool_belt[3] = Some(ItemType::Furnace);
         Ok(FactorishState {
             delta_time: 0.1,
             sim_time: 0.0,
@@ -549,7 +554,7 @@ impl FactorishState {
             viewport_y: 0.,
             view_scale: 1.,
             cursor: None,
-            tool_belt: [None; 10],
+            tool_belt,
             selected_item: None,
             tool_rotation: Rotation::Left,
             player: Player {
@@ -1757,7 +1762,9 @@ impl FactorishState {
             || cursor[1] < 0
             || self.height as i32 <= cursor[1]
         {
-            return Err(js_str!("invalid mouse position: {:?}", cursor));
+            // return Err(js_str!("invalid mouse position: {:?}", cursor));
+            // This is not particularly an error. Just ignore it.
+            return Ok(());
         }
         self.cursor = Some(cursor);
         // console_log!("mouse_move: cursor: {}, {}", cursor[0], cursor[1]);
@@ -1867,7 +1874,7 @@ impl FactorishState {
 
         for y in 0..self.height as i32 {
             for x in 0..self.width as i32 {
-                let cell = self.tile_at(&Position{x, y}).unwrap();
+                let cell = self.tile_at(&Position { x, y }).unwrap();
                 let start = ((x + y * self.width as i32) * 4) as usize;
                 data[start + 3] = 255;
                 let color = Self::color_of_cell(&cell);
