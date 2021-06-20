@@ -165,7 +165,7 @@ impl Structure for OreMine {
             // }
 
             let output = |state: &mut FactorishState, item, position: &Position| {
-                if let Ok(val) = if let Some(tile) = state.tile_at_mut(&[position.x, position.y]) {
+                if let Ok(val) = if let Some(tile) = state.tile_at_mut(&position) {
                     match item {
                         ItemType::IronOre => Ok(&mut tile.iron_ore),
                         ItemType::CoalOre => Ok(&mut tile.coal_ore),

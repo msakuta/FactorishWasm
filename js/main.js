@@ -792,7 +792,8 @@ const ysize = 64;
     let dragging = null;
     canvas.addEventListener("mousedown", function(evt){
         processEvents(sim.mouse_down([evt.offsetX, evt.offsetY], evt.button));
-        dragging = [evt.offsetX, evt.offsetY, false];
+        if(evt.button === 0)
+            dragging = [evt.offsetX, evt.offsetY, false];
         evt.stopPropagation();
         evt.preventDefault();
         return false;
