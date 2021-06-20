@@ -136,6 +136,7 @@ const DROP_ITEM_SIZE_I: i32 = DROP_ITEM_SIZE as i32;
 const COAL_POWER: f64 = 100.; // kilojoules
 const SAVE_VERSION: i32 = 1;
 const ORE_HARVEST_TIME: i32 = 20;
+const POPUP_TEXT_LIFE: i32 = 30;
 
 #[derive(Copy, Clone, Serialize, Deserialize)]
 struct Cell {
@@ -408,6 +409,13 @@ impl TempEnt {
 #[derive(Eq, PartialEq, Hash, Copy, Clone, Serialize, Deserialize)]
 struct PowerWire(Position, Position);
 
+struct PopupText {
+    text: String,
+    x: f64,
+    y: f64,
+    life: i32,
+}
+
 #[derive(Eq, PartialEq, Copy, Clone, Debug)]
 enum SelectedItem {
     /// This is index into `tool_belt`. It is kind of duplicate of `player.selected_item`,
@@ -471,6 +479,7 @@ pub struct FactorishState {
     on_player_update: js_sys::Function,
     minimap_buffer: RefCell<Vec<u8>>,
     power_wires: Vec<PowerWire>,
+    popup_texts: Vec<PopupText>,
     debug_bbox: bool,
     debug_fluidbox: bool,
 
@@ -563,6 +572,7 @@ impl FactorishState {
             info_elem: None,
             minimap_buffer: RefCell::new(vec![]),
             power_wires: vec![],
+            popup_texts: vec![],
             debug_bbox: false,
             debug_fluidbox: false,
             image_dirt: None,
@@ -925,13 +935,16 @@ impl FactorishState {
                             self.on_player_update
                                 .call1(&window(), &JsValue::from(self.get_player_inventory()?))
                                 .unwrap_or_else(|_| JsValue::from(true));
+                            self.new_popup_text(
+                                &format!("+1 {:?}", ore_harvesting.ore_type),
+                                ore_harvesting.pos.x as f64 * TILE_SIZE,
+                                ore_harvesting.pos.y as f64 * TILE_SIZE,
+                            );
                         } else {
                             ret = false;
                         }
                     }
                 }
-                // newPopupText("+1 " + oreHarvesting.type, (oreHarvesting.x - scrollPos[0]) * tilesize,
-                //     (oreHarvesting.y - scrollPos[1]) * tilesize);
             }
             ore_harvesting.timer = (ore_harvesting.timer + 1) % ORE_HARVEST_TIME;
             if ret {
@@ -942,6 +955,20 @@ impl FactorishState {
         } else {
             None
         };
+
+        let mut delete_me = vec![];
+        for (i, item) in self.popup_texts.iter_mut().enumerate() {
+            if item.life <= 0 {
+                delete_me.push(i);
+            } else {
+                item.y -= 1.;
+                item.life -= 1;
+            }
+        }
+
+        for i in delete_me.iter().rev() {
+            self.popup_texts.remove(*i);
+        }
 
         struct MutRef<'r, T: ?Sized>(&'r mut T);
         impl<'a, 'r, T: ?Sized> IntoIterator for &'a MutRef<'r, T>
@@ -1602,7 +1629,7 @@ impl FactorishState {
                     self.ore_harvesting = Some(OreHarvesting {
                         pos: cursor,
                         ore_type,
-                        timer: ORE_HARVEST_TIME,
+                        timer: 0,
                     });
                 }
             }
@@ -2131,6 +2158,16 @@ impl FactorishState {
         Ok(())
     }
 
+    fn new_popup_text(&mut self, text: &str, x: f64, y: f64) {
+        let pop = PopupText {
+            text: text.to_string(),
+            x: (x + self.viewport_x * TILE_SIZE) * self.view_scale,
+            y: (y + self.viewport_y * TILE_SIZE) * self.view_scale,
+            life: POPUP_TEXT_LIFE,
+        };
+        self.popup_texts.push(pop);
+    }
+
     pub fn render(&self, context: CanvasRenderingContext2d) -> Result<(), JsValue> {
         use std::f64;
 
@@ -2216,8 +2253,9 @@ impl FactorishState {
 
         const WIRE_ATTACH_X: f64 = 28.;
         const WIRE_ATTACH_Y: f64 = 8.;
+        context.set_stroke_style(&js_str!("rgb(191,127,0)"));
+        context.set_line_width(1.);
         for power_wire in &self.power_wires {
-            context.set_stroke_style(&js_str!("rgb(191,127,0)"));
             context.begin_path();
             context.move_to(
                 power_wire.0.x as f64 * TILE_SIZE + WIRE_ATTACH_X,
@@ -2352,6 +2390,15 @@ impl FactorishState {
         }
 
         context.restore();
+
+        context.set_font("bold 14px sans-serif");
+        context.set_stroke_style(&js_str!("white"));
+        context.set_line_width(2.);
+        context.set_fill_style(&js_str!("rgb(0,0,0)"));
+        for item in &self.popup_texts {
+            context.stroke_text(&item.text, item.x, item.y)?;
+            context.fill_text(&item.text, item.x, item.y)?;
+        }
 
         Ok(())
     }
