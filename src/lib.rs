@@ -135,12 +135,28 @@ const DROP_ITEM_SIZE_I: i32 = DROP_ITEM_SIZE as i32;
 
 const COAL_POWER: f64 = 100.; // kilojoules
 const SAVE_VERSION: i32 = 1;
+const ORE_HARVEST_TIME: i32 = 20;
+const POPUP_TEXT_LIFE: i32 = 30;
 
 #[derive(Copy, Clone, Serialize, Deserialize)]
 struct Cell {
     iron_ore: u32,
     coal_ore: u32,
     copper_ore: u32,
+}
+
+impl Cell {
+    fn get_ore_type(&self) -> Option<ItemType> {
+        if 0 < self.iron_ore {
+            Some(ItemType::IronOre)
+        } else if 0 < self.copper_ore {
+            Some(ItemType::CopperOre)
+        } else if 0 < self.coal_ore {
+            Some(ItemType::CoalOre)
+        } else {
+            None
+        }
+    }
 }
 
 type Inventory = HashMap<ItemType, usize>;
@@ -393,6 +409,13 @@ impl TempEnt {
 #[derive(Eq, PartialEq, Hash, Copy, Clone, Serialize, Deserialize)]
 struct PowerWire(Position, Position);
 
+struct PopupText {
+    text: String,
+    x: f64,
+    y: f64,
+    life: i32,
+}
+
 #[derive(Eq, PartialEq, Copy, Clone, Debug)]
 enum SelectedItem {
     /// This is index into `tool_belt`. It is kind of duplicate of `player.selected_item`,
@@ -416,6 +439,13 @@ impl SelectedItem {
     }
 }
 
+#[derive(Clone, Copy)]
+struct OreHarvesting {
+    pos: Position,
+    ore_type: ItemType,
+    timer: i32,
+}
+
 #[wasm_bindgen]
 pub struct FactorishState {
     #[allow(dead_code)]
@@ -436,6 +466,7 @@ pub struct FactorishState {
     tool_belt: [Option<ItemType>; 10],
 
     selected_item: Option<SelectedItem>,
+    ore_harvesting: Option<OreHarvesting>,
 
     tool_rotation: Rotation,
     player: Player,
@@ -448,6 +479,7 @@ pub struct FactorishState {
     on_player_update: js_sys::Function,
     minimap_buffer: RefCell<Vec<u8>>,
     power_wires: Vec<PowerWire>,
+    popup_texts: Vec<PopupText>,
     debug_bbox: bool,
     debug_fluidbox: bool,
 
@@ -506,6 +538,11 @@ impl FactorishState {
         // on_show_inventory: js_sys::Function,
     ) -> Result<FactorishState, JsValue> {
         console_log!("FactorishState constructor");
+        let mut tool_belt = [None; 10];
+        tool_belt[0] = Some(ItemType::OreMine);
+        tool_belt[1] = Some(ItemType::Inserter);
+        tool_belt[2] = Some(ItemType::TransportBelt);
+        tool_belt[3] = Some(ItemType::Furnace);
         Ok(FactorishState {
             delta_time: 0.1,
             sim_time: 0.0,
@@ -517,7 +554,7 @@ impl FactorishState {
             viewport_y: 0.,
             view_scale: 1.,
             cursor: None,
-            tool_belt: [None; 10],
+            tool_belt,
             selected_item: None,
             tool_rotation: Rotation::Left,
             player: Player {
@@ -540,6 +577,7 @@ impl FactorishState {
             info_elem: None,
             minimap_buffer: RefCell::new(vec![]),
             power_wires: vec![],
+            popup_texts: vec![],
             debug_bbox: false,
             debug_fluidbox: false,
             image_dirt: None,
@@ -609,6 +647,7 @@ impl FactorishState {
                 Box::new(SteamEngine::new(&Position::new(12, 5))),
             ],
             selected_structure_inventory: None,
+            ore_harvesting: None,
             drop_items: vec![],
             serial_no: 0,
             on_player_update,
@@ -884,6 +923,58 @@ impl FactorishState {
             }
         };
 
+        self.ore_harvesting = if let Some(mut ore_harvesting) = self.ore_harvesting {
+            let mut ret = true;
+            if (ore_harvesting.timer + 1) % ORE_HARVEST_TIME < ore_harvesting.timer {
+                console_log!("harvesting {:?}...", ore_harvesting.ore_type);
+                if let Some(tile) = self.tile_at_mut(&ore_harvesting.pos) {
+                    if let Some(ore) = match ore_harvesting.ore_type {
+                        ItemType::IronOre => Some(&mut tile.iron_ore),
+                        ItemType::CopperOre => Some(&mut tile.copper_ore),
+                        ItemType::CoalOre => Some(&mut tile.coal_ore),
+                        _ => None,
+                    } {
+                        if 0 < *ore {
+                            *ore -= 1;
+                            self.player.add_item(&ore_harvesting.ore_type, 1);
+                            self.on_player_update
+                                .call1(&window(), &JsValue::from(self.get_player_inventory()?))
+                                .unwrap_or_else(|_| JsValue::from(true));
+                            self.new_popup_text(
+                                format!("+1 {:?}", ore_harvesting.ore_type),
+                                ore_harvesting.pos.x as f64 * TILE_SIZE,
+                                ore_harvesting.pos.y as f64 * TILE_SIZE,
+                            );
+                        } else {
+                            ret = false;
+                        }
+                    }
+                }
+            }
+            ore_harvesting.timer = (ore_harvesting.timer + 1) % ORE_HARVEST_TIME;
+            if ret {
+                Some(ore_harvesting)
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
+        let mut delete_me = vec![];
+        for (i, item) in self.popup_texts.iter_mut().enumerate() {
+            if item.life <= 0 {
+                delete_me.push(i);
+            } else {
+                item.y -= 1.;
+                item.life -= 1;
+            }
+        }
+
+        for i in delete_me.iter().rev() {
+            self.popup_texts.remove(*i);
+        }
+
         struct MutRef<'r, T: ?Sized>(&'r mut T);
         impl<'a, 'r, T: ?Sized> IntoIterator for &'a MutRef<'r, T>
         where
@@ -1019,25 +1110,17 @@ impl FactorishState {
         Ok(events.iter().collect())
     }
 
-    fn tile_at(&self, tile: &[i32]) -> Option<Cell> {
-        if 0 <= tile[0]
-            && tile[0] < self.width as i32
-            && 0 <= tile[1]
-            && tile[1] < self.height as i32
-        {
-            Some(self.board[tile[0] as usize + tile[1] as usize * self.width as usize])
+    fn tile_at(&self, tile: &Position) -> Option<Cell> {
+        if 0 <= tile.x && tile.x < self.width as i32 && 0 <= tile.y && tile.y < self.height as i32 {
+            Some(self.board[tile.x as usize + tile.y as usize * self.width as usize])
         } else {
             None
         }
     }
 
-    fn tile_at_mut(&mut self, tile: &[i32]) -> Option<&mut Cell> {
-        if 0 <= tile[0]
-            && tile[0] < self.width as i32
-            && 0 <= tile[1]
-            && tile[1] < self.height as i32
-        {
-            Some(&mut self.board[tile[0] as usize + tile[1] as usize * self.width as usize])
+    fn tile_at_mut(&mut self, tile: &Position) -> Option<&mut Cell> {
+        if 0 <= tile.x && tile.x < self.width as i32 && 0 <= tile.y && tile.y < self.height as i32 {
+            Some(&mut self.board[tile.x as usize + tile.y as usize * self.width as usize])
         } else {
             None
         }
@@ -1195,6 +1278,7 @@ impl FactorishState {
 
     fn harvest(&mut self, position: &Position, clear_item: bool) -> Result<bool, JsValue> {
         let mut harvested_structure = false;
+        let mut popup_text = String::new();
         while let Some((index, structure)) = self
             .structures
             .iter()
@@ -1206,6 +1290,7 @@ impl FactorishState {
                 .add_item(&str_to_item(&structure.name()).ok_or_else(|| {
                     JsValue::from_str(&format!("wrong structure name: {:?}", structure.name()))
                 })?);
+            popup_text += &format!("+1 {}\n", structure.name());
             let mut structure = self.structures.remove(index);
             for notify_structure in &mut self.structures {
                 notify_structure.on_construction(structure.as_mut(), false)?;
@@ -1219,29 +1304,41 @@ impl FactorishState {
             if let Ok(ref mut data) = self.minimap_buffer.try_borrow_mut() {
                 self.render_minimap_data_pixel(data, &position);
             }
-            for (name, count) in structure.destroy_inventory() {
-                self.player.add_item(&name, count)
+            for (item_type, count) in structure.destroy_inventory() {
+                popup_text += &format!("+{} {}\n", count, &item_to_str(&item_type));
+                self.player.add_item(&item_type, count)
             }
             self.on_player_update
                 .call1(&window(), &JsValue::from(self.get_player_inventory()?))
                 .unwrap_or_else(|_| JsValue::from(true));
             harvested_structure = true;
         }
+        let mut harvested_items = false;
         if !harvested_structure && clear_item {
             // Pick up dropped items in the cell
-            let mut ret = false;
+            let mut picked_items = Inventory::new();
             while let Some(item_index) = self
                 .drop_items
                 .iter()
                 .position(|item| item.x / 32 == position.x && item.y / 32 == position.y)
             {
-                self.player
-                    .add_item(&self.drop_items.remove(item_index).type_, 1);
-                ret = true;
+                let item_type = self.drop_items.remove(item_index).type_;
+                picked_items.add_item(&item_type);
+                self.player.add_item(&item_type, 1);
+                harvested_items = true;
             }
-            return Ok(ret);
+            for (item_type, count) in picked_items {
+                popup_text += &format!("+{} {}\n", count, &item_to_str(&item_type));
+            }
         }
-        Ok(harvested_structure)
+        if !popup_text.is_empty() {
+            self.new_popup_text(
+                popup_text,
+                position.x as f64 * TILE_SIZE,
+                position.y as f64 * TILE_SIZE,
+            );
+        }
+        Ok(harvested_structure || harvested_items)
     }
 
     fn get_inventory(
@@ -1531,7 +1628,7 @@ impl FactorishState {
         })
     }
 
-    pub fn mouse_down(&mut self, pos: &[f64], _button: i32) -> Result<JsValue, JsValue> {
+    pub fn mouse_down(&mut self, pos: &[f64], button: i32) -> Result<JsValue, JsValue> {
         if pos.len() < 2 {
             return Err(JsValue::from_str("position must have 2 elements"));
         }
@@ -1540,7 +1637,18 @@ impl FactorishState {
             y: (pos[1] / self.view_scale / 32. - self.viewport_y) as i32,
         };
 
-        console_log!("mouse_down: {}, {}", cursor.x, cursor.y);
+        console_log!("mouse_down: {}, {}, button: {}", cursor.x, cursor.y, button);
+        if button == 2 && self.find_structure_tile(&[cursor.x, cursor.y]).is_none() {
+            if let Some(tile) = self.tile_at(&cursor) {
+                if let Some(ore_type) = tile.get_ore_type() {
+                    self.ore_harvesting = Some(OreHarvesting {
+                        pos: cursor,
+                        ore_type,
+                        timer: 0,
+                    });
+                }
+            }
+        }
         self.update_info();
         Ok(JsValue::from(js_sys::Array::new()))
     }
@@ -1624,12 +1732,16 @@ impl FactorishState {
                     }
                 }
             }
-        } else {
-            // Right click means explicit cleanup, so we pick up items no matter what.
-            self.harvest(&cursor, true)?;
-            events.push(js_sys::Array::of1(&JsValue::from_str(
-                "updatePlayerInventory",
-            )));
+        } else if button == 2 {
+            if self.ore_harvesting.is_some() {
+                self.ore_harvesting = None;
+            } else {
+                // Right click means explicit cleanup, so we pick up items no matter what.
+                self.harvest(&cursor, true)?;
+                events.push(js_sys::Array::of1(&JsValue::from_str(
+                    "updatePlayerInventory",
+                )));
+            }
         }
 
         console_log!("mouse_up: {}, {}", cursor.x, cursor.y);
@@ -1650,7 +1762,9 @@ impl FactorishState {
             || cursor[1] < 0
             || self.height as i32 <= cursor[1]
         {
-            return Err(js_str!("invalid mouse position: {:?}", cursor));
+            // return Err(js_str!("invalid mouse position: {:?}", cursor));
+            // This is not particularly an error. Just ignore it.
+            return Ok(());
         }
         self.cursor = Some(cursor);
         // console_log!("mouse_move: cursor: {}, {}", cursor[0], cursor[1]);
@@ -1662,6 +1776,9 @@ impl FactorishState {
         self.cursor = None;
         if let Some(ref elem) = self.info_elem {
             elem.set_inner_html("");
+        }
+        if self.ore_harvesting.is_some() {
+            self.ore_harvesting = None;
         }
         console_log!("mouse_leave");
         Ok(())
@@ -1757,7 +1874,7 @@ impl FactorishState {
 
         for y in 0..self.height as i32 {
             for x in 0..self.width as i32 {
-                let cell = self.tile_at(&[x, y]).unwrap();
+                let cell = self.tile_at(&Position { x, y }).unwrap();
                 let start = ((x + y * self.width as i32) * 4) as usize;
                 data[start + 3] = 255;
                 let color = Self::color_of_cell(&cell);
@@ -1786,7 +1903,7 @@ impl FactorishState {
         {
             color = [0x00, 0xff, 0x7f];
         } else {
-            let cell = self.tile_at(&[x, y]).unwrap();
+            let cell = self.tile_at(position).unwrap();
             color = Self::color_of_cell(&cell);
         }
         let start = ((x + y * self.width as i32) * 4) as usize;
@@ -2058,6 +2175,19 @@ impl FactorishState {
         Ok(())
     }
 
+    /// Add a new popup text that will show for a moment and automatically disappears
+    ///
+    /// @param text Is given as owned string because the text is most likely dynamic.
+    fn new_popup_text(&mut self, text: String, x: f64, y: f64) {
+        let pop = PopupText {
+            text: text.to_string(),
+            x: (x + self.viewport_x * TILE_SIZE) * self.view_scale,
+            y: (y + self.viewport_y * TILE_SIZE) * self.view_scale,
+            life: POPUP_TEXT_LIFE,
+        };
+        self.popup_texts.push(pop);
+    }
+
     pub fn render(&self, context: CanvasRenderingContext2d) -> Result<(), JsValue> {
         use std::f64;
 
@@ -2143,8 +2273,9 @@ impl FactorishState {
 
         const WIRE_ATTACH_X: f64 = 28.;
         const WIRE_ATTACH_Y: f64 = 8.;
+        context.set_stroke_style(&js_str!("rgb(191,127,0)"));
+        context.set_line_width(1.);
         for power_wire in &self.power_wires {
-            context.set_stroke_style(&js_str!("rgb(191,127,0)"));
             context.begin_path();
             context.move_to(
                 power_wire.0.x as f64 * TILE_SIZE + WIRE_ATTACH_X,
@@ -2264,7 +2395,30 @@ impl FactorishState {
             context.stroke_rect(x, y, 32., 32.);
         }
 
+        if let Some(ore_harvesting) = &self.ore_harvesting {
+            context.set_stroke_style(&js_str!("rgb(255,127,255)"));
+            context.set_line_width(4.);
+            context.begin_path();
+            context.arc(
+                (ore_harvesting.pos.x as f64 + 0.5) * TILE_SIZE,
+                (ore_harvesting.pos.y as f64 + 0.5) * TILE_SIZE,
+                TILE_SIZE / 2. + 2.,
+                0.,
+                ore_harvesting.timer as f64 / ORE_HARVEST_TIME as f64 * 2. * f64::consts::PI,
+            )?;
+            context.stroke();
+        }
+
         context.restore();
+
+        context.set_font("bold 14px sans-serif");
+        context.set_stroke_style(&js_str!("white"));
+        context.set_line_width(2.);
+        context.set_fill_style(&js_str!("rgb(0,0,0)"));
+        for item in &self.popup_texts {
+            context.stroke_text(&item.text, item.x, item.y)?;
+            context.fill_text(&item.text, item.x, item.y)?;
+        }
 
         Ok(())
     }
