@@ -2130,7 +2130,7 @@ impl FactorishState {
     }
 
     pub fn rotate_tool(&mut self) -> i32 {
-        self.tool_rotation.next();
+        self.tool_rotation = self.tool_rotation.next();
         self.tool_rotation.angle_4()
     }
 
