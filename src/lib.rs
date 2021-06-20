@@ -1105,13 +1105,9 @@ impl FactorishState {
         Ok(events.iter().collect())
     }
 
-    fn tile_at(&self, tile: &[i32]) -> Option<Cell> {
-        if 0 <= tile[0]
-            && tile[0] < self.width as i32
-            && 0 <= tile[1]
-            && tile[1] < self.height as i32
-        {
-            Some(self.board[tile[0] as usize + tile[1] as usize * self.width as usize])
+    fn tile_at(&self, tile: &Position) -> Option<Cell> {
+        if 0 <= tile.x && tile.x < self.width as i32 && 0 <= tile.y && tile.y < self.height as i32 {
+            Some(self.board[tile.x as usize + tile.y as usize * self.width as usize])
         } else {
             None
         }
@@ -1638,7 +1634,7 @@ impl FactorishState {
 
         console_log!("mouse_down: {}, {}, button: {}", cursor.x, cursor.y, button);
         if button == 2 && self.find_structure_tile(&[cursor.x, cursor.y]).is_none() {
-            if let Some(tile) = self.tile_at(&[cursor.x, cursor.y]) {
+            if let Some(tile) = self.tile_at(&cursor) {
                 if let Some(ore_type) = tile.get_ore_type() {
                     self.ore_harvesting = Some(OreHarvesting {
                         pos: cursor,
@@ -1871,7 +1867,7 @@ impl FactorishState {
 
         for y in 0..self.height as i32 {
             for x in 0..self.width as i32 {
-                let cell = self.tile_at(&[x, y]).unwrap();
+                let cell = self.tile_at(&Position{x, y}).unwrap();
                 let start = ((x + y * self.width as i32) * 4) as usize;
                 data[start + 3] = 255;
                 let color = Self::color_of_cell(&cell);
@@ -1900,7 +1896,7 @@ impl FactorishState {
         {
             color = [0x00, 0xff, 0x7f];
         } else {
-            let cell = self.tile_at(&[x, y]).unwrap();
+            let cell = self.tile_at(position).unwrap();
             color = Self::color_of_cell(&cell);
         }
         let start = ((x + y * self.width as i32) * 4) as usize;

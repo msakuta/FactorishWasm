@@ -122,7 +122,7 @@ impl Structure for OreMine {
         state: &mut FactorishState,
         structures: &mut dyn DynIterMut<Item = Box<dyn Structure>>,
     ) -> Result<FrameProcResult, ()> {
-        let otile = &state.tile_at(&[self.position.x, self.position.y]);
+        let otile = &state.tile_at(&self.position);
         if otile.is_none() {
             return Ok(FrameProcResult::None);
         }
