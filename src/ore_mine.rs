@@ -1,8 +1,8 @@
 use super::items::ItemType;
 use super::structure::{DynIterMut, Structure};
 use super::{
-    draw_direction_arrow, DropItem, FactorishState, FrameProcResult, Position, Recipe, Rotation,
-    TempEnt, COAL_POWER, TILE_SIZE,
+    draw_direction_arrow, DropItem, FactorishState, FrameProcResult, Inventory, InventoryTrait,
+    Position, Recipe, Rotation, TempEnt, COAL_POWER, TILE_SIZE,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -17,6 +17,7 @@ pub(crate) struct OreMine {
     power: f64,
     max_power: f64,
     recipe: Option<Recipe>,
+    input_inventory: Inventory,
 }
 
 impl OreMine {
@@ -28,6 +29,7 @@ impl OreMine {
             power: 25., // TODO: Have some initial energy for debugging, should be zero
             max_power: 25.,
             recipe: None,
+            input_inventory: Inventory::new(),
         }
     }
 }
@@ -128,6 +130,8 @@ impl Structure for OreMine {
         }
         let tile = otile.unwrap();
 
+        let mut ret = FrameProcResult::None;
+
         if self.recipe.is_none() {
             if 0 < tile.iron_ore {
                 self.recipe = Some(Recipe::new(
@@ -163,6 +167,14 @@ impl Structure for OreMine {
             //         this.removeItem("Coal Ore");
             //     }
             // }
+            if let Some(amount) = self.input_inventory.get_mut(&ItemType::CoalOre) {
+                if 0 < *amount && self.power == 0. {
+                    self.input_inventory.remove_item(&ItemType::CoalOre);
+                    self.power += COAL_POWER;
+                    self.max_power = self.max_power.max(self.power);
+                    ret = FrameProcResult::InventoryChanged(self.position);
+                }
+            }
 
             let output = |state: &mut FactorishState, item, position: &Position| {
                 if let Ok(val) = if let Some(tile) = state.tile_at_mut(&position) {
@@ -250,7 +262,7 @@ impl Structure for OreMine {
                 self.power -= progress * recipe.power_cost;
             }
         }
-        Ok(FrameProcResult::None)
+        Ok(ret)
     }
 
     fn rotate(&mut self) -> Result<(), ()> {
@@ -264,17 +276,44 @@ impl Structure for OreMine {
     }
 
     fn input(&mut self, item: &DropItem) -> Result<(), JsValue> {
-        if item.type_ == ItemType::CoalOre && self.power == 0. {
-            self.max_power = COAL_POWER;
-            self.power = COAL_POWER;
-            Ok(())
-        } else {
-            Err(JsValue::from_str("not inputtable to ore mine"))
+        // Fuels are always welcome.
+        if item.type_ == ItemType::CoalOre {
+            self.input_inventory.add_item(&ItemType::CoalOre);
+            return Ok(());
         }
+        Err(JsValue::from_str("not inputtable to ore mine"))
     }
 
     fn can_input(&self, item_type: &ItemType) -> bool {
         *item_type == ItemType::CoalOre && self.power == 0.
+    }
+
+    fn inventory(&self, is_input: bool) -> Option<&Inventory> {
+        if is_input {
+            Some(&self.input_inventory)
+        } else {
+            None
+        }
+    }
+
+    fn inventory_mut(&mut self, is_input: bool) -> Option<&mut Inventory> {
+        if is_input {
+            Some(&mut self.input_inventory)
+        } else {
+            None
+        }
+    }
+
+    fn destroy_inventory(&mut self) -> Inventory {
+        // Return the ingredients if it was in the middle of processing a recipe.
+        if let Some(recipe) = self.recipe.take() {
+            if 0. < self.progress {
+                let mut ret = std::mem::take(&mut self.input_inventory);
+                ret.merge(recipe.input);
+                return ret;
+            }
+        }
+        std::mem::take(&mut self.input_inventory)
     }
 
     crate::serialize_impl!();
