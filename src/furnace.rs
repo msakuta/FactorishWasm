@@ -8,6 +8,8 @@ use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 use web_sys::CanvasRenderingContext2d;
 
+const FUEL_CAPACITY: usize = 10;
+
 #[derive(Serialize, Deserialize)]
 pub(crate) struct Furnace {
     position: Position,
@@ -201,7 +203,9 @@ impl Structure for Furnace {
         }
 
         // Fuels are always welcome.
-        if o.type_ == ItemType::CoalOre {
+        if o.type_ == ItemType::CoalOre
+            && self.input_inventory.count_item(&ItemType::CoalOre) < FUEL_CAPACITY
+        {
             self.input_inventory.add_item(&ItemType::CoalOre);
             return Ok(());
         }
@@ -219,7 +223,9 @@ impl Structure for Furnace {
 
     fn can_input(&self, item_type: &ItemType) -> bool {
         if let Some(recipe) = &self.recipe {
-            *item_type == ItemType::CoalOre || recipe.input.get(item_type).is_some()
+            *item_type == ItemType::CoalOre
+                && self.input_inventory.count_item(item_type) < FUEL_CAPACITY
+                || recipe.input.get(item_type).is_some()
         } else {
             matches!(
                 item_type,

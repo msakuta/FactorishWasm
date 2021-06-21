@@ -9,6 +9,8 @@ use std::collections::HashMap;
 use wasm_bindgen::prelude::*;
 use web_sys::CanvasRenderingContext2d;
 
+const FUEL_CAPACITY: usize = 10;
+
 #[derive(Serialize, Deserialize)]
 pub(crate) struct OreMine {
     position: Position,
@@ -277,7 +279,9 @@ impl Structure for OreMine {
 
     fn input(&mut self, item: &DropItem) -> Result<(), JsValue> {
         // Fuels are always welcome.
-        if item.type_ == ItemType::CoalOre {
+        if item.type_ == ItemType::CoalOre
+            && self.input_inventory.count_item(&ItemType::CoalOre) < FUEL_CAPACITY
+        {
             self.input_inventory.add_item(&ItemType::CoalOre);
             return Ok(());
         }
@@ -285,7 +289,8 @@ impl Structure for OreMine {
     }
 
     fn can_input(&self, item_type: &ItemType) -> bool {
-        *item_type == ItemType::CoalOre && self.power == 0.
+        *item_type == ItemType::CoalOre
+            && self.input_inventory.count_item(&ItemType::CoalOre) < FUEL_CAPACITY
     }
 
     fn inventory(&self, is_input: bool) -> Option<&Inventory> {
