@@ -11,6 +11,8 @@ use web_sys::CanvasRenderingContext2d;
 
 use std::collections::HashMap;
 
+const FUEL_CAPACITY: usize = 10;
+
 #[derive(Serialize, Deserialize)]
 pub(crate) struct Boiler {
     position: Position,
@@ -204,7 +206,9 @@ impl Structure for Boiler {
 
     fn input(&mut self, o: &DropItem) -> Result<(), JsValue> {
         // Fuels are always welcome.
-        if o.type_ == ItemType::CoalOre {
+        if o.type_ == ItemType::CoalOre
+            && self.inventory.count_item(&ItemType::CoalOre) < FUEL_CAPACITY
+        {
             self.inventory.add_item(&ItemType::CoalOre);
             return Ok(());
         }
@@ -214,6 +218,7 @@ impl Structure for Boiler {
 
     fn can_input(&self, item_type: &ItemType) -> bool {
         *item_type == ItemType::CoalOre
+            && self.inventory.count_item(&ItemType::CoalOre) < FUEL_CAPACITY
     }
 
     fn output(&mut self, _state: &mut FactorishState, item_type: &ItemType) -> Result<(), ()> {
