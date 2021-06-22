@@ -1317,11 +1317,9 @@ impl FactorishState {
         if !harvested_structure && clear_item {
             // Pick up dropped items in the cell
             let mut picked_items = Inventory::new();
-            while let Some(item_index) = self
-                .drop_items
-                .iter()
-                .position(|item| item.x / 32 == position.x && item.y / 32 == position.y)
-            {
+            while let Some(item_index) = self.drop_items.iter().position(|item| {
+                item.x / TILE_SIZE_I == position.x && item.y / TILE_SIZE_I == position.y
+            }) {
                 let item_type = self.drop_items.remove(item_index).type_;
                 picked_items.add_item(&item_type);
                 self.player.add_item(&item_type, 1);
@@ -1638,7 +1636,14 @@ impl FactorishState {
         };
 
         console_log!("mouse_down: {}, {}, button: {}", cursor.x, cursor.y, button);
-        if button == 2 && self.find_structure_tile(&[cursor.x, cursor.y]).is_none() {
+        if button == 2
+            && self.find_structure_tile(&[cursor.x, cursor.y]).is_none()
+            // Let the player pick up drop items before harvesting ore below.
+            && !self.drop_items.iter().any(|item| {
+                item.x / TILE_SIZE_I == pos[0] as i32 / TILE_SIZE_I
+                    && item.y / TILE_SIZE_I == pos[1] as i32 / TILE_SIZE_I
+            })
+        {
             if let Some(tile) = self.tile_at(&cursor) {
                 if let Some(ore_type) = tile.get_ore_type() {
                     self.ore_harvesting = Some(OreHarvesting {
