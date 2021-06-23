@@ -251,6 +251,15 @@ pub(crate) trait Structure {
     fn output(&mut self, _state: &mut FactorishState, _item_type: &ItemType) -> Result<(), ()> {
         Err(())
     }
+    fn burner_inventory(&self) -> Option<&Inventory> {
+        None
+    }
+    fn input_burner_inventory(&mut self, item_type: &ItemType, amount: usize) -> usize {
+        0
+    }
+    fn burner_energy(&self) -> Option<(f64, f64)> {
+        None
+    }
     fn inventory(&self, _is_input: bool) -> Option<&Inventory> {
         None
     }

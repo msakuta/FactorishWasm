@@ -229,20 +229,23 @@ impl Structure for Boiler {
         }
     }
 
-    fn inventory(&self, is_input: bool) -> Option<&Inventory> {
-        if is_input {
-            Some(&self.inventory)
+    fn burner_inventory(&self) -> Option<&Inventory> {
+        Some(&self.inventory)
+    }
+
+    fn input_burner_inventory(&mut self, item_type: &ItemType, amount: usize) -> usize {
+        if *item_type == ItemType::CoalOre {
+            let add_amount =
+                amount.min(FUEL_CAPACITY - self.inventory.count_item(&ItemType::CoalOre));
+            self.inventory.add_items(item_type, add_amount);
+            add_amount
         } else {
-            None
+            0
         }
     }
 
-    fn inventory_mut(&mut self, is_input: bool) -> Option<&mut Inventory> {
-        if is_input {
-            Some(&mut self.inventory)
-        } else {
-            None
-        }
+    fn burner_energy(&self) -> Option<(f64, f64)> {
+        Some((self.power, self.max_power))
     }
 
     fn destroy_inventory(&mut self) -> Inventory {

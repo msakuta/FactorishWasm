@@ -32,6 +32,7 @@ import electricityAlarm from '../img/electricity-alarm.png';
 import rotateImage from "../img/rotate.png";
 import closeImage from "../img/close.png";
 import rightarrow from "../img/rightarrow.png";
+import fuelBack from "../img/fuel-back.png";
 
 
 import { FactorishState } from "../pkg/index.js";
@@ -389,9 +390,9 @@ let ysize = 64;
         }
         const position = pos ? pos : sim.get_selected_inventory();
         updateInventoryInt(inventoryContentElem, sim, false, sim.get_structure_inventory(
-            ...position, true));
+            ...position, "Input"));
         updateInventoryInt(outputInventoryContentElem, sim, false, sim.get_structure_inventory(
-            ...position, false));
+            ...position, "Output"));
     }
 
     function generateItemImage(i, iconSize, count){
@@ -428,7 +429,7 @@ let ysize = 64;
         Promise.resolve().then(f);
     }
 
-    function updateInventoryInt(elem, owner, icons, [inventory, item]){
+    function updateInventoryInt(elem, owner, icons, inventoryData, titleElem = null){
         // Local function to update DOM elements based on selection
         function updateInventorySelection(elem){
             for(var i = 0; i < elem.children.length; i++){
@@ -441,6 +442,17 @@ let ysize = 64;
         // Defer execution of updateMouseIcon in order to avoid 
         // "recursive use of an object detected which would lead to unsafe aliasing in rust"
         microTask(updateMouseIcon);
+
+        if(!inventoryData || inventoryData.length === 0){
+            elem.style.display = "none";
+            if(titleElem)
+                titleElem.style.display = "none";
+            return;
+        }
+        elem.style.display = "block";
+        if(titleElem)
+            titleElem.style.display = "block";
+        const [inventory, item] = inventoryData;
 
         selectedInventoryItem = item;
 
@@ -507,12 +519,17 @@ let ysize = 64;
         }
     }
 
+    const inputInventoryTitleElem = document.getElementById('inputInventoryTitle');
     const inventoryContentElem = document.getElementById('inputInventoryContent');
     inventoryContentElem.onclick = () => onInventoryClick(false, true);
     const outputInventoryContentElem = document.getElementById('outputInventoryContent');
     outputInventoryContentElem.onclick = () => onInventoryClick(false, false);
+    const outputInventoryTitleElem = document.getElementById('outputInventoryTitle');
+    const burnerContainer = document.getElementById('burnerContainer');
+    const inputFuelElem = document.getElementById('inputFuel');
+    inputFuelElem.style.backgroundImage = `url(${fuelBack})`;
 
-    [inventoryContentElem, outputInventoryContentElem].forEach((elem, idx) => {
+    [inventoryContentElem, outputInventoryContentElem, inputFuelElem].forEach((elem, idx) => {
         elem.ondragover = function(ev){
             var ok = false;
             for(var i = 0; i < ev.dataTransfer.types.length; i++){
@@ -525,20 +542,20 @@ let ysize = 64;
                 ev.dataTransfer.dropEffect = "move";
             }
         }
-        elem.ondrop = function(ev){
+        elem.addEventListener("drop", (ev) => {
             ev.preventDefault();
             var data = JSON.parse(ev.dataTransfer.getData(textType));
             if(data.fromPlayer){
                 // The amount could have changed during dragging, so we'll query current value
                 // from the source inventory.
-                if(sim.move_selected_inventory_item(!data.fromPlayer, idx === 0)){
+                if(sim.move_selected_inventory_item(!data.fromPlayer, idx === 0 ? "Input" : idx === 1 ? "Output" : "Burner")){
                     deselectPlayerInventory();
                     updateInventory(sim.get_player_inventory());
                     updateToolBar();
                     updateStructureInventory();
                 }
             }
-        }
+        }, true);
     });
     inventoryElem.style.display = 'none';
 
@@ -602,6 +619,47 @@ let ysize = 64;
         mousecaptorElem.style.zIndex = i + windowZIndex; // The mouse capture element comes on top of all other windows
     }
 
+    let burnerItemElem = null;
+    function showBurnerStatus(c, r){
+        const [burnerInventory, _] = sim.get_structure_inventory(c, r, "Burner");
+        if(burnerInventory){
+            burnerContainer.style.display = "block";
+            const elem = inputFuelElem;
+            // Clear the elements first
+            // while(elem.firstChild)
+            //     elem.removeChild(elem.firstChild);
+
+            if(0 < burnerInventory.length){
+                const [name, v] = burnerInventory[0];
+                if(burnerItemElem === null)
+                    burnerItemElem = generateItemImage(name, true, v);
+                else{
+                    const imageFile = getImageFile(i);
+                    burnerItemElem.src = 'url(' + (imageFile instanceof Array ?
+                        imageFile[0] : imageFile) + ')';
+                    burnerItemElem.children[1].innerHTML = v;
+                }
+                burnerItemElem.setAttribute('class', 'noselect');
+                burnerItemElem.itemName = name;
+                burnerItemElem.itemAmount = v;
+                elem.appendChild(burnerItemElem);
+            }
+            else if(burnerItemElem){
+                elem.removeChild(burnerItemElem);
+                burnerItemElem = null;
+            }
+
+            const burnerEnergy = sim.get_structure_burner_energy(c, r, true);
+            if(burnerEnergy){
+                const burnerEnergyElem = document.getElementById('burnerEnergy');
+                burnerEnergyElem.style.width = `${burnerEnergy[0] / burnerEnergy[1] * 80}px`;
+            }
+        }
+        else{
+            burnerContainer.style.display = "none";
+        }
+    }
+
     function showInventory(c, r){
         if(inventoryElem.style.display !== "none"){
             inventoryElem.style.display = "none";
@@ -614,8 +672,9 @@ let ysize = 64;
             // var recipeSelectButtonElem = document.getElementById('recipeSelectButton');
             // recipeSelectButtonElem.style.display = !inventoryTarget.recipes ? "none" : "block";
             // toolTip.style.display = "none"; // Hide the tool tip for "Click to oepn inventory"
-            updateInventoryInt(inventoryContentElem, sim, false, sim.get_structure_inventory(c, r, true));
-            updateInventoryInt(outputInventoryContentElem, sim, false, sim.get_structure_inventory(c, r, false));
+            updateInventoryInt(inventoryContentElem, sim, false, sim.get_structure_inventory(c, r, "Input"), inputInventoryTitleElem);
+            updateInventoryInt(outputInventoryContentElem, sim, false, sim.get_structure_inventory(c, r, "Output"), outputInventoryTitleElem);
+            showBurnerStatus(c, r);
         }
         // else{
         //     inventoryContent.innerHTML = "";
@@ -767,7 +826,7 @@ let ysize = 64;
         ev.preventDefault();
         var data = JSON.parse(ev.dataTransfer.getData(textType));
         if(!data.fromPlayer){
-            if(sim.move_selected_inventory_item(!data.fromPlayer, data.fromInput)){
+            if(sim.move_selected_inventory_item(!data.fromPlayer, data.fromInput ? "Input" : "Output")){
                 deselectPlayerInventory();
                 updateInventory(sim.get_player_inventory());
                 updateToolBar();
@@ -781,7 +840,7 @@ let ysize = 64;
     function onInventoryClick(isPlayer, isInput){
         // Update only if the selected inventory is the other one from destination.
         if(sim.get_selected_inventory() !== null){
-            if(sim.move_selected_inventory_item(isPlayer, isInput)){
+            if(sim.move_selected_inventory_item(isPlayer, isInput ? "Input" : "Output")){
                 deselectPlayerInventory();
                 updateInventory(sim.get_player_inventory());
                 updateToolBar();
@@ -955,6 +1014,12 @@ let ysize = 64;
         if(!paused)
             processEvents(sim.simulate(0.05));
         let result = sim.render(ctx);
+
+        const selPos = sim.get_selected_inventory();
+        if(selPos){
+            showBurnerStatus(selPos[0], selPos[1]);
+        }
+
         sim.render_minimap(miniMapContext);
         // console.log(result);
     }, 50);
