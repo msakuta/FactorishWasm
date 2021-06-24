@@ -1,5 +1,5 @@
 use super::pipe::Pipe;
-use super::structure::{DynIterMut, Structure};
+use super::structure::{Burner, DynIterMut, Structure, StructureBundle};
 use super::water_well::{FluidBox, FluidType};
 use super::{
     serialize_impl, DropItem, FactorishState, FrameProcResult, Inventory, InventoryTrait, ItemType,
@@ -110,7 +110,7 @@ impl Structure for Boiler {
             None => return Err(JsValue::from_str("furnace image not available")),
         }
         if !is_tooltip {
-            crate::draw_fuel_alarm!(self, state, context);
+            // crate::draw_fuel_alarm!(self, state, context, burner);
         }
 
         Ok(())
@@ -151,7 +151,8 @@ impl Structure for Boiler {
     fn frame_proc(
         &mut self,
         state: &mut FactorishState,
-        structures: &mut dyn DynIterMut<Item = Box<dyn Structure>>,
+        structures: &mut dyn DynIterMut<Item = StructureBundle>,
+        _burner: Option<&mut Burner>,
     ) -> Result<FrameProcResult, ()> {
         let connections = self.connection(state, structures.as_dyn_iter());
         self.output_fluid_box.connect_to = connections;

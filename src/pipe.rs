@@ -1,4 +1,4 @@
-use super::structure::{DynIterMut, Structure};
+use super::structure::{Burner, DynIterMut, Structure, StructureBundle};
 use super::water_well::FluidBox;
 use super::{FactorishState, FrameProcResult, Position, Ref};
 use serde::{Deserialize, Serialize};
@@ -40,7 +40,7 @@ impl Pipe {
 
                 // We could split and chain like above, but we don't have to, as long as we deal with immutable
                 // references.
-                let structures_slice: &[Box<dyn Structure>] = state.structures.as_slice();
+                let structures_slice: &[StructureBundle] = state.structures.as_slice();
 
                 let connection_list = structure.connection(state, &Ref(structures_slice));
                 let connections = connection_list
@@ -101,7 +101,8 @@ impl Structure for Pipe {
     fn frame_proc(
         &mut self,
         state: &mut FactorishState,
-        structures: &mut dyn DynIterMut<Item = Box<dyn Structure>>,
+        structures: &mut dyn DynIterMut<Item = StructureBundle>,
+        _burner: Option<&mut Burner>,
     ) -> Result<FrameProcResult, ()> {
         self.fluid_box.connect_to = self.connection(state, structures.as_dyn_iter());
         self.fluid_box

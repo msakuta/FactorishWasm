@@ -1,5 +1,5 @@
 use super::items::ItemType;
-use super::structure::{DynIterMut, Structure};
+use super::structure::{Burner, DynIterMut, Structure, StructureBundle};
 use super::{
     draw_direction_arrow, DropItem, FactorishState, FrameProcResult, Inventory, InventoryTrait,
     Position, Recipe, Rotation, TempEnt, COAL_POWER, TILE_SIZE,
@@ -16,23 +16,25 @@ pub(crate) struct OreMine {
     position: Position,
     rotation: Rotation,
     progress: f64,
-    power: f64,
-    max_power: f64,
     recipe: Option<Recipe>,
-    input_inventory: Inventory,
 }
 
 impl OreMine {
-    pub(crate) fn new(x: i32, y: i32, rotation: Rotation) -> Self {
-        OreMine {
-            position: Position { x, y },
-            rotation,
-            progress: 0.,
-            power: 25., // TODO: Have some initial energy for debugging, should be zero
-            max_power: 25.,
-            recipe: None,
-            input_inventory: Inventory::new(),
-        }
+    pub(crate) fn new(x: i32, y: i32, rotation: Rotation) -> StructureBundle {
+        StructureBundle::new(
+            Box::new(OreMine {
+                position: Position { x, y },
+                rotation,
+                progress: 0.,
+                recipe: None,
+            }),
+            Some(Burner {
+                inventory: Inventory::new(),
+                capacity: FUEL_CAPACITY,
+                energy: 25.,
+                max_energy: 100.,
+            }),
+        )
     }
 }
 
@@ -60,7 +62,7 @@ impl Structure for OreMine {
             0 => match state.image_mine.as_ref() {
                 Some(img) => {
                     let progress = if let Some(ref recipe) = self.recipe {
-                        (self.power / recipe.power_cost)
+                        (0f64/*self.power / recipe.power_cost*/)
                             .min(1. / recipe.recipe_time)
                             .min(1. - self.progress)
                     } else {
@@ -89,7 +91,7 @@ impl Structure for OreMine {
             2 => {
                 draw_direction_arrow((x, y), &self.rotation, state, context)?;
                 if !is_toolbar {
-                    crate::draw_fuel_alarm!(self, state, context);
+                    // crate::draw_fuel_alarm!(self, state, context, burner);
                 }
             }
             _ => (),
@@ -110,8 +112,8 @@ impl Structure for OreMine {
                     self.progress * 100.),
                 format!(r#"Power: {:.1}kJ <div style='position: relative; width: 100px; height: 10px; background-color: #001f1f; margin: 2px; border: 1px solid #3f3f3f'>
                  <div style='position: absolute; width: {}px; height: 10px; background-color: #ff00ff'></div></div>"#,
-                    self.power,
-                    if 0. < self.max_power { (self.power) / self.max_power * 100. } else { 0. }),
+                    0/*self.power*/,
+                    0/*if 0. < self.max_power { (self.power) / self.max_power * 100. } else { 0. }*/),
                 format!("Expected output: {}", if 0 < tile.iron_ore { tile.iron_ore } else if 0 < tile.coal_ore { tile.coal_ore } else { tile.copper_ore }))
         // getHTML(generateItemImage("time", true, this.recipe.time), true) + "<br>" +
         // "Outputs: <br>" +
@@ -124,13 +126,16 @@ impl Structure for OreMine {
     fn frame_proc(
         &mut self,
         state: &mut FactorishState,
-        structures: &mut dyn DynIterMut<Item = Box<dyn Structure>>,
+        structures: &mut dyn DynIterMut<Item = StructureBundle>,
+        burner: Option<&mut Burner>,
     ) -> Result<FrameProcResult, ()> {
         let otile = &state.tile_at(&self.position);
         if otile.is_none() {
             return Ok(FrameProcResult::None);
         }
         let tile = otile.unwrap();
+
+        let burner = burner.ok_or(())?;
 
         let mut ret = FrameProcResult::None;
 
@@ -169,14 +174,6 @@ impl Structure for OreMine {
             //         this.removeItem("Coal Ore");
             //     }
             // }
-            if let Some(amount) = self.input_inventory.get_mut(&ItemType::CoalOre) {
-                if 0 < *amount && self.power == 0. {
-                    self.input_inventory.remove_item(&ItemType::CoalOre);
-                    self.power += COAL_POWER;
-                    self.max_power = self.max_power.max(self.power);
-                    ret = FrameProcResult::InventoryChanged(self.position);
-                }
-            }
 
             let output = |state: &mut FactorishState, item, position: &Position| {
                 if let Ok(val) = if let Some(tile) = state.tile_at_mut(&position) {
@@ -201,7 +198,7 @@ impl Structure for OreMine {
             };
 
             // Proceed only if we have sufficient energy in the buffer.
-            let progress = (self.power / recipe.power_cost)
+            let progress = (burner.energy / recipe.power_cost)
                 .min(1. / recipe.recipe_time)
                 .min(1. - self.progress);
             if state.rng.next() < progress * 5. {
@@ -213,7 +210,8 @@ impl Structure for OreMine {
                 self.progress = 0.;
                 let output_position = self.position.add(self.rotation.delta());
                 let mut str_iter = structures.dyn_iter_mut();
-                if let Some(structure) = str_iter.find(|s| *s.position() == output_position) {
+                if let Some(structure) = str_iter.find(|s| *s.dynamic.position() == output_position)
+                {
                     let mut it = recipe.output.iter();
                     if let Some(item) = it.next() {
                         // Check whether we can input first
@@ -237,7 +235,7 @@ impl Structure for OreMine {
                             };
                         }
                     }
-                    if !structure.movable() {
+                    if !structure.dynamic.movable() {
                         return Ok(FrameProcResult::None);
                     }
                 }
@@ -261,7 +259,7 @@ impl Structure for OreMine {
                 }
             } else {
                 self.progress += progress;
-                self.power -= progress * recipe.power_cost;
+                burner.energy -= progress * recipe.power_cost;
             }
         }
         Ok(ret)
@@ -275,60 +273,6 @@ impl Structure for OreMine {
     fn set_rotation(&mut self, rotation: &Rotation) -> Result<(), ()> {
         self.rotation = *rotation;
         Ok(())
-    }
-
-    fn input(&mut self, item: &DropItem) -> Result<(), JsValue> {
-        // Fuels are always welcome.
-        if item.type_ == ItemType::CoalOre
-            && self.input_inventory.count_item(&ItemType::CoalOre) < FUEL_CAPACITY
-        {
-            self.input_inventory.add_item(&ItemType::CoalOre);
-            return Ok(());
-        }
-        Err(JsValue::from_str("not inputtable to ore mine"))
-    }
-
-    fn can_input(&self, item_type: &ItemType) -> bool {
-        *item_type == ItemType::CoalOre
-            && self.input_inventory.count_item(&ItemType::CoalOre) < FUEL_CAPACITY
-    }
-
-    fn burner_inventory(&self) -> Option<&Inventory> {
-        Some(&self.input_inventory)
-    }
-
-    fn add_burner_inventory(&mut self, item_type: &ItemType, amount: isize) -> isize {
-        if amount < 0 {
-            let existing = self.input_inventory.count_item(item_type);
-            let removed = existing.min((-amount) as usize);
-            self.input_inventory.remove_items(item_type, removed);
-            -(removed as isize)
-        } else if *item_type == ItemType::CoalOre {
-            let add_amount = amount.min(
-                (FUEL_CAPACITY - self.input_inventory.count_item(&ItemType::CoalOre)) as isize,
-            );
-            self.input_inventory
-                .add_items(item_type, add_amount as usize);
-            add_amount
-        } else {
-            0
-        }
-    }
-
-    fn burner_energy(&self) -> Option<(f64, f64)> {
-        Some((self.power, self.max_power))
-    }
-
-    fn destroy_inventory(&mut self) -> Inventory {
-        // Return the ingredients if it was in the middle of processing a recipe.
-        if let Some(recipe) = self.recipe.take() {
-            if 0. < self.progress {
-                let mut ret = std::mem::take(&mut self.input_inventory);
-                ret.merge(recipe.input);
-                return ret;
-            }
-        }
-        std::mem::take(&mut self.input_inventory)
     }
 
     crate::serialize_impl!();

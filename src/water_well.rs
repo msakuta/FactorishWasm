@@ -1,5 +1,5 @@
 use super::pipe::Pipe;
-use super::structure::{DynIterMut, Structure};
+use super::structure::{Burner, DynIterMut, Structure, StructureBundle};
 use super::{FactorishState, FrameProcResult, Position};
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
@@ -57,7 +57,7 @@ impl FluidBox {
         &mut self,
         position: &Position,
         state: &mut FactorishState,
-        structures: &mut dyn Iterator<Item = &mut Box<dyn Structure>>,
+        structures: &mut dyn Iterator<Item = &mut StructureBundle>,
     ) {
         let mut _biggest_flow_idx = -1;
         let mut biggest_flow_amount = 1e-3; // At least this amount of flow is required for displaying flow direction
@@ -83,7 +83,7 @@ impl FluidBox {
             {
                 continue;
             }
-            if let Some(structure) = structures.map(|s| s).find(|s| *s.position() == pos) {
+            if let Some(structure) = structures.map(|s| s).find(|s| *s.dynamic.position() == pos) {
                 let mut process_fluid_box = |self_box: &mut FluidBox, fluid_box: &mut FluidBox| {
                     // Different types of fluids won't mix
                     if 0. < fluid_box.amount
@@ -118,7 +118,7 @@ impl FluidBox {
                         _biggest_flow_idx = i as isize;
                     }
                 };
-                if let Some(fluid_boxes) = structure.fluid_box_mut() {
+                if let Some(fluid_boxes) = structure.dynamic.fluid_box_mut() {
                     for fluid_box in fluid_boxes {
                         process_fluid_box(self, fluid_box);
                     }
@@ -185,7 +185,8 @@ impl Structure for WaterWell {
     fn frame_proc(
         &mut self,
         state: &mut FactorishState,
-        structures: &mut dyn DynIterMut<Item = Box<dyn Structure>>,
+        structures: &mut dyn DynIterMut<Item = StructureBundle>,
+        _burner: Option<&mut Burner>,
     ) -> Result<FrameProcResult, ()> {
         self.output_fluid_box.amount =
             (self.output_fluid_box.amount + 1.).min(self.output_fluid_box.max_amount);

@@ -1,5 +1,5 @@
 use super::items::get_item_image_url;
-use super::structure::{DynIterMut, Structure};
+use super::structure::{Burner, DynIterMut, Structure, StructureBundle};
 use super::{
     serialize_impl, DropItem, FactorishState, FrameProcResult, Inventory, InventoryTrait, ItemType,
     Position, PowerWire, Recipe, TILE_SIZE,
@@ -67,16 +67,15 @@ impl Assembler {
     fn find_power_sources(
         &self,
         state: &mut FactorishState,
-        structures: &mut dyn DynIterMut<Item = Box<dyn Structure>>,
+        structures: &mut dyn DynIterMut<Item = StructureBundle>,
     ) -> Vec<Position> {
         let mut checked = HashMap::<PowerWire, ()>::new();
         let mut expand_list = HashMap::<Position, Vec<PowerWire>>::new();
         let mut ret = vec![];
         let mut check_struct = |position: &Position| {
-            if structures
-                .dyn_iter()
-                .any(|structure| structure.power_source() && *structure.position() == *position)
-            {
+            if structures.dyn_iter().any(|structure| {
+                structure.dynamic.power_source() && *structure.dynamic.position() == *position
+            }) {
                 ret.push(*position);
             }
         };
@@ -205,7 +204,8 @@ impl Structure for Assembler {
     fn frame_proc(
         &mut self,
         _state: &mut FactorishState,
-        structures: &mut dyn DynIterMut<Item = Box<dyn Structure>>,
+        structures: &mut dyn DynIterMut<Item = StructureBundle>,
+        _burner: Option<&mut Burner>,
     ) -> Result<FrameProcResult, ()> {
         if let Some(recipe) = &self.recipe {
             let mut ret = FrameProcResult::None;
@@ -216,10 +216,10 @@ impl Structure for Assembler {
                 for position in self.find_power_sources(_state, structures) {
                     if let Some(structure) = structures
                         .dyn_iter_mut()
-                        .find(|structure| *structure.position() == position)
+                        .find(|structure| *structure.dynamic.position() == position)
                     {
                         let demand = self.max_power - self.power - accumulated;
-                        if let Some(energy) = structure.power_outlet(demand) {
+                        if let Some(energy) = structure.dynamic.power_outlet(demand) {
                             accumulated += energy;
                             // console_log!("draining {:?}kJ of energy with {:?} demand, from {:?}, accumulated {:?}", energy, demand, structure.name(), accumulated);
                         }

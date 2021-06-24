@@ -1,5 +1,5 @@
 use super::pipe::Pipe;
-use super::structure::{DynIterMut, Structure};
+use super::structure::{Burner, DynIterMut, Structure, StructureBundle};
 use super::water_well::{FluidBox, FluidType};
 use super::{serialize_impl, FactorishState, FrameProcResult, Position, Recipe};
 use serde::{Deserialize, Serialize};
@@ -126,7 +126,8 @@ impl Structure for SteamEngine {
     fn frame_proc(
         &mut self,
         state: &mut FactorishState,
-        structures: &mut dyn DynIterMut<Item = Box<dyn Structure>>,
+        structures: &mut dyn DynIterMut<Item = StructureBundle>,
+        _burner: Option<&mut Burner>,
     ) -> Result<FrameProcResult, ()> {
         let connections = self.connection(state, structures.as_dyn_iter());
         self.input_fluid_box.connect_to = connections;

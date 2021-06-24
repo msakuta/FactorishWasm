@@ -1,6 +1,6 @@
 use super::items::ItemType;
 use super::water_well::FluidBox;
-use super::{DropItem, FactorishState, Inventory, InventoryTrait, Recipe};
+use super::{DropItem, FactorishState, Inventory, InventoryTrait, Recipe, COAL_POWER};
 use rotate_enum::RotateEnum;
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
@@ -9,7 +9,7 @@ use web_sys::CanvasRenderingContext2d;
 #[macro_export]
 macro_rules! serialize_impl {
     () => {
-        fn serialize(&self) -> serde_json::Result<serde_json::Value> {
+        fn js_serialize(&self) -> serde_json::Result<serde_json::Value> {
             serde_json::to_value(self)
         }
     };
@@ -17,8 +17,8 @@ macro_rules! serialize_impl {
 
 #[macro_export]
 macro_rules! draw_fuel_alarm {
-    ($self_:expr, $state:expr, $context:expr) => {
-        if $self_.recipe.is_some() && $self_.power == 0. && $state.sim_time % 1. < 0.5 {
+    ($self_:expr, $state:expr, $context:expr, $burner:expr) => {
+        if $self_.recipe.is_some() && $burner.energy == 0. && $state.sim_time % 1. < 0.5 {
             if let Some(img) = $state.image_fuel_alarm.as_ref() {
                 let (x, y) = (
                     $self_.position.x as f64 * 32.,
@@ -165,6 +165,68 @@ where
     }
 }
 
+#[derive(Serialize, Deserialize)]
+pub(crate) struct Burner {
+    pub inventory: Inventory,
+    pub capacity: usize,
+    pub energy: f64,
+    pub max_energy: f64,
+}
+
+impl Burner {
+    pub fn js_serialize(&self) -> serde_json::Result<serde_json::Value> {
+        serde_json::to_value(self)
+    }
+
+    pub fn add_burner_inventory(&mut self, item_type: &ItemType, amount: isize) -> isize {
+        if amount < 0 {
+            let existing = self.inventory.count_item(item_type);
+            let removed = existing.min((-amount) as usize);
+            self.inventory.remove_items(item_type, removed);
+            -(removed as isize)
+        } else if *item_type == ItemType::CoalOre {
+            let add_amount = amount
+                .min((self.capacity - self.inventory.count_item(&ItemType::CoalOre)) as isize);
+            self.inventory.add_items(item_type, add_amount as usize);
+            add_amount
+        } else {
+            0
+        }
+    }
+
+    pub fn frame_proc(&mut self, structure: &mut dyn Structure) -> Result<FrameProcResult, ()> {
+        if let Some(amount) = self.inventory.get_mut(&ItemType::CoalOre) {
+            if 0 < *amount && self.energy == 0. {
+                self.inventory.remove_item(&ItemType::CoalOre);
+                self.energy += COAL_POWER;
+                self.max_energy = self.max_energy.max(self.energy);
+                return Ok(FrameProcResult::InventoryChanged(*structure.position()));
+            }
+        }
+        Ok(FrameProcResult::None)
+    }
+
+    fn input(&mut self, item: &DropItem) -> Result<(), JsValue> {
+        // Fuels are always welcome.
+        if item.type_ == ItemType::CoalOre
+            && self.inventory.count_item(&ItemType::CoalOre) < self.capacity
+        {
+            self.inventory.add_item(&ItemType::CoalOre);
+            return Ok(());
+        }
+        Err(JsValue::from_str("not inputtable to ore mine"))
+    }
+
+    fn can_input(&self, item_type: &ItemType) -> bool {
+        *item_type == ItemType::CoalOre
+            && self.inventory.count_item(&ItemType::CoalOre) < self.capacity
+    }
+
+    fn destroy_inventory(&mut self) -> Inventory {
+        std::mem::take(&mut self.inventory)
+    }
+}
+
 pub(crate) trait Structure {
     fn name(&self) -> &str;
     fn position(&self) -> &Position;
@@ -200,7 +262,8 @@ pub(crate) trait Structure {
     fn frame_proc(
         &mut self,
         _state: &mut FactorishState,
-        _structures: &mut dyn DynIterMut<Item = Box<dyn Structure>>,
+        _structures: &mut dyn DynIterMut<Item = StructureBundle>,
+        _burner: Option<&mut Burner>,
     ) -> Result<FrameProcResult, ()> {
         Ok(FrameProcResult::None)
     }
@@ -211,7 +274,7 @@ pub(crate) trait Structure {
     /// event handler for costruction events for this structure itself.
     fn on_construction_self(
         &mut self,
-        _others: &dyn DynIter<Item = Box<dyn Structure>>,
+        _others: &dyn DynIter<Item = StructureBundle>,
         _construct: bool,
     ) -> Result<(), JsValue> {
         Ok(())
@@ -297,7 +360,7 @@ pub(crate) trait Structure {
     fn connection(
         &self,
         state: &FactorishState,
-        structures: &dyn DynIter<Item = Box<dyn Structure>>,
+        structures: &dyn DynIter<Item = StructureBundle>,
     ) -> [bool; 4] {
         // let mut structures_copy = structures.clone();
         let has_fluid_box = |x, y| {
@@ -306,9 +369,9 @@ pub(crate) trait Structure {
             }
             if let Some(structure) = structures
                 .dyn_iter()
-                .find(|s| *s.position() == Position { x, y })
+                .find(|s| *s.dynamic.position() == Position { x, y })
             {
-                return structure.fluid_box().is_some();
+                return structure.dynamic.fluid_box().is_some();
             }
             false
         };
@@ -338,5 +401,35 @@ pub(crate) trait Structure {
     fn wire_reach(&self) -> u32 {
         3
     }
-    fn serialize(&self) -> serde_json::Result<serde_json::Value>;
+    fn js_serialize(&self) -> serde_json::Result<serde_json::Value>;
+}
+
+pub(crate) struct StructureBundle {
+    pub dynamic: Box<dyn Structure>,
+    pub burner: Option<Burner>,
+}
+
+impl StructureBundle {
+    pub(crate) fn new(dynamic: Box<dyn Structure>, burner: Option<Burner>) -> Self {
+        Self { dynamic, burner }
+    }
+
+    pub(crate) fn input(&mut self, item: &DropItem) -> Result<(), JsValue> {
+        self.dynamic.input(item).or_else(|e| {
+            if let Some(burner) = self.burner.as_mut() {
+                burner.input(item)
+            } else {
+                js_err!("No input inventory")
+            }
+        })
+    }
+
+    pub(crate) fn can_input(&self, item_type: &ItemType) -> bool {
+        self.dynamic.can_input(item_type)
+            || self
+                .burner
+                .as_ref()
+                .map(|burner| burner.can_input(item_type))
+                .unwrap_or(false)
+    }
 }

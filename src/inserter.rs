@@ -1,5 +1,5 @@
 use super::items::{render_drop_item, ItemType};
-use super::structure::{DynIterMut, Structure};
+use super::structure::{Burner, DynIterMut, Structure, StructureBundle};
 use super::{
     draw_direction_arrow, DropItem, FactorishState, FrameProcResult, Inventory, InventoryTrait,
     Position, Rotation,
@@ -130,18 +130,19 @@ impl Structure for Inserter {
     fn frame_proc(
         &mut self,
         state: &mut FactorishState,
-        structures: &mut dyn DynIterMut<Item = Box<dyn Structure>>,
+        structures: &mut dyn DynIterMut<Item = StructureBundle>,
+        _burner: Option<&mut Burner>,
     ) -> Result<FrameProcResult, ()> {
         let input_position = self.position.add(self.rotation.delta_inv());
         let output_position = self.position.add(self.rotation.delta());
 
         fn find_structure_at(
-            structures: &mut dyn DynIterMut<Item = Box<dyn Structure>>,
+            structures: &mut dyn DynIterMut<Item = StructureBundle>,
             position: Position,
-        ) -> Option<&mut Box<dyn Structure>> {
+        ) -> Option<&mut StructureBundle> {
             structures
                 .dyn_iter_mut()
-                .find(|structure| *structure.position() == position)
+                .find(|structure| *structure.dynamic.position() == position)
         }
 
         if self.hold_item.is_none() {
@@ -150,7 +151,7 @@ impl Structure for Inserter {
                 let ret = FrameProcResult::None;
 
                 let mut try_hold =
-                    |structures: &mut dyn DynIterMut<Item = Box<dyn Structure>>, type_| -> bool {
+                    |structures: &mut dyn DynIterMut<Item = StructureBundle>, type_| -> bool {
                         if let Some(structure) = find_structure_at(structures, output_position) {
                             // console_log!(
                             //     "found structure to output[{}]: {}, {}, {}",
@@ -159,7 +160,7 @@ impl Structure for Inserter {
                             //     output_position.x,
                             //     output_position.y
                             // );
-                            if structure.can_input(&type_) || structure.movable() {
+                            if structure.can_input(&type_) || structure.dynamic.movable() {
                                 // ret = FrameProcResult::InventoryChanged(output_position);
                                 self.hold_item = Some(type_);
                                 self.cooldown += INSERTER_TIME;
@@ -182,7 +183,7 @@ impl Structure for Inserter {
                         // console_log!("fail output_object: {:?}", type_);
                     }
                 } else if let Some(structure) = find_structure_at(structures, input_position) {
-                    lets_try_hold = Some(structure.can_output());
+                    lets_try_hold = Some(structure.dynamic.can_output());
                     // console_log!("outputting from a structure at {:?}", structure.position());
                     // if let Ok((item, callback)) = structure.output(state, &output_position) {
                     //     lets_try_hold = Some((item, callback));
@@ -203,7 +204,9 @@ impl Structure for Inserter {
                             //     output_position.y
                             // );
                             for item in output_items {
-                                if structure.can_input(&item.0) || structure.movable() {
+                                if structure.dynamic.can_input(&item.0)
+                                    || structure.dynamic.movable()
+                                {
                                     // ret = FrameProcResult::InventoryChanged(output_position);
                                     self.hold_item = Some(item.0);
                                     self.cooldown += INSERTER_TIME;
@@ -219,7 +222,7 @@ impl Structure for Inserter {
                         None
                     })() {
                         if let Some(structure) = find_structure_at(structures, input_position) {
-                            structure.output(state, &type_.0)?;
+                            structure.dynamic.output(state, &type_.0)?;
                             return Ok(FrameProcResult::InventoryChanged(input_position));
                         } else {
                             console_log!(
@@ -267,7 +270,7 @@ impl Structure for Inserter {
                         self.cooldown += INSERTER_TIME;
                         self.hold_item = None;
                         return Ok(FrameProcResult::InventoryChanged(output_position));
-                    } else if structure.movable() {
+                    } else if structure.dynamic.movable() {
                         try_move(state)
                     }
                 } else {
