@@ -499,22 +499,22 @@ let ysize = 64;
                 }
                 updateInventorySelection(elem);
             };
-            div.onclick = function(evt){
-                selectThisItem(this.itemName);
+            div.onclick = (name => evt => {
+                selectThisItem(name);
                 evt.stopPropagation();
-            };
+            })(name);
             div.setAttribute('draggable', 'true');
-            div.ondragstart = function(ev){
+            div.ondragstart = (name => ev => {
                 console.log("dragStart");
-                selectThisItem(this.itemName);
+                selectThisItem(name);
                 ev.dataTransfer.dropEffect = 'move';
                 // Encode information to determine item to drop into a JSON
                 ev.dataTransfer.setData(textType, JSON.stringify({
-                    type: ev.target.itemName,
+                    type: name,
                     fromPlayer: elem === playerInventoryElem,
-                    fromInput: elem === inventoryContentElem,
+                    inventoryType: elem === inventoryContentElem ? "Input" : "Output",
                 }));
-            };
+            })(name);
             elem.appendChild(div);
         }
     }
@@ -631,17 +631,28 @@ let ysize = 64;
 
             if(0 < burnerInventory.length){
                 const [name, v] = burnerInventory[0];
-                if(burnerItemElem === null)
+                if(burnerItemElem === null){
                     burnerItemElem = generateItemImage(name, true, v);
+                    burnerItemElem.setAttribute('draggable', 'true');
+                }
                 else{
                     const imageFile = getImageFile(i);
                     burnerItemElem.src = 'url(' + (imageFile instanceof Array ?
                         imageFile[0] : imageFile) + ')';
                     burnerItemElem.children[1].innerHTML = v;
                 }
+                burnerItemElem.ondragstart = function(ev){
+                    console.log("dragStart");
+                    // selectThisItem(this.itemName);
+                    ev.dataTransfer.dropEffect = 'move';
+                    // Encode information to determine item to drop into a JSON
+                    ev.dataTransfer.setData(textType, JSON.stringify({
+                        type: name,
+                        fromPlayer: false,
+                        inventoryType: "Burner",
+                    }));
+                };
                 burnerItemElem.setAttribute('class', 'noselect');
-                burnerItemElem.itemName = name;
-                burnerItemElem.itemAmount = v;
                 elem.appendChild(burnerItemElem);
             }
             else if(burnerItemElem){
@@ -826,7 +837,7 @@ let ysize = 64;
         ev.preventDefault();
         var data = JSON.parse(ev.dataTransfer.getData(textType));
         if(!data.fromPlayer){
-            if(sim.move_selected_inventory_item(!data.fromPlayer, data.fromInput ? "Input" : "Output")){
+            if(sim.move_selected_inventory_item(!data.fromPlayer, data.inventoryType)){
                 deselectPlayerInventory();
                 updateInventory(sim.get_player_inventory());
                 updateToolBar();

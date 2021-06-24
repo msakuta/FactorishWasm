@@ -297,11 +297,18 @@ impl Structure for OreMine {
         Some(&self.input_inventory)
     }
 
-    fn input_burner_inventory(&mut self, item_type: &ItemType, amount: usize) -> usize {
-        if *item_type == ItemType::CoalOre {
-            let add_amount =
-                amount.min(FUEL_CAPACITY - self.input_inventory.count_item(&ItemType::CoalOre));
-            self.input_inventory.add_items(item_type, add_amount);
+    fn add_burner_inventory(&mut self, item_type: &ItemType, amount: isize) -> isize {
+        if amount < 0 {
+            let existing = self.input_inventory.count_item(item_type);
+            let removed = existing.min((-amount) as usize);
+            self.input_inventory.remove_items(item_type, removed);
+            -(removed as isize)
+        } else if *item_type == ItemType::CoalOre {
+            let add_amount = amount.min(
+                (FUEL_CAPACITY - self.input_inventory.count_item(&ItemType::CoalOre)) as isize,
+            );
+            self.input_inventory
+                .add_items(item_type, add_amount as usize);
             add_amount
         } else {
             0

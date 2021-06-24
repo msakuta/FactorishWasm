@@ -75,11 +75,7 @@ use transport_belt::TransportBelt;
 use water_well::{FluidType, WaterWell};
 
 use serde::{Deserialize, Serialize};
-use std::{
-    convert::TryFrom,
-    cell::RefCell,
-    collections::HashMap,
-};
+use std::{cell::RefCell, collections::HashMap, convert::TryFrom};
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::{Clamped, JsCast};
 use web_sys::{
@@ -1455,7 +1451,9 @@ impl FactorishState {
                     }
                 }
                 _ => {
-                    if let Some(inventory) = structure.inventory(inventory_type == InventoryType::Input) {
+                    if let Some(inventory) =
+                        structure.inventory(inventory_type == InventoryType::Input)
+                    {
                         return self.get_inventory(
                             inventory,
                             &self
@@ -1570,17 +1568,28 @@ impl FactorishState {
             match inventory_type {
                 InventoryType::Burner => {
                     if to_player {
-                        unimplemented!();
+                        if let Some(burner_inventory) = structure.burner_inventory() {
+                            if let Some((&item, &count)) = burner_inventory.iter().next() {
+                                self.player.inventory.add_items(
+                                    &item,
+                                    -structure.add_burner_inventory(&item, -(count as isize))
+                                        as usize,
+                                );
+                                return Ok(true);
+                            }
+                        }
                     } else {
-                        console_log!("moving from player to structure burner");
                         if let Some(SelectedItem::PlayerInventory(i)) = self.selected_item {
                             self.player.inventory.remove_items(
                                 &i,
-                                structure.input_burner_inventory(
-                                    &i,
-                                    self.player.inventory.count_item(&i),
-                                ),
+                                structure
+                                    .add_burner_inventory(
+                                        &i,
+                                        self.player.inventory.count_item(&i) as isize,
+                                    )
+                                    .abs() as usize,
                             );
+                            return Ok(true);
                         }
                     }
                 }
