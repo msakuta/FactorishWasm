@@ -1,6 +1,9 @@
-use super::structure::{Burner, DynIterMut, Structure, StructureBundle};
-use super::water_well::FluidBox;
-use super::{FactorishState, FrameProcResult, Position, Ref};
+use super::{
+    burner::Burner,
+    structure::{DynIterMut, Structure, StructureBundle},
+    water_well::FluidBox,
+    FactorishState, FrameProcResult, Position, Ref,
+};
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 use web_sys::CanvasRenderingContext2d;

@@ -43,6 +43,7 @@ macro_rules! hash_map {
 
 mod assembler;
 mod boiler;
+mod burner;
 mod chest;
 mod elect_pole;
 mod furnace;
@@ -60,6 +61,7 @@ mod water_well;
 
 use assembler::Assembler;
 use boiler::Boiler;
+use burner::Burner;
 use chest::Chest;
 use elect_pole::ElectPole;
 use furnace::Furnace;
@@ -70,9 +72,7 @@ use perlin_noise::{perlin_noise_pixel, Xor128};
 use pipe::Pipe;
 use splitter::Splitter;
 use steam_engine::SteamEngine;
-use structure::{
-    Burner, FrameProcResult, ItemResponse, Position, Rotation, Structure, StructureBundle,
-};
+use structure::{FrameProcResult, ItemResponse, Position, Rotation, Structure, StructureBundle};
 use transport_belt::TransportBelt;
 use water_well::{FluidType, WaterWell};
 

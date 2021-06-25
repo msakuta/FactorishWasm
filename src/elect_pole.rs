@@ -1,4 +1,7 @@
-use super::structure::{Burner, DynIterMut, Structure, StructureBundle};
+use super::{
+    burner::Burner,
+    structure::{DynIterMut, Structure, StructureBundle},
+};
 use super::{FactorishState, FrameProcResult, Position};
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;

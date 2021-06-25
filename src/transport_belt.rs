@@ -1,5 +1,8 @@
-use super::structure::{Burner, ItemResponse, ItemResponseResult, Structure};
-use super::{DropItem, FactorishState, Position, Rotation, TILE_SIZE};
+use super::{
+    burner::Burner,
+    structure::{ItemResponse, ItemResponseResult, Structure},
+    DropItem, FactorishState, Position, Rotation, TILE_SIZE,
+};
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 use web_sys::CanvasRenderingContext2d;

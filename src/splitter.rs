@@ -1,4 +1,7 @@
-use super::structure::{BoundingBox, Burner, ItemResponse, ItemResponseResult, Size, Structure};
+use super::{
+    burner::Burner,
+    structure::{BoundingBox, ItemResponse, ItemResponseResult, Size, Structure},
+};
 use super::{DropItem, FactorishState, Position, Rotation, TILE_SIZE};
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;

@@ -1,6 +1,9 @@
-use super::items::{DropItem, ItemType};
-use super::structure::{Burner, ItemResponse, ItemResponseResult, Structure};
-use super::{FactorishState, FrameProcResult, Inventory, InventoryTrait, Position};
+use super::{
+    burner::Burner,
+    items::{DropItem, ItemType},
+    structure::{ItemResponse, ItemResponseResult, Structure},
+    FactorishState, FrameProcResult, Inventory, InventoryTrait, Position, COAL_POWER,
+};
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 use web_sys::CanvasRenderingContext2d;

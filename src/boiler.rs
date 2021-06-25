@@ -1,9 +1,11 @@
-use super::pipe::Pipe;
-use super::structure::{Burner, DynIterMut, Structure, StructureBundle};
-use super::water_well::{FluidBox, FluidType};
 use super::{
-    serialize_impl, DropItem, FactorishState, FrameProcResult, Inventory, InventoryTrait, ItemType,
-    Position, Recipe, TempEnt, COAL_POWER,
+    burner::Burner,
+    pipe::Pipe,
+    serialize_impl,
+    structure::{DynIterMut, Structure, StructureBundle},
+    water_well::{FluidBox, FluidType},
+    DropItem, FactorishState, FrameProcResult, Inventory, InventoryTrait, ItemType, Position,
+    Recipe, TempEnt, COAL_POWER,
 };
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;

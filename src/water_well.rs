@@ -1,6 +1,9 @@
-use super::pipe::Pipe;
-use super::structure::{Burner, DynIterMut, Structure, StructureBundle};
-use super::{FactorishState, FrameProcResult, Position};
+use super::{
+    burner::Burner,
+    pipe::Pipe,
+    structure::{DynIterMut, Structure, StructureBundle},
+    FactorishState, FrameProcResult, Position,
+};
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 use web_sys::CanvasRenderingContext2d;

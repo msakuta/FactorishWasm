@@ -1,8 +1,10 @@
-use super::items::ItemType;
-use super::structure::{Burner, DynIterMut, Structure, StructureBundle};
 use super::{
-    draw_direction_arrow, DropItem, FactorishState, FrameProcResult, Inventory, InventoryTrait,
-    Position, Recipe, Rotation, TempEnt, COAL_POWER, TILE_SIZE,
+    burner::Burner,
+    draw_direction_arrow,
+    items::ItemType,
+    structure::{DynIterMut, Structure, StructureBundle},
+    DropItem, FactorishState, FrameProcResult, Inventory, InventoryTrait, Position, Recipe,
+    Rotation, TempEnt, COAL_POWER, TILE_SIZE,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;

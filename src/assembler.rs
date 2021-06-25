@@ -1,8 +1,10 @@
-use super::items::get_item_image_url;
-use super::structure::{Burner, DynIterMut, Structure, StructureBundle};
 use super::{
-    serialize_impl, DropItem, FactorishState, FrameProcResult, Inventory, InventoryTrait, ItemType,
-    Position, PowerWire, Recipe, TILE_SIZE,
+    burner::Burner,
+    items::get_item_image_url,
+    serialize_impl,
+    structure::{DynIterMut, Structure, StructureBundle},
+    DropItem, FactorishState, FrameProcResult, Inventory, InventoryTrait, ItemType, Position,
+    PowerWire, Recipe, TILE_SIZE,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;

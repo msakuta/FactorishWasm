@@ -1,8 +1,10 @@
-use super::items::item_to_str;
-use super::structure::{Burner, DynIterMut, Structure, StructureBundle};
 use super::{
-    serialize_impl, DropItem, FactorishState, FrameProcResult, Inventory, InventoryTrait, ItemType,
-    Position, Recipe, TempEnt, COAL_POWER,
+    burner::Burner,
+    items::item_to_str,
+    serialize_impl,
+    structure::{DynIterMut, Structure, StructureBundle},
+    DropItem, FactorishState, FrameProcResult, Inventory, InventoryTrait, ItemType, Position,
+    Recipe, TempEnt, COAL_POWER,
 };
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
