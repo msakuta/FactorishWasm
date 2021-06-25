@@ -658,7 +658,7 @@ impl FactorishState {
                 StructureBundle::new(Box::new(Furnace::new(&Position::new(8, 3))), None),
                 StructureBundle::new(Box::new(Assembler::new(&Position::new(6, 3))), None),
                 StructureBundle::new(Box::new(WaterWell::new(&Position::new(14, 5))), None),
-                StructureBundle::new(Box::new(Boiler::new(&Position::new(13, 5))), None),
+                Boiler::new(&Position::new(13, 5)),
                 StructureBundle::new(Box::new(SteamEngine::new(&Position::new(12, 5))), None),
             ],
             selected_structure_inventory: None,
@@ -1688,7 +1688,7 @@ impl FactorishState {
             ItemType::Chest => Box::new(Chest::new(cursor)),
             ItemType::Furnace => Box::new(Furnace::new(cursor)),
             ItemType::Assembler => Box::new(Assembler::new(cursor)),
-            ItemType::Boiler => Box::new(Boiler::new(cursor)),
+            ItemType::Boiler => return Ok(Boiler::new(cursor)),
             ItemType::WaterWell => Box::new(WaterWell::new(cursor)),
             ItemType::Pipe => Box::new(Pipe::new(cursor)),
             ItemType::SteamEngine => Box::new(SteamEngine::new(cursor)),
@@ -2189,7 +2189,7 @@ impl FactorishState {
             let mut tool = self.new_structure(item, &Position { x: 0, y: 0 })?;
             tool.dynamic.set_rotation(&self.tool_rotation).ok();
             for depth in 0..3 {
-                tool.dynamic.draw(self, context, depth, true)?;
+                tool.dynamic.draw(None, self, context, depth, true)?;
             }
         }
         Ok(())
@@ -2404,7 +2404,9 @@ impl FactorishState {
 
         let draw_structures = |depth| -> Result<(), JsValue> {
             for structure in &self.structures {
-                structure.dynamic.draw(&self, &context, depth, false)?;
+                structure
+                    .dynamic
+                    .draw(structure.burner.as_ref(), &self, &context, depth, false)?;
             }
             Ok(())
         };
@@ -2530,7 +2532,7 @@ impl FactorishState {
                 let mut tool = self.new_structure(&selected_tool, &Position::from(cursor))?;
                 tool.dynamic.set_rotation(&self.tool_rotation).ok();
                 for depth in 0..3 {
-                    tool.dynamic.draw(self, &context, depth, false)?;
+                    tool.dynamic.draw(None, self, &context, depth, false)?;
                 }
                 context.restore();
             }

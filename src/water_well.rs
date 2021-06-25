@@ -154,6 +154,7 @@ impl Structure for WaterWell {
 
     fn draw(
         &self,
+        _burner: Option<&Burner>,
         state: &FactorishState,
         context: &CanvasRenderingContext2d,
         depth: i32,

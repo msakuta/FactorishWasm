@@ -1,5 +1,5 @@
 use super::items::{DropItem, ItemType};
-use super::structure::{ItemResponse, ItemResponseResult, Structure};
+use super::structure::{Burner, ItemResponse, ItemResponseResult, Structure};
 use super::{FactorishState, FrameProcResult, Inventory, InventoryTrait, Position};
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
@@ -33,6 +33,7 @@ impl Structure for Chest {
 
     fn draw(
         &self,
+        _burner: Option<&Burner>,
         state: &FactorishState,
         context: &CanvasRenderingContext2d,
         depth: i32,

@@ -1,4 +1,4 @@
-use super::structure::{BoundingBox, ItemResponse, ItemResponseResult, Size, Structure};
+use super::structure::{BoundingBox, Burner, ItemResponse, ItemResponseResult, Size, Structure};
 use super::{DropItem, FactorishState, Position, Rotation, TILE_SIZE};
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
@@ -69,6 +69,7 @@ impl Structure for Splitter {
 
     fn draw(
         &self,
+        _burner: Option<&Burner>,
         state: &FactorishState,
         context: &CanvasRenderingContext2d,
         depth: i32,

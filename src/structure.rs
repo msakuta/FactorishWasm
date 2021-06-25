@@ -18,15 +18,17 @@ macro_rules! serialize_impl {
 #[macro_export]
 macro_rules! draw_fuel_alarm {
     ($self_:expr, $state:expr, $context:expr, $burner:expr) => {
-        if $self_.recipe.is_some() && $burner.energy == 0. && $state.sim_time % 1. < 0.5 {
-            if let Some(img) = $state.image_fuel_alarm.as_ref() {
-                let (x, y) = (
-                    $self_.position.x as f64 * 32.,
-                    $self_.position.y as f64 * 32.,
-                );
-                $context.draw_image_with_image_bitmap(&img.bitmap, x, y)?;
-            } else {
-                return js_err!("fuel alarm image not available");
+        if let Some(burner) = $burner {
+            if $self_.recipe.is_some() && burner.energy == 0. && $state.sim_time % 1. < 0.5 {
+                if let Some(img) = $state.image_fuel_alarm.as_ref() {
+                    let (x, y) = (
+                        $self_.position.x as f64 * 32.,
+                        $self_.position.y as f64 * 32.,
+                    );
+                    $context.draw_image_with_image_bitmap(&img.bitmap, x, y)?;
+                } else {
+                    return js_err!("fuel alarm image not available");
+                }
             }
         }
     };
@@ -251,6 +253,7 @@ pub(crate) trait Structure {
     }
     fn draw(
         &self,
+        burner: Option<&Burner>,
         state: &FactorishState,
         context: &CanvasRenderingContext2d,
         depth: i32,
@@ -319,9 +322,6 @@ pub(crate) trait Structure {
     }
     fn add_burner_inventory(&mut self, item_type: &ItemType, amount: isize) -> isize {
         0
-    }
-    fn burner_energy(&self) -> Option<(f64, f64)> {
-        None
     }
     fn inventory(&self, _is_input: bool) -> Option<&Inventory> {
         None

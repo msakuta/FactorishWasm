@@ -18,40 +18,44 @@ pub(crate) struct Boiler {
     position: Position,
     inventory: Inventory,
     progress: Option<f64>,
-    power: f64,
-    max_power: f64,
     recipe: Option<Recipe>,
     input_fluid_box: FluidBox,
     output_fluid_box: FluidBox,
 }
 
 impl Boiler {
-    pub(crate) fn new(position: &Position) -> Self {
-        Boiler {
-            position: *position,
-            inventory: Inventory::new(),
-            progress: None,
-            power: 0.,
-            max_power: 20.,
-            recipe: Some(Recipe {
-                input: hash_map!(ItemType::CoalOre => 1usize),
-                input_fluid: Some(FluidType::Water),
-                output: HashMap::new(),
-                output_fluid: Some(FluidType::Steam),
-                power_cost: 100.,
-                recipe_time: 30.,
+    pub(crate) fn new(position: &Position) -> StructureBundle {
+        StructureBundle {
+            dynamic: Box::new(Boiler {
+                position: *position,
+                inventory: Inventory::new(),
+                progress: None,
+                recipe: Some(Recipe {
+                    input: hash_map!(ItemType::CoalOre => 1usize),
+                    input_fluid: Some(FluidType::Water),
+                    output: HashMap::new(),
+                    output_fluid: Some(FluidType::Steam),
+                    power_cost: 100.,
+                    recipe_time: 30.,
+                }),
+                input_fluid_box: FluidBox::new(true, false, [false; 4]),
+                output_fluid_box: FluidBox::new(false, true, [false; 4]),
             }),
-            input_fluid_box: FluidBox::new(true, false, [false; 4]),
-            output_fluid_box: FluidBox::new(false, true, [false; 4]),
+            burner: Some(Burner {
+                inventory: Inventory::new(),
+                capacity: FUEL_CAPACITY,
+                energy: 0.,
+                max_energy: 100.,
+            }),
         }
     }
 
     const FLUID_PER_PROGRESS: f64 = 100.;
     const COMBUSTION_EPSILON: f64 = 1e-6;
 
-    fn combustion_rate(&self) -> f64 {
+    fn combustion_rate(&self, burner: &Burner) -> f64 {
         if let Some(ref recipe) = self.recipe {
-            (self.power / recipe.power_cost)
+            (burner.energy / recipe.power_cost)
                 .min(1. / recipe.recipe_time)
                 .min(self.input_fluid_box.amount / Self::FLUID_PER_PROGRESS)
                 .min(
@@ -76,6 +80,7 @@ impl Structure for Boiler {
 
     fn draw(
         &self,
+        burner: Option<&Burner>,
         state: &FactorishState,
         context: &CanvasRenderingContext2d,
         depth: i32,
@@ -89,7 +94,9 @@ impl Structure for Boiler {
         match state.image_boiler.as_ref() {
             Some(img) => {
                 let sx = if self.progress.is_some()
-                    && Self::COMBUSTION_EPSILON < self.combustion_rate()
+                    && burner
+                        .map(|burner| Self::COMBUSTION_EPSILON < self.combustion_rate(burner))
+                        .unwrap_or(false)
                 {
                     ((((state.sim_time * 5.) as isize) % 2 + 1) * 32) as f64
                 } else {
@@ -110,7 +117,7 @@ impl Structure for Boiler {
             None => return Err(JsValue::from_str("furnace image not available")),
         }
         if !is_tooltip {
-            // crate::draw_fuel_alarm!(self, state, context, burner);
+            crate::draw_fuel_alarm!(self, state, context, burner);
         }
 
         Ok(())
@@ -128,8 +135,8 @@ impl Structure for Boiler {
                         self.progress.unwrap_or(0.) * 100.),
                     format!(r#"Power: {:.1}kJ <div style='position: relative; width: 100px; height: 10px; background-color: #001f1f; margin: 2px; border: 1px solid #3f3f3f'>
                     <div style='position: absolute; width: {}px; height: 10px; background-color: #ff00ff'></div></div>"#,
-                    self.power,
-                    if 0. < self.max_power { (self.power) / self.max_power * 100. } else { 0. }),
+                    0./*self.power*/,
+                    0./*if 0. < self.max_power { (self.power) / self.max_power * 100. } else { 0. }*/),
                     self.input_fluid_box.desc(),
                     self.output_fluid_box.desc())
             // getHTML(generateItemImage("time", true, this.recipe.time), true) + "<br>" +
@@ -152,9 +159,10 @@ impl Structure for Boiler {
         &mut self,
         state: &mut FactorishState,
         structures: &mut dyn DynIterMut<Item = StructureBundle>,
-        _burner: Option<&mut Burner>,
+        burner: Option<&mut Burner>,
     ) -> Result<FrameProcResult, ()> {
         let connections = self.connection(state, structures.as_dyn_iter());
+        let burner = burner.ok_or(())?;
         self.output_fluid_box.connect_to = connections;
         self.input_fluid_box
             .simulate(&self.position, state, &mut structures.dyn_iter_mut());
@@ -165,20 +173,10 @@ impl Structure for Boiler {
                 self.progress = Some(0.);
             }
             let mut ret = FrameProcResult::None;
-            // First, check if we need to refill the energy buffer in order to continue the current work.
-            if self.inventory.get(&ItemType::CoalOre).is_some() {
-                // Refill the energy from the fuel
-                if self.power < recipe.power_cost {
-                    self.power += COAL_POWER;
-                    self.max_power = self.power;
-                    self.inventory.remove_item(&ItemType::CoalOre);
-                    ret = FrameProcResult::InventoryChanged(self.position);
-                }
-            }
 
             if let Some(prev_progress) = self.progress {
                 // Proceed only if we have sufficient energy in the buffer.
-                let progress = self.combustion_rate();
+                let progress = self.combustion_rate(burner);
                 if state.rng.next() < progress * 10. {
                     state
                         .temp_ents
@@ -194,7 +192,7 @@ impl Structure for Boiler {
                     return Ok(FrameProcResult::InventoryChanged(self.position));
                 } else if Self::COMBUSTION_EPSILON < progress {
                     self.progress = Some(prev_progress + progress);
-                    self.power -= progress * recipe.power_cost;
+                    burner.energy -= progress * recipe.power_cost;
                     self.output_fluid_box.type_ = Some(FluidType::Steam);
                     self.output_fluid_box.amount += progress * Self::FLUID_PER_PROGRESS;
                     self.input_fluid_box.amount -= progress * Self::FLUID_PER_PROGRESS;
@@ -248,10 +246,6 @@ impl Structure for Boiler {
         } else {
             0
         }
-    }
-
-    fn burner_energy(&self) -> Option<(f64, f64)> {
-        Some((self.power, self.max_power))
     }
 
     fn destroy_inventory(&mut self) -> Inventory {

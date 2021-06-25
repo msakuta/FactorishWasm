@@ -46,6 +46,7 @@ impl Structure for Furnace {
 
     fn draw(
         &self,
+        _burner: Option<&Burner>,
         state: &FactorishState,
         context: &CanvasRenderingContext2d,
         depth: i32,

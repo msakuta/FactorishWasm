@@ -1,4 +1,4 @@
-use super::structure::{ItemResponse, ItemResponseResult, Structure};
+use super::structure::{Burner, ItemResponse, ItemResponseResult, Structure};
 use super::{DropItem, FactorishState, Position, Rotation, TILE_SIZE};
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
@@ -30,6 +30,7 @@ impl Structure for TransportBelt {
 
     fn draw(
         &self,
+        _burner: Option<&Burner>,
         state: &FactorishState,
         context: &CanvasRenderingContext2d,
         depth: i32,
