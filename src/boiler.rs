@@ -4,8 +4,7 @@ use super::{
     serialize_impl,
     structure::{DynIterMut, Structure, StructureBundle},
     water_well::{FluidBox, FluidType},
-    DropItem, FactorishState, FrameProcResult, Inventory, InventoryTrait, ItemType, Position,
-    Recipe, TempEnt, COAL_POWER,
+    FactorishState, FrameProcResult, Inventory, ItemType, Position, Recipe, TempEnt,
 };
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
@@ -18,7 +17,6 @@ const FUEL_CAPACITY: usize = 10;
 #[derive(Serialize, Deserialize)]
 pub(crate) struct Boiler {
     position: Position,
-    inventory: Inventory,
     progress: Option<f64>,
     recipe: Option<Recipe>,
     input_fluid_box: FluidBox,
@@ -30,7 +28,6 @@ impl Boiler {
         StructureBundle {
             dynamic: Box::new(Boiler {
                 position: *position,
-                inventory: Inventory::new(),
                 progress: None,
                 recipe: Some(Recipe {
                     input: hash_map!(ItemType::CoalOre => 1usize),
@@ -86,7 +83,7 @@ impl Structure for Boiler {
         state: &FactorishState,
         context: &CanvasRenderingContext2d,
         depth: i32,
-        is_tooltip: bool,
+        _is_tooltip: bool,
     ) -> Result<(), JsValue> {
         if depth != 0 {
             return Ok(());
@@ -122,9 +119,14 @@ impl Structure for Boiler {
         Ok(())
     }
 
-    fn desc(&self, _state: &FactorishState) -> String {
+    fn desc(&self, burner: Option<&Burner>, _state: &FactorishState) -> String {
+        let burner = if let Some(burner) = burner {
+            burner
+        } else {
+            return "Burner not found".to_string();
+        };
         format!(
-            "{}<br>{}",
+            "{}",
             if self.recipe.is_some() {
                 // Progress bar
                 format!("{}{}{}{}Input fluid: {}Output fluid: {}",
@@ -134,8 +136,8 @@ impl Structure for Boiler {
                         self.progress.unwrap_or(0.) * 100.),
                     format!(r#"Power: {:.1}kJ <div style='position: relative; width: 100px; height: 10px; background-color: #001f1f; margin: 2px; border: 1px solid #3f3f3f'>
                     <div style='position: absolute; width: {}px; height: 10px; background-color: #ff00ff'></div></div>"#,
-                    0./*self.power*/,
-                    0./*if 0. < self.max_power { (self.power) / self.max_power * 100. } else { 0. }*/),
+                    burner.energy,
+                    if 0. < burner.max_energy { (burner.energy) / burner.max_energy * 100. } else { 0. }),
                     self.input_fluid_box.desc(),
                     self.output_fluid_box.desc())
             // getHTML(generateItemImage("time", true, this.recipe.time), true) + "<br>" +
@@ -144,13 +146,6 @@ impl Structure for Boiler {
             } else {
                 String::from("No recipe")
             },
-            format!(
-                "Items: \n{}",
-                self.inventory
-                    .iter()
-                    .map(|item| format!("{:?}: {}<br>", item.0, item.1))
-                    .fold(String::from(""), |accum, item| accum + &item)
-            )
         )
     }
 
@@ -171,7 +166,7 @@ impl Structure for Boiler {
             if self.input_fluid_box.type_ == Some(FluidType::Water) {
                 self.progress = Some(0.);
             }
-            let mut ret = FrameProcResult::None;
+            let ret = FrameProcResult::None;
 
             if let Some(prev_progress) = self.progress {
                 // Proceed only if we have sufficient energy in the buffer.
@@ -184,10 +179,6 @@ impl Structure for Boiler {
                 if 1. <= prev_progress + progress {
                     self.progress = None;
 
-                    // Produce outputs into inventory
-                    for output_item in &recipe.output {
-                        self.inventory.add_item(&output_item.0);
-                    }
                     return Ok(FrameProcResult::InventoryChanged(self.position));
                 } else if Self::COMBUSTION_EPSILON < progress {
                     self.progress = Some(prev_progress + progress);
@@ -200,63 +191,6 @@ impl Structure for Boiler {
             return Ok(ret);
         }
         Ok(FrameProcResult::None)
-    }
-
-    fn input(&mut self, o: &DropItem) -> Result<(), JsValue> {
-        // Fuels are always welcome.
-        if o.type_ == ItemType::CoalOre
-            && self.inventory.count_item(&ItemType::CoalOre) < FUEL_CAPACITY
-        {
-            self.inventory.add_item(&ItemType::CoalOre);
-            return Ok(());
-        }
-
-        Err(JsValue::from_str("Recipe is not initialized"))
-    }
-
-    fn can_input(&self, item_type: &ItemType) -> bool {
-        *item_type == ItemType::CoalOre
-            && self.inventory.count_item(&ItemType::CoalOre) < FUEL_CAPACITY
-    }
-
-    fn output(&mut self, _state: &mut FactorishState, item_type: &ItemType) -> Result<(), ()> {
-        if self.inventory.remove_item(item_type) {
-            Ok(())
-        } else {
-            Err(())
-        }
-    }
-
-    fn burner_inventory(&self) -> Option<&Inventory> {
-        Some(&self.inventory)
-    }
-
-    fn add_burner_inventory(&mut self, item_type: &ItemType, amount: isize) -> isize {
-        if amount < 0 {
-            let existing = self.inventory.count_item(item_type);
-            let removed = existing.min((-amount) as usize);
-            self.inventory.remove_items(item_type, removed);
-            -(removed as isize)
-        } else if *item_type == ItemType::CoalOre {
-            let add_amount = amount
-                .min((FUEL_CAPACITY - self.inventory.count_item(&ItemType::CoalOre)) as isize);
-            self.inventory.add_items(item_type, add_amount as usize);
-            add_amount as isize
-        } else {
-            0
-        }
-    }
-
-    fn destroy_inventory(&mut self) -> Inventory {
-        // Return the ingredients if it was in the middle of processing a recipe.
-        if let Some(recipe) = self.recipe.take() {
-            if self.progress.is_some() {
-                let mut ret = std::mem::take(&mut self.inventory);
-                ret.merge(recipe.input);
-                return ret;
-            }
-        }
-        std::mem::take(&mut self.inventory)
     }
 
     fn get_selected_recipe(&self) -> Option<&Recipe> {

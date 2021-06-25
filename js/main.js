@@ -307,7 +307,11 @@ let ysize = 64;
         for(var i = 0; i < toolBarCanvases.length; i++){
             var canvasElem = toolBarCanvases[i];
             var context = canvasElem.getContext('2d');
-            sim.render_tool(i, context);
+            try{
+                sim.render_tool(i, context);
+            } catch(e) {
+                console.error(e);
+            }
         }
     }
 
@@ -1025,7 +1029,12 @@ let ysize = 64;
     window.setInterval(function(){
         if(!paused)
             processEvents(sim.simulate(0.05));
-        let result = sim.render(ctx);
+        try{
+            sim.render(ctx);
+        }
+        catch(e){
+            console.error(e);
+        }
 
         const selPos = sim.get_selected_inventory();
         if(selPos){

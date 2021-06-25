@@ -178,7 +178,7 @@ impl Structure for WaterWell {
         Ok(())
     }
 
-    fn desc(&self, _state: &FactorishState) -> String {
+    fn desc(&self, _burner: Option<&Burner>, _state: &FactorishState) -> String {
         format!(
             "{}<br>{}",
             self.output_fluid_box.desc(),

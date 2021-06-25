@@ -3,8 +3,8 @@ use super::{
     draw_direction_arrow,
     items::ItemType,
     structure::{DynIterMut, Structure, StructureBundle},
-    DropItem, FactorishState, FrameProcResult, Inventory, InventoryTrait, Position, Recipe,
-    Rotation, TempEnt, COAL_POWER, TILE_SIZE,
+    DropItem, FactorishState, FrameProcResult, Inventory, Position, Recipe, Rotation, TempEnt,
+    TILE_SIZE,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -51,11 +51,11 @@ impl Structure for OreMine {
 
     fn draw(
         &self,
-        burner: Option<&Burner>,
+        _burner: Option<&Burner>,
         state: &FactorishState,
         context: &CanvasRenderingContext2d,
         depth: i32,
-        is_toolbar: bool,
+        _is_toolbar: bool,
     ) -> Result<(), JsValue> {
         let (x, y) = (
             self.position.x as f64 * TILE_SIZE,
@@ -100,7 +100,12 @@ impl Structure for OreMine {
         Ok(())
     }
 
-    fn desc(&self, state: &FactorishState) -> String {
+    fn desc(&self, burner: Option<&Burner>, state: &FactorishState) -> String {
+        let burner = if let Some(burner) = burner {
+            burner
+        } else {
+            return "Burner not found".to_string();
+        };
         let tile = &state.board
             [self.position.x as usize + self.position.y as usize * state.width as usize];
         if let Some(_recipe) = &self.recipe {
@@ -112,8 +117,8 @@ impl Structure for OreMine {
                     self.progress * 100.),
                 format!(r#"Power: {:.1}kJ <div style='position: relative; width: 100px; height: 10px; background-color: #001f1f; margin: 2px; border: 1px solid #3f3f3f'>
                  <div style='position: absolute; width: {}px; height: 10px; background-color: #ff00ff'></div></div>"#,
-                    0/*self.power*/,
-                    0/*if 0. < self.max_power { (self.power) / self.max_power * 100. } else { 0. }*/),
+                    burner.energy,
+                    if 0. < burner.max_energy { (burner.energy) / burner.max_energy * 100. } else { 0. }),
                 format!("Expected output: {}", if 0 < tile.iron_ore { tile.iron_ore } else if 0 < tile.coal_ore { tile.coal_ore } else { tile.copper_ore }))
         // getHTML(generateItemImage("time", true, this.recipe.time), true) + "<br>" +
         // "Outputs: <br>" +
@@ -137,7 +142,7 @@ impl Structure for OreMine {
 
         let burner = burner.ok_or(())?;
 
-        let mut ret = FrameProcResult::None;
+        let ret = FrameProcResult::None;
 
         if self.recipe.is_none() {
             if 0 < tile.iron_ore {

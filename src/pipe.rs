@@ -95,7 +95,7 @@ impl Structure for Pipe {
         Self::draw_int(self, state, context, depth, true)
     }
 
-    fn desc(&self, _state: &FactorishState) -> String {
+    fn desc(&self, _burner: Option<&Burner>, _state: &FactorishState) -> String {
         self.fluid_box.desc()
         // getHTML(generateItemImage("time", true, this.recipe.time), true) + "<br>" +
         // "Outputs: <br>" +

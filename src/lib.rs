@@ -655,7 +655,7 @@ impl FactorishState {
                 StructureBundle::new(Box::new(TransportBelt::new(11, 3, Rotation::Left)), None),
                 StructureBundle::new(Box::new(TransportBelt::new(12, 3, Rotation::Left)), None),
                 OreMine::new(12, 2, Rotation::Bottom),
-                StructureBundle::new(Box::new(Furnace::new(&Position::new(8, 3))), None),
+                Furnace::new(&Position::new(8, 3)),
                 StructureBundle::new(Box::new(Assembler::new(&Position::new(6, 3))), None),
                 StructureBundle::new(Box::new(WaterWell::new(&Position::new(14, 5))), None),
                 Boiler::new(&Position::new(13, 5)),
@@ -1239,7 +1239,7 @@ impl FactorishState {
                             format!(
                                 r#"Type: {}<br>{}"#,
                                 structure.dynamic.name(),
-                                structure.dynamic.desc(&self)
+                                structure.dynamic.desc(structure.burner.as_ref(), &self)
                             )
                         } else {
                             let cell = self.board
@@ -1348,7 +1348,14 @@ impl FactorishState {
             if let Ok(ref mut data) = self.minimap_buffer.try_borrow_mut() {
                 self.render_minimap_data_pixel(data, &position);
             }
-            for (item_type, count) in structure.dynamic.destroy_inventory() {
+            for (item_type, count) in structure.dynamic.destroy_inventory().into_iter().chain(
+                structure
+                    .burner
+                    .as_mut()
+                    .map(|burner| burner.destroy_inventory())
+                    .unwrap_or_else(|| Inventory::new())
+                    .into_iter(),
+            ) {
                 popup_text += &format!("+{} {}\n", count, &item_to_str(&item_type));
                 self.player.add_item(&item_type, count)
             }
@@ -1686,7 +1693,9 @@ impl FactorishState {
                 return Ok(OreMine::new(cursor.x, cursor.y, self.tool_rotation));
             }
             ItemType::Chest => Box::new(Chest::new(cursor)),
-            ItemType::Furnace => Box::new(Furnace::new(cursor)),
+            ItemType::Furnace => {
+                return Ok(Furnace::new(cursor));
+            }
             ItemType::Assembler => Box::new(Assembler::new(cursor)),
             ItemType::Boiler => return Ok(Boiler::new(cursor)),
             ItemType::WaterWell => Box::new(WaterWell::new(cursor)),
@@ -2407,7 +2416,7 @@ impl FactorishState {
                 structure
                     .dynamic
                     .draw(structure.burner.as_ref(), &self, &context, depth, false)?;
-                if (depth == 2) {
+                if depth == 2 {
                     if let Some(burner) = &structure.burner {
                         burner.draw(&structure.dynamic.position(), &self, &context)?;
                     }

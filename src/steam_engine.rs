@@ -106,7 +106,7 @@ impl Structure for SteamEngine {
         Ok(())
     }
 
-    fn desc(&self, _state: &FactorishState) -> String {
+    fn desc(&self, _burner: Option<&Burner>, _state: &FactorishState) -> String {
         if self.recipe.is_some() {
             // Progress bar
             format!("{}{}{}{}{}Input fluid: {}",

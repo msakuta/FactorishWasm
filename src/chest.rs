@@ -2,7 +2,7 @@ use super::{
     burner::Burner,
     items::{DropItem, ItemType},
     structure::{ItemResponse, ItemResponseResult, Structure},
-    FactorishState, FrameProcResult, Inventory, InventoryTrait, Position, COAL_POWER,
+    FactorishState, FrameProcResult, Inventory, InventoryTrait, Position,
 };
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
@@ -55,7 +55,7 @@ impl Structure for Chest {
         }
     }
 
-    fn desc(&self, _state: &FactorishState) -> String {
+    fn desc(&self, _burner: Option<&Burner>, _state: &FactorishState) -> String {
         format!(
             "Items: \n{}",
             self.inventory

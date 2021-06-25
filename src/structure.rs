@@ -1,6 +1,6 @@
 use super::{
     burner::Burner, items::ItemType, water_well::FluidBox, DropItem, FactorishState, Inventory,
-    InventoryTrait, Recipe, COAL_POWER,
+    InventoryTrait, Recipe,
 };
 use rotate_enum::RotateEnum;
 use serde::{Deserialize, Serialize};
@@ -179,7 +179,7 @@ pub(crate) trait Structure {
         depth: i32,
         is_tooptip: bool,
     ) -> Result<(), JsValue>;
-    fn desc(&self, _state: &FactorishState) -> String {
+    fn desc(&self, _burner: Option<&Burner>, _state: &FactorishState) -> String {
         String::from("")
     }
     fn frame_proc(
@@ -236,12 +236,6 @@ pub(crate) trait Structure {
     /// with `can_output`.
     fn output(&mut self, _state: &mut FactorishState, _item_type: &ItemType) -> Result<(), ()> {
         Err(())
-    }
-    fn burner_inventory(&self) -> Option<&Inventory> {
-        None
-    }
-    fn add_burner_inventory(&mut self, item_type: &ItemType, amount: isize) -> isize {
-        0
     }
     fn inventory(&self, _is_input: bool) -> Option<&Inventory> {
         None
@@ -335,7 +329,7 @@ impl StructureBundle {
     }
 
     pub(crate) fn input(&mut self, item: &DropItem) -> Result<(), JsValue> {
-        self.dynamic.input(item).or_else(|e| {
+        self.dynamic.input(item).or_else(|_| {
             if let Some(burner) = self.burner.as_mut() {
                 burner.input(item)
             } else {

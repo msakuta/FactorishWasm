@@ -18,22 +18,26 @@ pub(crate) struct Furnace {
     input_inventory: Inventory,
     output_inventory: Inventory,
     progress: Option<f64>,
-    power: f64,
-    max_power: f64,
     recipe: Option<Recipe>,
 }
 
 impl Furnace {
-    pub(crate) fn new(position: &Position) -> Self {
-        Furnace {
-            position: *position,
-            input_inventory: Inventory::new(),
-            output_inventory: Inventory::new(),
-            progress: None,
-            power: 20.,
-            max_power: 20.,
-            recipe: None,
-        }
+    pub(crate) fn new(position: &Position) -> StructureBundle {
+        StructureBundle::new(
+            Box::new(Furnace {
+                position: *position,
+                input_inventory: Inventory::new(),
+                output_inventory: Inventory::new(),
+                progress: None,
+                recipe: None,
+            }),
+            Some(Burner {
+                inventory: Inventory::new(),
+                capacity: FUEL_CAPACITY,
+                energy: 0.,
+                max_energy: 100.,
+            }),
+        )
     }
 }
 
@@ -48,7 +52,7 @@ impl Structure for Furnace {
 
     fn draw(
         &self,
-        _burner: Option<&Burner>,
+        burner: Option<&Burner>,
         state: &FactorishState,
         context: &CanvasRenderingContext2d,
         depth: i32,
@@ -57,10 +61,11 @@ impl Structure for Furnace {
         if depth != 0 {
             return Ok(());
         };
+        let burner = burner.ok_or_else(|| js_str!("Furnace: Burner not found"))?;
         let (x, y) = (self.position.x as f64 * 32., self.position.y as f64 * 32.);
         match state.image_furnace.as_ref() {
             Some(img) => {
-                let sx = if self.progress.is_some() && 0. < self.power {
+                let sx = if self.progress.is_some() && 0. < burner.energy {
                     ((((state.sim_time * 5.) as isize) % 2 + 1) * 32) as f64
                 } else {
                     0.
@@ -86,7 +91,12 @@ impl Structure for Furnace {
         Ok(())
     }
 
-    fn desc(&self, _state: &FactorishState) -> String {
+    fn desc(&self, burner: Option<&Burner>, _state: &FactorishState) -> String {
+        let burner = if let Some(burner) = burner {
+            burner
+        } else {
+            return "Burner not found".to_string();
+        };
         format!(
             "{}<br>{}{}",
             if self.recipe.is_some() {
@@ -98,8 +108,8 @@ impl Structure for Furnace {
                         self.progress.unwrap_or(0.) * 100.),
                     format!(r#"Power: {:.1}kJ <div style='position: relative; width: 100px; height: 10px; background-color: #001f1f; margin: 2px; border: 1px solid #3f3f3f'>
                     <div style='position: absolute; width: {}px; height: 10px; background-color: #ff00ff'></div></div>"#,
-                    self.power,
-                    if 0. < self.max_power { (self.power) / self.max_power * 100. } else { 0. }),
+                    burner.energy,
+                    if 0. < burner.max_energy { (burner.energy) / burner.max_energy * 100. } else { 0. }),
                     )
             // getHTML(generateItemImage("time", true, this.recipe.time), true) + "<br>" +
             // "Outputs: <br>" +
@@ -116,16 +126,17 @@ impl Structure for Furnace {
         &mut self,
         state: &mut FactorishState,
         _structures: &mut dyn DynIterMut<Item = StructureBundle>,
-        _burner: Option<&mut Burner>,
+        burner: Option<&mut Burner>,
     ) -> Result<FrameProcResult, ()> {
+        let burner = burner.ok_or_else(|| ())?;
         if let Some(recipe) = &self.recipe {
             let mut ret = FrameProcResult::None;
             // First, check if we need to refill the energy buffer in order to continue the current work.
             if self.input_inventory.get(&ItemType::CoalOre).is_some() {
                 // Refill the energy from the fuel
-                if self.power < recipe.power_cost {
-                    self.power += COAL_POWER;
-                    self.max_power = self.power;
+                if burner.energy < recipe.power_cost {
+                    burner.energy += COAL_POWER;
+                    burner.max_energy = burner.energy;
                     self.input_inventory.remove_item(&ItemType::CoalOre);
                     ret = FrameProcResult::InventoryChanged(self.position);
                 }
@@ -152,7 +163,7 @@ impl Structure for Furnace {
 
             if let Some(prev_progress) = self.progress {
                 // Proceed only if we have sufficient energy in the buffer.
-                let progress = (self.power / recipe.power_cost)
+                let progress = (burner.energy / recipe.power_cost)
                     .min(1. / recipe.recipe_time)
                     .min(1.);
                 if state.rng.next() < progress * 10. {
@@ -170,7 +181,7 @@ impl Structure for Furnace {
                     return Ok(FrameProcResult::InventoryChanged(self.position));
                 } else {
                     self.progress = Some(prev_progress + progress);
-                    self.power -= progress * recipe.power_cost;
+                    burner.energy -= progress * recipe.power_cost;
                 }
             }
             return Ok(ret);

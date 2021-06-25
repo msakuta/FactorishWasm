@@ -176,7 +176,7 @@ impl Structure for Assembler {
         Ok(())
     }
 
-    fn desc(&self, _state: &FactorishState) -> String {
+    fn desc(&self, _burner: Option<&Burner>, _state: &FactorishState) -> String {
         format!(
             "{}<br>{}{}",
             if let Some(recipe) = &self.recipe {
