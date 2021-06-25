@@ -135,7 +135,7 @@ const DROP_ITEM_SIZE: f64 = 8.;
 const DROP_ITEM_SIZE_I: i32 = DROP_ITEM_SIZE as i32;
 
 const COAL_POWER: f64 = 100.; // kilojoules
-const SAVE_VERSION: i32 = 1;
+const SAVE_VERSION: i64 = 2;
 const ORE_HARVEST_TIME: i32 = 20;
 const POPUP_TEXT_LIFE: i32 = 30;
 
@@ -784,10 +784,19 @@ impl FactorishState {
     pub fn deserialize_game(&mut self, data: &str) -> Result<(), JsValue> {
         use serde_json::Value;
 
-        self.structures.clear();
-        self.drop_items.clear();
         let mut json: Value =
             serde_json::from_str(&data).map_err(|_| js_str!("Deserialize error"))?;
+        let version = json
+            .get("version")
+            .and_then(|value| value.as_i64())
+            .ok_or_else(|| js_str!("Version not found!"))?;
+        // Save version 2 is not backwards compatible
+        if version < SAVE_VERSION {
+            return js_err!("Save data version is old: {}", version);
+        }
+
+        self.structures.clear();
+        self.drop_items.clear();
 
         fn json_get<I: serde_json::value::Index + std::fmt::Display + Copy>(
             value: &serde_json::Value,
