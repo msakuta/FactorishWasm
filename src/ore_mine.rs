@@ -93,9 +93,6 @@ impl Structure for OreMine {
             },
             2 => {
                 draw_direction_arrow((x, y), &self.rotation, state, context)?;
-                if !is_toolbar {
-                    crate::draw_fuel_alarm!(self, state, context, burner);
-                }
             }
             _ => (),
         }

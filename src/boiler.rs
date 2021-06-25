@@ -118,9 +118,6 @@ impl Structure for Boiler {
             }
             None => return Err(JsValue::from_str("furnace image not available")),
         }
-        if !is_tooltip {
-            crate::draw_fuel_alarm!(self, state, context, burner);
-        }
 
         Ok(())
     }

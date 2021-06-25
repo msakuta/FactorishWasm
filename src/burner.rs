@@ -1,10 +1,11 @@
 use super::{
     items::{DropItem, ItemType},
     structure::Structure,
-    FrameProcResult, Inventory, InventoryTrait, COAL_POWER,
+    FactorishState, FrameProcResult, Inventory, InventoryTrait, Position, COAL_POWER,
 };
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::JsValue;
+use web_sys::CanvasRenderingContext2d;
 
 #[derive(Serialize, Deserialize)]
 pub(crate) struct Burner {
@@ -17,6 +18,23 @@ pub(crate) struct Burner {
 impl Burner {
     pub fn js_serialize(&self) -> serde_json::Result<serde_json::Value> {
         serde_json::to_value(self)
+    }
+
+    pub fn draw(
+        &self,
+        position: &Position,
+        state: &FactorishState,
+        context: &CanvasRenderingContext2d,
+    ) -> Result<(), JsValue> {
+        if self.energy < 1e-3 && state.sim_time % 1. < 0.5 {
+            if let Some(img) = state.image_fuel_alarm.as_ref() {
+                let (x, y) = (position.x as f64 * 32., position.y as f64 * 32.);
+                context.draw_image_with_image_bitmap(&img.bitmap, x, y)?;
+            } else {
+                return js_err!("fuel alarm image not available");
+            }
+        }
+        Ok(())
     }
 
     pub fn add_burner_inventory(&mut self, item_type: &ItemType, amount: isize) -> isize {

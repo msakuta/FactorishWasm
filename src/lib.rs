@@ -2407,6 +2407,11 @@ impl FactorishState {
                 structure
                     .dynamic
                     .draw(structure.burner.as_ref(), &self, &context, depth, false)?;
+                if (depth == 2) {
+                    if let Some(burner) = &structure.burner {
+                        burner.draw(&structure.dynamic.position(), &self, &context)?;
+                    }
+                }
             }
             Ok(())
         };

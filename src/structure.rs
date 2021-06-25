@@ -16,25 +16,6 @@ macro_rules! serialize_impl {
     };
 }
 
-#[macro_export]
-macro_rules! draw_fuel_alarm {
-    ($self_:expr, $state:expr, $context:expr, $burner:expr) => {
-        if let Some(burner) = $burner {
-            if $self_.recipe.is_some() && burner.energy == 0. && $state.sim_time % 1. < 0.5 {
-                if let Some(img) = $state.image_fuel_alarm.as_ref() {
-                    let (x, y) = (
-                        $self_.position.x as f64 * 32.,
-                        $self_.position.y as f64 * 32.,
-                    );
-                    $context.draw_image_with_image_bitmap(&img.bitmap, x, y)?;
-                } else {
-                    return js_err!("fuel alarm image not available");
-                }
-            }
-        }
-    };
-}
-
 #[derive(Eq, PartialEq, Hash, Copy, Clone, Debug, Serialize, Deserialize)]
 pub(crate) struct Position {
     pub x: i32,
