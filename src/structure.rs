@@ -411,4 +411,14 @@ impl StructureBundle {
         }
         Err(())
     }
+
+    pub(crate) fn inventory_mut(&mut self, is_input: bool) -> Option<&mut Inventory> {
+        if let Some(inventory) = self.dynamic.inventory_mut(is_input) {
+            return Some(inventory);
+        } else {
+            self.factory
+                .as_mut()
+                .map(|factory| factory.inventory_mut(is_input))?
+        }
+    }
 }

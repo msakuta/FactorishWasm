@@ -117,7 +117,7 @@ impl Factory {
         })
     }
 
-    fn inventory_mut(&mut self, is_input: bool) -> Option<&mut Inventory> {
+    pub fn inventory_mut(&mut self, is_input: bool) -> Option<&mut Inventory> {
         Some(if is_input {
             &mut self.input_inventory
         } else {
@@ -125,7 +125,7 @@ impl Factory {
         })
     }
 
-    fn destroy_inventory(&mut self) -> Inventory {
+    pub fn destroy_inventory(&mut self) -> Inventory {
         let mut ret = std::mem::take(&mut self.input_inventory);
         ret.merge(std::mem::take(&mut self.output_inventory));
         // Return the ingredients if it was in the middle of processing a recipe.

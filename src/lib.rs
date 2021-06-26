@@ -1421,7 +1421,15 @@ impl FactorishState {
                     .as_mut()
                     .map(|burner| burner.destroy_inventory())
                     .unwrap_or_else(|| Inventory::new())
-                    .into_iter(),
+                    .into_iter()
+                    .chain(
+                        structure
+                            .factory
+                            .as_mut()
+                            .map(|factory| factory.destroy_inventory())
+                            .unwrap_or_else(|| Inventory::new())
+                            .into_iter(),
+                    ),
             ) {
                 popup_text += &format!("+{} {}\n", count, &item_to_str(&item_type));
                 self.player.add_item(&item_type, count)
@@ -1710,9 +1718,8 @@ impl FactorishState {
                     }
                 }
                 _ => {
-                    if let Some(inventory) = structure
-                        .dynamic
-                        .inventory_mut(inventory_type == InventoryType::Input)
+                    if let Some(inventory) =
+                        structure.inventory_mut(inventory_type == InventoryType::Input)
                     {
                         let (src, dst, item_name) = if to_player {
                             (
