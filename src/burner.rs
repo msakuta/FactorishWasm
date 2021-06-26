@@ -1,6 +1,6 @@
 use super::{
     items::{DropItem, ItemType},
-    structure::Structure,
+    structure::{Energy, Structure},
     FactorishState, FrameProcResult, Inventory, InventoryTrait, Position, COAL_POWER,
 };
 use serde::{Deserialize, Serialize};
@@ -11,8 +11,6 @@ use web_sys::CanvasRenderingContext2d;
 pub(crate) struct Burner {
     pub inventory: Inventory,
     pub capacity: usize,
-    pub energy: f64,
-    pub max_energy: f64,
 }
 
 impl Burner {
@@ -22,11 +20,13 @@ impl Burner {
 
     pub fn draw(
         &self,
+        energy: Option<&Energy>,
         position: &Position,
         state: &FactorishState,
         context: &CanvasRenderingContext2d,
     ) -> Result<(), JsValue> {
-        if self.energy < 1e-3 && state.sim_time % 1. < 0.5 {
+        let energy = energy.ok_or_else(|| js_str!("Burner without Energy component"))?;
+        if energy.value < 1e-3 && state.sim_time % 1. < 0.5 {
             if let Some(img) = state.image_fuel_alarm.as_ref() {
                 let (x, y) = (position.x as f64 * 32., position.y as f64 * 32.);
                 context.draw_image_with_image_bitmap(&img.bitmap, x, y)?;
@@ -53,12 +53,17 @@ impl Burner {
         }
     }
 
-    pub fn frame_proc(&mut self, structure: &mut dyn Structure) -> Result<FrameProcResult, ()> {
+    pub fn frame_proc(
+        &mut self,
+        energy: Option<&mut Energy>,
+        structure: &mut dyn Structure,
+    ) -> Result<FrameProcResult, ()> {
+        let energy = energy.ok_or(())?; //|| js_str!("Burner without Energy component"))?;
         if let Some(amount) = self.inventory.get_mut(&ItemType::CoalOre) {
-            if 0 < *amount && self.energy == 0. {
+            if 0 < *amount && energy.value < 1e-3 {
                 self.inventory.remove_item(&ItemType::CoalOre);
-                self.energy += COAL_POWER;
-                self.max_energy = self.max_energy.max(self.energy);
+                energy.value += COAL_POWER;
+                energy.max = energy.max.max(energy.value);
                 return Ok(FrameProcResult::InventoryChanged(*structure.position()));
             }
         }

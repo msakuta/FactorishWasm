@@ -69,6 +69,8 @@ impl Structure for SteamEngine {
     fn draw(
         &self,
         _burner: Option<&Burner>,
+        _energy: Option<&super::structure::Energy>,
+        _factory: Option<&super::factory::Factory>,
         state: &FactorishState,
         context: &CanvasRenderingContext2d,
         depth: i32,
@@ -106,7 +108,13 @@ impl Structure for SteamEngine {
         Ok(())
     }
 
-    fn desc(&self, _burner: Option<&Burner>, _state: &FactorishState) -> String {
+    fn desc(
+        &self,
+        _burner: Option<&Burner>,
+        _energy: Option<&super::structure::Energy>,
+        _factory: Option<&super::factory::Factory>,
+        _state: &FactorishState,
+    ) -> String {
         if self.recipe.is_some() {
             // Progress bar
             format!("{}{}{}{}{}Input fluid: {}",
@@ -130,9 +138,10 @@ impl Structure for SteamEngine {
 
     fn frame_proc(
         &mut self,
+        _burner: Option<&mut Burner>,
+        _energy: Option<&mut super::structure::Energy>,
         state: &mut FactorishState,
         structures: &mut dyn DynIterMut<Item = StructureBundle>,
-        _burner: Option<&mut Burner>,
     ) -> Result<FrameProcResult, ()> {
         let connections = self.connection(state, structures.as_dyn_iter());
         self.input_fluid_box.connect_to = connections;

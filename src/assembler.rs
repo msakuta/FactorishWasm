@@ -130,6 +130,8 @@ impl Structure for Assembler {
     fn draw(
         &self,
         _burner: Option<&Burner>,
+        _energy: Option<&super::structure::Energy>,
+        _factory: Option<&super::factory::Factory>,
         state: &FactorishState,
         context: &CanvasRenderingContext2d,
         depth: i32,
@@ -176,7 +178,13 @@ impl Structure for Assembler {
         Ok(())
     }
 
-    fn desc(&self, _burner: Option<&Burner>, _state: &FactorishState) -> String {
+    fn desc(
+        &self,
+        _burner: Option<&Burner>,
+        _energy: Option<&super::structure::Energy>,
+        _factory: Option<&super::factory::Factory>,
+        _state: &FactorishState,
+    ) -> String {
         format!(
             "{}<br>{}{}",
             if let Some(recipe) = &self.recipe {
@@ -206,9 +214,10 @@ impl Structure for Assembler {
 
     fn frame_proc(
         &mut self,
+        _burner: Option<&mut Burner>,
+        _energy: Option<&mut super::structure::Energy>,
         _state: &mut FactorishState,
         structures: &mut dyn DynIterMut<Item = StructureBundle>,
-        _burner: Option<&mut Burner>,
     ) -> Result<FrameProcResult, ()> {
         if let Some(recipe) = &self.recipe {
             let mut ret = FrameProcResult::None;
@@ -276,7 +285,11 @@ impl Structure for Assembler {
         Ok(FrameProcResult::None)
     }
 
-    fn input(&mut self, o: &DropItem) -> Result<(), JsValue> {
+    fn input(
+        &mut self,
+        _factory: Option<&mut super::factory::Factory>,
+        o: &DropItem,
+    ) -> Result<(), JsValue> {
         if let Some(recipe) = &self.recipe {
             if 0 < recipe.input.count_item(&o.type_) || 0 < recipe.output.count_item(&o.type_) {
                 self.input_inventory.add_item(&o.type_);

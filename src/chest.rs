@@ -37,6 +37,8 @@ impl Structure for Chest {
     fn draw(
         &self,
         _burner: Option<&Burner>,
+        _energy: Option<&super::structure::Energy>,
+        _factory: Option<&super::factory::Factory>,
         state: &FactorishState,
         context: &CanvasRenderingContext2d,
         depth: i32,
@@ -55,7 +57,13 @@ impl Structure for Chest {
         }
     }
 
-    fn desc(&self, _burner: Option<&Burner>, _state: &FactorishState) -> String {
+    fn desc(
+        &self,
+        _burner: Option<&Burner>,
+        _energy: Option<&super::structure::Energy>,
+        _factory: Option<&super::factory::Factory>,
+        _state: &FactorishState,
+    ) -> String {
         format!(
             "Items: \n{}",
             self.inventory
@@ -77,7 +85,11 @@ impl Structure for Chest {
         }
     }
 
-    fn input(&mut self, o: &DropItem) -> Result<(), JsValue> {
+    fn input(
+        &mut self,
+        _factory: Option<&mut super::factory::Factory>,
+        o: &DropItem,
+    ) -> Result<(), JsValue> {
         self.item_response(o)
             .map(|_| ())
             .map_err(|_| JsValue::from_str("ItemResponse failed"))

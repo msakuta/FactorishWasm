@@ -34,6 +34,8 @@ impl Structure for TransportBelt {
     fn draw(
         &self,
         _burner: Option<&Burner>,
+        _energy: Option<&super::structure::Energy>,
+        _factory: Option<&super::factory::Factory>,
         state: &FactorishState,
         context: &CanvasRenderingContext2d,
         depth: i32,

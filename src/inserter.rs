@@ -54,6 +54,8 @@ impl Structure for Inserter {
     fn draw(
         &self,
         _burner: Option<&Burner>,
+        _energy: Option<&super::structure::Energy>,
+        _factory: Option<&super::factory::Factory>,
         state: &FactorishState,
         context: &CanvasRenderingContext2d,
         depth: i32,
@@ -131,9 +133,10 @@ impl Structure for Inserter {
 
     fn frame_proc(
         &mut self,
+        _burner: Option<&mut Burner>,
+        _energy: Option<&mut super::structure::Energy>,
         state: &mut FactorishState,
         structures: &mut dyn DynIterMut<Item = StructureBundle>,
-        _burner: Option<&mut Burner>,
     ) -> Result<FrameProcResult, ()> {
         let input_position = self.position.add(self.rotation.delta_inv());
         let output_position = self.position.add(self.rotation.delta());
@@ -185,7 +188,7 @@ impl Structure for Inserter {
                         // console_log!("fail output_object: {:?}", type_);
                     }
                 } else if let Some(structure) = find_structure_at(structures, input_position) {
-                    lets_try_hold = Some(structure.dynamic.can_output());
+                    lets_try_hold = Some(structure.can_output());
                     // console_log!("outputting from a structure at {:?}", structure.position());
                     // if let Ok((item, callback)) = structure.output(state, &output_position) {
                     //     lets_try_hold = Some((item, callback));
@@ -224,7 +227,7 @@ impl Structure for Inserter {
                         None
                     })() {
                         if let Some(structure) = find_structure_at(structures, input_position) {
-                            structure.dynamic.output(state, &type_.0)?;
+                            structure.output(state, &type_.0)?;
                             return Ok(FrameProcResult::InventoryChanged(input_position));
                         } else {
                             console_log!(

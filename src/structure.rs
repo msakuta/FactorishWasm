@@ -1,6 +1,6 @@
 use super::{
-    burner::Burner, items::ItemType, water_well::FluidBox, DropItem, FactorishState, Inventory,
-    InventoryTrait, Recipe,
+    burner::Burner, factory::Factory, items::ItemType, water_well::FluidBox, DropItem,
+    FactorishState, Inventory, InventoryTrait, Recipe,
 };
 use rotate_enum::RotateEnum;
 use serde::{Deserialize, Serialize};
@@ -174,19 +174,28 @@ pub(crate) trait Structure {
     fn draw(
         &self,
         burner: Option<&Burner>,
+        energy: Option<&Energy>,
+        factory: Option<&Factory>,
         state: &FactorishState,
         context: &CanvasRenderingContext2d,
         depth: i32,
         is_tooptip: bool,
     ) -> Result<(), JsValue>;
-    fn desc(&self, _burner: Option<&Burner>, _state: &FactorishState) -> String {
+    fn desc(
+        &self,
+        _burner: Option<&Burner>,
+        _energy: Option<&Energy>,
+        _factory: Option<&Factory>,
+        _state: &FactorishState,
+    ) -> String {
         String::from("")
     }
     fn frame_proc(
         &mut self,
+        _burner: Option<&mut Burner>,
+        _energy: Option<&mut Energy>,
         _state: &mut FactorishState,
         _structures: &mut dyn DynIterMut<Item = StructureBundle>,
-        _burner: Option<&mut Burner>,
     ) -> Result<FrameProcResult, ()> {
         Ok(FrameProcResult::None)
     }
@@ -215,7 +224,7 @@ pub(crate) trait Structure {
     fn item_response(&mut self, _item: &DropItem) -> Result<ItemResponseResult, ()> {
         Err(())
     }
-    fn input(&mut self, _o: &DropItem) -> Result<(), JsValue> {
+    fn input(&mut self, _factory: Option<&mut Factory>, _o: &DropItem) -> Result<(), JsValue> {
         Err(JsValue::from_str("Not supported"))
     }
     /// Returns wheter the structure can accept an item as the input. If this structure is a factory
@@ -318,24 +327,51 @@ pub(crate) trait Structure {
     fn js_serialize(&self) -> serde_json::Result<serde_json::Value>;
 }
 
+#[derive(Serialize, Deserialize)]
+pub(crate) struct Energy {
+    pub value: f64,
+    pub max: f64,
+}
+
 pub(crate) struct StructureBundle {
     pub dynamic: Box<dyn Structure>,
     pub burner: Option<Burner>,
+    pub energy: Option<Energy>,
+    pub factory: Option<Factory>,
 }
 
 impl StructureBundle {
-    pub(crate) fn new(dynamic: Box<dyn Structure>, burner: Option<Burner>) -> Self {
-        Self { dynamic, burner }
+    pub(crate) fn new(
+        dynamic: Box<dyn Structure>,
+        burner: Option<Burner>,
+        energy: Option<Energy>,
+        factory: Option<Factory>,
+    ) -> Self {
+        Self {
+            dynamic,
+            burner,
+            energy,
+            factory,
+        }
     }
 
     pub(crate) fn input(&mut self, item: &DropItem) -> Result<(), JsValue> {
-        self.dynamic.input(item).or_else(|_| {
-            if let Some(burner) = self.burner.as_mut() {
-                burner.input(item)
-            } else {
-                js_err!("No input inventory")
-            }
-        })
+        self.dynamic
+            .input(self.factory.as_mut(), item)
+            .or_else(|e| {
+                if let Some(burner) = self.burner.as_mut() {
+                    burner.input(item)
+                } else {
+                    Err(e)
+                }
+            })
+            .or_else(|_| {
+                if let Some(factory) = self.factory.as_mut() {
+                    factory.input(item)
+                } else {
+                    js_err!("No input inventory")
+                }
+            })
     }
 
     pub(crate) fn can_input(&self, item_type: &ItemType) -> bool {
@@ -345,5 +381,34 @@ impl StructureBundle {
                 .as_ref()
                 .map(|burner| burner.can_input(item_type))
                 .unwrap_or(false)
+            || self
+                .factory
+                .as_ref()
+                .map(|factory| factory.can_input(item_type))
+                .unwrap_or(false)
+    }
+
+    pub(crate) fn can_output(&self) -> Inventory {
+        let mut ret = self.dynamic.can_output();
+        if let Some(factory) = self.factory.as_ref() {
+            ret.merge(factory.can_output());
+        }
+        ret
+    }
+
+    pub(crate) fn output(
+        &mut self,
+        state: &mut FactorishState,
+        item_type: &ItemType,
+    ) -> Result<(), ()> {
+        if let Ok(ret) = self.dynamic.output(state, item_type) {
+            return Ok(ret);
+        }
+        if let Some(factory) = self.factory.as_mut() {
+            if let Ok(()) = factory.output(state, item_type) {
+                return Ok(());
+            }
+        }
+        Err(())
     }
 }

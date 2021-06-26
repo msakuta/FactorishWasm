@@ -36,6 +36,8 @@ impl Structure for ElectPole {
     fn draw(
         &self,
         _burner: Option<&Burner>,
+        _energy: Option<&super::structure::Energy>,
+        _factory: Option<&super::factory::Factory>,
         state: &FactorishState,
         context: &CanvasRenderingContext2d,
         depth: i32,
@@ -64,9 +66,10 @@ impl Structure for ElectPole {
 
     fn frame_proc(
         &mut self,
+        _burner: Option<&mut Burner>,
+        _energy: Option<&mut super::structure::Energy>,
         _state: &mut FactorishState,
         structures: &mut dyn DynIterMut<Item = StructureBundle>,
-        _burner: Option<&mut Burner>,
     ) -> Result<FrameProcResult, ()> {
         for structure in structures.dyn_iter_mut() {
             let target_position = structure.dynamic.position();

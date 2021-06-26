@@ -158,6 +158,8 @@ impl Structure for WaterWell {
     fn draw(
         &self,
         _burner: Option<&Burner>,
+        _energy: Option<&super::structure::Energy>,
+        _factory: Option<&super::factory::Factory>,
         state: &FactorishState,
         context: &CanvasRenderingContext2d,
         depth: i32,
@@ -178,7 +180,13 @@ impl Structure for WaterWell {
         Ok(())
     }
 
-    fn desc(&self, _burner: Option<&Burner>, _state: &FactorishState) -> String {
+    fn desc(
+        &self,
+        _burner: Option<&Burner>,
+        _energy: Option<&super::structure::Energy>,
+        _factory: Option<&super::factory::Factory>,
+        _state: &FactorishState,
+    ) -> String {
         format!(
             "{}<br>{}",
             self.output_fluid_box.desc(),
@@ -188,9 +196,10 @@ impl Structure for WaterWell {
 
     fn frame_proc(
         &mut self,
+        _burner: Option<&mut Burner>,
+        _energy: Option<&mut super::structure::Energy>,
         state: &mut FactorishState,
         structures: &mut dyn DynIterMut<Item = StructureBundle>,
-        _burner: Option<&mut Burner>,
     ) -> Result<FrameProcResult, ()> {
         self.output_fluid_box.amount =
             (self.output_fluid_box.amount + 1.).min(self.output_fluid_box.max_amount);

@@ -2,7 +2,7 @@ use super::{
     burner::Burner,
     draw_direction_arrow,
     items::ItemType,
-    structure::{DynIterMut, Structure, StructureBundle},
+    structure::{DynIterMut, Energy, Structure, StructureBundle},
     DropItem, FactorishState, FrameProcResult, Inventory, Position, Recipe, Rotation, TempEnt,
     TILE_SIZE,
 };
@@ -33,9 +33,12 @@ impl OreMine {
             Some(Burner {
                 inventory: Inventory::new(),
                 capacity: FUEL_CAPACITY,
-                energy: 25.,
-                max_energy: 100.,
             }),
+            Some(Energy {
+                value: 25.,
+                max: 100.,
+            }),
+            None,
         )
     }
 }
@@ -52,6 +55,8 @@ impl Structure for OreMine {
     fn draw(
         &self,
         _burner: Option<&Burner>,
+        _energy: Option<&Energy>,
+        _factory: Option<&super::factory::Factory>,
         state: &FactorishState,
         context: &CanvasRenderingContext2d,
         depth: i32,
@@ -100,11 +105,17 @@ impl Structure for OreMine {
         Ok(())
     }
 
-    fn desc(&self, burner: Option<&Burner>, state: &FactorishState) -> String {
-        let burner = if let Some(burner) = burner {
-            burner
+    fn desc(
+        &self,
+        _burner: Option<&Burner>,
+        energy: Option<&Energy>,
+        _factory: Option<&super::factory::Factory>,
+        state: &FactorishState,
+    ) -> String {
+        let energy = if let Some(energy) = energy {
+            energy
         } else {
-            return "Burner not found".to_string();
+            return "Energy not found".to_string();
         };
         let tile = &state.board
             [self.position.x as usize + self.position.y as usize * state.width as usize];
@@ -117,8 +128,8 @@ impl Structure for OreMine {
                     self.progress * 100.),
                 format!(r#"Power: {:.1}kJ <div style='position: relative; width: 100px; height: 10px; background-color: #001f1f; margin: 2px; border: 1px solid #3f3f3f'>
                  <div style='position: absolute; width: {}px; height: 10px; background-color: #ff00ff'></div></div>"#,
-                    burner.energy,
-                    if 0. < burner.max_energy { (burner.energy) / burner.max_energy * 100. } else { 0. }),
+                    energy.value,
+                    if 0. < energy.max { (energy.value) / energy.max * 100. } else { 0. }),
                 format!("Expected output: {}", if 0 < tile.iron_ore { tile.iron_ore } else if 0 < tile.coal_ore { tile.coal_ore } else { tile.copper_ore }))
         // getHTML(generateItemImage("time", true, this.recipe.time), true) + "<br>" +
         // "Outputs: <br>" +
@@ -130,9 +141,10 @@ impl Structure for OreMine {
 
     fn frame_proc(
         &mut self,
+        _burner: Option<&mut Burner>,
+        energy: Option<&mut Energy>,
         state: &mut FactorishState,
         structures: &mut dyn DynIterMut<Item = StructureBundle>,
-        burner: Option<&mut Burner>,
     ) -> Result<FrameProcResult, ()> {
         let otile = &state.tile_at(&self.position);
         if otile.is_none() {
@@ -140,7 +152,7 @@ impl Structure for OreMine {
         }
         let tile = otile.unwrap();
 
-        let burner = burner.ok_or(())?;
+        let energy = energy.ok_or(())?;
 
         let ret = FrameProcResult::None;
 
@@ -203,7 +215,7 @@ impl Structure for OreMine {
             };
 
             // Proceed only if we have sufficient energy in the buffer.
-            let progress = (burner.energy / recipe.power_cost)
+            let progress = (energy.value / recipe.power_cost)
                 .min(1. / recipe.recipe_time)
                 .min(1. - self.progress);
             if state.rng.next() < progress * 5. {
@@ -264,7 +276,7 @@ impl Structure for OreMine {
                 }
             } else {
                 self.progress += progress;
-                burner.energy -= progress * recipe.power_cost;
+                energy.value -= progress * recipe.power_cost;
             }
         }
         Ok(ret)
