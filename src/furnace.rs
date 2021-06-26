@@ -131,11 +131,6 @@ impl Structure for Furnace {
 
     fn input(&mut self, factory: Option<&mut Factory>, o: &DropItem) -> Result<(), JsValue> {
         let factory = factory.ok_or_else(|| js_str!("Furnace without Factory component"))?;
-        console_log!(
-            "Inputting to Furnace: {:?} recipe: {:?}",
-            o.type_,
-            factory.recipe.is_none()
-        );
         if factory.recipe.is_none() {
             match o.type_ {
                 ItemType::IronOre => {
@@ -161,8 +156,6 @@ impl Structure for Furnace {
                     )))
                 }
             }
-        } else if let Some(recipe) = factory.recipe.as_ref() {
-            console_log!("recipe: {:?}", recipe.input);
         }
 
         Err(JsValue::from_str("Recipe is not initialized"))

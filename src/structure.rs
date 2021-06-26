@@ -194,6 +194,7 @@ pub(crate) trait Structure {
         &mut self,
         _burner: Option<&mut Burner>,
         _energy: Option<&mut Energy>,
+        _factory: Option<&mut Factory>,
         _state: &mut FactorishState,
         _structures: &mut dyn DynIterMut<Item = StructureBundle>,
     ) -> Result<FrameProcResult, ()> {
@@ -268,7 +269,7 @@ pub(crate) trait Structure {
     fn get_recipes(&self) -> Vec<Recipe> {
         vec![]
     }
-    fn select_recipe(&mut self, _index: usize) -> Result<bool, JsValue> {
+    fn select_recipe(&mut self, _factory: &mut Factory, _index: usize) -> Result<bool, JsValue> {
         Err(JsValue::from_str("recipes not available"))
     }
     fn get_selected_recipe(&self) -> Option<&Recipe> {

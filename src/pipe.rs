@@ -114,6 +114,7 @@ impl Structure for Pipe {
         &mut self,
         _burner: Option<&mut Burner>,
         _energy: Option<&mut super::structure::Energy>,
+        _factory: Option<&mut super::factory::Factory>,
         state: &mut FactorishState,
         structures: &mut dyn DynIterMut<Item = StructureBundle>,
     ) -> Result<FrameProcResult, ()> {

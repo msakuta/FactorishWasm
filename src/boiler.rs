@@ -171,6 +171,7 @@ impl Structure for Boiler {
         &mut self,
         burner: Option<&mut Burner>,
         energy: Option<&mut Energy>,
+        _factory: Option<&mut super::factory::Factory>,
         state: &mut FactorishState,
         structures: &mut dyn DynIterMut<Item = StructureBundle>,
     ) -> Result<FrameProcResult, ()> {

@@ -672,12 +672,7 @@ impl FactorishState {
                 ),
                 OreMine::new(12, 2, Rotation::Bottom),
                 Furnace::new(&Position::new(8, 3)),
-                StructureBundle::new(
-                    Box::new(Assembler::new(&Position::new(6, 3))),
-                    None,
-                    None,
-                    None,
-                ),
+                Assembler::new(&Position::new(6, 3)),
                 StructureBundle::new(
                     Box::new(WaterWell::new(&Position::new(14, 5))),
                     None,
@@ -1115,6 +1110,7 @@ impl FactorishState {
             frame_proc_result_to_event(center.dynamic.frame_proc(
                 center.burner.as_mut(),
                 center.energy.as_mut(),
+                center.factory.as_mut(),
                 self,
                 &mut Chained(MutRef(front), MutRef(last)),
             ));
@@ -1643,7 +1639,11 @@ impl FactorishState {
 
     pub fn select_recipe(&mut self, c: i32, r: i32, index: usize) -> Result<bool, JsValue> {
         if let Some(structure) = self.find_structure_tile_mut(&[c, r]) {
-            structure.dynamic.select_recipe(index)
+            if let Some(factory) = structure.factory.as_mut() {
+                structure.dynamic.select_recipe(factory, index)
+            } else {
+                js_err!("Structure cannot set recipe")
+            }
         } else {
             Err(JsValue::from_str("Structure is not found"))
         }
@@ -1775,7 +1775,9 @@ impl FactorishState {
             ItemType::Furnace => {
                 return Ok(Furnace::new(cursor));
             }
-            ItemType::Assembler => Box::new(Assembler::new(cursor)),
+            ItemType::Assembler => {
+                return Ok(Assembler::new(cursor));
+            }
             ItemType::Boiler => return Ok(Boiler::new(cursor)),
             ItemType::WaterWell => Box::new(WaterWell::new(cursor)),
             ItemType::Pipe => Box::new(Pipe::new(cursor)),
@@ -1963,6 +1965,7 @@ impl FactorishState {
                 if structure.dynamic.inventory(true).is_some()
                     || structure.dynamic.inventory(false).is_some()
                     || structure.burner.is_some()
+                    || structure.factory.is_some()
                 {
                     // Select clicked structure
                     console_log!("opening inventory at {:?}", cursor);

@@ -135,6 +135,7 @@ impl Structure for Inserter {
         &mut self,
         _burner: Option<&mut Burner>,
         _energy: Option<&mut super::structure::Energy>,
+        _factory: Option<&mut super::factory::Factory>,
         state: &mut FactorishState,
         structures: &mut dyn DynIterMut<Item = StructureBundle>,
     ) -> Result<FrameProcResult, ()> {
@@ -209,9 +210,7 @@ impl Structure for Inserter {
                             //     output_position.y
                             // );
                             for item in output_items {
-                                if structure.dynamic.can_input(&item.0)
-                                    || structure.dynamic.movable()
-                                {
+                                if structure.can_input(&item.0) || structure.dynamic.movable() {
                                     // ret = FrameProcResult::InventoryChanged(output_position);
                                     self.hold_item = Some(item.0);
                                     self.cooldown += INSERTER_TIME;

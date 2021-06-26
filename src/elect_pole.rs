@@ -68,6 +68,7 @@ impl Structure for ElectPole {
         &mut self,
         _burner: Option<&mut Burner>,
         _energy: Option<&mut super::structure::Energy>,
+        _factory: Option<&mut super::factory::Factory>,
         _state: &mut FactorishState,
         structures: &mut dyn DynIterMut<Item = StructureBundle>,
     ) -> Result<FrameProcResult, ()> {
