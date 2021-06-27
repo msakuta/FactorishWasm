@@ -1,6 +1,6 @@
 use super::{
     structure::{ItemResponse, ItemResponseResult, Structure, StructureComponents},
-    DropItem, FactorishState, Position, Rotation, TILE_SIZE,
+    DropItem, FactorishState, Rotation, TILE_SIZE,
 };
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
@@ -8,16 +8,12 @@ use web_sys::CanvasRenderingContext2d;
 
 #[derive(Serialize, Deserialize)]
 pub(crate) struct TransportBelt {
-    position: Position,
     rotation: Rotation,
 }
 
 impl TransportBelt {
-    pub(crate) fn new(x: i32, y: i32, rotation: Rotation) -> Self {
-        TransportBelt {
-            position: Position { x, y },
-            rotation,
-        }
+    pub(crate) fn new(rotation: Rotation) -> Self {
+        TransportBelt { rotation }
     }
 }
 
@@ -26,13 +22,9 @@ impl Structure for TransportBelt {
         "Transport Belt"
     }
 
-    fn position(&self) -> &Position {
-        &self.position
-    }
-
     fn draw(
         &self,
-        _components: &StructureComponents,
+        components: &StructureComponents,
         state: &FactorishState,
         context: &CanvasRenderingContext2d,
         depth: i32,
@@ -43,7 +35,11 @@ impl Structure for TransportBelt {
         };
         match state.image_belt.as_ref() {
             Some(img) => {
-                let (x, y) = (self.position.x as f64 * 32., self.position.y as f64 * 32.);
+                let (x, y) = if let Some(position) = components.position.as_ref() {
+                    (position.x as f64 * 32., position.y as f64 * 32.)
+                } else {
+                    (0., 0.)
+                };
                 context.save();
                 context.translate(x + 16., y + 16.)?;
                 context.rotate(self.rotation.angle_rad())?;
@@ -56,8 +52,8 @@ impl Structure for TransportBelt {
                             0.,
                             32.,
                             32.,
-                            self.position.x as f64 * 32.,
-                            self.position.y as f64 * 32.,
+                            x,
+                            y,
                             32.,
                             32.,
                         )?;
@@ -84,7 +80,11 @@ impl Structure for TransportBelt {
         Ok(())
     }
 
-    fn item_response(&mut self, item: &DropItem) -> Result<ItemResponseResult, ()> {
+    fn item_response(
+        &mut self,
+        _components: &mut StructureComponents,
+        item: &DropItem,
+    ) -> Result<ItemResponseResult, ()> {
         let vx = self.rotation.delta().0;
         let vy = self.rotation.delta().1;
         let ax = if self.rotation.is_vertial() {

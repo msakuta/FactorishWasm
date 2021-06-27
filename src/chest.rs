@@ -1,7 +1,7 @@
 use super::{
     items::{DropItem, ItemType},
     structure::{ItemResponse, ItemResponseResult, Structure, StructureComponents},
-    FactorishState, FrameProcResult, Inventory, InventoryTrait, Position,
+    FactorishState, FrameProcResult, Inventory, InventoryTrait,
 };
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
@@ -11,14 +11,12 @@ const CHEST_CAPACITY: usize = 100;
 
 #[derive(Serialize, Deserialize)]
 pub(crate) struct Chest {
-    position: Position,
     inventory: Inventory,
 }
 
 impl Chest {
-    pub(crate) fn new(position: &Position) -> Self {
+    pub(crate) fn new() -> Self {
         Chest {
-            position: *position,
             inventory: Inventory::new(),
         }
     }
@@ -29,13 +27,9 @@ impl Structure for Chest {
         "Chest"
     }
 
-    fn position(&self) -> &Position {
-        &self.position
-    }
-
     fn draw(
         &self,
-        _components: &StructureComponents,
+        components: &StructureComponents,
         state: &FactorishState,
         context: &CanvasRenderingContext2d,
         depth: i32,
@@ -44,7 +38,11 @@ impl Structure for Chest {
         if depth != 0 {
             return Ok(());
         };
-        let (x, y) = (self.position.x as f64 * 32., self.position.y as f64 * 32.);
+        let (x, y) = if let Some(position) = &components.position {
+            (position.x as f64 * 32., position.y as f64 * 32.)
+        } else {
+            (0., 0.)
+        };
         match state.image_chest.as_ref() {
             Some(img) => {
                 context.draw_image_with_image_bitmap(&img.bitmap, x, y)?;
@@ -64,24 +62,26 @@ impl Structure for Chest {
         )
     }
 
-    fn item_response(&mut self, _item: &DropItem) -> Result<ItemResponseResult, ()> {
+    fn item_response(
+        &mut self,
+        components: &mut StructureComponents,
+        _item: &DropItem,
+    ) -> Result<ItemResponseResult, ()> {
         if self.inventory.len() < CHEST_CAPACITY {
             self.inventory.add_item(&_item.type_);
             Ok((
                 ItemResponse::Consume,
-                Some(FrameProcResult::InventoryChanged(self.position)),
+                Some(FrameProcResult::InventoryChanged(
+                    components.position.ok_or(())?,
+                )),
             ))
         } else {
             Err(())
         }
     }
 
-    fn input(
-        &mut self,
-        _factory: Option<&mut super::factory::Factory>,
-        o: &DropItem,
-    ) -> Result<(), JsValue> {
-        self.item_response(o)
+    fn input(&mut self, components: &mut StructureComponents, o: &DropItem) -> Result<(), JsValue> {
+        self.item_response(components, o)
             .map(|_| ())
             .map_err(|_| JsValue::from_str("ItemResponse failed"))
     }

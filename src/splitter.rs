@@ -8,15 +8,13 @@ use web_sys::CanvasRenderingContext2d;
 
 #[derive(Serialize, Deserialize)]
 pub(crate) struct Splitter {
-    position: Position,
     rotation: Rotation,
     direction: i8,
 }
 
 impl Splitter {
-    pub(crate) fn new(x: i32, y: i32, rotation: Rotation) -> Self {
+    pub(crate) fn new(rotation: Rotation) -> Self {
         Splitter {
-            position: Position { x, y },
             rotation,
             direction: 0,
         }
@@ -28,10 +26,6 @@ impl Structure for Splitter {
         "Splitter"
     }
 
-    fn position(&self) -> &Position {
-        &self.position
-    }
-
     fn size(&self) -> Size {
         Size {
             width: 1,
@@ -39,9 +33,13 @@ impl Structure for Splitter {
         }
     }
 
-    fn bounding_box(&self) -> BoundingBox {
-        let position = self.position();
-        match self.rotation {
+    fn bounding_box(&self, components: &StructureComponents) -> Option<BoundingBox> {
+        let position = if let Some(position) = components.position.as_ref() {
+            position
+        } else {
+            return None;
+        };
+        Some(match self.rotation {
             Rotation::Left => BoundingBox {
                 x0: position.x,
                 y0: position.y - 1,
@@ -66,12 +64,12 @@ impl Structure for Splitter {
                 x1: position.x + 1,
                 y1: position.y + 1,
             },
-        }
+        })
     }
 
     fn draw(
         &self,
-        _components: &StructureComponents,
+        components: &StructureComponents,
         state: &FactorishState,
         context: &CanvasRenderingContext2d,
         depth: i32,
@@ -81,7 +79,11 @@ impl Structure for Splitter {
             return Ok(());
         }
         let mut ret = Ok(());
-        let (x, y) = (self.position.x as f64 * 32., self.position.y as f64 * 32.);
+        let (x, y) = if let Some(position) = &components.position {
+            (position.x as f64 * 32., position.y as f64 * 32.)
+        } else {
+            (0., 0.)
+        };
         context.save();
         context.translate(x + 16., y + 16.)?;
         context.rotate(self.rotation.angle_rad())?;
@@ -97,8 +99,8 @@ impl Structure for Splitter {
                                 0.,
                                 32.,
                                 32.,
-                                self.position.x as f64 * 32.,
-                                self.position.y as f64 * 32. + n as f64 * TILE_SIZE,
+                                x,
+                                y + n as f64 * TILE_SIZE,
                                 32.,
                                 32.,
                             )?;
@@ -110,16 +112,16 @@ impl Structure for Splitter {
         } else if depth == 1 {
             if let Some(splitter) = state.image_splitter.as_ref() {
                 if depth == 1 {
-                    for x in 0..2 {
+                    for ix in 0..2 {
                         context
                             .draw_image_with_image_bitmap_and_sw_and_sh_and_dx_and_dy_and_dw_and_dh(
                                 &splitter.bitmap,
                                 0.,
-                                (if self.direction == 0 { 1 - x } else { x }) as f64 * TILE_SIZE,
+                                (if self.direction == 0 { 1 - ix } else { ix }) as f64 * TILE_SIZE,
                                 TILE_SIZE,
                                 TILE_SIZE,
-                                self.position.x as f64 * TILE_SIZE,
-                                (self.position.y + x) as f64 * TILE_SIZE,
+                                x,
+                                y + ix as f64 * TILE_SIZE,
                                 TILE_SIZE,
                                 TILE_SIZE,
                             )?;
@@ -148,7 +150,11 @@ impl Structure for Splitter {
         Ok(())
     }
 
-    fn item_response(&mut self, item: &DropItem) -> Result<ItemResponseResult, ()> {
+    fn item_response(
+        &mut self,
+        components: &mut StructureComponents,
+        item: &DropItem,
+    ) -> Result<ItemResponseResult, ()> {
         let vx = self.rotation.delta().0;
         let vy = self.rotation.delta().1;
         let mut ax = if self.rotation.is_vertial() {
@@ -161,7 +167,7 @@ impl Structure for Splitter {
         } else {
             item.y as f64
         };
-        let Position { x: tx, y: ty } = self.position;
+        let Position { x: tx, y: ty } = components.position.ok_or(())?;
         let halftilesize = TILE_SIZE / 2.;
         let mut postdirection = false;
         let shift_direction = self.rotation.clone().next().delta();

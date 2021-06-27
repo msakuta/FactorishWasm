@@ -1,5 +1,4 @@
 use super::{
-    burner::Burner,
     draw_direction_arrow,
     items::{render_drop_item, ItemType},
     structure::{DynIterMut, Structure, StructureBundle, StructureComponents},
@@ -11,7 +10,6 @@ use web_sys::CanvasRenderingContext2d;
 
 #[derive(Serialize, Deserialize)]
 pub(crate) struct Inserter {
-    position: Position,
     rotation: Rotation,
     cooldown: f64,
     hold_item: Option<ItemType>,
@@ -20,9 +18,8 @@ pub(crate) struct Inserter {
 const INSERTER_TIME: f64 = 20.;
 
 impl Inserter {
-    pub(crate) fn new(x: i32, y: i32, rotation: Rotation) -> Self {
+    pub(crate) fn new(rotation: Rotation) -> Self {
         Inserter {
-            position: Position { x, y },
             rotation,
             cooldown: 0.,
             hold_item: None,
@@ -47,19 +44,19 @@ impl Structure for Inserter {
         "Inserter"
     }
 
-    fn position(&self) -> &Position {
-        &self.position
-    }
-
     fn draw(
         &self,
-        _components: &StructureComponents,
+        components: &StructureComponents,
         state: &FactorishState,
         context: &CanvasRenderingContext2d,
         depth: i32,
         _is_toolbar: bool,
     ) -> Result<(), JsValue> {
-        let (x, y) = (self.position.x as f64 * 32., self.position.y as f64 * 32.);
+        let (x, y) = if let Some(position) = &components.position {
+            (position.x as f64 * 32., position.y as f64 * 32.)
+        } else {
+            (0., 0.)
+        };
         match depth {
             0 => match state.image_inserter.as_ref() {
                 Some(img) => {
@@ -131,14 +128,13 @@ impl Structure for Inserter {
 
     fn frame_proc(
         &mut self,
-        _burner: Option<&mut Burner>,
-        _energy: Option<&mut super::structure::Energy>,
-        _factory: Option<&mut super::factory::Factory>,
+        components: &mut StructureComponents,
         state: &mut FactorishState,
         structures: &mut dyn DynIterMut<Item = StructureBundle>,
     ) -> Result<FrameProcResult, ()> {
-        let input_position = self.position.add(self.rotation.delta_inv());
-        let output_position = self.position.add(self.rotation.delta());
+        let position = components.position.as_ref().ok_or(())?;
+        let input_position = position.add(self.rotation.delta_inv());
+        let output_position = position.add(self.rotation.delta());
 
         fn find_structure_at(
             structures: &mut dyn DynIterMut<Item = StructureBundle>,
@@ -146,7 +142,7 @@ impl Structure for Inserter {
         ) -> Option<&mut StructureBundle> {
             structures
                 .dyn_iter_mut()
-                .find(|structure| *structure.dynamic.position() == position)
+                .find(|structure| structure.components.position == Some(position))
         }
 
         if self.hold_item.is_none() {

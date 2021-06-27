@@ -1,10 +1,9 @@
 use super::{
-    burner::Burner,
     pipe::Pipe,
     serialize_impl,
     structure::{DynIterMut, Structure, StructureBundle, StructureComponents},
     water_well::{FluidBox, FluidType},
-    FactorishState, FrameProcResult, Position, Recipe,
+    FactorishState, FrameProcResult, Recipe,
 };
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
@@ -14,7 +13,6 @@ use std::collections::HashMap;
 
 #[derive(Serialize, Deserialize)]
 pub(crate) struct SteamEngine {
-    position: Position,
     progress: Option<f64>,
     power: f64,
     max_power: f64,
@@ -23,9 +21,8 @@ pub(crate) struct SteamEngine {
 }
 
 impl SteamEngine {
-    pub(crate) fn new(position: &Position) -> Self {
+    pub(crate) fn new() -> Self {
         SteamEngine {
-            position: *position,
             progress: None,
             power: 0.,
             max_power: 100.,
@@ -62,13 +59,9 @@ impl Structure for SteamEngine {
         "Steam Engine"
     }
 
-    fn position(&self) -> &Position {
-        &self.position
-    }
-
     fn draw(
         &self,
-        _components: &StructureComponents,
+        components: &StructureComponents,
         state: &FactorishState,
         context: &CanvasRenderingContext2d,
         depth: i32,
@@ -77,8 +70,12 @@ impl Structure for SteamEngine {
         if depth != 0 {
             return Ok(());
         };
-        Pipe::draw_int(self, state, context, depth, false)?;
-        let (x, y) = (self.position.x as f64 * 32., self.position.y as f64 * 32.);
+        Pipe::draw_int(self, components, state, context, depth, false)?;
+        let (x, y) = if let Some(position) = &components.position {
+            (position.x as f64 * 32., position.y as f64 * 32.)
+        } else {
+            (0., 0.)
+        };
         match state.image_steam_engine.as_ref() {
             Some(img) => {
                 let sx = if self.progress.is_some()
@@ -130,16 +127,15 @@ impl Structure for SteamEngine {
 
     fn frame_proc(
         &mut self,
-        _burner: Option<&mut Burner>,
-        _energy: Option<&mut super::structure::Energy>,
-        _factory: Option<&mut super::factory::Factory>,
+        components: &mut StructureComponents,
         state: &mut FactorishState,
         structures: &mut dyn DynIterMut<Item = StructureBundle>,
     ) -> Result<FrameProcResult, ()> {
-        let connections = self.connection(state, structures.as_dyn_iter());
+        let position = components.position.as_ref().ok_or(())?;
+        let connections = self.connection(components, state, structures.as_dyn_iter());
         self.input_fluid_box.connect_to = connections;
         self.input_fluid_box
-            .simulate(&self.position, state, &mut structures.dyn_iter_mut());
+            .simulate(position, state, &mut structures.dyn_iter_mut());
         if let Some(recipe) = &self.recipe {
             if self.input_fluid_box.type_ == recipe.input_fluid {
                 self.progress = Some(0.);
@@ -151,7 +147,7 @@ impl Structure for SteamEngine {
                 let progress = self.combustion_rate();
                 if 1. <= prev_progress + progress {
                     self.progress = None;
-                    return Ok(FrameProcResult::InventoryChanged(self.position));
+                    return Ok(FrameProcResult::InventoryChanged(*position));
                 } else if Self::COMBUSTION_EPSILON < progress {
                     self.progress = Some(prev_progress + progress);
                     self.power -= progress * recipe.power_cost;

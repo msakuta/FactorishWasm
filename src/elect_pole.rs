@@ -1,24 +1,17 @@
-use super::{
-    burner::Burner,
-    structure::{DynIterMut, Structure, StructureBundle, StructureComponents},
-};
-use super::{FactorishState, FrameProcResult, Position};
+use super::structure::{DynIterMut, Structure, StructureBundle, StructureComponents};
+use super::{FactorishState, FrameProcResult};
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 use web_sys::CanvasRenderingContext2d;
 
 #[derive(Serialize, Deserialize)]
 pub(crate) struct ElectPole {
-    position: Position,
     power: f64,
 }
 
 impl ElectPole {
-    pub(crate) fn new(position: &Position) -> Self {
-        ElectPole {
-            position: *position,
-            power: 0.,
-        }
+    pub(crate) fn new() -> Self {
+        ElectPole { power: 0. }
     }
 
     const POWER_CAPACITY: f64 = 10.;
@@ -29,13 +22,9 @@ impl Structure for ElectPole {
         "Electric Pole"
     }
 
-    fn position(&self) -> &Position {
-        &self.position
-    }
-
     fn draw(
         &self,
-        _components: &StructureComponents,
+        components: &StructureComponents,
         state: &FactorishState,
         context: &CanvasRenderingContext2d,
         depth: i32,
@@ -44,8 +33,11 @@ impl Structure for ElectPole {
         if depth != 0 {
             return Ok(());
         };
-        let position = self.position;
-        let (x, y) = (position.x as f64 * 32., position.y as f64 * 32.);
+        let (x, y) = if let Some(position) = &components.position {
+            (position.x as f64 * 32., position.y as f64 * 32.)
+        } else {
+            (0., 0.)
+        };
         match state.image_elect_pole.as_ref() {
             Some(img) => {
                 // let (front, mid) = state.structures.split_at_mut(i);
@@ -64,22 +56,22 @@ impl Structure for ElectPole {
 
     fn frame_proc(
         &mut self,
-        _burner: Option<&mut Burner>,
-        _energy: Option<&mut super::structure::Energy>,
-        _factory: Option<&mut super::factory::Factory>,
+        components: &mut StructureComponents,
         _state: &mut FactorishState,
         structures: &mut dyn DynIterMut<Item = StructureBundle>,
     ) -> Result<FrameProcResult, ()> {
+        let position = components.position.as_ref().ok_or(())?;
         for structure in structures.dyn_iter_mut() {
-            let target_position = structure.dynamic.position();
-            if target_position.distance(&self.position) < 3 {
-                if let Some(power) = structure
-                    .dynamic
-                    .power_outlet(Self::POWER_CAPACITY - self.power)
-                {
-                    self.power += power;
+            if let Some(target_position) = structure.components.position.as_ref() {
+                if target_position.distance(position) < 3 {
+                    if let Some(power) = structure
+                        .dynamic
+                        .power_outlet(Self::POWER_CAPACITY - self.power)
+                    {
+                        self.power += power;
+                    }
                 }
-            }
+            };
         }
         Ok(FrameProcResult::None)
     }

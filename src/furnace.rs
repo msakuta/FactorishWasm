@@ -13,16 +13,12 @@ use web_sys::CanvasRenderingContext2d;
 const FUEL_CAPACITY: usize = 10;
 
 #[derive(Serialize, Deserialize)]
-pub(crate) struct Furnace {
-    position: Position,
-}
+pub(crate) struct Furnace {}
 
 impl Furnace {
     pub(crate) fn new(position: &Position) -> StructureBundle {
         StructureBundle::new(
-            Box::new(Furnace {
-                position: *position,
-            }),
+            Box::new(Furnace {}),
             Some(*position),
             Some(Burner {
                 inventory: Inventory::new(),
@@ -42,10 +38,6 @@ impl Structure for Furnace {
         "Furnace"
     }
 
-    fn position(&self) -> &Position {
-        &self.position
-    }
-
     fn draw(
         &self,
         components: &StructureComponents,
@@ -58,7 +50,11 @@ impl Structure for Furnace {
             return Ok(());
         };
 
-        let (x, y) = (self.position.x as f64 * 32., self.position.y as f64 * 32.);
+        let (x, y) = if let Some(position) = &components.position {
+            (position.x as f64 * 32., position.y as f64 * 32.)
+        } else {
+            (0., 0.)
+        };
         match state.image_furnace.as_ref() {
             Some(img) => {
                 let sx = if let Some((energy, factory)) =
@@ -125,8 +121,11 @@ impl Structure for Furnace {
         )
     }
 
-    fn input(&mut self, factory: Option<&mut Factory>, o: &DropItem) -> Result<(), JsValue> {
-        let factory = factory.ok_or_else(|| js_str!("Furnace without Factory component"))?;
+    fn input(&mut self, components: &mut StructureComponents, o: &DropItem) -> Result<(), JsValue> {
+        let factory = components
+            .factory
+            .as_mut()
+            .ok_or_else(|| js_str!("Furnace without Factory component"))?;
         if factory.recipe.is_none() {
             match o.type_ {
                 ItemType::IronOre => {

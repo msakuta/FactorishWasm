@@ -1,5 +1,4 @@
 use super::{
-    burner::Burner,
     pipe::Pipe,
     structure::{DynIterMut, Structure, StructureBundle, StructureComponents},
     FactorishState, FrameProcResult, Position,
@@ -86,7 +85,10 @@ impl FluidBox {
             {
                 continue;
             }
-            if let Some(structure) = structures.map(|s| s).find(|s| *s.dynamic.position() == pos) {
+            if let Some(structure) = structures
+                .map(|s| s)
+                .find(|s| s.components.position == Some(pos))
+            {
                 let mut process_fluid_box = |self_box: &mut FluidBox, fluid_box: &mut FluidBox| {
                     // Different types of fluids won't mix
                     if 0. < fluid_box.amount
@@ -133,14 +135,12 @@ impl FluidBox {
 
 #[derive(Serialize, Deserialize)]
 pub(crate) struct WaterWell {
-    position: Position,
     output_fluid_box: FluidBox,
 }
 
 impl WaterWell {
-    pub(crate) fn new(position: &Position) -> Self {
+    pub(crate) fn new() -> Self {
         WaterWell {
-            position: *position,
             output_fluid_box: FluidBox::new(false, true, [false; 4]).set_type(&FluidType::Water),
         }
     }
@@ -151,13 +151,9 @@ impl Structure for WaterWell {
         "Water Well"
     }
 
-    fn position(&self) -> &Position {
-        &self.position
-    }
-
     fn draw(
         &self,
-        _components: &StructureComponents,
+        components: &StructureComponents,
         state: &FactorishState,
         context: &CanvasRenderingContext2d,
         depth: i32,
@@ -166,8 +162,12 @@ impl Structure for WaterWell {
         if depth != 0 {
             return Ok(());
         };
-        Pipe::draw_int(self, state, context, depth, false)?;
-        let (x, y) = (self.position.x as f64 * 32., self.position.y as f64 * 32.);
+        Pipe::draw_int(self, components, state, context, depth, false)?;
+        let (x, y) = if let Some(position) = components.position {
+            (position.x as f64 * 32., position.y as f64 * 32.)
+        } else {
+            (0., 0.)
+        };
         match state.image_water_well.as_ref() {
             Some(img) => {
                 context.draw_image_with_image_bitmap(&img.bitmap, x, y)?;
@@ -188,18 +188,18 @@ impl Structure for WaterWell {
 
     fn frame_proc(
         &mut self,
-        _burner: Option<&mut Burner>,
-        _energy: Option<&mut super::structure::Energy>,
-        _factory: Option<&mut super::factory::Factory>,
+        components: &mut StructureComponents,
         state: &mut FactorishState,
         structures: &mut dyn DynIterMut<Item = StructureBundle>,
     ) -> Result<FrameProcResult, ()> {
         self.output_fluid_box.amount =
             (self.output_fluid_box.amount + 1.).min(self.output_fluid_box.max_amount);
-        let connections = self.connection(state, structures.as_dyn_iter());
+        let connections = self.connection(components, state, structures.as_dyn_iter());
         self.output_fluid_box.connect_to = connections;
-        self.output_fluid_box
-            .simulate(&self.position, state, &mut structures.dyn_iter_mut());
+        if let Some(position) = components.position.as_ref() {
+            self.output_fluid_box
+                .simulate(position, state, &mut structures.dyn_iter_mut());
+        }
         Ok(FrameProcResult::None)
     }
 

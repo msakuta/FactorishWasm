@@ -1,8 +1,7 @@
 use super::{
-    burner::Burner,
     structure::{DynIterMut, Structure, StructureBundle, StructureComponents},
     water_well::FluidBox,
-    FactorishState, FrameProcResult, Position, Ref,
+    FactorishState, FrameProcResult, Ref,
 };
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
@@ -10,20 +9,19 @@ use web_sys::CanvasRenderingContext2d;
 
 #[derive(Serialize, Deserialize)]
 pub(crate) struct Pipe {
-    position: Position,
     fluid_box: FluidBox,
 }
 
 impl Pipe {
-    pub(crate) fn new(position: &Position) -> Self {
+    pub(crate) fn new() -> Self {
         Pipe {
-            position: *position,
             fluid_box: FluidBox::new(true, true, [false; 4]),
         }
     }
 
     pub(crate) fn draw_int(
         structure: &dyn Structure,
+        components: &StructureComponents,
         state: &FactorishState,
         context: &CanvasRenderingContext2d,
         depth: i32,
@@ -32,8 +30,11 @@ impl Pipe {
         if depth != 0 {
             return Ok(());
         };
-        let position = structure.position();
-        let (x, y) = (position.x as f64 * 32., position.y as f64 * 32.);
+        let (x, y) = if let Some(position) = components.position.as_ref() {
+            (position.x as f64 * 32., position.y as f64 * 32.)
+        } else {
+            (0., 0.)
+        };
         match state.image_pipe.as_ref() {
             Some(img) => {
                 // let (front, mid) = state.structures.split_at_mut(i);
@@ -45,7 +46,8 @@ impl Pipe {
                 // references.
                 let structures_slice: &[StructureBundle] = state.structures.as_slice();
 
-                let connection_list = structure.connection(state, &Ref(structures_slice));
+                let connection_list =
+                    structure.connection(components, state, &Ref(structures_slice));
                 let connections = connection_list
                     .iter()
                     .enumerate()
@@ -80,19 +82,15 @@ impl Structure for Pipe {
         "Pipe"
     }
 
-    fn position(&self) -> &Position {
-        &self.position
-    }
-
     fn draw(
         &self,
-        _components: &StructureComponents,
+        components: &StructureComponents,
         state: &FactorishState,
         context: &CanvasRenderingContext2d,
         depth: i32,
         _is_toolbar: bool,
     ) -> Result<(), JsValue> {
-        Self::draw_int(self, state, context, depth, true)
+        Self::draw_int(self, components, state, context, depth, true)
     }
 
     fn desc(&self, _components: &StructureComponents, _state: &FactorishState) -> String {
@@ -104,15 +102,15 @@ impl Structure for Pipe {
 
     fn frame_proc(
         &mut self,
-        _burner: Option<&mut Burner>,
-        _energy: Option<&mut super::structure::Energy>,
-        _factory: Option<&mut super::factory::Factory>,
+        components: &mut StructureComponents,
         state: &mut FactorishState,
         structures: &mut dyn DynIterMut<Item = StructureBundle>,
     ) -> Result<FrameProcResult, ()> {
-        self.fluid_box.connect_to = self.connection(state, structures.as_dyn_iter());
-        self.fluid_box
-            .simulate(&self.position, state, &mut structures.dyn_iter_mut());
+        self.fluid_box.connect_to = self.connection(components, state, structures.as_dyn_iter());
+        if let Some(position) = &components.position {
+            self.fluid_box
+                .simulate(position, state, &mut structures.dyn_iter_mut());
+        }
         Ok(FrameProcResult::None)
     }
 

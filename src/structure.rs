@@ -151,25 +151,26 @@ where
 
 pub(crate) trait Structure {
     fn name(&self) -> &str;
-    fn position(&self) -> &Position;
     fn size(&self) -> Size {
         Size {
             width: 1,
             height: 1,
         }
     }
-    fn bounding_box(&self) -> BoundingBox {
-        let (position, size) = (self.position(), self.size());
-        BoundingBox {
+    fn bounding_box(&self, components: &StructureComponents) -> Option<BoundingBox> {
+        let position = &components.position?;
+        let (position, size) = (position, self.size());
+        Some(BoundingBox {
             x0: position.x,
             y0: position.y,
             x1: position.x + size.width,
             y1: position.y + size.height,
-        }
+        })
     }
-    fn contains(&self, pos: &Position) -> bool {
-        let bb = self.bounding_box();
-        bb.x0 <= pos.x && pos.x < bb.x1 && bb.y0 <= pos.y && pos.y < bb.y1
+    fn contains(&self, components: &StructureComponents, pos: &Position) -> bool {
+        self.bounding_box(components)
+            .map(|bb| bb.x0 <= pos.x && pos.x < bb.x1 && bb.y0 <= pos.y && pos.y < bb.y1)
+            .unwrap_or(false)
     }
     fn draw(
         &self,
@@ -184,9 +185,7 @@ pub(crate) trait Structure {
     }
     fn frame_proc(
         &mut self,
-        _burner: Option<&mut Burner>,
-        _energy: Option<&mut Energy>,
-        _factory: Option<&mut Factory>,
+        _components: &mut StructureComponents,
         _state: &mut FactorishState,
         _structures: &mut dyn DynIterMut<Item = StructureBundle>,
     ) -> Result<FrameProcResult, ()> {
@@ -214,10 +213,18 @@ pub(crate) trait Structure {
         Err(())
     }
     /// Called every frame for each item that is on this structure.
-    fn item_response(&mut self, _item: &DropItem) -> Result<ItemResponseResult, ()> {
+    fn item_response(
+        &mut self,
+        _components: &mut StructureComponents,
+        _item: &DropItem,
+    ) -> Result<ItemResponseResult, ()> {
         Err(())
     }
-    fn input(&mut self, _factory: Option<&mut Factory>, _o: &DropItem) -> Result<(), JsValue> {
+    fn input(
+        &mut self,
+        _components: &mut StructureComponents,
+        _o: &DropItem,
+    ) -> Result<(), JsValue> {
         Err(JsValue::from_str("Not supported"))
     }
     /// Returns wheter the structure can accept an item as the input. If this structure is a factory
@@ -275,9 +282,15 @@ pub(crate) trait Structure {
     }
     fn connection(
         &self,
+        components: &StructureComponents,
         state: &FactorishState,
         structures: &dyn DynIter<Item = StructureBundle>,
     ) -> [bool; 4] {
+        let position = if let Some(position) = components.position.as_ref() {
+            position
+        } else {
+            return [false; 4];
+        };
         // let mut structures_copy = structures.clone();
         let has_fluid_box = |x, y| {
             if x < 0 || state.width <= x as u32 || y < 0 || state.height <= y as u32 {
@@ -285,7 +298,7 @@ pub(crate) trait Structure {
             }
             if let Some(structure) = structures
                 .dyn_iter()
-                .find(|s| *s.dynamic.position() == Position { x, y })
+                .find(|s| s.components.position == Some(Position { x, y }))
             {
                 return structure.dynamic.fluid_box().is_some();
             }
@@ -293,7 +306,7 @@ pub(crate) trait Structure {
         };
 
         // Fluid containers connect to other containers
-        let Position { x, y } = *self.position();
+        let Position { x, y } = *position;
         let l = has_fluid_box(x - 1, y);
         let t = has_fluid_box(x, y - 1);
         let r = has_fluid_box(x + 1, y);
@@ -333,6 +346,17 @@ pub(crate) struct StructureComponents {
     pub factory: Option<Factory>,
 }
 
+impl StructureComponents {
+    fn _new_with_position(position: Position) -> Self {
+        Self {
+            position: Some(position),
+            burner: None,
+            energy: None,
+            factory: None,
+        }
+    }
+}
+
 impl Default for StructureComponents {
     fn default() -> Self {
         Self {
@@ -370,7 +394,7 @@ impl StructureBundle {
 
     pub(crate) fn input(&mut self, item: &DropItem) -> Result<(), JsValue> {
         self.dynamic
-            .input(self.components.factory.as_mut(), item)
+            .input(&mut self.components, item)
             .or_else(|e| {
                 if let Some(burner) = self.components.burner.as_mut() {
                     burner.input(item)

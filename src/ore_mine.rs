@@ -15,7 +15,6 @@ const FUEL_CAPACITY: usize = 10;
 
 #[derive(Serialize, Deserialize)]
 pub(crate) struct OreMine {
-    position: Position,
     rotation: Rotation,
     progress: f64,
     recipe: Option<Recipe>,
@@ -25,7 +24,6 @@ impl OreMine {
     pub(crate) fn new(x: i32, y: i32, rotation: Rotation) -> StructureBundle {
         StructureBundle::new(
             Box::new(OreMine {
-                position: Position { x, y },
                 rotation,
                 progress: 0.,
                 recipe: None,
@@ -49,22 +47,19 @@ impl Structure for OreMine {
         "Ore Mine"
     }
 
-    fn position(&self) -> &Position {
-        &self.position
-    }
-
     fn draw(
         &self,
-        _components: &StructureComponents,
+        components: &StructureComponents,
         state: &FactorishState,
         context: &CanvasRenderingContext2d,
         depth: i32,
         _is_toolbar: bool,
     ) -> Result<(), JsValue> {
-        let (x, y) = (
-            self.position.x as f64 * TILE_SIZE,
-            self.position.y as f64 * TILE_SIZE,
-        );
+        let (x, y) = if let Some(position) = components.position.as_ref() {
+            (position.x as f64 * TILE_SIZE, position.y as f64 * TILE_SIZE)
+        } else {
+            (0., 0.)
+        };
         match depth {
             0 => match state.image_mine.as_ref() {
                 Some(img) => {
@@ -105,13 +100,13 @@ impl Structure for OreMine {
     }
 
     fn desc(&self, components: &StructureComponents, state: &FactorishState) -> String {
-        let energy = if let Some(energy) = components.energy.as_ref() {
-            energy
-        } else {
-            return "Energy not found".to_string();
-        };
-        let tile = &state.board
-            [self.position.x as usize + self.position.y as usize * state.width as usize];
+        let (position, energy) =
+            if let Some(energy) = components.position.as_ref().zip(components.energy.as_ref()) {
+                energy
+            } else {
+                return "Position or Energy not found".to_string();
+            };
+        let tile = &state.board[position.x as usize + position.y as usize * state.width as usize];
         if let Some(_recipe) = &self.recipe {
             // Progress bar
             format!("{}{}{}{}{}",
@@ -134,19 +129,18 @@ impl Structure for OreMine {
 
     fn frame_proc(
         &mut self,
-        _burner: Option<&mut Burner>,
-        energy: Option<&mut Energy>,
-        _factory: Option<&mut super::factory::Factory>,
+        components: &mut StructureComponents,
         state: &mut FactorishState,
         structures: &mut dyn DynIterMut<Item = StructureBundle>,
     ) -> Result<FrameProcResult, ()> {
-        let otile = &state.tile_at(&self.position);
+        let position = components.position.as_ref().ok_or(())?;
+        let energy = components.energy.as_mut().ok_or(())?;
+
+        let otile = &state.tile_at(position);
         if otile.is_none() {
             return Ok(FrameProcResult::None);
         }
         let tile = otile.unwrap();
-
-        let energy = energy.ok_or(())?;
 
         let ret = FrameProcResult::None;
 
@@ -215,19 +209,20 @@ impl Structure for OreMine {
             if state.rng.next() < progress * 5. {
                 state
                     .temp_ents
-                    .push(TempEnt::new(&mut state.rng, self.position));
+                    .push(TempEnt::new(&mut state.rng, *position));
             }
             if 1. <= self.progress + progress {
                 self.progress = 0.;
-                let output_position = self.position.add(self.rotation.delta());
+                let output_position = position.add(self.rotation.delta());
                 let mut str_iter = structures.dyn_iter_mut();
-                if let Some(structure) = str_iter.find(|s| *s.dynamic.position() == output_position)
+                if let Some(structure) =
+                    str_iter.find(|s| s.components.position == Some(output_position))
                 {
                     let mut it = recipe.output.iter();
                     if let Some(item) = it.next() {
                         // Check whether we can input first
                         if structure.can_input(item.0) {
-                            if let Ok(val) = output(state, *item.0, &self.position) {
+                            if let Ok(val) = output(state, *item.0, position) {
                                 structure
                                     .input(&DropItem {
                                         id: 0,
@@ -259,7 +254,7 @@ impl Structure for OreMine {
                             state.new_object(output_position.x, output_position.y, *item.0)
                         {
                             // console_log!("Failed to create object: {:?}", code);
-                        } else if let Ok(val) = output(state, *item.0, &self.position) {
+                        } else if let Ok(val) = output(state, *item.0, position) {
                             if val == 0 {
                                 self.recipe = None;
                             }

@@ -16,7 +16,6 @@ const FUEL_CAPACITY: usize = 10;
 
 #[derive(Serialize, Deserialize)]
 pub(crate) struct Boiler {
-    position: Position,
     progress: Option<f64>,
     recipe: Option<Recipe>,
     input_fluid_box: FluidBox,
@@ -27,7 +26,6 @@ impl Boiler {
     pub(crate) fn new(position: &Position) -> StructureBundle {
         StructureBundle {
             dynamic: Box::new(Boiler {
-                position: *position,
                 progress: None,
                 recipe: Some(Recipe {
                     input: hash_map!(ItemType::CoalOre => 1usize),
@@ -79,10 +77,6 @@ impl Structure for Boiler {
         "Boiler"
     }
 
-    fn position(&self) -> &Position {
-        &self.position
-    }
-
     fn draw(
         &self,
         components: &StructureComponents,
@@ -94,8 +88,12 @@ impl Structure for Boiler {
         if depth != 0 {
             return Ok(());
         };
-        Pipe::draw_int(self, state, context, depth, false)?;
-        let (x, y) = (self.position.x as f64 * 32., self.position.y as f64 * 32.);
+        Pipe::draw_int(self, components, state, context, depth, false)?;
+        let (x, y) = if let Some(position) = &components.position {
+            (position.x as f64 * 32., position.y as f64 * 32.)
+        } else {
+            (0., 0.)
+        };
         match state.image_boiler.as_ref() {
             Some(img) => {
                 let sx = if let Some(energy) = components.energy.as_ref() {
@@ -166,20 +164,19 @@ impl Structure for Boiler {
 
     fn frame_proc(
         &mut self,
-        burner: Option<&mut Burner>,
-        energy: Option<&mut Energy>,
-        _factory: Option<&mut super::factory::Factory>,
+        components: &mut StructureComponents,
         state: &mut FactorishState,
         structures: &mut dyn DynIterMut<Item = StructureBundle>,
     ) -> Result<FrameProcResult, ()> {
-        let connections = self.connection(state, structures.as_dyn_iter());
-        let burner = burner.ok_or(())?;
-        let energy = energy.ok_or(())?;
+        let connections = self.connection(components, state, structures.as_dyn_iter());
+        let position = components.position.as_ref().ok_or(())?;
+        let burner = components.burner.as_mut().ok_or(())?;
+        let energy = components.energy.as_mut().ok_or(())?;
         self.output_fluid_box.connect_to = connections;
         self.input_fluid_box
-            .simulate(&self.position, state, &mut structures.dyn_iter_mut());
+            .simulate(position, state, &mut structures.dyn_iter_mut());
         self.output_fluid_box
-            .simulate(&self.position, state, &mut structures.dyn_iter_mut());
+            .simulate(position, state, &mut structures.dyn_iter_mut());
         if let Some(recipe) = &self.recipe {
             if self.input_fluid_box.type_ == Some(FluidType::Water) {
                 self.progress = Some(0.);
@@ -192,12 +189,12 @@ impl Structure for Boiler {
                 if state.rng.next() < progress * 10. {
                     state
                         .temp_ents
-                        .push(TempEnt::new(&mut state.rng, self.position));
+                        .push(TempEnt::new(&mut state.rng, *position));
                 }
                 if 1. <= prev_progress + progress {
                     self.progress = None;
 
-                    return Ok(FrameProcResult::InventoryChanged(self.position));
+                    return Ok(FrameProcResult::InventoryChanged(*position));
                 } else if Self::COMBUSTION_EPSILON < progress {
                     self.progress = Some(prev_progress + progress);
                     energy.value -= progress * recipe.power_cost;

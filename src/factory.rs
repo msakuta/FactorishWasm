@@ -1,6 +1,6 @@
 use super::{
     items::{DropItem, ItemType},
-    structure::{Energy, Structure},
+    structure::{Energy, Position},
     FactorishState, FrameProcResult, Inventory, InventoryTrait, Recipe,
 };
 use serde::{Deserialize, Serialize};
@@ -26,9 +26,10 @@ impl Factory {
 
     pub fn frame_proc(
         &mut self,
+        position: Option<&mut Position>,
         energy: Option<&mut Energy>,
-        structure: &dyn Structure,
     ) -> Result<FrameProcResult, ()> {
+        let position = position.ok_or(())?;
         let energy = energy.ok_or(())?;
         if let Some(recipe) = &self.recipe {
             let mut ret = FrameProcResult::None;
@@ -48,7 +49,7 @@ impl Factory {
                         self.input_inventory.remove_items(item, *count);
                     }
                     self.progress = Some(0.);
-                    ret = FrameProcResult::InventoryChanged(*structure.position());
+                    ret = FrameProcResult::InventoryChanged(*position);
                 }
             }
 
@@ -65,7 +66,7 @@ impl Factory {
                         self.output_inventory
                             .add_items(&output_item.0, *output_item.1);
                     }
-                    return Ok(FrameProcResult::InventoryChanged(*structure.position()));
+                    return Ok(FrameProcResult::InventoryChanged(*position));
                 } else {
                     self.progress = Some(prev_progress + progress);
                     energy.value -= progress * recipe.power_cost;

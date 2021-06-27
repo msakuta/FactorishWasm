@@ -1,5 +1,4 @@
 use super::{
-    burner::Burner,
     factory::Factory,
     items::get_item_image_url,
     serialize_impl,
@@ -43,16 +42,12 @@ fn _recipe_html(state: &FactorishState, recipe: &Recipe) -> String {
 }
 
 #[derive(Serialize, Deserialize)]
-pub(crate) struct Assembler {
-    position: Position,
-}
+pub(crate) struct Assembler {}
 
 impl Assembler {
     pub(crate) fn new(position: &Position) -> StructureBundle {
         StructureBundle::new(
-            Box::new(Assembler {
-                position: *position,
-            }),
+            Box::new(Assembler {}),
             Some(*position),
             None,
             Some(Energy {
@@ -66,6 +61,7 @@ impl Assembler {
     /// Find all power sources that are connected to this structure through wires.
     fn find_power_sources(
         &self,
+        position: &Position,
         state: &mut FactorishState,
         structures: &mut dyn DynIterMut<Item = StructureBundle>,
     ) -> Vec<Position> {
@@ -74,17 +70,17 @@ impl Assembler {
         let mut ret = vec![];
         let mut check_struct = |position: &Position| {
             if structures.dyn_iter().any(|structure| {
-                structure.dynamic.power_source() && *structure.dynamic.position() == *position
+                structure.dynamic.power_source() && structure.components.position == Some(*position)
             }) {
                 ret.push(*position);
             }
         };
         for wire in &state.power_wires {
-            if wire.0 == self.position {
+            if wire.0 == *position {
                 expand_list.insert(wire.1, vec![*wire]);
                 checked.insert(*wire, ());
                 check_struct(&wire.1);
-            } else if wire.1 == self.position {
+            } else if wire.1 == *position {
                 expand_list.insert(wire.0, vec![*wire]);
                 checked.insert(*wire, ());
                 check_struct(&wire.0);
@@ -121,10 +117,6 @@ impl Structure for Assembler {
         "Assembler"
     }
 
-    fn position(&self) -> &Position {
-        &self.position
-    }
-
     fn draw(
         &self,
         components: &StructureComponents,
@@ -133,11 +125,12 @@ impl Structure for Assembler {
         depth: i32,
         is_toolbar: bool,
     ) -> Result<(), JsValue> {
+        let (x, y) = if let Some(position) = &components.position {
+            (position.x as f64 * TILE_SIZE, position.y as f64 * TILE_SIZE)
+        } else {
+            (0., 0.)
+        };
         if depth == 0 {
-            let (x, y) = (
-                self.position.x as f64 * TILE_SIZE,
-                self.position.y as f64 * TILE_SIZE,
-            );
             match state.image_assembler.as_ref() {
                 Some(img) => {
                     let sx = if let Some((energy, factory)) =
@@ -178,7 +171,6 @@ impl Structure for Assembler {
         {
             if !is_toolbar && energy.value == 0. && state.sim_time % 1. < 0.5 {
                 if let Some(img) = state.image_electricity_alarm.as_ref() {
-                    let (x, y) = (self.position.x as f64 * 32., self.position.y as f64 * 32.);
                     context.draw_image_with_image_bitmap(&img.bitmap, x, y)?;
                 } else {
                     return js_err!("electricity alarm image not available");
@@ -225,29 +217,30 @@ impl Structure for Assembler {
 
     fn frame_proc(
         &mut self,
-        _burner: Option<&mut Burner>,
-        energy: Option<&mut super::structure::Energy>,
-        factory: Option<&mut Factory>,
+        components: &mut StructureComponents,
         _state: &mut FactorishState,
         structures: &mut dyn DynIterMut<Item = StructureBundle>,
     ) -> Result<FrameProcResult, ()> {
-        if let Some((
-            energy,
-            Factory {
-                recipe: Some(recipe),
-                ..
-            },
-        )) = energy.zip(factory)
+        if let StructureComponents {
+            position: Some(position),
+            energy: Some(energy),
+            factory:
+                Some(Factory {
+                    recipe: Some(recipe),
+                    ..
+                }),
+            ..
+        } = components
         {
             let mut ret = FrameProcResult::None;
             // First, check if we need to refill the energy buffer in order to continue the current work.
             // Refill the energy from the fuel
             if energy.value < recipe.power_cost {
                 let mut accumulated = 0.;
-                for position in self.find_power_sources(_state, structures) {
+                for position in self.find_power_sources(position, _state, structures) {
                     if let Some(structure) = structures
                         .dyn_iter_mut()
-                        .find(|structure| *structure.dynamic.position() == position)
+                        .find(|structure| structure.components.position == Some(position))
                     {
                         let demand = energy.max - energy.value - accumulated;
                         if let Some(energy) = structure.dynamic.power_outlet(demand) {
@@ -257,7 +250,7 @@ impl Structure for Assembler {
                     }
                 }
                 energy.value += accumulated;
-                ret = FrameProcResult::InventoryChanged(self.position);
+                ret = FrameProcResult::InventoryChanged(*position);
             }
 
             return Ok(ret);
