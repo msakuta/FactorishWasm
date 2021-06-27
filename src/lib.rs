@@ -77,7 +77,10 @@ use chest::Chest;
 use elect_pole::ElectPole;
 use furnace::Furnace;
 use inserter::Inserter;
-use items::{item_to_str, render_drop_item, str_to_item, DropItem, ItemType};
+use items::{
+    item_to_str, str_to_item, DeleteAllItems, DropItem, HitCheck, ItemPosition, ItemType,
+    RenderItem, SerializeItem, UpdatePos,
+};
 use ore_mine::OreMine;
 use perlin_noise::{perlin_noise_pixel, Xor128};
 use pipe::Pipe;
@@ -152,6 +155,13 @@ const COAL_POWER: f64 = 100.; // kilojoules
 const SAVE_VERSION: i64 = 2;
 const ORE_HARVEST_TIME: i32 = 20;
 const POPUP_TEXT_LIFE: i32 = 30;
+
+use specs::{Builder, World, WorldExt};
+use specs::{Component, RunNow, VecStorage};
+
+impl Component for ItemType {
+    type Storage = VecStorage<Self>;
+}
 
 #[derive(Copy, Clone, Serialize, Deserialize)]
 struct Cell {
@@ -490,7 +500,7 @@ pub struct FactorishState {
     board: Vec<Cell>,
     structures: Vec<StructureBundle>,
     selected_structure_inventory: Option<Position>,
-    drop_items: Vec<DropItem>,
+    world: World,
     serial_no: u32,
     tool_belt: [Option<ItemType>; 10],
 
@@ -567,6 +577,11 @@ impl FactorishState {
         // on_show_inventory: js_sys::Function,
     ) -> Result<FactorishState, JsValue> {
         console_log!("FactorishState constructor");
+
+        let mut world = World::new();
+        world.register::<ItemPosition>();
+        world.register::<ItemType>();
+
         let mut tool_belt = [None; 10];
         tool_belt[0] = Some(ItemType::OreMine);
         tool_belt[1] = Some(ItemType::Inserter);
@@ -598,6 +613,7 @@ impl FactorishState {
                     (ItemType::WaterWell, 1usize),
                     (ItemType::Pipe, 15usize),
                     (ItemType::SteamEngine, 2usize),
+                    (ItemType::Splitter, 5usize),
                 ]
                 .iter()
                 .copied()
@@ -691,7 +707,7 @@ impl FactorishState {
             ],
             selected_structure_inventory: None,
             ore_harvesting: None,
-            drop_items: vec![],
+            world,
             serial_no: 0,
             on_player_update,
             temp_ents: vec![],
@@ -788,17 +804,28 @@ impl FactorishState {
             serde_json::to_value(&self.power_wires)
                 .map_err(|e| js_str!("Serialize error: {}", e))?,
         );
+        let mut serialize_item = SerializeItem { output: Ok(vec![]) };
+        console_log!(
+            "serialize_item: {}",
+            serialize_item.output.as_ref().map(|o| o.len()).unwrap_or(0)
+        );
+        serialize_item.run_now(&self.world);
         map.insert(
             "items".to_string(),
-            serde_json::to_value(
-                self.drop_items
-                    .iter()
-                    .map(serde_json::to_value)
-                    .collect::<serde_json::Result<Vec<serde_json::Value>>>()
-                    .map_err(|e| js_str!("Serialize error: {}", e))?,
-            )
-            .map_err(|e| js_str!("Serialize error: {}", e))?,
+            serde_json::to_value(serialize_item.output?)
+                .map_err(|e| js_str!("Serialize error: {}", e))?,
         );
+        // map.insert(
+        //     "items".to_string(),
+        //     serde_json::to_value(
+        //         self.drop_items
+        //             .iter()
+        //             .map(serde_json::to_value)
+        //             .collect::<serde_json::Result<Vec<serde_json::Value>>>()
+        //             .map_err(|e| js_str!("Serialize error: {}", e))?,
+        //     )
+        //     .map_err(|e| js_str!("Serialize error: {}", e))?,
+        // );
         map.insert(
             "tool_belt".to_string(),
             map_err(serde_json::to_value(self.tool_belt), "toolbelt")?,
@@ -852,7 +879,10 @@ impl FactorishState {
         }
 
         self.structures.clear();
-        self.drop_items.clear();
+        // self.drop_items.clear();
+        let mut delete_all_items = DeleteAllItems;
+        delete_all_items.run_now(&self.world);
+        self.world.maintain();
 
         fn json_get<I: serde_json::value::Index + std::fmt::Display + Copy>(
             value: &serde_json::Value,
@@ -962,12 +992,30 @@ impl FactorishState {
 
         self.structures = structures;
 
-        self.drop_items = serde_json::from_value(
+        // self.drop_items = serde_json::from_value(
+        //     json.get_mut("items")
+        //         .ok_or_else(|| js_str!("\"items\" not found"))?
+        //         .take(),
+        // )
+        // .map_err(|_| js_str!("drop items deserialization error"))?;
+
+        for item in serde_json::from_value::<Vec<DropItem>>(
             json.get_mut("items")
                 .ok_or_else(|| js_str!("\"items\" not found"))?
                 .take(),
         )
-        .map_err(|_| js_str!("drop items deserialization error"))?;
+        .map_err(|_| js_str!("drop items deserialization error"))?
+        .iter()
+        {
+            self.world
+                .create_entity()
+                .with(item.type_)
+                .with(ItemPosition {
+                    x: item.x,
+                    y: item.y,
+                })
+                .build();
+        }
 
         self.tool_belt = from_value(json_take(&mut json, "tool_belt")?)?;
 
@@ -1143,70 +1191,79 @@ impl FactorishState {
             }
         }
 
-        let mut to_remove = vec![];
-        for i in 0..self.drop_items.len() {
-            let item = &self.drop_items[i];
-            if 0 < item.x
-                && item.x < self.width as i32 * tilesize
-                && 0 < item.y
-                && item.y < self.height as i32 * tilesize
-            {
-                if let Some(item_response_result) = structures
-                    .iter_mut()
-                    .find(|s| {
-                        s.dynamic.contains(
-                            &s.components,
-                            &Position {
-                                x: item.x / TILE_SIZE_I,
-                                y: item.y / TILE_SIZE_I,
-                            },
-                        )
-                    })
-                    .and_then(|structure| {
-                        structure
-                            .dynamic
-                            .item_response(&mut structure.components, item)
-                            .ok()
-                    })
-                {
-                    match item_response_result.0 {
-                        ItemResponse::None => {}
-                        ItemResponse::Move(moved_x, moved_y) => {
-                            if self.hit_check(moved_x, moved_y, Some(item.id)) {
-                                continue;
-                            }
-                            let position = Position {
-                                x: moved_x / 32,
-                                y: moved_y / 32,
-                            };
-                            if let Some(s) = structures
-                                .iter()
-                                .find(|s| s.dynamic.contains(&s.components, &position))
-                            {
-                                if !s.dynamic.movable() {
-                                    continue;
-                                }
-                            } else {
-                                continue;
-                            }
-                            let item = &mut self.drop_items[i];
-                            item.x = moved_x;
-                            item.y = moved_y;
-                        }
-                        ItemResponse::Consume => {
-                            to_remove.push(item.id);
-                        }
-                    }
-                    if let Some(result) = item_response_result.1 {
-                        frame_proc_result_to_event(Ok(result));
-                    }
-                }
-            }
-        }
+        use specs::RunNow;
 
-        for id in to_remove {
-            self.remove_item(id);
-        }
+        let world = std::mem::take(&mut self.world);
+        let mut update_pos = UpdatePos {
+            structures: &mut structures,
+        };
+        update_pos.run_now(&world);
+        self.world = world;
+
+        // let mut to_remove = vec![];
+        // for i in 0..self.drop_items.len() {
+        //     let item = &self.drop_items[i];
+        //     if 0 < item.x
+        //         && item.x < self.width as i32 * tilesize
+        //         && 0 < item.y
+        //         && item.y < self.height as i32 * tilesize
+        //     {
+        //         if let Some(item_response_result) = structures
+        //             .iter_mut()
+        //             .find(|s| {
+        //                 s.dynamic.contains(
+        //                     &s.components,
+        //                     &Position {
+        //                         x: item.x / TILE_SIZE_I,
+        //                         y: item.y / TILE_SIZE_I,
+        //                     },
+        //                 )
+        //             })
+        //             .and_then(|structure| {
+        //                 structure
+        //                     .dynamic
+        //                     .item_response(&mut structure.components, item)
+        //                     .ok()
+        //             })
+        //         {
+        //             match item_response_result.0 {
+        //                 ItemResponse::None => {}
+        //                 ItemResponse::Move(moved_x, moved_y) => {
+        //                     if self.hit_check(moved_x, moved_y, Some(item.id)) {
+        //                         continue;
+        //                     }
+        //                     let position = Position {
+        //                         x: moved_x / 32,
+        //                         y: moved_y / 32,
+        //                     };
+        //                     if let Some(s) = structures
+        //                         .iter()
+        //                         .find(|s| s.dynamic.contains(&s.components, &position))
+        //                     {
+        //                         if !s.dynamic.movable() {
+        //                             continue;
+        //                         }
+        //                     } else {
+        //                         continue;
+        //                     }
+        //                     let item = &mut self.drop_items[i];
+        //                     item.x = moved_x;
+        //                     item.y = moved_y;
+        //                 }
+        //                 ItemResponse::Consume => {
+        //                     to_remove.push(item.id);
+        //                 }
+        //             }
+        //             if let Some(result) = item_response_result.1 {
+        //                 frame_proc_result_to_event(Ok(result));
+        //             }
+        //         }
+        //     }
+        // }
+
+        // for id in to_remove {
+        //     self.remove_item(id);
+        // }
 
         self.structures = structures;
 
@@ -1296,35 +1353,38 @@ impl FactorishState {
     }
 
     fn find_item(&self, pos: &Position) -> Option<&DropItem> {
-        self.drop_items
-            .iter()
-            .find(|item| item.x / 32 == pos.x && item.y / 32 == pos.y)
+        None
+        // self.drop_items
+        //     .iter()
+        //     .find(|item| item.x / 32 == pos.x && item.y / 32 == pos.y)
     }
 
     fn remove_item(&mut self, id: u32) -> Option<DropItem> {
-        if let Some((i, _)) = self
-            .drop_items
-            .iter()
-            .enumerate()
-            .find(|item| item.1.id == id)
-        {
-            Some(self.drop_items.remove(i))
-        } else {
-            None
-        }
+        None
+        // if let Some((i, _)) = self
+        //     .drop_items
+        //     .iter()
+        //     .enumerate()
+        //     .find(|item| item.1.id == id)
+        // {
+        //     Some(self.drop_items.remove(i))
+        // } else {
+        //     None
+        // }
     }
 
     fn _remove_item_pos(&mut self, pos: &Position) -> Option<DropItem> {
-        if let Some((i, _)) = self
-            .drop_items
-            .iter()
-            .enumerate()
-            .find(|item| item.1.x / 32 == pos.x && item.1.y / 32 == pos.y)
-        {
-            Some(self.drop_items.remove(i))
-        } else {
-            None
-        }
+        None
+        // if let Some((i, _)) = self
+        //     .drop_items
+        //     .iter()
+        //     .enumerate()
+        //     .find(|item| item.1.x / 32 == pos.x && item.1.y / 32 == pos.y)
+        // {
+        //     Some(self.drop_items.remove(i))
+        // } else {
+        //     None
+        // }
     }
 
     fn update_info(&self) {
@@ -1359,17 +1419,20 @@ impl FactorishState {
 
     /// Check whether given coordinates hits some object
     fn hit_check(&self, x: i32, y: i32, ignore: Option<u32>) -> bool {
-        for item in &self.drop_items {
-            if let Some(ignore_id) = ignore {
-                if ignore_id == item.id {
-                    continue;
-                }
-            }
-            if (x - item.x).abs() < DROP_ITEM_SIZE_I && (y - item.y).abs() < DROP_ITEM_SIZE_I {
-                return true;
-            }
-        }
-        false
+        let mut hit_check = HitCheck::new(x, y);
+        hit_check.run_now(&self.world);
+        hit_check.result()
+        // for item in &self.drop_items {
+        //     if let Some(ignore_id) = ignore {
+        //         if ignore_id == item.id {
+        //             continue;
+        //         }
+        //     }
+        //     if (x - item.x).abs() < DROP_ITEM_SIZE_I && (y - item.y).abs() < DROP_ITEM_SIZE_I {
+        //         return true;
+        //     }
+        // }
+        // false
     }
 
     fn rotate(&mut self) -> Result<bool, RotateErr> {
@@ -1403,7 +1466,14 @@ impl FactorishState {
                 return Err(NewObjectErr::BlockedByItem);
             }
             // obj.addElem();
-            self.drop_items.push(obj);
+            self.world
+                .create_entity()
+                .with(ItemPosition { x: obj.x, y: obj.y })
+                .with(type_)
+                .build();
+
+            // self.drop_items.push(obj);
+
             return Ok(());
         }
         Err(NewObjectErr::OutOfMap)
@@ -1473,18 +1543,18 @@ impl FactorishState {
         let mut harvested_items = false;
         if !harvested_structure && clear_item {
             // Pick up dropped items in the cell
-            let mut picked_items = Inventory::new();
-            while let Some(item_index) = self.drop_items.iter().position(|item| {
-                item.x / TILE_SIZE_I == position.x && item.y / TILE_SIZE_I == position.y
-            }) {
-                let item_type = self.drop_items.remove(item_index).type_;
-                picked_items.add_item(&item_type);
-                self.player.add_item(&item_type, 1);
-                harvested_items = true;
-            }
-            for (item_type, count) in picked_items {
-                popup_text += &format!("+{} {}\n", count, &item_to_str(&item_type));
-            }
+            // let mut picked_items = Inventory::new();
+            // while let Some(item_index) = self.drop_items.iter().position(|item| {
+            //     item.x / TILE_SIZE_I == position.x && item.y / TILE_SIZE_I == position.y
+            // }) {
+            //     let item_type = self.drop_items.remove(item_index).type_;
+            //     picked_items.add_item(&item_type);
+            //     self.player.add_item(&item_type, 1);
+            //     harvested_items = true;
+            // }
+            // for (item_type, count) in picked_items {
+            //     popup_text += &format!("+{} {}\n", count, &item_to_str(&item_type));
+            // }
         }
         if !popup_text.is_empty() {
             self.new_popup_text(
@@ -1927,13 +1997,12 @@ impl FactorishState {
         };
 
         console_log!("mouse_down: {}, {}, button: {}", cursor.x, cursor.y, button);
-        if button == 2
-            && self.find_structure_tile(&[cursor.x, cursor.y]).is_none()
-            // Let the player pick up drop items before harvesting ore below.
-            && !self.drop_items.iter().any(|item| {
-                item.x / TILE_SIZE_I == pos[0] as i32 / TILE_SIZE_I
-                    && item.y / TILE_SIZE_I == pos[1] as i32 / TILE_SIZE_I
-            })
+        if button == 2 && self.find_structure_tile(&[cursor.x, cursor.y]).is_none()
+        // Let the player pick up drop items before harvesting ore below.
+        // && !self.drop_items.iter().any(|item| {
+        //     item.x / TILE_SIZE_I == pos[0] as i32 / TILE_SIZE_I
+        //         && item.y / TILE_SIZE_I == pos[1] as i32 / TILE_SIZE_I
+        // })
         {
             if let Some(tile) = self.tile_at(&cursor) {
                 if let Some(ore_type) = tile.get_ore_type() {
@@ -2586,9 +2655,12 @@ impl FactorishState {
 
         draw_structures(0)?;
 
-        for item in &self.drop_items {
-            render_drop_item(self, &context, &item.type_, item.x, item.y)?;
-        }
+        let mut item_render = RenderItem::new(&self, &context);
+        item_render.run_now(&self.world);
+
+        // for item in &self.drop_items {
+        //     render_drop_item(self, &context, &item.type_, item.x, item.y)?;
+        // }
 
         const WIRE_ATTACH_X: f64 = 28.;
         const WIRE_ATTACH_Y: f64 = 8.;
@@ -2627,14 +2699,14 @@ impl FactorishState {
                 }
             }
             context.set_stroke_style(&js_str!("purple"));
-            for item in &self.drop_items {
-                context.stroke_rect(
-                    item.x as f64 - DROP_ITEM_SIZE / 2.,
-                    item.y as f64 - DROP_ITEM_SIZE / 2.,
-                    DROP_ITEM_SIZE,
-                    DROP_ITEM_SIZE,
-                );
-            }
+            // for item in &self.drop_items {
+            //     context.stroke_rect(
+            //         item.x as f64 - DROP_ITEM_SIZE / 2.,
+            //         item.y as f64 - DROP_ITEM_SIZE / 2.,
+            //         DROP_ITEM_SIZE,
+            //         DROP_ITEM_SIZE,
+            //     );
+            // }
             context.restore();
         }
 

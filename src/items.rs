@@ -1,5 +1,9 @@
-use super::{tilesize, FactorishState, ImageBundle};
+use super::{
+    structure::StructureBundle, tilesize, FactorishState, ImageBundle, ItemResponse, Position,
+    DROP_ITEM_SIZE_I, TILE_SIZE_I,
+};
 use serde::{Deserialize, Serialize};
+use specs::{Component, Entities, Entity, ReadStorage, System, VecStorage, WriteStorage};
 use wasm_bindgen::prelude::*;
 use web_sys::CanvasRenderingContext2d;
 
@@ -187,5 +191,205 @@ pub(crate) fn get_item_image_url<'a>(state: &'a FactorishState, item_type: &Item
         ItemType::SteamEngine => &state.image_steam_engine.as_ref().unwrap().url,
         ItemType::ElectPole => &state.image_elect_pole.as_ref().unwrap().url,
         ItemType::Splitter => &state.image_splitter.as_ref().unwrap().url,
+    }
+}
+
+#[derive(Debug)]
+pub(crate) struct ItemPosition {
+    pub x: i32,
+    pub y: i32,
+}
+
+impl Component for ItemPosition {
+    type Storage = VecStorage<Self>;
+}
+
+pub(crate) struct UpdatePos<'a> {
+    pub structures: &'a mut Vec<StructureBundle>,
+}
+
+impl<'a, 'b> System<'a> for UpdatePos<'b> {
+    type SystemData = (
+        Entities<'a>,
+        ReadStorage<'a, ItemType>,
+        WriteStorage<'a, ItemPosition>,
+    );
+
+    fn run(&mut self, (entities, item_type, mut pos): Self::SystemData) {
+        use specs::Join;
+        let mut to_remove = vec![];
+        for (entity, item_type, pos) in (&entities, &item_type, &mut pos).join() {
+            if let Some(item_response_result) = self
+                .structures
+                .iter_mut()
+                .find(|s| {
+                    s.dynamic.contains(
+                        &s.components,
+                        &Position {
+                            x: pos.x / TILE_SIZE_I,
+                            y: pos.y / TILE_SIZE_I,
+                        },
+                    )
+                })
+                .and_then(|structure| {
+                    structure
+                        .dynamic
+                        .item_response(
+                            &mut structure.components,
+                            &DropItem {
+                                id: entity.id(),
+                                type_: *item_type,
+                                x: pos.x,
+                                y: pos.y,
+                            },
+                        )
+                        .ok()
+                })
+            {
+                match item_response_result.0 {
+                    ItemResponse::None => {}
+                    ItemResponse::Move(moved_x, moved_y) => {
+                        // if self.state.hit_check(moved_x, moved_y, Some(item.id)) {
+                        //     continue;
+                        // }
+                        let position = Position {
+                            x: moved_x / 32,
+                            y: moved_y / 32,
+                        };
+                        if let Some(s) = self
+                            .structures
+                            .iter()
+                            .find(|s| s.dynamic.contains(&s.components, &position))
+                        {
+                            if !s.dynamic.movable() {
+                                continue;
+                            }
+                        } else {
+                            continue;
+                        }
+                        pos.x = moved_x;
+                        pos.y = moved_y;
+                    }
+                    ItemResponse::Consume => {
+                        to_remove.push(entity);
+                    }
+                }
+            }
+        }
+        for entity in to_remove {
+            entities.delete(entity).unwrap();
+        }
+    }
+}
+
+pub(crate) struct RenderItem<'a> {
+    state: &'a FactorishState,
+    context: &'a CanvasRenderingContext2d,
+}
+
+impl<'a> RenderItem<'a> {
+    pub fn new<'b>(
+        state: &'b FactorishState,
+        context: &'b CanvasRenderingContext2d,
+    ) -> RenderItem<'b> {
+        RenderItem { state, context }
+    }
+}
+
+impl<'a, 'b> System<'a> for RenderItem<'b> {
+    type SystemData = (ReadStorage<'a, ItemPosition>, ReadStorage<'a, ItemType>);
+
+    fn run(&mut self, (pos, item_type): Self::SystemData) {
+        use specs::Join;
+        for (pos, item_type) in (&pos, &item_type).join() {
+            render_drop_item(self.state, self.context, item_type, pos.x, pos.y).unwrap();
+        }
+    }
+}
+
+pub(crate) struct SerializeItem {
+    pub output: Result<Vec<serde_json::Value>, JsValue>,
+}
+
+impl<'a> System<'a> for SerializeItem {
+    type SystemData = (
+        Entities<'a>,
+        ReadStorage<'a, ItemType>,
+        ReadStorage<'a, ItemPosition>,
+    );
+
+    fn run(&mut self, (entities, item_type, pos): Self::SystemData) {
+        use specs::Join;
+        self.output = (&entities, &item_type, &pos)
+            .join()
+            .into_iter()
+            .map(|(entity, item_type, pos)| {
+                serde_json::to_value(DropItem {
+                    id: entity.id(),
+                    type_: *item_type,
+                    x: pos.x,
+                    y: pos.y,
+                })
+            })
+            .collect::<serde_json::Result<Vec<serde_json::Value>>>()
+            .map_err(|e| js_str!("Serialize error: {}", e));
+    }
+}
+
+pub(crate) struct DeleteAllItems;
+
+impl<'a> System<'a> for DeleteAllItems {
+    type SystemData = Entities<'a>;
+
+    fn run(&mut self, entities: Self::SystemData) {
+        use specs::Join;
+        for entity in entities.join() {
+            entities.delete(entity).unwrap();
+        }
+    }
+}
+
+pub(crate) struct HitCheck {
+    x: i32,
+    y: i32,
+    ignore: Option<Entity>,
+    result: bool,
+}
+
+impl HitCheck {
+    pub fn new(x: i32, y: i32) -> Self {
+        Self {
+            x,
+            y,
+            ignore: None,
+            result: false,
+        }
+    }
+
+    pub fn result(&self) -> bool {
+        self.result
+    }
+}
+
+impl<'a> System<'a> for HitCheck {
+    type SystemData = (Entities<'a>, ReadStorage<'a, ItemPosition>);
+
+    /// Check whether given coordinates hits some object
+    fn run(&mut self, (entities, pos): Self::SystemData) {
+        use specs::Join;
+        self.result = false;
+        for (entity, pos) in (&entities, &pos).join() {
+            if let Some(ignore_id) = self.ignore {
+                if ignore_id == entity {
+                    continue;
+                }
+            }
+            if (self.x - pos.x).abs() < DROP_ITEM_SIZE_I
+                && (self.y - pos.y).abs() < DROP_ITEM_SIZE_I
+            {
+                self.result = true;
+                return;
+            }
+        }
     }
 }

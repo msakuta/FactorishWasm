@@ -109,6 +109,7 @@ pub(crate) enum FrameProcResult {
     InventoryChanged(Position),
 }
 
+#[derive(Debug)]
 pub(crate) enum ItemResponse {
     None,
     Move(i32, i32),
