@@ -40,6 +40,7 @@ impl Boiler {
             }),
             components: StructureComponents {
                 position: Some(*position),
+                rotation: None,
                 burner: Some(Burner {
                     inventory: Inventory::new(),
                     capacity: FUEL_CAPACITY,

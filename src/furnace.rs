@@ -20,6 +20,7 @@ impl Furnace {
         StructureBundle::new(
             Box::new(Furnace {}),
             Some(*position),
+            None,
             Some(Burner {
                 inventory: Inventory::new(),
                 capacity: FUEL_CAPACITY,

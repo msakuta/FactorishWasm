@@ -665,27 +665,9 @@ impl FactorishState {
                 ret
             },
             structures: vec![
-                StructureBundle::new(
-                    Box::new(TransportBelt::new(Rotation::Left)),
-                    Some(Position::new(10, 3)),
-                    None,
-                    None,
-                    None,
-                ),
-                StructureBundle::new(
-                    Box::new(TransportBelt::new(Rotation::Left)),
-                    Some(Position::new(11, 3)),
-                    None,
-                    None,
-                    None,
-                ),
-                StructureBundle::new(
-                    Box::new(TransportBelt::new(Rotation::Left)),
-                    Some(Position::new(12, 3)),
-                    None,
-                    None,
-                    None,
-                ),
+                TransportBelt::new(Position::new(10, 3), Rotation::Left),
+                TransportBelt::new(Position::new(11, 3), Rotation::Left),
+                TransportBelt::new(Position::new(12, 3), Rotation::Left),
                 OreMine::new(12, 2, Rotation::Bottom),
                 Furnace::new(&Position::new(8, 3)),
                 Assembler::new(&Position::new(6, 3)),
@@ -695,11 +677,13 @@ impl FactorishState {
                     None,
                     None,
                     None,
+                    None,
                 ),
                 Boiler::new(&Position::new(13, 5)),
                 StructureBundle::new(
                     Box::new(SteamEngine::new()),
                     Some(Position::new(12, 5)),
+                    None,
                     None,
                     None,
                     None,
@@ -763,6 +747,13 @@ impl FactorishState {
                                 "position".to_string(),
                                 serde_json::to_value(position)
                                     .map_err(|e| js_str!("Position serialize error: {}", e))?,
+                            );
+                        }
+                        if let Some(rotation) = &structure.components.rotation {
+                            map.insert(
+                                "rotation".to_string(),
+                                serde_json::to_value(rotation)
+                                    .map_err(|e| js_str!("Rotation serialize error: {}", e))?,
                             );
                         }
                         if let Some(burner) = &structure.components.burner {
@@ -1179,6 +1170,7 @@ impl FactorishState {
                     })
                 {
                     match item_response_result.0 {
+                        ItemResponse::None => {}
                         ItemResponse::Move(moved_x, moved_y) => {
                             if self.hit_check(moved_x, moved_y, Some(item.id)) {
                                 continue;
@@ -1390,7 +1382,6 @@ impl FactorishState {
             if let Some(ref cursor) = self.cursor {
                 if let Some(idx) = self.find_structure_tile_idx(cursor) {
                     return self.structures[idx]
-                        .dynamic
                         .rotate()
                         .map_err(|()| RotateErr::NotSupported)
                         .map(|_| false);
@@ -1809,9 +1800,15 @@ impl FactorishState {
         cursor: &Position,
     ) -> Result<StructureBundle, JsValue> {
         let dynamic: Box<dyn Structure> = match tool {
-            ItemType::TransportBelt => Box::new(TransportBelt::new(self.tool_rotation)),
-            ItemType::Inserter => Box::new(Inserter::new(self.tool_rotation)),
-            ItemType::Splitter => Box::new(Splitter::new(self.tool_rotation)),
+            ItemType::TransportBelt => {
+                return Ok(TransportBelt::new(*cursor, self.tool_rotation));
+            }
+            ItemType::Inserter => {
+                return Ok(Inserter::new(*cursor, self.tool_rotation));
+            }
+            ItemType::Splitter => {
+                return Ok(Splitter::new(*cursor, self.tool_rotation));
+            }
             ItemType::OreMine => {
                 return Ok(OreMine::new(cursor.x, cursor.y, self.tool_rotation));
             }
@@ -1833,6 +1830,7 @@ impl FactorishState {
             dynamic,
             components: StructureComponents {
                 position: Some(*cursor),
+                rotation: None,
                 burner: None,
                 energy: None,
                 factory: None,
@@ -1890,6 +1888,12 @@ impl FactorishState {
                 position: if let Some(position) = value.get_mut("position") {
                     serde_json::from_value(position.take())
                         .map_err(|s| js_str!("structure deserialization error: {}", s))?
+                } else {
+                    None
+                },
+                rotation: if let Some(rotation) = value.get_mut("rotation") {
+                    serde_json::from_value(rotation.take())
+                        .map_err(|s| js_str!("structure rotation deserialization error: {}", s))?
                 } else {
                     None
                 },
@@ -2347,7 +2351,7 @@ impl FactorishState {
         context.clear_rect(0., 0., 32., 32.);
         if let Some(item) = self.tool_belt.get(tool_index).unwrap_or(&None) {
             let mut tool = self.new_structure(item, &Position { x: 0, y: 0 })?;
-            tool.dynamic.set_rotation(&self.tool_rotation).ok();
+            tool.set_rotation(&self.tool_rotation).ok();
             for depth in 0..3 {
                 tool.dynamic
                     .draw(&StructureComponents::default(), self, context, depth, true)?;
@@ -2702,7 +2706,7 @@ impl FactorishState {
                 context.save();
                 context.set_global_alpha(0.5);
                 let mut tool = self.new_structure(&selected_tool, &Position::from(cursor))?;
-                tool.dynamic.set_rotation(&self.tool_rotation).ok();
+                tool.set_rotation(&self.tool_rotation).ok();
                 for depth in 0..3 {
                     tool.dynamic
                         .draw(&tool.components, self, &context, depth, false)?;

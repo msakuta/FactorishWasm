@@ -50,6 +50,7 @@ impl Assembler {
             Box::new(Assembler {}),
             Some(*position),
             None,
+            None,
             Some(Energy {
                 value: 0.,
                 max: 100.,

@@ -66,17 +66,19 @@ impl Structure for Chest {
         &mut self,
         components: &mut StructureComponents,
         _item: &DropItem,
-    ) -> Result<ItemResponseResult, ()> {
+    ) -> Result<ItemResponseResult, JsValue> {
         if self.inventory.len() < CHEST_CAPACITY {
             self.inventory.add_item(&_item.type_);
             Ok((
                 ItemResponse::Consume,
                 Some(FrameProcResult::InventoryChanged(
-                    components.position.ok_or(())?,
+                    components
+                        .position
+                        .ok_or_else(|| js_str!("Chest without Position components"))?,
                 )),
             ))
         } else {
-            Err(())
+            Ok((ItemResponse::None, None))
         }
     }
 

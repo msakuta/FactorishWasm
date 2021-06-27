@@ -1,5 +1,6 @@
 use super::structure::{
-    BoundingBox, ItemResponse, ItemResponseResult, Size, Structure, StructureComponents,
+    BoundingBox, ItemResponse, ItemResponseResult, Size, Structure, StructureBundle,
+    StructureComponents,
 };
 use super::{DropItem, FactorishState, Position, Rotation, TILE_SIZE};
 use serde::{Deserialize, Serialize};
@@ -8,15 +9,14 @@ use web_sys::CanvasRenderingContext2d;
 
 #[derive(Serialize, Deserialize)]
 pub(crate) struct Splitter {
-    rotation: Rotation,
     direction: i8,
 }
 
 impl Splitter {
-    pub(crate) fn new(rotation: Rotation) -> Self {
-        Splitter {
-            rotation,
-            direction: 0,
+    pub(crate) fn new(position: Position, rotation: Rotation) -> StructureBundle {
+        StructureBundle {
+            dynamic: Box::new(Splitter { direction: 0 }),
+            components: StructureComponents::new_with_position_and_rotation(position, rotation),
         }
     }
 }
@@ -34,12 +34,17 @@ impl Structure for Splitter {
     }
 
     fn bounding_box(&self, components: &StructureComponents) -> Option<BoundingBox> {
-        let position = if let Some(position) = components.position.as_ref() {
-            position
+        let (position, rotation) = if let StructureComponents {
+            position: Some(position),
+            rotation: Some(rotation),
+            ..
+        } = components
+        {
+            (position, rotation)
         } else {
             return None;
         };
-        Some(match self.rotation {
+        Some(match *rotation {
             Rotation::Left => BoundingBox {
                 x0: position.x,
                 y0: position.y - 1,
@@ -86,7 +91,7 @@ impl Structure for Splitter {
         };
         context.save();
         context.translate(x + 16., y + 16.)?;
-        context.rotate(self.rotation.angle_rad())?;
+        context.rotate(components.rotation.map(|r| r.angle_rad()).unwrap_or(0.))?;
         context.translate(-(x + 16.), -(y + 16.))?;
         if depth == 0 {
             if let Some(belt) = state.image_belt.as_ref() {
@@ -140,38 +145,34 @@ impl Structure for Splitter {
         true
     }
 
-    fn rotate(&mut self) -> Result<(), ()> {
-        self.rotation = self.rotation.next();
-        Ok(())
-    }
-
-    fn set_rotation(&mut self, rotation: &Rotation) -> Result<(), ()> {
-        self.rotation = *rotation;
-        Ok(())
-    }
-
     fn item_response(
         &mut self,
         components: &mut StructureComponents,
         item: &DropItem,
-    ) -> Result<ItemResponseResult, ()> {
-        let vx = self.rotation.delta().0;
-        let vy = self.rotation.delta().1;
-        let mut ax = if self.rotation.is_vertial() {
+    ) -> Result<ItemResponseResult, JsValue> {
+        let rotation = components
+            .rotation
+            .as_ref()
+            .ok_or_else(|| js_str!("Splitter without Rotation component"))?;
+        let vx = rotation.delta().0;
+        let vy = rotation.delta().1;
+        let mut ax = if rotation.is_vertial() {
             (item.x as f64 / TILE_SIZE).floor() * TILE_SIZE + TILE_SIZE / 2.
         } else {
             item.x as f64
         };
-        let mut ay = if self.rotation.is_horizontal() {
+        let mut ay = if rotation.is_horizontal() {
             (item.y as f64 / TILE_SIZE).floor() * TILE_SIZE + TILE_SIZE / 2.
         } else {
             item.y as f64
         };
-        let Position { x: tx, y: ty } = components.position.ok_or(())?;
+        let Position { x: tx, y: ty } = components
+            .position
+            .ok_or_else(|| js_str!("Splitter without Position component"))?;
         let halftilesize = TILE_SIZE / 2.;
         let mut postdirection = false;
-        let shift_direction = self.rotation.clone().next().delta();
-        if self.rotation.is_horizontal() {
+        let shift_direction = rotation.clone().next().delta();
+        if rotation.is_horizontal() {
             // Detect the point where the item passes over the mid point of this entity.
             if ((ax + halftilesize) / TILE_SIZE).floor()
                 != ((ax + vx as f64 + halftilesize) / TILE_SIZE).floor()

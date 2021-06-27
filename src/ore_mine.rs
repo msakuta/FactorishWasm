@@ -15,7 +15,6 @@ const FUEL_CAPACITY: usize = 10;
 
 #[derive(Serialize, Deserialize)]
 pub(crate) struct OreMine {
-    rotation: Rotation,
     progress: f64,
     recipe: Option<Recipe>,
 }
@@ -24,11 +23,11 @@ impl OreMine {
     pub(crate) fn new(x: i32, y: i32, rotation: Rotation) -> StructureBundle {
         StructureBundle::new(
             Box::new(OreMine {
-                rotation,
                 progress: 0.,
                 recipe: None,
             }),
             Some(Position { x, y }),
+            Some(rotation),
             Some(Burner {
                 inventory: Inventory::new(),
                 capacity: FUEL_CAPACITY,
@@ -91,7 +90,12 @@ impl Structure for OreMine {
                 None => return Err(JsValue::from_str("mine image not available")),
             },
             2 => {
-                draw_direction_arrow((x, y), &self.rotation, state, context)?;
+                draw_direction_arrow(
+                    (x, y),
+                    &components.rotation.unwrap_or(Rotation::Left),
+                    state,
+                    context,
+                )?;
             }
             _ => (),
         }
@@ -134,6 +138,7 @@ impl Structure for OreMine {
         structures: &mut dyn DynIterMut<Item = StructureBundle>,
     ) -> Result<FrameProcResult, ()> {
         let position = components.position.as_ref().ok_or(())?;
+        let rotation = components.rotation.as_ref().ok_or(())?;
         let energy = components.energy.as_mut().ok_or(())?;
 
         let otile = &state.tile_at(position);
@@ -213,7 +218,7 @@ impl Structure for OreMine {
             }
             if 1. <= self.progress + progress {
                 self.progress = 0.;
-                let output_position = position.add(self.rotation.delta());
+                let output_position = position.add(rotation.delta());
                 let mut str_iter = structures.dyn_iter_mut();
                 if let Some(structure) =
                     str_iter.find(|s| s.components.position == Some(output_position))
@@ -269,16 +274,6 @@ impl Structure for OreMine {
             }
         }
         Ok(ret)
-    }
-
-    fn rotate(&mut self) -> Result<(), ()> {
-        self.rotation = self.rotation.next();
-        Ok(())
-    }
-
-    fn set_rotation(&mut self, rotation: &Rotation) -> Result<(), ()> {
-        self.rotation = *rotation;
-        Ok(())
     }
 
     crate::serialize_impl!();

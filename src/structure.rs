@@ -55,7 +55,7 @@ pub(crate) struct BoundingBox {
     pub y1: i32,
 }
 
-#[derive(Copy, Clone, Serialize, Deserialize, RotateEnum)]
+#[derive(Debug, Copy, Clone, Serialize, Deserialize, RotateEnum)]
 pub(crate) enum Rotation {
     Left,
     Top,
@@ -110,6 +110,7 @@ pub(crate) enum FrameProcResult {
 }
 
 pub(crate) enum ItemResponse {
+    None,
     Move(i32, i32),
     Consume,
 }
@@ -206,19 +207,13 @@ pub(crate) trait Structure {
     fn movable(&self) -> bool {
         false
     }
-    fn rotate(&mut self) -> Result<(), ()> {
-        Err(())
-    }
-    fn set_rotation(&mut self, _rotation: &Rotation) -> Result<(), ()> {
-        Err(())
-    }
     /// Called every frame for each item that is on this structure.
     fn item_response(
         &mut self,
         _components: &mut StructureComponents,
         _item: &DropItem,
-    ) -> Result<ItemResponseResult, ()> {
-        Err(())
+    ) -> Result<ItemResponseResult, JsValue> {
+        Err(js_str!("ItemResponse not implemented"))
     }
     fn input(
         &mut self,
@@ -341,15 +336,17 @@ pub(crate) struct Energy {
 
 pub(crate) struct StructureComponents {
     pub position: Option<Position>,
+    pub rotation: Option<Rotation>,
     pub burner: Option<Burner>,
     pub energy: Option<Energy>,
     pub factory: Option<Factory>,
 }
 
 impl StructureComponents {
-    fn _new_with_position(position: Position) -> Self {
+    pub fn new_with_position_and_rotation(position: Position, rotation: Rotation) -> Self {
         Self {
             position: Some(position),
+            rotation: Some(rotation),
             burner: None,
             energy: None,
             factory: None,
@@ -361,6 +358,7 @@ impl Default for StructureComponents {
     fn default() -> Self {
         Self {
             position: None,
+            rotation: None,
             burner: None,
             energy: None,
             factory: None,
@@ -377,6 +375,7 @@ impl StructureBundle {
     pub(crate) fn new(
         dynamic: Box<dyn Structure>,
         position: Option<Position>,
+        rotation: Option<Rotation>,
         burner: Option<Burner>,
         energy: Option<Energy>,
         factory: Option<Factory>,
@@ -385,6 +384,7 @@ impl StructureBundle {
             dynamic,
             components: StructureComponents {
                 position,
+                rotation,
                 burner,
                 energy,
                 factory,
@@ -460,5 +460,17 @@ impl StructureBundle {
                 .as_mut()
                 .map(|factory| factory.inventory_mut(is_input))?
         }
+    }
+
+    pub(crate) fn rotate(&mut self) -> Result<(), ()> {
+        if let Some(ref mut rotation) = self.components.rotation {
+            *rotation = rotation.next();
+        }
+        Ok(())
+    }
+
+    pub(crate) fn set_rotation(&mut self, rotation: &Rotation) -> Result<(), ()> {
+        self.components.rotation = Some(*rotation);
+        Ok(())
     }
 }

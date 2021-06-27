@@ -1,19 +1,22 @@
 use super::{
-    structure::{ItemResponse, ItemResponseResult, Structure, StructureComponents},
-    DropItem, FactorishState, Rotation, TILE_SIZE,
+    structure::{
+        ItemResponse, ItemResponseResult, Structure, StructureBundle, StructureComponents,
+    },
+    DropItem, FactorishState, Position, Rotation, TILE_SIZE,
 };
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 use web_sys::CanvasRenderingContext2d;
 
 #[derive(Serialize, Deserialize)]
-pub(crate) struct TransportBelt {
-    rotation: Rotation,
-}
+pub(crate) struct TransportBelt {}
 
 impl TransportBelt {
-    pub(crate) fn new(rotation: Rotation) -> Self {
-        TransportBelt { rotation }
+    pub(crate) fn new(position: Position, rotation: Rotation) -> StructureBundle {
+        StructureBundle {
+            dynamic: Box::new(TransportBelt {}),
+            components: StructureComponents::new_with_position_and_rotation(position, rotation),
+        }
     }
 }
 
@@ -42,7 +45,9 @@ impl Structure for TransportBelt {
                 };
                 context.save();
                 context.translate(x + 16., y + 16.)?;
-                context.rotate(self.rotation.angle_rad())?;
+                components
+                    .rotation
+                    .map(|rotation| context.rotate(rotation.angle_rad()));
                 context.translate(-(x + 16.), -(y + 16.))?;
                 for i in 0..2 {
                     context
@@ -70,29 +75,23 @@ impl Structure for TransportBelt {
         true
     }
 
-    fn rotate(&mut self) -> Result<(), ()> {
-        self.rotation = self.rotation.next();
-        Ok(())
-    }
-
-    fn set_rotation(&mut self, rotation: &Rotation) -> Result<(), ()> {
-        self.rotation = *rotation;
-        Ok(())
-    }
-
     fn item_response(
         &mut self,
-        _components: &mut StructureComponents,
+        components: &mut StructureComponents,
         item: &DropItem,
-    ) -> Result<ItemResponseResult, ()> {
-        let vx = self.rotation.delta().0;
-        let vy = self.rotation.delta().1;
-        let ax = if self.rotation.is_vertial() {
+    ) -> Result<ItemResponseResult, JsValue> {
+        let rotation = components
+            .rotation
+            .as_ref()
+            .ok_or_else(|| js_str!("TransportBelt without Rotation component"))?;
+        let vx = rotation.delta().0;
+        let vy = rotation.delta().1;
+        let ax = if rotation.is_vertial() {
             (item.x as f64 / TILE_SIZE).floor() * TILE_SIZE + TILE_SIZE / 2.
         } else {
             item.x as f64
         };
-        let ay = if self.rotation.is_horizontal() {
+        let ay = if rotation.is_horizontal() {
             (item.y as f64 / TILE_SIZE).floor() * TILE_SIZE + TILE_SIZE / 2.
         } else {
             item.y as f64

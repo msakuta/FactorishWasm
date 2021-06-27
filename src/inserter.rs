@@ -18,11 +18,20 @@ pub(crate) struct Inserter {
 const INSERTER_TIME: f64 = 20.;
 
 impl Inserter {
-    pub(crate) fn new(rotation: Rotation) -> Self {
-        Inserter {
-            rotation,
-            cooldown: 0.,
-            hold_item: None,
+    pub(crate) fn new(position: Position, rotation: Rotation) -> StructureBundle {
+        StructureBundle {
+            dynamic: Box::new(Inserter {
+                rotation,
+                cooldown: 0.,
+                hold_item: None,
+            }),
+            components: StructureComponents {
+                position: Some(position),
+                rotation: Some(rotation),
+                burner: None,
+                energy: None,
+                factory: None,
+            },
         }
     }
 
@@ -279,16 +288,6 @@ impl Structure for Inserter {
             self.cooldown -= 1.;
         }
         Ok(FrameProcResult::None)
-    }
-
-    fn rotate(&mut self) -> Result<(), ()> {
-        self.rotation = self.rotation.next();
-        Ok(())
-    }
-
-    fn set_rotation(&mut self, rotation: &Rotation) -> Result<(), ()> {
-        self.rotation = *rotation;
-        Ok(())
     }
 
     fn destroy_inventory(&mut self) -> Inventory {
