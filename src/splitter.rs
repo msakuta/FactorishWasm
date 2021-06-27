@@ -145,6 +145,14 @@ impl Structure for Splitter {
         true
     }
 
+    fn rotate(&mut self, components: &mut StructureComponents) -> Result<(), ()> {
+        let rotation = components.rotation.as_mut().ok_or(())?;
+        let position = components.position.as_mut().ok_or(())?;
+        *position = position.add(rotation.next().delta());
+        *rotation = rotation.next().next();
+        Ok(())
+    }
+
     fn item_response(
         &mut self,
         components: &mut StructureComponents,

@@ -207,6 +207,9 @@ pub(crate) trait Structure {
     fn movable(&self) -> bool {
         false
     }
+    fn rotate(&mut self, _components: &mut StructureComponents) -> Result<(), ()> {
+        Err(())
+    }
     /// Called every frame for each item that is on this structure.
     fn item_response(
         &mut self,
@@ -463,6 +466,9 @@ impl StructureBundle {
     }
 
     pub(crate) fn rotate(&mut self) -> Result<(), ()> {
+        if self.dynamic.rotate(&mut self.components).is_ok() {
+            return Ok(());
+        }
         if let Some(ref mut rotation) = self.components.rotation {
             *rotation = rotation.next();
         }

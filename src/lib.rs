@@ -1273,16 +1273,14 @@ impl FactorishState {
     ///
     /// Because mutable version of find_structure_tile doesn't work.
     fn find_structure_tile_idx(&self, tile: &[i32]) -> Option<usize> {
+        let position = Position {
+            x: tile[0],
+            y: tile[1],
+        };
         self.structures
             .iter()
             .enumerate()
-            .find(|(_, s)| {
-                s.components.position
-                    == Some(Position {
-                        x: tile[0],
-                        y: tile[1],
-                    })
-            })
+            .find(|(_, s)| s.dynamic.contains(&s.components, &position))
             .map(|(idx, _)| idx)
     }
 
