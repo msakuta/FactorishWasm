@@ -173,21 +173,13 @@ pub(crate) trait Structure {
     }
     fn draw(
         &self,
-        burner: Option<&Burner>,
-        energy: Option<&Energy>,
-        factory: Option<&Factory>,
+        _components: &StructureComponents,
         state: &FactorishState,
         context: &CanvasRenderingContext2d,
         depth: i32,
         is_tooptip: bool,
     ) -> Result<(), JsValue>;
-    fn desc(
-        &self,
-        _burner: Option<&Burner>,
-        _energy: Option<&Energy>,
-        _factory: Option<&Factory>,
-        _state: &FactorishState,
-    ) -> String {
+    fn desc(&self, _components: &StructureComponents, _state: &FactorishState) -> String {
         String::from("")
     }
     fn frame_proc(
@@ -334,40 +326,60 @@ pub(crate) struct Energy {
     pub max: f64,
 }
 
-pub(crate) struct StructureBundle {
-    pub dynamic: Box<dyn Structure>,
+pub(crate) struct StructureComponents {
+    pub position: Option<Position>,
     pub burner: Option<Burner>,
     pub energy: Option<Energy>,
     pub factory: Option<Factory>,
 }
 
+impl Default for StructureComponents {
+    fn default() -> Self {
+        Self {
+            position: None,
+            burner: None,
+            energy: None,
+            factory: None,
+        }
+    }
+}
+
+pub(crate) struct StructureBundle {
+    pub dynamic: Box<dyn Structure>,
+    pub components: StructureComponents,
+}
+
 impl StructureBundle {
     pub(crate) fn new(
         dynamic: Box<dyn Structure>,
+        position: Option<Position>,
         burner: Option<Burner>,
         energy: Option<Energy>,
         factory: Option<Factory>,
     ) -> Self {
         Self {
             dynamic,
-            burner,
-            energy,
-            factory,
+            components: StructureComponents {
+                position,
+                burner,
+                energy,
+                factory,
+            },
         }
     }
 
     pub(crate) fn input(&mut self, item: &DropItem) -> Result<(), JsValue> {
         self.dynamic
-            .input(self.factory.as_mut(), item)
+            .input(self.components.factory.as_mut(), item)
             .or_else(|e| {
-                if let Some(burner) = self.burner.as_mut() {
+                if let Some(burner) = self.components.burner.as_mut() {
                     burner.input(item)
                 } else {
                     Err(e)
                 }
             })
             .or_else(|_| {
-                if let Some(factory) = self.factory.as_mut() {
+                if let Some(factory) = self.components.factory.as_mut() {
                     factory.input(item)
                 } else {
                     js_err!("No input inventory")
@@ -378,11 +390,13 @@ impl StructureBundle {
     pub(crate) fn can_input(&self, item_type: &ItemType) -> bool {
         self.dynamic.can_input(item_type)
             || self
+                .components
                 .burner
                 .as_ref()
                 .map(|burner| burner.can_input(item_type))
                 .unwrap_or(false)
             || self
+                .components
                 .factory
                 .as_ref()
                 .map(|factory| factory.can_input(item_type))
@@ -391,7 +405,7 @@ impl StructureBundle {
 
     pub(crate) fn can_output(&self) -> Inventory {
         let mut ret = self.dynamic.can_output();
-        if let Some(factory) = self.factory.as_ref() {
+        if let Some(factory) = self.components.factory.as_ref() {
             ret.merge(factory.can_output());
         }
         ret
@@ -405,7 +419,7 @@ impl StructureBundle {
         if let Ok(ret) = self.dynamic.output(state, item_type) {
             return Ok(ret);
         }
-        if let Some(factory) = self.factory.as_mut() {
+        if let Some(factory) = self.components.factory.as_mut() {
             if let Ok(()) = factory.output(state, item_type) {
                 return Ok(());
             }
@@ -417,7 +431,8 @@ impl StructureBundle {
         if let Some(inventory) = self.dynamic.inventory_mut(is_input) {
             return Some(inventory);
         } else {
-            self.factory
+            self.components
+                .factory
                 .as_mut()
                 .map(|factory| factory.inventory_mut(is_input))?
         }

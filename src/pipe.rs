@@ -1,6 +1,6 @@
 use super::{
     burner::Burner,
-    structure::{DynIterMut, Structure, StructureBundle},
+    structure::{DynIterMut, Structure, StructureBundle, StructureComponents},
     water_well::FluidBox,
     FactorishState, FrameProcResult, Position, Ref,
 };
@@ -86,9 +86,7 @@ impl Structure for Pipe {
 
     fn draw(
         &self,
-        _burner: Option<&Burner>,
-        _energy: Option<&super::structure::Energy>,
-        _factory: Option<&super::factory::Factory>,
+        _components: &StructureComponents,
         state: &FactorishState,
         context: &CanvasRenderingContext2d,
         depth: i32,
@@ -97,13 +95,7 @@ impl Structure for Pipe {
         Self::draw_int(self, state, context, depth, true)
     }
 
-    fn desc(
-        &self,
-        _burner: Option<&Burner>,
-        _energy: Option<&super::structure::Energy>,
-        _factory: Option<&super::factory::Factory>,
-        _state: &FactorishState,
-    ) -> String {
+    fn desc(&self, _components: &StructureComponents, _state: &FactorishState) -> String {
         self.fluid_box.desc()
         // getHTML(generateItemImage("time", true, this.recipe.time), true) + "<br>" +
         // "Outputs: <br>" +

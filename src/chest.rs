@@ -1,7 +1,6 @@
 use super::{
-    burner::Burner,
     items::{DropItem, ItemType},
-    structure::{ItemResponse, ItemResponseResult, Structure},
+    structure::{ItemResponse, ItemResponseResult, Structure, StructureComponents},
     FactorishState, FrameProcResult, Inventory, InventoryTrait, Position,
 };
 use serde::{Deserialize, Serialize};
@@ -36,9 +35,7 @@ impl Structure for Chest {
 
     fn draw(
         &self,
-        _burner: Option<&Burner>,
-        _energy: Option<&super::structure::Energy>,
-        _factory: Option<&super::factory::Factory>,
+        _components: &StructureComponents,
         state: &FactorishState,
         context: &CanvasRenderingContext2d,
         depth: i32,
@@ -57,13 +54,7 @@ impl Structure for Chest {
         }
     }
 
-    fn desc(
-        &self,
-        _burner: Option<&Burner>,
-        _energy: Option<&super::structure::Energy>,
-        _factory: Option<&super::factory::Factory>,
-        _state: &FactorishState,
-    ) -> String {
+    fn desc(&self, _components: &StructureComponents, _state: &FactorishState) -> String {
         format!(
             "Items: \n{}",
             self.inventory

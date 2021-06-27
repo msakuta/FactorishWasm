@@ -73,7 +73,10 @@ use perlin_noise::{perlin_noise_pixel, Xor128};
 use pipe::Pipe;
 use splitter::Splitter;
 use steam_engine::SteamEngine;
-use structure::{FrameProcResult, ItemResponse, Position, Rotation, Structure, StructureBundle};
+use structure::{
+    FrameProcResult, ItemResponse, Position, Rotation, Structure, StructureBundle,
+    StructureComponents,
+};
 use transport_belt::TransportBelt;
 use water_well::{FluidType, WaterWell};
 
@@ -657,15 +660,18 @@ impl FactorishState {
                     None,
                     None,
                     None,
+                    None,
                 ),
                 StructureBundle::new(
                     Box::new(TransportBelt::new(11, 3, Rotation::Left)),
                     None,
                     None,
                     None,
+                    None,
                 ),
                 StructureBundle::new(
                     Box::new(TransportBelt::new(12, 3, Rotation::Left)),
+                    None,
                     None,
                     None,
                     None,
@@ -678,10 +684,12 @@ impl FactorishState {
                     None,
                     None,
                     None,
+                    None,
                 ),
                 Boiler::new(&Position::new(13, 5)),
                 StructureBundle::new(
                     Box::new(SteamEngine::new(&Position::new(12, 5))),
+                    None,
                     None,
                     None,
                     None,
@@ -740,7 +748,7 @@ impl FactorishState {
                                 .js_serialize()
                                 .map_err(|e| js_str!("Serialize error: {}", e))?,
                         );
-                        if let Some(burner) = &structure.burner {
+                        if let Some(burner) = &structure.components.burner {
                             map.insert(
                                 "burner".to_string(),
                                 burner
@@ -748,14 +756,14 @@ impl FactorishState {
                                     .map_err(|e| js_str!("Serialize error: {}", e))?,
                             );
                         }
-                        if let Some(energy) = &structure.energy {
+                        if let Some(energy) = &structure.components.energy {
                             map.insert(
                                 "energy".to_string(),
                                 serde_json::to_value(energy)
                                     .map_err(|e| js_str!("Energy serialize error: {}", e))?,
                             );
                         }
-                        if let Some(factory) = &structure.factory {
+                        if let Some(factory) = &structure.components.factory {
                             map.insert(
                                 "factory".to_string(),
                                 serde_json::to_value(factory)
@@ -1107,21 +1115,22 @@ impl FactorishState {
             let (center, last) = mid
                 .split_first_mut()
                 .ok_or_else(|| JsValue::from_str("Structures split fail"))?;
+            let components = &mut center.components;
             frame_proc_result_to_event(center.dynamic.frame_proc(
-                center.burner.as_mut(),
-                center.energy.as_mut(),
-                center.factory.as_mut(),
+                components.burner.as_mut(),
+                components.energy.as_mut(),
+                components.factory.as_mut(),
                 self,
                 &mut Chained(MutRef(front), MutRef(last)),
             ));
-            if let Some(burner) = &mut center.burner {
+            if let Some(burner) = &mut components.burner {
                 frame_proc_result_to_event(
-                    burner.frame_proc(center.energy.as_mut(), center.dynamic.as_mut()),
+                    burner.frame_proc(components.energy.as_mut(), center.dynamic.as_mut()),
                 );
             }
-            if let Some(factory) = &mut center.factory {
+            if let Some(factory) = &mut components.factory {
                 frame_proc_result_to_event(
-                    factory.frame_proc(center.energy.as_mut(), center.dynamic.as_mut()),
+                    factory.frame_proc(components.energy.as_mut(), center.dynamic.as_mut()),
                 );
             }
         }
@@ -1297,12 +1306,7 @@ impl FactorishState {
                             format!(
                                 r#"Type: {}<br>{}"#,
                                 structure.dynamic.name(),
-                                structure.dynamic.desc(
-                                    structure.burner.as_ref(),
-                                    structure.energy.as_ref(),
-                                    structure.factory.as_ref(),
-                                    &self
-                                )
+                                structure.dynamic.desc(&structure.components, &self)
                             )
                         } else {
                             let cell = self.board
@@ -1413,6 +1417,7 @@ impl FactorishState {
             }
             for (item_type, count) in structure.dynamic.destroy_inventory().into_iter().chain(
                 structure
+                    .components
                     .burner
                     .as_mut()
                     .map(|burner| burner.destroy_inventory())
@@ -1420,6 +1425,7 @@ impl FactorishState {
                     .into_iter()
                     .chain(
                         structure
+                            .components
                             .factory
                             .as_mut()
                             .map(|factory| factory.destroy_inventory())
@@ -1553,7 +1559,7 @@ impl FactorishState {
         if let Some(structure) = self.find_structure_tile(&[c, r]) {
             match inventory_type {
                 InventoryType::Burner => {
-                    if let Some(Burner { inventory, .. }) = &structure.burner {
+                    if let Some(Burner { inventory, .. }) = &structure.components.burner {
                         return self.get_inventory(inventory, &None);
                     } else {
                         return Ok(js_sys::Array::new());
@@ -1564,7 +1570,7 @@ impl FactorishState {
                         .dynamic
                         .inventory(inventory_type == InventoryType::Input)
                         .or_else(|| {
-                            structure.factory.as_ref().map(|factory| {
+                            structure.components.factory.as_ref().map(|factory| {
                                 factory.inventory(inventory_type == InventoryType::Input)
                             })?
                         })
@@ -1588,7 +1594,7 @@ impl FactorishState {
 
     pub fn get_structure_burner_energy(&self, c: i32, r: i32) -> Option<js_sys::Array> {
         self.find_structure_tile(&[c, r]).and_then(|structure| {
-            let energy = structure.energy.as_ref()?;
+            let energy = structure.components.energy.as_ref()?;
             Some(js_sys::Array::of2(
                 &JsValue::from(energy.value),
                 &JsValue::from(energy.max),
@@ -1639,7 +1645,7 @@ impl FactorishState {
 
     pub fn select_recipe(&mut self, c: i32, r: i32, index: usize) -> Result<bool, JsValue> {
         if let Some(structure) = self.find_structure_tile_mut(&[c, r]) {
-            if let Some(factory) = structure.factory.as_mut() {
+            if let Some(factory) = structure.components.factory.as_mut() {
                 structure.dynamic.select_recipe(factory, index)
             } else {
                 js_err!("Structure cannot set recipe")
@@ -1689,7 +1695,7 @@ impl FactorishState {
             match inventory_type {
                 InventoryType::Burner => {
                     if to_player {
-                        if let Some(burner) = &mut structure.burner {
+                        if let Some(burner) = &mut structure.components.burner {
                             console_log!("Burner to player");
                             if let Some((&item, &count)) = burner.inventory.iter().next() {
                                 self.player.inventory.add_items(
@@ -1701,7 +1707,7 @@ impl FactorishState {
                         }
                     } else {
                         if let Some((SelectedItem::PlayerInventory(i), burner)) =
-                            self.selected_item.zip(structure.burner.as_mut())
+                            self.selected_item.zip(structure.components.burner.as_mut())
                         {
                             console_log!("player to Burner");
                             self.player.inventory.remove_items(
@@ -1787,9 +1793,12 @@ impl FactorishState {
         };
         Ok(StructureBundle {
             dynamic,
-            burner: None,
-            energy: None,
-            factory: None,
+            components: StructureComponents {
+                position: Some(*cursor),
+                burner: None,
+                energy: None,
+                factory: None,
+            },
         })
     }
 
@@ -1839,23 +1848,31 @@ impl FactorishState {
 
         Ok(StructureBundle {
             dynamic: payload,
-            burner: if let Some(burner) = value.get_mut("burner") {
-                serde_json::from_value(burner.take())
-                    .map_err(|s| js_str!("structure deserialization error: {}", s))?
-            } else {
-                None
-            },
-            energy: if let Some(energy) = value.get_mut("energy") {
-                serde_json::from_value(energy.take())
-                    .map_err(|s| js_str!("structure energy deserialization error: {}", s))?
-            } else {
-                None
-            },
-            factory: if let Some(factory) = value.get_mut("factory") {
-                serde_json::from_value(factory.take())
-                    .map_err(|s| js_str!("structure factory deserialization error: {}", s))?
-            } else {
-                None
+            components: StructureComponents {
+                position: if let Some(position) = value.get_mut("position") {
+                    serde_json::from_value(position.take())
+                        .map_err(|s| js_str!("structure deserialization error: {}", s))?
+                } else {
+                    None
+                },
+                burner: if let Some(burner) = value.get_mut("burner") {
+                    serde_json::from_value(burner.take())
+                        .map_err(|s| js_str!("structure deserialization error: {}", s))?
+                } else {
+                    None
+                },
+                energy: if let Some(energy) = value.get_mut("energy") {
+                    serde_json::from_value(energy.take())
+                        .map_err(|s| js_str!("structure energy deserialization error: {}", s))?
+                } else {
+                    None
+                },
+                factory: if let Some(factory) = value.get_mut("factory") {
+                    serde_json::from_value(factory.take())
+                        .map_err(|s| js_str!("structure factory deserialization error: {}", s))?
+                } else {
+                    None
+                },
             },
         })
     }
@@ -1964,8 +1981,8 @@ impl FactorishState {
             } else if let Some(structure) = self.find_structure_tile(&[cursor.x, cursor.y]) {
                 if structure.dynamic.inventory(true).is_some()
                     || structure.dynamic.inventory(false).is_some()
-                    || structure.burner.is_some()
-                    || structure.factory.is_some()
+                    || structure.components.burner.is_some()
+                    || structure.components.factory.is_some()
                 {
                     // Select clicked structure
                     console_log!("opening inventory at {:?}", cursor);
@@ -2295,7 +2312,7 @@ impl FactorishState {
             tool.dynamic.set_rotation(&self.tool_rotation).ok();
             for depth in 0..3 {
                 tool.dynamic
-                    .draw(None, None, None, self, context, depth, true)?;
+                    .draw(&StructureComponents::default(), self, context, depth, true)?;
             }
         }
         Ok(())
@@ -2510,19 +2527,13 @@ impl FactorishState {
 
         let draw_structures = |depth| -> Result<(), JsValue> {
             for structure in &self.structures {
-                structure.dynamic.draw(
-                    structure.burner.as_ref(),
-                    structure.energy.as_ref(),
-                    structure.factory.as_ref(),
-                    &self,
-                    &context,
-                    depth,
-                    false,
-                )?;
+                structure
+                    .dynamic
+                    .draw(&structure.components, &self, &context, depth, false)?;
                 if depth == 2 {
-                    if let Some(burner) = &structure.burner {
+                    if let Some(burner) = &structure.components.burner {
                         burner.draw(
-                            structure.energy.as_ref(),
+                            structure.components.energy.as_ref(),
                             &structure.dynamic.position(),
                             &self,
                             &context,
@@ -2654,8 +2665,13 @@ impl FactorishState {
                 let mut tool = self.new_structure(&selected_tool, &Position::from(cursor))?;
                 tool.dynamic.set_rotation(&self.tool_rotation).ok();
                 for depth in 0..3 {
-                    tool.dynamic
-                        .draw(None, None, None, self, &context, depth, false)?;
+                    tool.dynamic.draw(
+                        &StructureComponents::default(),
+                        self,
+                        &context,
+                        depth,
+                        false,
+                    )?;
                 }
                 context.restore();
             }

@@ -1,9 +1,8 @@
 use super::{
     burner::Burner,
-    factory::Factory,
     pipe::Pipe,
     serialize_impl,
-    structure::{DynIterMut, Energy, Structure, StructureBundle},
+    structure::{DynIterMut, Energy, Structure, StructureBundle, StructureComponents},
     water_well::{FluidBox, FluidType},
     FactorishState, FrameProcResult, Inventory, ItemType, Position, Recipe, TempEnt,
 };
@@ -41,15 +40,18 @@ impl Boiler {
                 input_fluid_box: FluidBox::new(true, false, [false; 4]),
                 output_fluid_box: FluidBox::new(false, true, [false; 4]),
             }),
-            burner: Some(Burner {
-                inventory: Inventory::new(),
-                capacity: FUEL_CAPACITY,
-            }),
-            energy: Some(Energy {
-                value: 0.,
-                max: 100.,
-            }),
-            factory: None,
+            components: StructureComponents {
+                position: Some(*position),
+                burner: Some(Burner {
+                    inventory: Inventory::new(),
+                    capacity: FUEL_CAPACITY,
+                }),
+                energy: Some(Energy {
+                    value: 0.,
+                    max: 100.,
+                }),
+                factory: None,
+            },
         }
     }
 
@@ -83,9 +85,7 @@ impl Structure for Boiler {
 
     fn draw(
         &self,
-        burner: Option<&Burner>,
-        energy: Option<&Energy>,
-        _factory: Option<&Factory>,
+        components: &StructureComponents,
         state: &FactorishState,
         context: &CanvasRenderingContext2d,
         depth: i32,
@@ -98,9 +98,11 @@ impl Structure for Boiler {
         let (x, y) = (self.position.x as f64 * 32., self.position.y as f64 * 32.);
         match state.image_boiler.as_ref() {
             Some(img) => {
-                let sx = if let Some(energy) = energy {
+                let sx = if let Some(energy) = components.energy.as_ref() {
                     if self.progress.is_some()
-                        && burner
+                        && components
+                            .burner
+                            .as_ref()
                             .map(|burner| {
                                 Self::COMBUSTION_EPSILON < self.combustion_rate(burner, energy)
                             })
@@ -131,18 +133,13 @@ impl Structure for Boiler {
         Ok(())
     }
 
-    fn desc(
-        &self,
-        burner: Option<&Burner>,
-        energy: Option<&Energy>,
-        _factory: Option<&Factory>,
-        _state: &FactorishState,
-    ) -> String {
-        let (_burner, energy) = if let Some(burner) = burner.zip(energy) {
-            burner
-        } else {
-            return "Burner not found".to_string();
-        };
+    fn desc(&self, components: &StructureComponents, _state: &FactorishState) -> String {
+        let (_burner, energy) =
+            if let Some(burner) = components.burner.as_ref().zip(components.energy.as_ref()) {
+                burner
+            } else {
+                return "Burner not found".to_string();
+            };
         format!(
             "{}",
             if self.recipe.is_some() {

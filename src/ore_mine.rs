@@ -2,7 +2,7 @@ use super::{
     burner::Burner,
     draw_direction_arrow,
     items::ItemType,
-    structure::{DynIterMut, Energy, Structure, StructureBundle},
+    structure::{DynIterMut, Energy, Structure, StructureBundle, StructureComponents},
     DropItem, FactorishState, FrameProcResult, Inventory, Position, Recipe, Rotation, TempEnt,
     TILE_SIZE,
 };
@@ -30,6 +30,7 @@ impl OreMine {
                 progress: 0.,
                 recipe: None,
             }),
+            Some(Position { x, y }),
             Some(Burner {
                 inventory: Inventory::new(),
                 capacity: FUEL_CAPACITY,
@@ -54,9 +55,7 @@ impl Structure for OreMine {
 
     fn draw(
         &self,
-        _burner: Option<&Burner>,
-        _energy: Option<&Energy>,
-        _factory: Option<&super::factory::Factory>,
+        _components: &StructureComponents,
         state: &FactorishState,
         context: &CanvasRenderingContext2d,
         depth: i32,
@@ -105,14 +104,8 @@ impl Structure for OreMine {
         Ok(())
     }
 
-    fn desc(
-        &self,
-        _burner: Option<&Burner>,
-        energy: Option<&Energy>,
-        _factory: Option<&super::factory::Factory>,
-        state: &FactorishState,
-    ) -> String {
-        let energy = if let Some(energy) = energy {
+    fn desc(&self, components: &StructureComponents, state: &FactorishState) -> String {
+        let energy = if let Some(energy) = components.energy.as_ref() {
             energy
         } else {
             return "Energy not found".to_string();

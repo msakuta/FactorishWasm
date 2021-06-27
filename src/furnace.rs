@@ -3,7 +3,7 @@ use super::{
     factory::Factory,
     items::item_to_str,
     serialize_impl,
-    structure::{Energy, Structure, StructureBundle},
+    structure::{Energy, Structure, StructureBundle, StructureComponents},
     DropItem, FactorishState, Inventory, InventoryTrait, ItemType, Position, Recipe,
 };
 use serde::{Deserialize, Serialize};
@@ -23,6 +23,7 @@ impl Furnace {
             Box::new(Furnace {
                 position: *position,
             }),
+            Some(*position),
             Some(Burner {
                 inventory: Inventory::new(),
                 capacity: FUEL_CAPACITY,
@@ -47,9 +48,7 @@ impl Structure for Furnace {
 
     fn draw(
         &self,
-        _burner: Option<&Burner>,
-        energy: Option<&Energy>,
-        factory: Option<&Factory>,
+        components: &StructureComponents,
         state: &FactorishState,
         context: &CanvasRenderingContext2d,
         depth: i32,
@@ -62,7 +61,9 @@ impl Structure for Furnace {
         let (x, y) = (self.position.x as f64 * 32., self.position.y as f64 * 32.);
         match state.image_furnace.as_ref() {
             Some(img) => {
-                let sx = if let Some((energy, factory)) = energy.zip(factory) {
+                let sx = if let Some((energy, factory)) =
+                    components.energy.as_ref().zip(components.factory.as_ref())
+                {
                     if factory.progress.is_some() && 0. < energy.value {
                         ((((state.sim_time * 5.) as isize) % 2 + 1) * 32) as f64
                     } else {
@@ -92,18 +93,13 @@ impl Structure for Furnace {
         Ok(())
     }
 
-    fn desc(
-        &self,
-        _burner: Option<&Burner>,
-        energy: Option<&Energy>,
-        factory: Option<&Factory>,
-        _state: &FactorishState,
-    ) -> String {
-        let (energy, factory) = if let Some(bundle) = energy.zip(factory) {
-            bundle
-        } else {
-            return "Energy or Factory component not found".to_string();
-        };
+    fn desc(&self, components: &StructureComponents, _state: &FactorishState) -> String {
+        let (energy, factory) =
+            if let Some(bundle) = components.energy.as_ref().zip(components.factory.as_ref()) {
+                bundle
+            } else {
+                return "Energy or Factory component not found".to_string();
+            };
         format!(
             "{}<br>{}{}",
             if factory.recipe.is_some() {

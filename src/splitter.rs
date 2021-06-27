@@ -1,6 +1,5 @@
-use super::{
-    burner::Burner,
-    structure::{BoundingBox, ItemResponse, ItemResponseResult, Size, Structure},
+use super::structure::{
+    BoundingBox, ItemResponse, ItemResponseResult, Size, Structure, StructureComponents,
 };
 use super::{DropItem, FactorishState, Position, Rotation, TILE_SIZE};
 use serde::{Deserialize, Serialize};
@@ -72,9 +71,7 @@ impl Structure for Splitter {
 
     fn draw(
         &self,
-        _burner: Option<&Burner>,
-        _energy: Option<&super::structure::Energy>,
-        _factory: Option<&super::factory::Factory>,
+        _components: &StructureComponents,
         state: &FactorishState,
         context: &CanvasRenderingContext2d,
         depth: i32,

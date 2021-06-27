@@ -2,7 +2,7 @@ use super::{
     burner::Burner,
     draw_direction_arrow,
     items::{render_drop_item, ItemType},
-    structure::{DynIterMut, Structure, StructureBundle},
+    structure::{DynIterMut, Structure, StructureBundle, StructureComponents},
     DropItem, FactorishState, FrameProcResult, Inventory, InventoryTrait, Position, Rotation,
 };
 use serde::{Deserialize, Serialize};
@@ -53,9 +53,7 @@ impl Structure for Inserter {
 
     fn draw(
         &self,
-        _burner: Option<&Burner>,
-        _energy: Option<&super::structure::Energy>,
-        _factory: Option<&super::factory::Factory>,
+        _components: &StructureComponents,
         state: &FactorishState,
         context: &CanvasRenderingContext2d,
         depth: i32,

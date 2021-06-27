@@ -1,6 +1,6 @@
 use super::{
     burner::Burner,
-    structure::{DynIterMut, Structure, StructureBundle},
+    structure::{DynIterMut, Structure, StructureBundle, StructureComponents},
 };
 use super::{FactorishState, FrameProcResult, Position};
 use serde::{Deserialize, Serialize};
@@ -35,9 +35,7 @@ impl Structure for ElectPole {
 
     fn draw(
         &self,
-        _burner: Option<&Burner>,
-        _energy: Option<&super::structure::Energy>,
-        _factory: Option<&super::factory::Factory>,
+        _components: &StructureComponents,
         state: &FactorishState,
         context: &CanvasRenderingContext2d,
         depth: i32,

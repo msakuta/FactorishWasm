@@ -2,7 +2,7 @@ use super::{
     burner::Burner,
     pipe::Pipe,
     serialize_impl,
-    structure::{DynIterMut, Structure, StructureBundle},
+    structure::{DynIterMut, Structure, StructureBundle, StructureComponents},
     water_well::{FluidBox, FluidType},
     FactorishState, FrameProcResult, Position, Recipe,
 };
@@ -68,9 +68,7 @@ impl Structure for SteamEngine {
 
     fn draw(
         &self,
-        _burner: Option<&Burner>,
-        _energy: Option<&super::structure::Energy>,
-        _factory: Option<&super::factory::Factory>,
+        _components: &StructureComponents,
         state: &FactorishState,
         context: &CanvasRenderingContext2d,
         depth: i32,
@@ -108,13 +106,7 @@ impl Structure for SteamEngine {
         Ok(())
     }
 
-    fn desc(
-        &self,
-        _burner: Option<&Burner>,
-        _energy: Option<&super::structure::Energy>,
-        _factory: Option<&super::factory::Factory>,
-        _state: &FactorishState,
-    ) -> String {
+    fn desc(&self, _components: &StructureComponents, _state: &FactorishState) -> String {
         if self.recipe.is_some() {
             // Progress bar
             format!("{}{}{}{}{}Input fluid: {}",

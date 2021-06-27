@@ -1,6 +1,5 @@
 use super::{
-    burner::Burner,
-    structure::{ItemResponse, ItemResponseResult, Structure},
+    structure::{ItemResponse, ItemResponseResult, Structure, StructureComponents},
     DropItem, FactorishState, Position, Rotation, TILE_SIZE,
 };
 use serde::{Deserialize, Serialize};
@@ -33,9 +32,7 @@ impl Structure for TransportBelt {
 
     fn draw(
         &self,
-        _burner: Option<&Burner>,
-        _energy: Option<&super::structure::Energy>,
-        _factory: Option<&super::factory::Factory>,
+        _components: &StructureComponents,
         state: &FactorishState,
         context: &CanvasRenderingContext2d,
         depth: i32,

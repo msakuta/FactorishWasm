@@ -1,7 +1,7 @@
 use super::{
     burner::Burner,
     pipe::Pipe,
-    structure::{DynIterMut, Structure, StructureBundle},
+    structure::{DynIterMut, Structure, StructureBundle, StructureComponents},
     FactorishState, FrameProcResult, Position,
 };
 use serde::{Deserialize, Serialize};
@@ -157,9 +157,7 @@ impl Structure for WaterWell {
 
     fn draw(
         &self,
-        _burner: Option<&Burner>,
-        _energy: Option<&super::structure::Energy>,
-        _factory: Option<&super::factory::Factory>,
+        _components: &StructureComponents,
         state: &FactorishState,
         context: &CanvasRenderingContext2d,
         depth: i32,
@@ -180,13 +178,7 @@ impl Structure for WaterWell {
         Ok(())
     }
 
-    fn desc(
-        &self,
-        _burner: Option<&Burner>,
-        _energy: Option<&super::structure::Energy>,
-        _factory: Option<&super::factory::Factory>,
-        _state: &FactorishState,
-    ) -> String {
+    fn desc(&self, _components: &StructureComponents, _state: &FactorishState) -> String {
         format!(
             "{}<br>{}",
             self.output_fluid_box.desc(),

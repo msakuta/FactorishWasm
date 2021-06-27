@@ -3,7 +3,7 @@ use super::{
     factory::Factory,
     items::get_item_image_url,
     serialize_impl,
-    structure::{DynIterMut, Energy, Structure, StructureBundle},
+    structure::{DynIterMut, Energy, Structure, StructureBundle, StructureComponents},
     FactorishState, FrameProcResult, InventoryTrait, ItemType, Position, PowerWire, Recipe,
     TILE_SIZE,
 };
@@ -53,6 +53,7 @@ impl Assembler {
             Box::new(Assembler {
                 position: *position,
             }),
+            Some(*position),
             None,
             Some(Energy {
                 value: 0.,
@@ -126,9 +127,7 @@ impl Structure for Assembler {
 
     fn draw(
         &self,
-        _burner: Option<&Burner>,
-        energy: Option<&Energy>,
-        factory: Option<&Factory>,
+        components: &StructureComponents,
         state: &FactorishState,
         context: &CanvasRenderingContext2d,
         depth: i32,
@@ -141,7 +140,9 @@ impl Structure for Assembler {
             );
             match state.image_assembler.as_ref() {
                 Some(img) => {
-                    let sx = if let Some((energy, factory)) = energy.zip(factory) {
+                    let sx = if let Some((energy, factory)) =
+                        components.energy.as_ref().zip(components.factory.as_ref())
+                    {
                         if factory.progress.is_some() && 0. < energy.value {
                             ((((state.sim_time * 5.) as isize) % 4) * 32) as f64
                         } else {
@@ -173,7 +174,7 @@ impl Structure for Assembler {
                 recipe: Some(_recipe),
                 ..
             },
-        )) = energy.zip(factory)
+        )) = components.energy.as_ref().zip(components.factory.as_ref())
         {
             if !is_toolbar && energy.value == 0. && state.sim_time % 1. < 0.5 {
                 if let Some(img) = state.image_electricity_alarm.as_ref() {
@@ -188,18 +189,13 @@ impl Structure for Assembler {
         Ok(())
     }
 
-    fn desc(
-        &self,
-        _burner: Option<&Burner>,
-        energy: Option<&super::structure::Energy>,
-        factory: Option<&super::factory::Factory>,
-        _state: &FactorishState,
-    ) -> String {
-        let (energy, factory) = if let Some(bundle) = energy.zip(factory) {
-            bundle
-        } else {
-            return "Energy or Factory component not found".to_string();
-        };
+    fn desc(&self, components: &StructureComponents, _state: &FactorishState) -> String {
+        let (energy, factory) =
+            if let Some(bundle) = components.energy.as_ref().zip(components.factory.as_ref()) {
+                bundle
+            } else {
+                return "Energy or Factory component not found".to_string();
+            };
         format!(
             "{}<br>{}{}",
             if let Some(recipe) = &factory.recipe {
