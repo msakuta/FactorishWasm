@@ -369,6 +369,252 @@ impl Default for StructureComponents {
     }
 }
 
+#[derive(Debug, Copy, Clone)]
+pub(crate) struct StructureId(u32, u32);
+
+pub type VecStorage<T> = Vec<Option<T>>;
+pub struct DenseVecStorage<T> {
+    indices: Vec<usize>,
+    storage: Vec<Option<T>>,
+}
+
+impl<T> DenseVecStorage<T> {
+    fn new(size: usize) -> Self {
+        Self {
+            indices: vec![0; size],
+            storage: vec![],
+        }
+    }
+
+    fn add(&mut self, id: StructureId, component: T) {
+        self.indices[id.0 as usize] = self.storage.len();
+        self.storage.push(Some(component));
+    }
+
+    fn remove(&mut self, id: StructureId) {
+        let storage_idx = self.indices[id.0 as usize];
+        if self.storage.len() <= storage_idx {
+            return;
+        }
+        self.storage[storage_idx] = None;
+    }
+
+    fn clear(&mut self) {
+        self.indices.iter_mut().for_each(|i| *i = 0);
+        self.storage.clear();
+    }
+
+    fn get(&self, idx: u32) -> Option<&T> {
+        let storage_idx = self.indices[idx as usize];
+        if self.storage.len() <= storage_idx {
+            return None;
+        }
+        self.storage[storage_idx].as_ref()
+    }
+
+    fn get_mut(&mut self, idx: u32) -> Option<&mut T> {
+        let storage_idx = self.indices[idx as usize];
+        if self.storage.len() <= storage_idx {
+            return None;
+        }
+        self.storage[storage_idx].as_mut()
+    }
+}
+
+impl<T> Default for DenseVecStorage<T> {
+    fn default() -> Self {
+        Self {
+            indices: vec![],
+            storage: vec![],
+        }
+    }
+}
+
+pub(crate) struct StructureStorage {
+    size: usize,
+    pub alive: Vec<bool>,
+    pub generation: Vec<u32>,
+    pub dynamic: Vec<Option<Box<dyn Structure>>>,
+    pub position: VecStorage<Position>,
+    pub rotation: VecStorage<Rotation>,
+    pub burner: DenseVecStorage<Burner>,
+    pub energy: DenseVecStorage<Energy>,
+    pub factory: DenseVecStorage<Factory>,
+}
+
+impl StructureStorage {
+    pub fn new(size: usize) -> Self {
+        Self {
+            size,
+            alive: vec![false; size],
+            generation: vec![0; size],
+            // Can't use vec! macro to None-initialize since it requires Clone trait
+            dynamic: (0..size).map(|_| None).collect(),
+            position: vec![None; size],
+            rotation: vec![None; size],
+            burner: DenseVecStorage::new(size),
+            energy: DenseVecStorage::new(size),
+            factory: DenseVecStorage::new(size),
+        }
+    }
+
+    pub fn from_vec(vec: Vec<StructureBundle>) -> Self {
+        let mut ret = Self::new(64);
+        for s in vec {
+            ret.add(s);
+        }
+        ret
+    }
+
+    pub fn add(&mut self, bundle: StructureBundle) {
+        if let Some((idx, b)) = self.alive.iter_mut().enumerate().find(|b| !*b.1) {
+            *b = true;
+            self.generation[idx] += 1;
+            let id = StructureId(idx as u32, self.generation[idx]);
+            self.dynamic[idx] = Some(bundle.dynamic);
+            self.position[idx] = bundle.components.position;
+            self.rotation[idx] = bundle.components.rotation;
+            if let Some(burner) = bundle.components.burner {
+                self.burner.add(id, burner);
+            }
+            if let Some(energy) = bundle.components.energy {
+                self.energy.add(id, energy);
+            }
+            if let Some(factory) = bundle.components.factory {
+                self.factory.add(id, factory);
+            }
+        }
+    }
+
+    pub fn iter(&self) -> StructureIterator {
+        StructureIterator {
+            storage: &self,
+            idx: 0,
+        }
+    }
+
+    pub fn get_mut(&mut self, idx: u32) -> Option<StructureMut> {
+        if (idx as usize) < self.alive.len() && self.alive[idx as usize] {
+            Some(StructureMut {
+                dynamic: self.dynamic[idx as usize].unwrap().as_mut(),
+                components: ComponentsMut {
+                    position: self.position[idx as usize].as_mut(),
+                    rotation: self.rotation[idx as usize].as_mut(),
+                    burner: self.burner.get_mut(idx),
+                    energy: self.energy.get_mut(idx),
+                    factory: self.factory.get_mut(idx),
+                }
+            })
+        } else {
+            None
+        }
+    }
+
+    pub fn clear(&mut self) {
+        self.alive.iter_mut().for_each(|b| *b = false);
+        self.dynamic.iter_mut().for_each(|s| *s = None);
+        self.position.iter_mut().for_each(|p| *p = None);
+        self.rotation.iter_mut().for_each(|p| *p = None);
+        self.burner.clear();
+        self.energy.clear();
+        self.factory.clear();
+    }
+}
+
+impl Default for StructureStorage {
+    fn default() -> Self {
+        StructureStorage {
+            size: 0,
+            alive: vec![],
+            generation: vec![],
+            dynamic: vec![],
+            position: vec![],
+            rotation: vec![],
+            burner: DenseVecStorage::default(),
+            energy: DenseVecStorage::default(),
+            factory: DenseVecStorage::default(),
+        }
+    }
+}
+
+impl<'a> IntoIterator for &'a StructureStorage {
+    type Item = StructureRef<'a>;
+    type IntoIter = StructureIterator<'a>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        StructureIterator {
+            storage: self,
+            idx: 0,
+        }
+    }
+}
+
+pub(crate) struct ComponentsMut<'a> {
+    pub position: Option<&'a mut Position>,
+    pub rotation: Option<&'a mut Rotation>,
+    pub burner: Option<&'a mut Burner>,
+    pub energy: Option<&'a mut Energy>,
+    pub factory: Option<&'a mut Factory>,
+}
+
+pub(crate) struct StructureMut<'a> {
+    pub dynamic: &'a mut dyn Structure,
+    pub components: ComponentsMut<'a>,
+}
+
+impl<'a> StructureMut<'a> {
+    pub(crate) fn inventory_mut(&mut self, is_input: bool) -> Option<&mut Inventory> {
+        if let Some(inventory) = self.dynamic.inventory_mut(is_input) {
+            return Some(inventory);
+        } else {
+            self.components
+                .factory
+                .as_mut()
+                .map(|factory| factory.inventory_mut(is_input))?
+        }
+    }
+}
+
+pub(crate) struct ComponentsRef<'a> {
+    pub position: Option<&'a Position>,
+    pub rotation: Option<&'a Rotation>,
+    pub burner: Option<&'a Burner>,
+    pub energy: Option<&'a Energy>,
+    pub factory: Option<&'a Factory>,
+}
+
+pub(crate) struct StructureRef<'a> {
+    pub dynamic: &'a dyn Structure,
+    pub components: ComponentsRef<'a>,
+}
+
+pub(crate) struct StructureIterator<'a> {
+    storage: &'a StructureStorage,
+    idx: u32,
+}
+
+impl<'a> Iterator for StructureIterator<'a> {
+    type Item = StructureRef<'a>;
+
+    fn next(&mut self) -> Option<StructureRef<'a>> {
+        while !self.storage.alive[self.idx as usize] {
+            if self.storage.size <= self.idx as usize {
+                return None;
+            }
+        }
+        Some(StructureRef {
+            dynamic: self.storage.dynamic[self.idx as usize].unwrap().as_ref(),
+            components: ComponentsRef {
+                position: self.storage.position[self.idx as usize].as_ref(),
+                rotation: self.storage.rotation[self.idx as usize].as_ref(),
+                burner: self.storage.burner.get(self.idx),
+                energy: self.storage.energy.get(self.idx),
+                factory: self.storage.factory.get(self.idx),
+            }
+        })
+    }
+}
+
 pub(crate) struct StructureBundle {
     pub dynamic: Box<dyn Structure>,
     pub components: StructureComponents,

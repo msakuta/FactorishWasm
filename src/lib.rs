@@ -85,7 +85,7 @@ use splitter::Splitter;
 use steam_engine::SteamEngine;
 use structure::{
     FrameProcResult, ItemResponse, Position, Rotation, Structure, StructureBundle,
-    StructureComponents,
+    StructureComponents, StructureStorage, StructureId,
 };
 use transport_belt::TransportBelt;
 use water_well::{FluidType, WaterWell};
@@ -488,7 +488,7 @@ pub struct FactorishState {
     viewport_y: f64,
     view_scale: f64,
     board: Vec<Cell>,
-    structures: Vec<StructureBundle>,
+    structures: StructureStorage,
     selected_structure_inventory: Option<Position>,
     drop_items: Vec<DropItem>,
     serial_no: u32,
@@ -688,7 +688,10 @@ impl FactorishState {
                     None,
                     None,
                 ),
-            ],
+            ].into_iter().fold(StructureStorage::new(32), |ss, s| {
+                ss.add(s);
+                ss
+            }),
             selected_structure_inventory: None,
             ore_harvesting: None,
             drop_items: vec![],
@@ -960,7 +963,7 @@ impl FactorishState {
             .map_err(|e| js_str!("power_wires deserialization error: {}", e))?;
         }
 
-        self.structures = structures;
+        self.structures = StructureStorage::from_vec(structures);
 
         self.drop_items = serde_json::from_value(
             json.get_mut("items")
@@ -1719,7 +1722,7 @@ impl FactorishState {
         if let Some(idx) = self.find_structure_tile_idx(&[pos.x, pos.y]) {
             let structure = self
                 .structures
-                .get_mut(idx)
+                .get_mut(idx as u32)
                 .ok_or_else(|| js_str!("structure out of bounds"))?;
             match inventory_type {
                 InventoryType::Burner => {
