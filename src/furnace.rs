@@ -9,6 +9,7 @@ use super::{
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 use web_sys::CanvasRenderingContext2d;
+use specs::{World, WorldExt, Builder, Entity};
 
 const FUEL_CAPACITY: usize = 10;
 
@@ -16,21 +17,20 @@ const FUEL_CAPACITY: usize = 10;
 pub(crate) struct Furnace {}
 
 impl Furnace {
-    pub(crate) fn new(position: &Position) -> StructureBundle {
-        StructureBundle::new(
-            Box::new(Furnace {}),
-            Some(*position),
-            None,
-            Some(Burner {
+    pub(crate) fn new(world: &World, position: &Position) -> Entity {
+        world.create_entity()
+            .with(Box::new(Furnace {}) as Box<dyn Structure + Send + Sync>)
+            .with(*position)
+            .with(Burner {
                 inventory: Inventory::new(),
                 capacity: FUEL_CAPACITY,
-            }),
-            Some(Energy {
+            })
+            .with(Energy {
                 value: 0.,
                 max: 100.,
-            }),
-            Some(Factory::new()),
-        )
+            })
+            .with(Factory::new())
+            .build()
     }
 }
 

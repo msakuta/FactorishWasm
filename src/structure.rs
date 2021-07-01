@@ -6,6 +6,7 @@ use rotate_enum::RotateEnum;
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 use web_sys::CanvasRenderingContext2d;
+use specs::{Component, Entities, Entity, ReadStorage, System, VecStorage, DenseVecStorage, WriteStorage};
 
 #[macro_export]
 macro_rules! serialize_impl {
@@ -331,21 +332,27 @@ pub(crate) trait Structure {
     fn js_serialize(&self) -> serde_json::Result<serde_json::Value>;
 }
 
+
+
 #[derive(Serialize, Deserialize)]
 pub(crate) struct Energy {
     pub value: f64,
     pub max: f64,
 }
 
-pub(crate) struct StructureComponents {
-    pub position: Option<Position>,
-    pub rotation: Option<Rotation>,
-    pub burner: Option<Burner>,
-    pub energy: Option<Energy>,
-    pub factory: Option<Factory>,
+impl Component for Energy {
+    type Storage = VecStorage<Self>;
 }
 
-impl StructureComponents {
+pub(crate) struct StructureComponents<'a> {
+    pub position: Option<Position>,
+    pub rotation: Option<Rotation>,
+    pub burner: Option<&'a mut Burner>,
+    pub energy: Option<&'a mut Energy>,
+    pub factory: Option<&'a mut Factory>,
+}
+
+impl<'a> StructureComponents<'a> {
     pub fn new_with_position_and_rotation(position: Position, rotation: Rotation) -> Self {
         Self {
             position: Some(position),
@@ -357,7 +364,7 @@ impl StructureComponents {
     }
 }
 
-impl Default for StructureComponents {
+impl<'a> Default for StructureComponents<'a> {
     fn default() -> Self {
         Self {
             position: None,
@@ -369,19 +376,19 @@ impl Default for StructureComponents {
     }
 }
 
-pub(crate) struct StructureBundle {
-    pub dynamic: Box<dyn Structure>,
-    pub components: StructureComponents,
+pub(crate) struct StructureBundle<'a> {
+    pub dynamic: Box<dyn Structure + Send + Sync>,
+    pub components: StructureComponents<'a>,
 }
 
-impl StructureBundle {
+impl<'a> StructureBundle<'a> {
     pub(crate) fn new(
-        dynamic: Box<dyn Structure>,
+        dynamic: Box<dyn Structure + Send + Sync>,
         position: Option<Position>,
         rotation: Option<Rotation>,
-        burner: Option<Burner>,
-        energy: Option<Energy>,
-        factory: Option<Factory>,
+        burner: Option<&'a mut Burner>,
+        energy: Option<&'a mut Energy>,
+        factory: Option<&'a mut Factory>,
     ) -> Self {
         Self {
             dynamic,

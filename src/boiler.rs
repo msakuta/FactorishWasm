@@ -9,6 +9,7 @@ use super::{
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 use web_sys::CanvasRenderingContext2d;
+use specs::{World, WorldExt, Builder, Entity};
 
 use std::collections::HashMap;
 
@@ -23,9 +24,9 @@ pub(crate) struct Boiler {
 }
 
 impl Boiler {
-    pub(crate) fn new(position: &Position) -> StructureBundle {
-        StructureBundle {
-            dynamic: Box::new(Boiler {
+    pub(crate) fn new(world: &World, position: &Position) -> Entity {
+        world.create_entity()
+            .with(Box::new(Boiler {
                 progress: None,
                 recipe: Some(Recipe {
                     input: hash_map!(ItemType::CoalOre => 1usize),
@@ -37,21 +38,17 @@ impl Boiler {
                 }),
                 input_fluid_box: FluidBox::new(true, false, [false; 4]),
                 output_fluid_box: FluidBox::new(false, true, [false; 4]),
-            }),
-            components: StructureComponents {
-                position: Some(*position),
-                rotation: None,
-                burner: Some(Burner {
+            }) as Box<dyn Structure + Send + Sync>)
+            .with(*position)
+            .with(Burner {
                     inventory: Inventory::new(),
                     capacity: FUEL_CAPACITY,
-                }),
-                energy: Some(Energy {
+                })
+            .with(Energy {
                     value: 0.,
                     max: 100.,
-                }),
-                factory: None,
-            },
-        }
+                })
+            .build()
     }
 
     const FLUID_PER_PROGRESS: f64 = 100.;

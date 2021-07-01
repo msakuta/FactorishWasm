@@ -7,6 +7,7 @@ use super::{
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 use web_sys::CanvasRenderingContext2d;
+use specs::{World, WorldExt, Builder, Entity};
 
 #[derive(Serialize, Deserialize)]
 pub(crate) struct Inserter {
@@ -18,21 +19,15 @@ pub(crate) struct Inserter {
 const INSERTER_TIME: f64 = 20.;
 
 impl Inserter {
-    pub(crate) fn new(position: Position, rotation: Rotation) -> StructureBundle {
-        StructureBundle {
-            dynamic: Box::new(Inserter {
+    pub(crate) fn new(world: &mut World, position: Position, rotation: Rotation) -> Entity {
+        world.create_entity().with(Box::new(Inserter {
                 rotation,
                 cooldown: 0.,
                 hold_item: None,
-            }),
-            components: StructureComponents {
-                position: Some(position),
-                rotation: Some(rotation),
-                burner: None,
-                energy: None,
-                factory: None,
-            },
-        }
+            }) as Box<dyn Structure + Send + Sync>)
+            .with(position)
+            .with(rotation)
+            .build()
     }
 
     fn get_arm_angles(&self) -> (f64, f64) {
@@ -145,10 +140,10 @@ impl Structure for Inserter {
         let input_position = position.add(self.rotation.delta_inv());
         let output_position = position.add(self.rotation.delta());
 
-        fn find_structure_at(
-            structures: &mut dyn DynIterMut<Item = StructureBundle>,
+        fn find_structure_at<'a>(
+            structures: &'a mut dyn DynIterMut<Item = StructureBundle>,
             position: Position,
-        ) -> Option<&mut StructureBundle> {
+        ) -> Option<&'a mut StructureBundle<'a>> {
             structures
                 .dyn_iter_mut()
                 .find(|structure| structure.components.position == Some(position))

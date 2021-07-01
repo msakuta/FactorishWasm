@@ -6,6 +6,7 @@ use super::{DropItem, FactorishState, Position, Rotation, TILE_SIZE};
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 use web_sys::CanvasRenderingContext2d;
+use specs::{World, WorldExt, Entity, Builder};
 
 #[derive(Serialize, Deserialize)]
 pub(crate) struct Splitter {
@@ -13,11 +14,12 @@ pub(crate) struct Splitter {
 }
 
 impl Splitter {
-    pub(crate) fn new(position: Position, rotation: Rotation) -> StructureBundle {
-        StructureBundle {
-            dynamic: Box::new(Splitter { direction: 0 }),
-            components: StructureComponents::new_with_position_and_rotation(position, rotation),
-        }
+    pub(crate) fn new(world: &World, position: Position, rotation: Rotation) -> Entity {
+        world.create_entity()
+            .with(Box::new(Splitter { direction: 0 }) as Box<dyn Structure + Send + Sync>)
+            .with(position)
+            .with(rotation)
+            .build()
     }
 }
 

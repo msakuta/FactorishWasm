@@ -5,8 +5,10 @@ use super::{
 };
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
+use specs::{Component, DenseVecStorage, System, ReadStorage, WriteStorage};
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Component)]
+#[storage(DenseVecStorage)]
 pub(crate) struct Factory {
     pub input_inventory: Inventory,
     pub output_inventory: Inventory,
@@ -26,7 +28,7 @@ impl Factory {
 
     pub fn frame_proc(
         &mut self,
-        position: Option<&mut Position>,
+        position: Option<&Position>,
         energy: Option<&mut Energy>,
     ) -> Result<FrameProcResult, ()> {
         let position = position.ok_or(())?;
@@ -136,5 +138,22 @@ impl Factory {
             }
         }
         ret
+    }
+}
+
+pub(crate) struct FactorySystem {
+    pub events: Vec<FrameProcResult>,
+}
+
+impl<'a> System<'a> for FactorySystem {
+    type SystemData = (ReadStorage<'a, Position>, WriteStorage<'a, Factory>, WriteStorage<'a, Energy>);
+
+    fn run(&mut self, (position, mut factory, mut energy): Self::SystemData) {
+        use specs::Join;
+        for (position, factory, energy) in (&position, &mut factory, &mut energy).join() {
+            if let Ok(res) = factory.frame_proc(Some(position), Some(energy)) {
+                self.events.push(res);
+            }
+        }
     }
 }

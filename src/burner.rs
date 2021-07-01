@@ -6,8 +6,10 @@ use super::{
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::JsValue;
 use web_sys::CanvasRenderingContext2d;
+use specs::{Component, DenseVecStorage, System, ReadStorage, WriteStorage};
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Component)]
+#[storage(DenseVecStorage)]
 pub(crate) struct Burner {
     pub inventory: Inventory,
     pub capacity: usize,
@@ -90,5 +92,28 @@ impl Burner {
 
     pub fn destroy_inventory(&mut self) -> Inventory {
         std::mem::take(&mut self.inventory)
+    }
+}
+
+pub(crate) struct BurnerSystem {
+    pub events: Vec<FrameProcResult>,
+}
+
+impl<'a> System<'a> for BurnerSystem {
+    type SystemData = (ReadStorage<'a, Position>, WriteStorage<'a, Burner>, WriteStorage<'a, Energy>);
+
+    fn run(&mut self, (position, mut burner, mut energy): Self::SystemData) {
+        use specs::Join;
+        for (position, burner, energy) in (&position, &mut burner, &mut energy).join() {
+            // console_log!("burner {:?}", position);
+            if let Some(amount) = burner.inventory.get_mut(&ItemType::CoalOre) {
+                if 0 < *amount && energy.value < 1e-3 {
+                    burner.inventory.remove_item(&ItemType::CoalOre);
+                    energy.value += COAL_POWER;
+                    energy.max = energy.max.max(energy.value);
+                    self.events.push(FrameProcResult::InventoryChanged(*position));
+                }
+            }
+        }
     }
 }

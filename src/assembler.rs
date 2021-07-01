@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use wasm_bindgen::prelude::*;
 use web_sys::CanvasRenderingContext2d;
+use specs::{World, WorldExt, Builder, Entity};
 
 fn generate_item_image(item_image: &str, icon_size: bool, count: usize) -> String {
     let size = 32;
@@ -45,18 +46,16 @@ fn _recipe_html(state: &FactorishState, recipe: &Recipe) -> String {
 pub(crate) struct Assembler {}
 
 impl Assembler {
-    pub(crate) fn new(position: &Position) -> StructureBundle {
-        StructureBundle::new(
-            Box::new(Assembler {}),
-            Some(*position),
-            None,
-            None,
-            Some(Energy {
+    pub(crate) fn new(world: &World, position: &Position) -> Entity {
+        world.create_entity()
+            .with(*position)
+            .with(Box::new(Assembler {}) as Box<dyn Structure + Send + Sync>)
+            .with(Energy {
                 value: 0.,
                 max: 100.,
-            }),
-            Some(Factory::new()),
-        )
+            })
+            .with(Factory::new())
+            .build()
     }
 
     /// Find all power sources that are connected to this structure through wires.

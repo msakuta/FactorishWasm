@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use wasm_bindgen::prelude::*;
 use web_sys::CanvasRenderingContext2d;
+use specs::{World, WorldExt, Entity, Builder};
 
 const FUEL_CAPACITY: usize = 10;
 
@@ -20,24 +21,23 @@ pub(crate) struct OreMine {
 }
 
 impl OreMine {
-    pub(crate) fn new(x: i32, y: i32, rotation: Rotation) -> StructureBundle {
-        StructureBundle::new(
-            Box::new(OreMine {
+    pub(crate) fn new(world: &World, x: i32, y: i32, rotation: Rotation) -> Entity {
+        world.create_entity()
+            .with(Box::new(OreMine {
                 progress: 0.,
                 recipe: None,
-            }),
-            Some(Position { x, y }),
-            Some(rotation),
-            Some(Burner {
+            }) as Box<dyn Structure + Send + Sync>)
+            .with(Position { x, y })
+            .with(rotation)
+            .with(Burner {
                 inventory: Inventory::new(),
                 capacity: FUEL_CAPACITY,
-            }),
-            Some(Energy {
+            })
+            .with(Energy {
                 value: 25.,
                 max: 100.,
-            }),
-            None,
-        )
+            })
+            .build()
     }
 }
 
