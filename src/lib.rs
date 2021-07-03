@@ -1189,7 +1189,8 @@ impl FactorishState {
         let mut raw_events = vec![];
 
         use specs::Join;
-        for (structure, position, rotation, burner, energy, factory) in (
+        for (entity, structure, position, rotation, burner, energy, factory) in (
+            &world.entities(),
             &mut world.write_component::<StructureBoxed>(),
             &world.read_component::<Position>(),
             &world.read_component::<Rotation>(),
@@ -1206,7 +1207,7 @@ impl FactorishState {
                 energy,
                 factory,
             };
-            if let Ok(event) = structure.frame_proc(&mut components, self) {
+            if let Ok(event) = structure.frame_proc(entity, &mut components, self) {
                 if let FrameProcResult::None = event {
                 } else {
                     raw_events.push(event);
@@ -1217,7 +1218,7 @@ impl FactorishState {
         self.world = world;
 
         for event in raw_events {
-            if let FrameProcResult::CreateItem(item) = event {
+            if let FrameProcResult::CreateItem { item, dropper } = event {
                 let c = item.x / TILE_SIZE_I;
                 let r = item.y / TILE_SIZE_I;
                 if 0 <= c && c < self.width as i32 && 0 <= r && r < self.height as i32 {
@@ -1230,6 +1231,11 @@ impl FactorishState {
                     if self.hit_check(item.x, item.y, Some(item.id)) {
                         continue;
                     }
+                    self.world
+                        .write_component::<StructureBoxed>()
+                        .get_mut(dropper)
+                        .and_then(|dynamic| dynamic.inventory_mut(false))
+                        .map(|inventory| inventory.remove_item(&item.type_));
                     self.drop_items.push(item);
                 }
             } else {
@@ -1257,59 +1263,34 @@ impl FactorishState {
         for i in 0..self.drop_items.len() {
             let item = &self.drop_items[i];
             if 0 < item.x
-                && item.x < self.width as i32 * tilesize
+                && item.x < self.width as i32 * TILE_SIZE_I
                 && 0 < item.y
-                && item.y < self.height as i32 * tilesize
+                && item.y < self.height as i32 * TILE_SIZE_I
             {
-                struct ItemResponseSystem<'b> {
-                    state: &'b FactorishState,
-                    drop_item: &'b DropItem,
-                    events: Option<structure::ItemResponseResult>,
-                }
+                use specs::Join;
 
-                impl<'a, 'b> System<'a> for ItemResponseSystem<'b> {
-                    type SystemData = (
-                        Entities<'a>,
-                        WriteStorage<'a, Box<dyn Structure + Send + Sync>>,
-                        ReadStorage<'a, Position>,
-                    );
-
-                    fn run(&mut self, (entities, mut dynamic, position): Self::SystemData) {
-                        use specs::Join;
-
-                        for (entity, dynamic, position) in
-                            (&entities, &mut dynamic, &position).join()
-                        {
-                            let mut components = StructureComponents::default();
-                            components.position = Some(*position);
-                            if dynamic.contains(
-                                entity,
-                                &Position {
-                                    x: self.drop_item.x,
-                                    y: self.drop_item.y,
-                                },
-                                self.state,
-                            ) {
-                                if let Ok(res) =
-                                    dynamic.item_response(&mut components, self.drop_item)
-                                {
-                                    self.events = Some(res);
-                                    break;
-                                }
-                            }
-                        }
+                let mut item_res = None;
+                for (entity, dynamic, position) in (
+                    &self.world.entities(),
+                    &mut self.world.write_component::<StructureBoxed>(),
+                    &self.world.read_component::<Position>(),
+                )
+                    .join()
+                {
+                    let mut components = StructureComponents::default();
+                    components.position = Some(*position);
+                    if dynamic.contains(
+                        entity,
+                        &Position {
+                            x: item.x / TILE_SIZE_I,
+                            y: item.y / TILE_SIZE_I,
+                        },
+                        self,
+                    ) {
+                        item_res = Some(dynamic.item_response(entity, self, item)?);
+                        break;
                     }
                 }
-
-                let mut item_response_system = ItemResponseSystem {
-                    state: self,
-                    drop_item: item,
-                    events: None,
-                };
-
-                item_response_system.run_now(&self.world);
-
-                use specs::Join;
 
                 let check_movable = |item_position: &Position| -> bool {
                     for (entity, dynamic, position, _) in (
@@ -1348,7 +1329,7 @@ impl FactorishState {
                 //             .item_response(&mut structure.components, item)
                 //             .ok()
                 //     })
-                if let Some((res, event)) = item_response_system.events {
+                if let Some((res, event)) = item_res {
                     match res {
                         ItemResponse::None => {}
                         ItemResponse::Move(moved_x, moved_y) => {

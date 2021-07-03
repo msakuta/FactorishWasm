@@ -156,12 +156,15 @@ impl Structure for Splitter {
 
     fn item_response(
         &mut self,
-        components: &mut StructureComponents,
+        entity: Entity,
+        state: &FactorishState,
         item: &DropItem,
     ) -> Result<ItemResponseResult, JsValue> {
-        let rotation = components
-            .rotation
-            .as_ref()
+        let rotation = state
+            .world
+            .read_component::<Rotation>()
+            .get(entity)
+            .copied()
             .ok_or_else(|| js_str!("Splitter without Rotation component"))?;
         let vx = rotation.delta().0;
         let vy = rotation.delta().1;
@@ -175,8 +178,11 @@ impl Structure for Splitter {
         } else {
             item.y as f64
         };
-        let Position { x: tx, y: ty } = components
-            .position
+        let Position { x: tx, y: ty } = state
+            .world
+            .read_component::<Position>()
+            .get(entity)
+            .copied()
             .ok_or_else(|| js_str!("Splitter without Position component"))?;
         let halftilesize = TILE_SIZE / 2.;
         let mut postdirection = false;

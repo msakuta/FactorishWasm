@@ -140,6 +140,7 @@ impl Structure for OreMine {
 
     fn frame_proc(
         &mut self,
+        entity: Entity,
         components: &mut StructureComponents,
         state: &mut FactorishState,
     ) -> Result<FrameProcResult, ()> {
@@ -270,12 +271,15 @@ impl Structure for OreMine {
                         //     self.recipe = None;
                         // }
                         // }
-                        return Ok(FrameProcResult::CreateItem(DropItem::new(
-                            &mut state.serial_no,
-                            *item.0,
-                            output_position.x,
-                            output_position.y,
-                        )));
+                        return Ok(FrameProcResult::CreateItem {
+                            item: DropItem::new(
+                                &mut state.serial_no,
+                                *item.0,
+                                output_position.x,
+                                output_position.y,
+                            ),
+                            dropper: entity,
+                        });
                     } else {
                         return Err(());
                     }

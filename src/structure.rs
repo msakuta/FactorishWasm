@@ -112,7 +112,7 @@ impl Rotation {
 pub(crate) enum FrameProcResult {
     None,
     InventoryChanged(Position),
-    CreateItem(DropItem),
+    CreateItem { item: DropItem, dropper: Entity },
 }
 
 pub(crate) enum ItemResponse {
@@ -197,6 +197,7 @@ pub(crate) trait Structure {
     }
     fn frame_proc(
         &mut self,
+        _entity: Entity,
         _components: &mut StructureComponents,
         _state: &mut FactorishState,
     ) -> Result<FrameProcResult, ()> {
@@ -219,7 +220,8 @@ pub(crate) trait Structure {
     /// Called every frame for each item that is on this structure.
     fn item_response(
         &mut self,
-        _components: &mut StructureComponents,
+        _entity: Entity,
+        _state: &FactorishState,
         _item: &DropItem,
     ) -> Result<ItemResponseResult, JsValue> {
         Err(js_str!("ItemResponse not implemented"))

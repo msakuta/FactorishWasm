@@ -62,6 +62,7 @@ impl Structure for ElectPole {
 
     fn frame_proc(
         &mut self,
+        _entity: Entity,
         components: &mut StructureComponents,
         _state: &mut FactorishState,
     ) -> Result<FrameProcResult, ()> {

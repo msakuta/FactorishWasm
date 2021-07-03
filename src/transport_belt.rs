@@ -82,12 +82,15 @@ impl Structure for TransportBelt {
 
     fn item_response(
         &mut self,
-        components: &mut StructureComponents,
+        entity: Entity,
+        state: &FactorishState,
         item: &DropItem,
     ) -> Result<ItemResponseResult, JsValue> {
-        let rotation = components
-            .rotation
-            .as_ref()
+        let rotation = state
+            .world
+            .read_component::<Rotation>()
+            .get(entity)
+            .copied()
             .ok_or_else(|| js_str!("TransportBelt without Rotation component"))?;
         let vx = rotation.delta().0;
         let vy = rotation.delta().1;

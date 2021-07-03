@@ -70,7 +70,8 @@ impl Structure for Chest {
 
     fn item_response(
         &mut self,
-        components: &mut StructureComponents,
+        entity: Entity,
+        state: &FactorishState,
         _item: &DropItem,
     ) -> Result<ItemResponseResult, JsValue> {
         if self.inventory.len() < CHEST_CAPACITY {
@@ -78,8 +79,11 @@ impl Structure for Chest {
             Ok((
                 ItemResponse::Consume,
                 Some(FrameProcResult::InventoryChanged(
-                    components
-                        .position
+                    state
+                        .world
+                        .read_component::<Position>()
+                        .get(entity)
+                        .copied()
                         .ok_or_else(|| js_str!("Chest without Position components"))?,
                 )),
             ))
@@ -89,9 +93,10 @@ impl Structure for Chest {
     }
 
     fn input(&mut self, components: &mut StructureComponents, o: &DropItem) -> Result<(), JsValue> {
-        self.item_response(components, o)
-            .map(|_| ())
-            .map_err(|_| JsValue::from_str("ItemResponse failed"))
+        // self.item_response(components, o)
+        //     .map(|_| ())
+        //     .map_err(|_| JsValue::from_str("ItemResponse failed"))
+        Ok(())
     }
 
     /// Chest can put any item

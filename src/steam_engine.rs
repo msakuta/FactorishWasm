@@ -133,6 +133,7 @@ impl Structure for SteamEngine {
 
     fn frame_proc(
         &mut self,
+        _entity: Entity,
         components: &mut StructureComponents,
         state: &mut FactorishState,
     ) -> Result<FrameProcResult, ()> {
