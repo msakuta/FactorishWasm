@@ -1624,15 +1624,13 @@ impl FactorishState {
         let mut harvested_structure = false;
         let mut popup_text = String::new();
         let mut structures_to_delete = vec![];
-        while let Some((entity, position, structure)) = (
+        for (entity, position, structure) in (
             &self.world.entities(),
             &self.world.read_component::<Position>(),
-            &mut self
-                .world
-                .write_component::<Box<dyn Structure + Send + Sync>>(),
+            &mut self.world.write_component::<StructureBoxed>(),
         )
             .join()
-            .find(|(_, entity_position, _)| *entity_position == position)
+            .filter(|(_, entity_position, _)| *entity_position == position)
         {
             // .structures
             // .iter()
@@ -1692,6 +1690,8 @@ impl FactorishState {
         for entity in structures_to_delete {
             self.world.delete_entity(entity);
         }
+
+        self.world.maintain();
 
         let mut harvested_items = false;
         if !harvested_structure && clear_item {
