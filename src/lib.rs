@@ -590,7 +590,7 @@ impl FactorishState {
         tool_belt[3] = Some(ItemType::Furnace);
 
         let mut world = World::new();
-        world.register::<Box<dyn Structure + Send + Sync>>();
+        world.register::<StructureBoxed>();
         world.register::<Position>();
         world.register::<Rotation>();
         world.register::<Size>();
@@ -1559,6 +1559,7 @@ impl FactorishState {
                     let mut rotation_component = self.world.write_component::<Rotation>();
                     if let Some(rotation) = rotation_component.get_mut(entity) {
                         *rotation = rotation.next();
+                        return Ok(true);
                     } else {
                         return Err(RotateErr::NotSupported);
                     }
