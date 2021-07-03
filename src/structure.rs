@@ -239,9 +239,6 @@ pub(crate) trait Structure {
     fn on_construction_self(&mut self, _construct: bool) -> Result<(), JsValue> {
         Ok(())
     }
-    fn movable(&self) -> bool {
-        false
-    }
     fn rotate(&mut self, _components: &mut StructureComponents) -> Result<(), ()> {
         Err(())
     }
@@ -383,9 +380,11 @@ pub(crate) struct Movable;
 pub(crate) struct StructureComponents<'a> {
     pub position: Option<Position>,
     pub rotation: Option<Rotation>,
+    pub size: Option<Size>,
     pub burner: Option<&'a mut Burner>,
     pub energy: Option<&'a mut Energy>,
     pub factory: Option<&'a mut Factory>,
+    pub movable: bool,
 }
 
 impl<'a> StructureComponents<'a> {
@@ -393,9 +392,11 @@ impl<'a> StructureComponents<'a> {
         Self {
             position: Some(position),
             rotation: Some(rotation),
+            size: None,
             burner: None,
             energy: None,
             factory: None,
+            movable: false,
         }
     }
 }
@@ -405,9 +406,11 @@ impl<'a> Default for StructureComponents<'a> {
         Self {
             position: None,
             rotation: None,
+            size: None,
             burner: None,
             energy: None,
             factory: None,
+            movable: false,
         }
     }
 }
@@ -425,18 +428,22 @@ impl<'a> StructureBundle<'a> {
         dynamic: &'a mut StructureDynamic,
         position: Option<Position>,
         rotation: Option<Rotation>,
+        size: Option<Size>,
         burner: Option<&'a mut Burner>,
         energy: Option<&'a mut Energy>,
         factory: Option<&'a mut Factory>,
+        movable: bool,
     ) -> Self {
         Self {
             dynamic,
             components: StructureComponents {
                 position,
                 rotation,
+                size,
                 burner,
                 energy,
                 factory,
+                movable,
             },
         }
     }

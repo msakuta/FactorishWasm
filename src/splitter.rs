@@ -104,10 +104,6 @@ impl Structure for Splitter {
         ret
     }
 
-    fn movable(&self) -> bool {
-        true
-    }
-
     fn rotate(&mut self, components: &mut StructureComponents) -> Result<(), ()> {
         let rotation = components.rotation.as_mut().ok_or(())?;
         let position = components.position.as_mut().ok_or(())?;

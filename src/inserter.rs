@@ -3,8 +3,8 @@ use super::{
     draw_direction_arrow,
     factory::Factory,
     items::{render_drop_item, ItemType},
-    structure::{Energy, Structure, StructureBoxed, StructureBundle, StructureComponents},
-    FactorishState, FrameProcResult, Inventory, InventoryTrait, Position, Rotation,
+    structure::{Energy, Size, Structure, StructureBoxed, StructureBundle, StructureComponents},
+    FactorishState, FrameProcResult, Inventory, InventoryTrait, Movable, Position, Rotation,
 };
 use serde::{Deserialize, Serialize};
 use specs::{Builder, Entity, World, WorldExt};
@@ -152,20 +152,24 @@ impl Structure for Inserter {
         ) -> bool {
             let mut dynamic = state.world.write_component::<StructureBoxed>();
             let position_components = state.world.read_component::<Position>();
-            let mut rotation = state.world.read_component::<Rotation>();
+            let rotation = state.world.read_component::<Rotation>();
+            let size = state.world.read_component::<Size>();
             let mut burner = state.world.write_component::<Burner>();
             let mut energy = state.world.write_component::<Energy>();
             let mut factory = state.world.write_component::<Factory>();
+            let movable = state.world.read_component::<Movable>();
 
             use specs::Join;
 
             (
                 &mut dynamic,
                 &position_components,
-                (&mut rotation).maybe(),
+                (&rotation).maybe(),
+                (&size).maybe(),
                 (&mut burner).maybe(),
                 (&mut energy).maybe(),
                 (&mut factory).maybe(),
+                (&movable).maybe(),
             )
                 .join()
                 .find(|bundle| *bundle.1 == position)
@@ -175,9 +179,11 @@ impl Structure for Inserter {
                         components: StructureComponents {
                             position: Some(*bundle.1),
                             rotation: bundle.2.copied(),
-                            burner: bundle.3,
-                            energy: bundle.4,
-                            factory: bundle.5,
+                            size: bundle.3.copied(),
+                            burner: bundle.4,
+                            energy: bundle.5,
+                            factory: bundle.6,
+                            movable: bundle.7.is_some(),
                         },
                     })
                 })
@@ -198,7 +204,7 @@ impl Structure for Inserter {
                         //     output_position.x,
                         //     output_position.y
                         // );
-                        if bundle.can_input(&type_) || bundle.dynamic.movable() {
+                        if bundle.can_input(&type_) || bundle.components.movable {
                             // ret = FrameProcResult::InventoryChanged(output_position);
                             self.hold_item = Some(type_);
                             self.cooldown += INSERTER_TIME;

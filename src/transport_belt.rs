@@ -76,10 +76,6 @@ impl Structure for TransportBelt {
         Ok(())
     }
 
-    fn movable(&self) -> bool {
-        true
-    }
-
     fn item_response(
         &mut self,
         entity: Entity,

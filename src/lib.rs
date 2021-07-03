@@ -1200,23 +1200,27 @@ impl FactorishState {
         let mut raw_events = vec![];
 
         use specs::Join;
-        for (entity, structure, position, rotation, burner, energy, factory) in (
+        for (entity, structure, position, rotation, size, burner, energy, factory, movable) in (
             &world.entities(),
             &mut world.write_component::<StructureBoxed>(),
             &world.read_component::<Position>(),
-            &world.read_component::<Rotation>(),
+            (&world.read_component::<Rotation>()).maybe(),
+            (&world.read_component::<Size>()).maybe(),
             (&mut world.write_component::<Burner>()).maybe(),
             (&mut world.write_component::<Energy>()).maybe(),
             (&mut world.write_component::<Factory>()).maybe(),
+            (&world.read_component::<Movable>()).maybe(),
         )
             .join()
         {
             let mut components = StructureComponents {
                 position: Some(*position),
-                rotation: Some(*rotation),
+                rotation: rotation.copied(),
+                size: size.copied(),
                 burner,
                 energy,
                 factory,
+                movable: movable.is_some(),
             };
             if let Ok(event) = structure.frame_proc(entity, &mut components, self) {
                 if let FrameProcResult::None = event {
@@ -2894,25 +2898,27 @@ impl FactorishState {
 
         let draw_structures = |depth| -> Result<(), JsValue> {
             use specs::Join;
-            for (entity, dynamic, position, rotation, burner, energy, factory) in (
+            for (entity, dynamic, position, rotation, size, burner, energy, factory, movable) in (
                 &self.world.entities(),
-                &self
-                    .world
-                    .read_component::<Box<dyn Structure + Send + Sync>>(),
+                &self.world.read_component::<StructureBoxed>(),
                 &self.world.read_component::<Position>(),
                 (&self.world.read_component::<Rotation>()).maybe(),
+                (&self.world.read_component::<Size>()).maybe(),
                 (&mut self.world.write_component::<Burner>()).maybe(),
                 (&mut self.world.write_component::<Energy>()).maybe(),
                 (&mut self.world.write_component::<Factory>()).maybe(),
+                (&self.world.read_component::<Movable>()).maybe(),
             )
                 .join()
             {
                 let components = StructureComponents {
                     position: Some(*position),
                     rotation: rotation.copied(),
+                    size: size.copied(),
                     burner,
                     energy,
                     factory,
+                    movable: movable.is_some(),
                 };
                 dynamic.draw(entity, &components, &self, &context, depth, false)?;
                 if depth == 2 {
