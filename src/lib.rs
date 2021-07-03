@@ -878,7 +878,7 @@ impl FactorishState {
             return js_err!("Save data version is old: {}", version);
         }
 
-        // self.structures.clear();
+        self.world.delete_all();
         self.drop_items.clear();
 
         fn json_get<I: serde_json::value::Index + std::fmt::Display + Copy>(
