@@ -2,7 +2,7 @@ use super::{
     burner::Burner,
     pipe::Pipe,
     serialize_impl,
-    structure::{DynIterMut, Energy, Structure, StructureBundle, StructureComponents},
+    structure::{Energy, Structure, StructureComponents},
     water_well::{FluidBox, FluidType},
     FactorishState, FrameProcResult, Inventory, ItemType, Position, Recipe, TempEnt,
 };

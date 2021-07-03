@@ -3,7 +3,7 @@ use super::{
     factory::Factory,
     items::item_to_str,
     serialize_impl,
-    structure::{Energy, Structure, StructureBundle, StructureComponents},
+    structure::{Energy, Structure, StructureComponents},
     DropItem, FactorishState, Inventory, InventoryTrait, ItemType, Position, Recipe,
 };
 use serde::{Deserialize, Serialize};

@@ -736,65 +736,80 @@ impl FactorishState {
         );
         map.insert("width".to_string(), serde_json::Value::from(self.width));
         map.insert("height".to_string(), serde_json::Value::from(self.height));
-        // map.insert(
-        //     "structures".to_string(),
-        //     serde_json::Value::from(
-        //         self.structures
-        //             .iter()
-        //             .map(|structure| {
-        //                 let mut map = serde_json::Map::new();
-        //                 map.insert(
-        //                     "type".to_string(),
-        //                     serde_json::Value::String(structure.dynamic.name().to_string()),
-        //                 );
-        //                 map.insert(
-        //                     "payload".to_string(),
-        //                     structure
-        //                         .dynamic
-        //                         .js_serialize()
-        //                         .map_err(|e| js_str!("Serialize error: {}", e))?,
-        //                 );
-        //                 if let Some(position) = &structure.components.position {
-        //                     map.insert(
-        //                         "position".to_string(),
-        //                         serde_json::to_value(position)
-        //                             .map_err(|e| js_str!("Position serialize error: {}", e))?,
-        //                     );
-        //                 }
-        //                 if let Some(rotation) = &structure.components.rotation {
-        //                     map.insert(
-        //                         "rotation".to_string(),
-        //                         serde_json::to_value(rotation)
-        //                             .map_err(|e| js_str!("Rotation serialize error: {}", e))?,
-        //                     );
-        //                 }
-        //                 if let Some(burner) = &structure.components.burner {
-        //                     map.insert(
-        //                         "burner".to_string(),
-        //                         burner
-        //                             .js_serialize()
-        //                             .map_err(|e| js_str!("Serialize error: {}", e))?,
-        //                     );
-        //                 }
-        //                 if let Some(energy) = &structure.components.energy {
-        //                     map.insert(
-        //                         "energy".to_string(),
-        //                         serde_json::to_value(energy)
-        //                             .map_err(|e| js_str!("Energy serialize error: {}", e))?,
-        //                     );
-        //                 }
-        //                 if let Some(factory) = &structure.components.factory {
-        //                     map.insert(
-        //                         "factory".to_string(),
-        //                         serde_json::to_value(factory)
-        //                             .map_err(|e| js_str!("Factory serialize error: {}", e))?,
-        //                     );
-        //                 }
-        //                 Ok(serde_json::Value::Object(map))
-        //             })
-        //             .collect::<Result<Vec<serde_json::Value>, JsValue>>()?,
-        //     ),
-        // );
+        map.insert(
+            "structures".to_string(),
+            serde_json::Value::from({
+                use specs::Join;
+                (
+                    &self.world.entities(),
+                    &self.world.read_component::<StructureBoxed>(),
+                    (&self.world.read_component::<Position>()).maybe(),
+                    (&self.world.read_component::<Rotation>()).maybe(),
+                    (&self.world.read_component::<Burner>()).maybe(),
+                    (&self.world.read_component::<Energy>()).maybe(),
+                    (&self.world.read_component::<Factory>()).maybe(),
+                )
+                    .join()
+                    .map(
+                        |(entity, dynamic, position, rotation, burner, energy, factory)| {
+                            let mut map = serde_json::Map::new();
+                            map.insert(
+                                "id".to_string(),
+                                serde_json::to_value(entity.id())
+                                    .map_err(|e| js_str!("Id serialize error: {}", e))?,
+                            );
+                            map.insert(
+                                "type".to_string(),
+                                serde_json::Value::String(dynamic.name().to_string()),
+                            );
+                            map.insert(
+                                "payload".to_string(),
+                                dynamic
+                                    .js_serialize()
+                                    .map_err(|e| js_str!("Serialize error: {}", e))?,
+                            );
+                            if let Some(position) = position {
+                                map.insert(
+                                    "position".to_string(),
+                                    serde_json::to_value(position)
+                                        .map_err(|e| js_str!("Position serialize error: {}", e))?,
+                                );
+                            }
+                            if let Some(rotation) = rotation {
+                                map.insert(
+                                    "rotation".to_string(),
+                                    serde_json::to_value(rotation)
+                                        .map_err(|e| js_str!("Rotation serialize error: {}", e))?,
+                                );
+                            }
+                            if let Some(burner) = burner {
+                                map.insert(
+                                    "burner".to_string(),
+                                    burner
+                                        .js_serialize()
+                                        .map_err(|e| js_str!("Serialize error: {}", e))?,
+                                );
+                            }
+                            if let Some(energy) = energy {
+                                map.insert(
+                                    "energy".to_string(),
+                                    serde_json::to_value(energy)
+                                        .map_err(|e| js_str!("Energy serialize error: {}", e))?,
+                                );
+                            }
+                            if let Some(factory) = factory {
+                                map.insert(
+                                    "factory".to_string(),
+                                    serde_json::to_value(factory)
+                                        .map_err(|e| js_str!("Factory serialize error: {}", e))?,
+                                );
+                            }
+                            Ok(serde_json::Value::Object(map))
+                        },
+                    )
+                    .collect::<Result<Vec<serde_json::Value>, JsValue>>()?
+            }),
+        );
         map.insert(
             "power_wires".to_string(),
             serde_json::to_value(&self.power_wires)
@@ -1409,36 +1424,24 @@ impl FactorishState {
 
     /// Look up a structure at a given tile coordinates
     fn find_structure_tile(&self, tile: &[i32]) -> Option<Entity> {
-        struct FindStructureSystem {
-            position: Position,
-            entity: Option<Entity>,
-        }
+        let position = Position {
+            x: tile[0],
+            y: tile[1],
+        };
 
-        impl<'a> System<'a> for FindStructureSystem {
-            type SystemData = (Entities<'a>, ReadStorage<'a, Position>);
-
-            fn run(&mut self, (entities, position): Self::SystemData) {
-                use specs::Join;
-                for (entity, position) in (&entities, &position).join() {
-                    if *position == self.position {
-                        self.entity = Some(entity);
-                        return;
-                    }
-                }
+        use specs::Join;
+        for (entity, e_position) in (
+            &self.world.entities(),
+            &self.world.read_component::<Position>(),
+        )
+            .join()
+        {
+            if *e_position == position {
+                return Some(entity);
             }
         }
 
-        let mut find_structure_system = FindStructureSystem {
-            position: Position {
-                x: tile[0],
-                y: tile[1],
-            },
-            entity: None,
-        };
-
-        find_structure_system.run_now(&self.world);
-
-        find_structure_system.entity
+        None
         // self.structures.iter().find(|s| {
         //     s.components.position
         //         == Some(Position {
@@ -2003,14 +2006,6 @@ impl FactorishState {
             }
             false
         };
-
-        struct MoveFactoryItemSystem<'b> {
-            inventory_type: InventoryType,
-            to_player: bool,
-            pos: &'b Position,
-            state: &'b mut FactorishState,
-            result: bool,
-        }
 
         Ok(match inventory_type {
             InventoryType::Burner => move_inventory(),

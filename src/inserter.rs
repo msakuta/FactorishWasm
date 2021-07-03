@@ -3,10 +3,8 @@ use super::{
     draw_direction_arrow,
     factory::Factory,
     items::{render_drop_item, ItemType},
-    structure::{
-        DynIterMut, Energy, Structure, StructureBoxed, StructureBundle, StructureComponents,
-    },
-    DropItem, FactorishState, FrameProcResult, Inventory, InventoryTrait, Position, Rotation,
+    structure::{Energy, Structure, StructureBoxed, StructureBundle, StructureComponents},
+    FactorishState, FrameProcResult, Inventory, InventoryTrait, Position, Rotation,
 };
 use serde::{Deserialize, Serialize};
 use specs::{Builder, Entity, World, WorldExt};
@@ -183,7 +181,7 @@ impl Structure for Inserter {
                     })
                 })
                 .unwrap_or(false)
-        };
+        }
 
         if self.hold_item.is_none() {
             if self.cooldown <= 1. {

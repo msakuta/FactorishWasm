@@ -1,4 +1,4 @@
-use super::structure::{DynIterMut, Position, Structure, StructureBundle, StructureComponents};
+use super::structure::{Position, Structure, StructureComponents};
 use super::{FactorishState, FrameProcResult};
 use serde::{Deserialize, Serialize};
 use specs::{Builder, Entity, World, WorldExt};

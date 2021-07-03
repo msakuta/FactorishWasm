@@ -2,9 +2,8 @@ use super::{
     burner::Burner,
     draw_direction_arrow,
     items::ItemType,
-    structure::{DynIterMut, Energy, Structure, StructureBundle, StructureComponents},
-    DropItem, FactorishState, FrameProcResult, Inventory, Position, Recipe, Rotation, TempEnt,
-    TILE_SIZE,
+    structure::{Energy, Structure, StructureComponents},
+    FactorishState, FrameProcResult, Inventory, Position, Recipe, Rotation, TempEnt, TILE_SIZE,
 };
 use serde::{Deserialize, Serialize};
 use specs::{Builder, Entity, World, WorldExt};
