@@ -21,6 +21,10 @@ impl Splitter {
             .with(position)
             .with(rotation)
             .with(crate::structure::Movable)
+            .with(Size {
+                width: 1,
+                height: 2,
+            })
             .build()
     }
 }
@@ -28,48 +32,6 @@ impl Splitter {
 impl Structure for Splitter {
     fn name(&self) -> &str {
         "Splitter"
-    }
-
-    fn size(&self) -> Size {
-        Size {
-            width: 1,
-            height: 2,
-        }
-    }
-
-    fn bounding_box(&self, entity: Entity, state: &FactorishState) -> Option<BoundingBox> {
-        use specs::Join;
-        let position = state.world.read_component::<Position>();
-        let rotation = state.world.read_component::<Rotation>();
-        let (position, rotation) = (&position, &rotation)
-            .join()
-            .get(entity, &state.world.entities())?;
-        Some(match *rotation {
-            Rotation::Left => BoundingBox {
-                x0: position.x,
-                y0: position.y - 1,
-                x1: position.x + 1,
-                y1: position.y + 1,
-            },
-            Rotation::Top => BoundingBox {
-                x0: position.x,
-                y0: position.y,
-                x1: position.x + 2,
-                y1: position.y + 1,
-            },
-            Rotation::Right => BoundingBox {
-                x0: position.x,
-                y0: position.y,
-                x1: position.x + 1,
-                y1: position.y + 2,
-            },
-            Rotation::Bottom => BoundingBox {
-                x0: position.x - 1,
-                y0: position.y,
-                x1: position.x + 1,
-                y1: position.y + 1,
-            },
-        })
     }
 
     fn draw(

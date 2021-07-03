@@ -86,8 +86,8 @@ use specs::{ReadStorage, RunNow, System};
 use splitter::Splitter;
 use steam_engine::SteamEngine;
 use structure::{
-    Energy, FrameProcResult, ItemResponse, Movable, Position, Rotation, Structure, StructureBoxed,
-    StructureComponents,
+    entity_bbox, entity_contains, Energy, FrameProcResult, ItemResponse, Movable, Position,
+    Rotation, Size, Structure, StructureBoxed, StructureComponents,
 };
 use transport_belt::TransportBelt;
 use water_well::{FluidType, WaterWell};
@@ -593,6 +593,7 @@ impl FactorishState {
         world.register::<Box<dyn Structure + Send + Sync>>();
         world.register::<Position>();
         world.register::<Rotation>();
+        world.register::<Size>();
         world.register::<Burner>();
         world.register::<Energy>();
         world.register::<Factory>();
@@ -634,6 +635,7 @@ impl FactorishState {
                     (ItemType::WaterWell, 1usize),
                     (ItemType::Pipe, 15usize),
                     (ItemType::SteamEngine, 2usize),
+                    (ItemType::Splitter, 5usize),
                 ]
                 .iter()
                 .copied()
@@ -745,6 +747,7 @@ impl FactorishState {
                     &self.world.read_component::<StructureBoxed>(),
                     (&self.world.read_component::<Position>()).maybe(),
                     (&self.world.read_component::<Rotation>()).maybe(),
+                    (&self.world.read_component::<Size>()).maybe(),
                     (&self.world.read_component::<Burner>()).maybe(),
                     (&self.world.read_component::<Energy>()).maybe(),
                     (&self.world.read_component::<Factory>()).maybe(),
@@ -757,6 +760,7 @@ impl FactorishState {
                             dynamic,
                             position,
                             rotation,
+                            size,
                             burner,
                             energy,
                             factory,
@@ -790,6 +794,13 @@ impl FactorishState {
                                     "rotation".to_string(),
                                     serde_json::to_value(rotation)
                                         .map_err(|e| js_str!("Rotation serialize error: {}", e))?,
+                                );
+                            }
+                            if let Some(size) = size {
+                                map.insert(
+                                    "size".to_string(),
+                                    serde_json::to_value(size)
+                                        .map_err(|e| js_str!("Size serialize error: {}", e))?,
                                 );
                             }
                             if let Some(burner) = burner {
@@ -1279,13 +1290,13 @@ impl FactorishState {
                 {
                     let mut components = StructureComponents::default();
                     components.position = Some(*position);
-                    if dynamic.contains(
+                    if entity_contains(
+                        &self.world,
                         entity,
                         &Position {
                             x: item.x / TILE_SIZE_I,
                             y: item.y / TILE_SIZE_I,
                         },
-                        self,
                     ) {
                         item_res = Some(dynamic.item_response(entity, self, item)?);
                         break;
@@ -1293,42 +1304,19 @@ impl FactorishState {
                 }
 
                 let check_movable = |item_position: &Position| -> bool {
-                    for (entity, dynamic, position, _) in (
+                    for (entity, _) in (
                         &self.world.entities(),
-                        &self.world.read_component::<StructureBoxed>(),
-                        &self.world.read_component::<Position>(),
                         &self.world.read_component::<Movable>(),
                     )
                         .join()
                     {
-                        if dynamic.contains(entity, item_position, self) {
+                        if entity_contains(&self.world, entity, item_position) {
                             return true;
                         }
                     }
                     false
                 };
-                let movable = check_movable(&Position {
-                    x: item.x / 32,
-                    y: item.y / 32,
-                });
 
-                // if let Some(item_response_result) = structures
-                //     .iter_mut()
-                //     .find(|s| {
-                //         s.dynamic.contains(
-                //             &s.components,
-                //             &Position {
-                //                 x: item.x / TILE_SIZE_I,
-                //                 y: item.y / TILE_SIZE_I,
-                //             },
-                //         )
-                //     })
-                //     .and_then(|structure| {
-                //         structure
-                //             .dynamic
-                //             .item_response(&mut structure.components, item)
-                //             .ok()
-                //     })
                 if let Some((res, event)) = item_res {
                     match res {
                         ItemResponse::None => {}
@@ -1344,16 +1332,6 @@ impl FactorishState {
                                 continue;
                             }
 
-                            // if let Some(s) = structures
-                            //     .iter()
-                            //     .find(|s| s.dynamic.contains(&s.components, &position))
-                            // {
-                            //     if !s.dynamic.movable() {
-                            //         continue;
-                            //     }
-                            // } else {
-                            //     continue;
-                            // }
                             let item = &mut self.drop_items[i];
                             item.x = moved_x;
                             item.y = moved_y;
@@ -2159,13 +2137,19 @@ impl FactorishState {
         if let Some(position) = value.get_mut("position") {
             builder = builder.with(
                 serde_json::from_value::<Position>(position.take())
-                    .map_err(|s| js_str!("structure deserialization error: {}", s))?,
+                    .map_err(|s| js_str!("structure position deserialization error: {}", s))?,
             );
         }
         if let Some(rotation) = value.get_mut("rotation") {
             builder = builder.with(
                 serde_json::from_value::<Rotation>(rotation.take())
                     .map_err(|s| js_str!("structure rotation deserialization error: {}", s))?,
+            );
+        }
+        if let Some(size) = value.get_mut("size") {
+            builder = builder.with(
+                serde_json::from_value::<Size>(size.take())
+                    .map_err(|s| js_str!("structure size deserialization error: {}", s))?,
             );
         }
         if let Some(burner) = value.get_mut("burner") {
@@ -2247,13 +2231,8 @@ impl FactorishState {
             if let Some(selected_tool) = self.get_selected_tool_or_item_opt() {
                 if let Some(count) = self.player.inventory.get(&selected_tool) {
                     if 1 <= *count {
-                        let mut new_s = self.new_structure(&selected_tool, &cursor)?;
-                        let bbox = self
-                            .world
-                            .read_component::<Box<dyn Structure + Send + Sync>>()
-                            .get(new_s)
-                            .map(|s| s.bounding_box(new_s, self))
-                            .flatten();
+                        let new_s = self.new_structure(&selected_tool, &cursor)?;
+                        let bbox = entity_bbox(&self.world, new_s);
                         console_log!("bbox: {:?}", bbox);
                         if let Some(bbox) = bbox {
                             for y in bbox.y0..bbox.y1 {
@@ -2983,15 +2962,8 @@ impl FactorishState {
             context.set_stroke_style(&js_str!("red"));
             context.set_line_width(1.);
             use specs::Join;
-            for (entity, dynamic) in (
-                &self.world.entities(),
-                &self
-                    .world
-                    .read_component::<Box<dyn Structure + Send + Sync>>(),
-            )
-                .join()
-            {
-                if let Some(bb) = dynamic.bounding_box(entity, self) {
+            for entity in (&self.world.entities()).join() {
+                if let Some(bb) = entity_bbox(&self.world, entity) {
                     context.stroke_rect(
                         bb.x0 as f64 * TILE_SIZE,
                         bb.y0 as f64 * TILE_SIZE,
@@ -3024,7 +2996,7 @@ impl FactorishState {
                 .join()
             {
                 if let Some(fluid_boxes) = dynamic.fluid_box() {
-                    let bb = try_continue!(dynamic.bounding_box(entity, self));
+                    let bb = try_continue!(entity_bbox(&self.world, entity));
                     for (i, fb) in fluid_boxes.iter().enumerate() {
                         const BAR_MARGIN: f64 = 4.;
                         const BAR_WIDTH: f64 = 4.;

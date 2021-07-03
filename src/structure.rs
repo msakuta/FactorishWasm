@@ -47,9 +47,62 @@ impl From<&[i32; 2]> for Position {
     }
 }
 
+#[derive(Serialize, Deserialize, Component, Clone, Copy)]
 pub(crate) struct Size {
-    pub width: i32,
-    pub height: i32,
+    pub width: u32,
+    pub height: u32,
+}
+
+pub(crate) fn entity_bbox(world: &World, entity: Entity) -> Option<BoundingBox> {
+    let position = world.read_component::<Position>().get(entity).copied()?;
+    let size = world
+        .read_component::<Size>()
+        .get(entity)
+        .copied()
+        .unwrap_or(Size {
+            width: 1,
+            height: 1,
+        });
+    Some(
+        match world
+            .read_component::<Rotation>()
+            .get(entity)
+            .unwrap_or(&Rotation::Right)
+        {
+            Rotation::Left => BoundingBox {
+                x0: position.x + 1 - size.width as i32,
+                y0: position.y + 1 - size.height as i32,
+                x1: position.x + 1,
+                y1: position.y + 1,
+            },
+            Rotation::Top => BoundingBox {
+                x0: position.x,
+                y0: position.y,
+                x1: position.x + size.height as i32,
+                y1: position.y + size.width as i32,
+            },
+            Rotation::Right => BoundingBox {
+                x0: position.x,
+                y0: position.y,
+                x1: position.x + size.width as i32,
+                y1: position.y + size.height as i32,
+            },
+            Rotation::Bottom => BoundingBox {
+                x0: position.x + 1 - size.height as i32,
+                y0: position.y + 1 - size.width as i32,
+                x1: position.x + 1,
+                y1: position.y + 1,
+            },
+        },
+    )
+}
+
+pub(crate) fn entity_contains(world: &World, entity: Entity, pos: &Position) -> bool {
+    if let Some(bb) = entity_bbox(world, entity) {
+        bb.x0 <= pos.x && pos.x < bb.x1 && bb.y0 <= pos.y && pos.y < bb.y1
+    } else {
+        false
+    }
 }
 
 #[derive(Debug)]
@@ -158,31 +211,6 @@ where
 
 pub(crate) trait Structure {
     fn name(&self) -> &str;
-    fn size(&self) -> Size {
-        Size {
-            width: 1,
-            height: 1,
-        }
-    }
-    fn bounding_box(&self, entity: Entity, state: &FactorishState) -> Option<BoundingBox> {
-        let position = state
-            .world
-            .read_component::<Position>()
-            .get(entity)
-            .copied()?;
-        let size = self.size();
-        Some(BoundingBox {
-            x0: position.x,
-            y0: position.y,
-            x1: position.x + size.width,
-            y1: position.y + size.height,
-        })
-    }
-    fn contains(&self, entity: Entity, pos: &Position, state: &FactorishState) -> bool {
-        self.bounding_box(entity, state)
-            .map(|bb| bb.x0 <= pos.x && pos.x < bb.x1 && bb.y0 <= pos.y && pos.y < bb.y1)
-            .unwrap_or(false)
-    }
     fn draw(
         &self,
         entity: Entity,
