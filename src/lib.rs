@@ -598,6 +598,7 @@ impl FactorishState {
         world.register::<Energy>();
         world.register::<Factory>();
         world.register::<Movable>();
+        world.register::<Inserter>();
 
         TransportBelt::new(&mut world, Position::new(10, 3), Rotation::Left);
         TransportBelt::new(&mut world, Position::new(11, 3), Rotation::Left);
@@ -752,6 +753,7 @@ impl FactorishState {
                     (&self.world.read_component::<Energy>()).maybe(),
                     (&self.world.read_component::<Factory>()).maybe(),
                     (&self.world.read_component::<Movable>()).maybe(),
+                    (&self.world.read_component::<Inserter>()).maybe(),
                 )
                     .join()
                     .map(
@@ -765,6 +767,7 @@ impl FactorishState {
                             energy,
                             factory,
                             movable,
+                            inserter,
                         )| {
                             let mut map = serde_json::Map::new();
                             map.insert(
@@ -782,52 +785,30 @@ impl FactorishState {
                                     .js_serialize()
                                     .map_err(|e| js_str!("Serialize error: {}", e))?,
                             );
-                            if let Some(position) = position {
-                                map.insert(
-                                    "position".to_string(),
-                                    serde_json::to_value(position)
-                                        .map_err(|e| js_str!("Position serialize error: {}", e))?,
-                                );
+
+                            macro_rules! serialize_component {
+                                ($name:literal, $value:expr) => {
+                                    if let Some(value) = $value {
+                                        map.insert(
+                                            $name.to_string(),
+                                            serde_json::to_value(value).map_err(|e| {
+                                                js_str!("{} serialize error: {}", $name, e)
+                                            })?,
+                                        );
+                                    }
+                                };
                             }
-                            if let Some(rotation) = rotation {
-                                map.insert(
-                                    "rotation".to_string(),
-                                    serde_json::to_value(rotation)
-                                        .map_err(|e| js_str!("Rotation serialize error: {}", e))?,
-                                );
-                            }
-                            if let Some(size) = size {
-                                map.insert(
-                                    "size".to_string(),
-                                    serde_json::to_value(size)
-                                        .map_err(|e| js_str!("Size serialize error: {}", e))?,
-                                );
-                            }
-                            if let Some(burner) = burner {
-                                map.insert(
-                                    "burner".to_string(),
-                                    burner
-                                        .js_serialize()
-                                        .map_err(|e| js_str!("Serialize error: {}", e))?,
-                                );
-                            }
-                            if let Some(energy) = energy {
-                                map.insert(
-                                    "energy".to_string(),
-                                    serde_json::to_value(energy)
-                                        .map_err(|e| js_str!("Energy serialize error: {}", e))?,
-                                );
-                            }
-                            if let Some(factory) = factory {
-                                map.insert(
-                                    "factory".to_string(),
-                                    serde_json::to_value(factory)
-                                        .map_err(|e| js_str!("Factory serialize error: {}", e))?,
-                                );
-                            }
+
+                            serialize_component!("position", position);
+                            serialize_component!("rotation", rotation);
+                            serialize_component!("size", size);
+                            serialize_component!("burner", burner);
+                            serialize_component!("energy", energy);
+                            serialize_component!("factory", factory);
                             if movable.is_some() {
-                                map.insert("movable".to_string(), serde_json::Value::Null);
+                                map.insert("movable".to_string(), serde_json::Value::Bool(true));
                             }
+                            serialize_component!("inserter", inserter);
                             Ok(serde_json::Value::Object(map))
                         },
                     )
@@ -1118,55 +1099,55 @@ impl FactorishState {
             self.popup_texts.remove(*i);
         }
 
-        struct MutRef<'r, T: ?Sized>(&'r mut T);
-        impl<'a, 'r, T: ?Sized> IntoIterator for &'a MutRef<'r, T>
-        where
-            &'a T: IntoIterator,
-        {
-            type IntoIter = <&'a T as IntoIterator>::IntoIter;
-            type Item = <&'a T as IntoIterator>::Item;
-            fn into_iter(self) -> Self::IntoIter {
-                self.0.into_iter()
-            }
-        }
-        impl<'a, 'r, T: ?Sized> IntoIterator for &'a mut MutRef<'r, T>
-        where
-            &'a mut T: IntoIterator,
-        {
-            type IntoIter = <&'a mut T as IntoIterator>::IntoIter;
-            type Item = <&'a mut T as IntoIterator>::Item;
-            fn into_iter(self) -> Self::IntoIter {
-                self.0.into_iter()
-            }
-        }
+        // struct MutRef<'r, T: ?Sized>(&'r mut T);
+        // impl<'a, 'r, T: ?Sized> IntoIterator for &'a MutRef<'r, T>
+        // where
+        //     &'a T: IntoIterator,
+        // {
+        //     type IntoIter = <&'a T as IntoIterator>::IntoIter;
+        //     type Item = <&'a T as IntoIterator>::Item;
+        //     fn into_iter(self) -> Self::IntoIter {
+        //         self.0.into_iter()
+        //     }
+        // }
+        // impl<'a, 'r, T: ?Sized> IntoIterator for &'a mut MutRef<'r, T>
+        // where
+        //     &'a mut T: IntoIterator,
+        // {
+        //     type IntoIter = <&'a mut T as IntoIterator>::IntoIter;
+        //     type Item = <&'a mut T as IntoIterator>::Item;
+        //     fn into_iter(self) -> Self::IntoIter {
+        //         self.0.into_iter()
+        //     }
+        // }
 
-        struct Chained<S, T>(S, T);
-        impl<'a, S, T, Item: 'a> IntoIterator for &'a Chained<S, T>
-        where
-            &'a S: IntoIterator<Item = &'a Item>,
-            &'a T: IntoIterator<Item = &'a Item>,
-        {
-            type IntoIter =
-                iter::Chain<<&'a S as IntoIterator>::IntoIter, <&'a T as IntoIterator>::IntoIter>;
-            type Item = &'a Item;
-            fn into_iter(self) -> Self::IntoIter {
-                self.0.into_iter().chain(self.1.into_iter())
-            }
-        }
-        impl<'a, S, T, Item: 'a> IntoIterator for &'a mut Chained<S, T>
-        where
-            &'a mut S: IntoIterator<Item = &'a mut Item>,
-            &'a mut T: IntoIterator<Item = &'a mut Item>,
-        {
-            type IntoIter = iter::Chain<
-                <&'a mut S as IntoIterator>::IntoIter,
-                <&'a mut T as IntoIterator>::IntoIter,
-            >;
-            type Item = &'a mut Item;
-            fn into_iter(self) -> Self::IntoIter {
-                self.0.into_iter().chain(self.1.into_iter())
-            }
-        }
+        // struct Chained<S, T>(S, T);
+        // impl<'a, S, T, Item: 'a> IntoIterator for &'a Chained<S, T>
+        // where
+        //     &'a S: IntoIterator<Item = &'a Item>,
+        //     &'a T: IntoIterator<Item = &'a Item>,
+        // {
+        //     type IntoIter =
+        //         iter::Chain<<&'a S as IntoIterator>::IntoIter, <&'a T as IntoIterator>::IntoIter>;
+        //     type Item = &'a Item;
+        //     fn into_iter(self) -> Self::IntoIter {
+        //         self.0.into_iter().chain(self.1.into_iter())
+        //     }
+        // }
+        // impl<'a, S, T, Item: 'a> IntoIterator for &'a mut Chained<S, T>
+        // where
+        //     &'a mut S: IntoIterator<Item = &'a mut Item>,
+        //     &'a mut T: IntoIterator<Item = &'a mut Item>,
+        // {
+        //     type IntoIter = iter::Chain<
+        //         <&'a mut S as IntoIterator>::IntoIter,
+        //         <&'a mut T as IntoIterator>::IntoIter,
+        //     >;
+        //     type Item = &'a mut Item;
+        //     fn into_iter(self) -> Self::IntoIter {
+        //         self.0.into_iter().chain(self.1.into_iter())
+        //     }
+        // }
         // This is silly way to avoid borrow checker that temporarily move the structures
         // away from self so that they do not claim mutable borrow twice, but it works.
         // let mut structures = std::mem::take(&mut self.structures);
@@ -1197,9 +1178,18 @@ impl FactorishState {
 
         let world = std::mem::take(&mut self.world);
 
-        let mut raw_events = vec![];
-
         use specs::Join;
+        let mut raw_events = vec![];
+        for (entity, inserter) in
+            (&world.entities(), &mut world.write_component::<Inserter>()).join()
+        {
+            let res = inserter.process_item(entity, self, &world)?;
+            if let FrameProcResult::None = res {
+            } else {
+                raw_events.push(res);
+            }
+        }
+
         for (entity, structure, position, rotation, size, burner, energy, factory, movable) in (
             &world.entities(),
             &mut world.write_component::<StructureBoxed>(),
@@ -1237,21 +1227,91 @@ impl FactorishState {
                 let c = item.x / TILE_SIZE_I;
                 let r = item.y / TILE_SIZE_I;
                 if 0 <= c && c < self.width as i32 && 0 <= r && r < self.height as i32 {
-                    if let Some(entity) = self.find_structure_tile(&[c, r]) {
-                        if self.world.read_component::<Movable>().get(entity).is_none() {
-                            continue;
+                    let picker: Option<Entity> = if let Some(entity) =
+                        self.find_structure_tile(&[c, r])
+                    {
+                        let mut dynamics = self.world.write_component::<StructureBoxed>();
+                        let dynamic = dynamics.get_mut(entity);
+                        let mut factories = self.world.write_component::<Factory>();
+                        let mut factory = factories.get_mut(entity);
+
+                        if let Some((dynamic, factory)) = dynamic.zip(factory.as_mut()) {
+                            console_log!("Checking recipe on input");
+                            for recipe in &dynamic.get_recipes() {
+                                if recipe.input.len() == 1 && recipe.input.contains_key(&item.type_)
+                                {
+                                    factory.recipe = Some(recipe.clone());
+                                    break;
+                                }
+                            }
                         }
-                    }
+
+                        if factory.map(|e| e.can_input(&item.type_)).unwrap_or(false)
+                            || self
+                                .world
+                                .read_component::<Burner>()
+                                .get(entity)
+                                .map(|e| e.can_input(&item.type_))
+                                .unwrap_or(false)
+                        {
+                            Some(entity)
+                        } else if self.world.read_component::<Movable>().get(entity).is_none() {
+                            console_log!("non-movable: {:?}", item);
+                            continue;
+                        } else {
+                            None
+                        }
+                    } else {
+                        None
+                    };
+                    console_log!("Picker: {:?} Dropper: {:?}", picker, dropper);
                     // return board[c + r * ysize].structure.input(obj);
                     if self.hit_check(item.x, item.y, Some(item.id)) {
                         continue;
                     }
-                    self.world
-                        .write_component::<StructureBoxed>()
+
+                    // Try to empty inserter hands first.
+                    if !self
+                        .world
+                        .write_component::<Inserter>()
                         .get_mut(dropper)
-                        .and_then(|dynamic| dynamic.inventory_mut(false))
-                        .map(|inventory| inventory.remove_item(&item.type_));
-                    self.drop_items.push(item);
+                        .map(|inserter| inserter.drop_item())
+                        .unwrap_or(false)
+                    {
+                        self.world
+                            .write_component::<StructureBoxed>()
+                            .get_mut(dropper)
+                            .and_then(|dynamic| dynamic.inventory_mut(false))
+                            .map(|inventory| inventory.remove_item(&item.type_));
+                    }
+
+                    if let Some(picker) = picker {
+                        if self
+                            .world
+                            .write_component::<Factory>()
+                            .get_mut(picker)
+                            .map(|factory| factory.input(&item).ok())
+                            .flatten()
+                            .or_else(|| {
+                                self.world
+                                    .write_component::<Burner>()
+                                    .get_mut(picker)
+                                    .map(|burner| burner.input(&item).ok())
+                                    .flatten()
+                            })
+                            .is_some()
+                        {
+                            frame_proc_result_to_event(Ok(FrameProcResult::InventoryChanged(
+                                self.world
+                                    .read_component::<Position>()
+                                    .get(picker)
+                                    .copied()
+                                    .ok_or_else(|| js_str!("Inventory without position"))?,
+                            )));
+                        }
+                    } else {
+                        self.drop_items.push(item);
+                    }
                 }
             } else {
                 frame_proc_result_to_event(Ok(event));
@@ -2139,45 +2199,27 @@ impl FactorishState {
         };
 
         let mut builder = world.create_entity().with(payload);
-        if let Some(position) = value.get_mut("position") {
-            builder = builder.with(
-                serde_json::from_value::<Position>(position.take())
-                    .map_err(|s| js_str!("structure position deserialization error: {}", s))?,
-            );
+
+        macro_rules! deserialize_component {
+            ($name:literal, $type:ty) => {
+                if let Some(value) = value.get_mut($name) {
+                    builder = builder.with(serde_json::from_value::<$type>(value.take()).map_err(
+                        |s| js_str!("structure {} deserialization error: {}", $name, s),
+                    )?);
+                }
+            };
         }
-        if let Some(rotation) = value.get_mut("rotation") {
-            builder = builder.with(
-                serde_json::from_value::<Rotation>(rotation.take())
-                    .map_err(|s| js_str!("structure rotation deserialization error: {}", s))?,
-            );
-        }
-        if let Some(size) = value.get_mut("size") {
-            builder = builder.with(
-                serde_json::from_value::<Size>(size.take())
-                    .map_err(|s| js_str!("structure size deserialization error: {}", s))?,
-            );
-        }
-        if let Some(burner) = value.get_mut("burner") {
-            builder = builder.with(
-                serde_json::from_value::<Burner>(burner.take())
-                    .map_err(|s| js_str!("structure deserialization error: {}", s))?,
-            );
-        }
-        if let Some(energy) = value.get_mut("energy") {
-            builder = builder.with(
-                serde_json::from_value::<Energy>(energy.take())
-                    .map_err(|s| js_str!("structure energy deserialization error: {}", s))?,
-            );
-        }
-        if let Some(factory) = value.get_mut("factory") {
-            builder = builder.with(
-                serde_json::from_value::<Factory>(factory.take())
-                    .map_err(|s| js_str!("structure factory deserialization error: {}", s))?,
-            );
-        }
+
+        deserialize_component!("position", Position);
+        deserialize_component!("rotation", Rotation);
+        deserialize_component!("size", Size);
+        deserialize_component!("burner", Burner);
+        deserialize_component!("energy", Energy);
+        deserialize_component!("factory", Factory);
         if value.get_mut("movable").is_some() {
             builder = builder.with(Movable);
         }
+        deserialize_component!("inserter", Inserter);
         Ok(builder.build())
     }
 
@@ -2899,7 +2941,18 @@ impl FactorishState {
 
         let draw_structures = |depth| -> Result<(), JsValue> {
             use specs::Join;
-            for (entity, dynamic, position, rotation, size, burner, energy, factory, movable) in (
+            for (
+                entity,
+                dynamic,
+                position,
+                rotation,
+                size,
+                burner,
+                energy,
+                factory,
+                movable,
+                inserter,
+            ) in (
                 &self.world.entities(),
                 &self.world.read_component::<StructureBoxed>(),
                 &self.world.read_component::<Position>(),
@@ -2909,6 +2962,7 @@ impl FactorishState {
                 (&mut self.world.write_component::<Energy>()).maybe(),
                 (&mut self.world.write_component::<Factory>()).maybe(),
                 (&self.world.read_component::<Movable>()).maybe(),
+                (&self.world.read_component::<Inserter>()).maybe(),
             )
                 .join()
             {
@@ -2922,6 +2976,13 @@ impl FactorishState {
                     movable: movable.is_some(),
                 };
                 dynamic.draw(entity, &components, &self, &context, depth, false)?;
+
+                if depth == 1 {
+                    inserter.map(|inserter| {
+                        inserter.draw(entity, &components, &self, &context, depth, false)
+                    });
+                }
+
                 if depth == 2 {
                     if let Some(burner) = components.burner {
                         burner.draw(

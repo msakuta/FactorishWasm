@@ -2,22 +2,23 @@ use super::{
     burner::Burner,
     draw_direction_arrow,
     factory::Factory,
-    items::{render_drop_item, ItemType},
+    items::{render_drop_item, DropItem, ItemType},
     structure::{Energy, Size, Structure, StructureBoxed, StructureBundle, StructureComponents},
     FactorishState, FrameProcResult, Inventory, InventoryTrait, Movable, Position, Rotation,
+    TILE_SIZE_I,
 };
 use serde::{Deserialize, Serialize};
-use specs::{Builder, Entity, World, WorldExt};
+use specs::{Builder, Component, DenseVecStorage, Entity, World, WorldExt};
 use wasm_bindgen::prelude::*;
 use web_sys::CanvasRenderingContext2d;
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Component)]
 pub(crate) struct Inserter {
     cooldown: f64,
     hold_item: Option<ItemType>,
 }
 
-const INSERTER_TIME: f64 = 20.;
+const INSERTER_TIME: f64 = 15.;
 
 impl Inserter {
     pub(crate) fn new(world: &mut World, position: Position, rotation: Rotation) -> Entity {
@@ -29,6 +30,10 @@ impl Inserter {
             }) as StructureBoxed)
             .with(position)
             .with(rotation)
+            .with(Inserter {
+                cooldown: 0.,
+                hold_item: None,
+            })
             .build()
     }
 
@@ -47,14 +52,143 @@ impl Inserter {
             (0., 0.)
         }
     }
-}
 
-impl Structure for Inserter {
-    fn name(&self) -> &str {
-        "Inserter"
+    pub(crate) fn process_item(
+        &mut self,
+        entity: Entity,
+        state: &mut FactorishState,
+        world: &World,
+    ) -> Result<FrameProcResult, JsValue> {
+        let position = world
+            .read_component::<Position>()
+            .get(entity)
+            .copied()
+            .ok_or_else(|| js_str!("Inserter without Position component"))?;
+        let rotation = world
+            .read_component::<Rotation>()
+            .get(entity)
+            .copied()
+            .ok_or_else(|| js_str!("Inserter without Rotation component"))?;
+
+        let input_position = position.add(rotation.delta_inv());
+        let output_position = position.add(rotation.delta());
+
+        if self.hold_item.is_none() {
+            if self.cooldown <= 1. {
+                self.cooldown = 0.;
+
+                let mut try_hold = |type_| -> bool {
+                    if let Some(value) = find_structure_at(world, output_position, |bundle| {
+                        if bundle.can_input(&type_) || bundle.components.movable {
+                            self.hold_item = Some(type_);
+                            self.cooldown += INSERTER_TIME;
+                            Some(true)
+                        } else {
+                            None
+                        }
+                    }) {
+                        value
+                    } else {
+                        self.hold_item = Some(type_);
+                        self.cooldown += INSERTER_TIME;
+                        true
+                    }
+                };
+
+                let mut lets_try_hold = None;
+                if let Some(&DropItem { type_, id, .. }) = state.find_item(&input_position) {
+                    if try_hold(type_) {
+                        state.remove_item(id);
+                    } else {
+                        // console_log!("fail output_object: {:?}", type_);
+                    }
+                } else {
+                    find_structure_at(world, input_position, |bundle| {
+                        lets_try_hold = Some(bundle.dynamic.can_output());
+                        Some(())
+                    });
+                }
+
+                if let Some(ref output_items) = lets_try_hold {
+                    if let Some(type_) = (|| {
+                        // First, try matching the item that the structure at the output position can accept.
+                        if let Some(item) = find_structure_at(world, output_position, |bundle| {
+                            for item in output_items {
+                                if bundle.dynamic.can_input(&item.0) || bundle.components.movable {
+                                    self.hold_item = Some(*item.0);
+                                    self.cooldown += INSERTER_TIME;
+                                    return Some(Some(item));
+                                }
+                            }
+                            Some(None)
+                        }) {
+                            return item;
+                        } else if let Some(item) = output_items.into_iter().next() {
+                            // If there is no structures at the output, anything can output.
+                            self.hold_item = Some(*item.0);
+                            self.cooldown += INSERTER_TIME;
+                            return Some(item);
+                        }
+                        None
+                    })() {
+                        if find_structure_at(world, input_position, |bundle| {
+                            bundle
+                                .components
+                                .factory
+                                .as_mut()
+                                .map(|factory| factory.output_inventory.remove_item(&type_.0))
+                        })
+                        .is_some()
+                        {
+                            return Ok(FrameProcResult::InventoryChanged(input_position));
+                        } else {
+                            console_log!(
+                                "We have confirmed that there is input structure, right???"
+                            );
+                            return Err(js_str!(
+                                "We have confirmed that there is input structure, right???"
+                            ));
+                        }
+                    }
+                }
+                if let Some(pos) = state.selected_structure_inventory {
+                    if pos == input_position {
+                        return Ok(FrameProcResult::InventoryChanged(input_position));
+                    }
+                }
+            } else {
+                self.cooldown -= 1.;
+            }
+        } else if self.cooldown < 1. {
+            self.cooldown = 0.;
+            if let Some(item_type) = self.hold_item {
+                return Ok(FrameProcResult::CreateItem {
+                    item: DropItem::new(
+                        &mut state.serial_no,
+                        item_type,
+                        output_position.x,
+                        output_position.y,
+                    ),
+                    dropper: entity,
+                });
+            }
+        } else {
+            self.cooldown -= 1.;
+        }
+        Ok(FrameProcResult::None)
     }
 
-    fn draw(
+    pub(crate) fn drop_item(&mut self) -> bool {
+        if self.hold_item.is_some() {
+            self.cooldown += INSERTER_TIME;
+            self.hold_item = None;
+            console_log!("Cleared item! {}", self.cooldown);
+            return true;
+        }
+        false
+    }
+
+    pub(crate) fn draw(
         &self,
         entity: Entity,
         components: &StructureComponents,
@@ -68,28 +202,8 @@ impl Structure for Inserter {
         } else {
             (0., 0.)
         };
-        let rotation = components
-            .rotation
-            .ok_or_else(|| js_str!("Inserter without rotation component"))?;
-        match depth {
-            0 => match state.image_inserter.as_ref() {
-                Some(img) => {
-                    context
-                        .draw_image_with_image_bitmap_and_sw_and_sh_and_dx_and_dy_and_dw_and_dh(
-                            &img.bitmap,
-                            0.,
-                            0.,
-                            32.,
-                            32.,
-                            x,
-                            y,
-                            32.,
-                            32.,
-                        )?;
-                }
-                None => return Err(JsValue::from_str("inserter image not available")),
-            },
-            1 => match state.image_inserter.as_ref() {
+        if depth == 1 {
+            match state.image_inserter.as_ref() {
                 Some(img) => {
                     let angles = self.get_arm_angles(components);
                     context.save();
@@ -132,7 +246,98 @@ impl Structure for Inserter {
                     context.restore();
                 }
                 None => return Err(JsValue::from_str("inserter-arm image not available")),
+            }
+        }
+        Ok(())
+    }
+}
+
+fn find_structure_at<T>(
+    world: &World,
+    position: Position,
+    mut f: impl FnMut(&mut StructureBundle) -> Option<T>,
+) -> Option<T> {
+    let mut dynamic = world.write_component::<StructureBoxed>();
+    let position_components = world.read_component::<Position>();
+    let rotation = world.read_component::<Rotation>();
+    let size = world.read_component::<Size>();
+    let mut burner = world.write_component::<Burner>();
+    let mut energy = world.write_component::<Energy>();
+    let mut factory = world.write_component::<Factory>();
+    let movable = world.read_component::<Movable>();
+
+    use specs::Join;
+
+    (
+        &mut dynamic,
+        &position_components,
+        (&rotation).maybe(),
+        (&size).maybe(),
+        (&mut burner).maybe(),
+        (&mut energy).maybe(),
+        (&mut factory).maybe(),
+        (&movable).maybe(),
+    )
+        .join()
+        .find(|bundle| *bundle.1 == position)
+        .map(|bundle| {
+            f(&mut StructureBundle {
+                dynamic: bundle.0.as_mut(),
+                components: StructureComponents {
+                    position: Some(*bundle.1),
+                    rotation: bundle.2.copied(),
+                    size: bundle.3.copied(),
+                    burner: bundle.4,
+                    energy: bundle.5,
+                    factory: bundle.6,
+                    movable: bundle.7.is_some(),
+                },
+            })
+        })
+        .flatten()
+}
+
+impl Structure for Inserter {
+    fn name(&self) -> &str {
+        "Inserter"
+    }
+
+    fn draw(
+        &self,
+        entity: Entity,
+        components: &StructureComponents,
+        state: &FactorishState,
+        context: &CanvasRenderingContext2d,
+        depth: i32,
+        _is_toolbar: bool,
+    ) -> Result<(), JsValue> {
+        let (x, y) = if let Some(position) = &components.position {
+            (position.x as f64 * 32., position.y as f64 * 32.)
+        } else {
+            (0., 0.)
+        };
+        let rotation = components
+            .rotation
+            .ok_or_else(|| js_str!("Inserter without rotation component"))?;
+        match depth {
+            0 => match state.image_inserter.as_ref() {
+                Some(img) => {
+                    context
+                        .draw_image_with_image_bitmap_and_sw_and_sh_and_dx_and_dy_and_dw_and_dh(
+                            &img.bitmap,
+                            0.,
+                            0.,
+                            32.,
+                            32.,
+                            x,
+                            y,
+                            32.,
+                            32.,
+                        )?;
+                }
+                None => return Err(JsValue::from_str("inserter image not available")),
             },
+            1 => (),
             2 => draw_direction_arrow((x, y), &rotation, state, context)?,
             _ => panic!(),
         }
@@ -148,182 +353,7 @@ impl Structure for Inserter {
     ) -> Result<FrameProcResult, ()> {
         let position = components.position.as_ref().ok_or(())?;
         let rotation = components.rotation.ok_or(())?;
-        let input_position = position.add(rotation.delta_inv());
-        let output_position = position.add(rotation.delta());
 
-        fn find_structure_at(
-            state: &mut FactorishState,
-            position: Position,
-            mut f: impl FnMut(&StructureBundle) -> bool,
-        ) -> bool {
-            let mut dynamic = state.world.write_component::<StructureBoxed>();
-            let position_components = state.world.read_component::<Position>();
-            let rotation = state.world.read_component::<Rotation>();
-            let size = state.world.read_component::<Size>();
-            let mut burner = state.world.write_component::<Burner>();
-            let mut energy = state.world.write_component::<Energy>();
-            let mut factory = state.world.write_component::<Factory>();
-            let movable = state.world.read_component::<Movable>();
-
-            use specs::Join;
-
-            (
-                &mut dynamic,
-                &position_components,
-                (&rotation).maybe(),
-                (&size).maybe(),
-                (&mut burner).maybe(),
-                (&mut energy).maybe(),
-                (&mut factory).maybe(),
-                (&movable).maybe(),
-            )
-                .join()
-                .find(|bundle| *bundle.1 == position)
-                .map(|bundle| {
-                    f(&StructureBundle {
-                        dynamic: bundle.0.as_mut(),
-                        components: StructureComponents {
-                            position: Some(*bundle.1),
-                            rotation: bundle.2.copied(),
-                            size: bundle.3.copied(),
-                            burner: bundle.4,
-                            energy: bundle.5,
-                            factory: bundle.6,
-                            movable: bundle.7.is_some(),
-                        },
-                    })
-                })
-                .unwrap_or(false)
-        }
-
-        if self.hold_item.is_none() {
-            if self.cooldown <= 1. {
-                self.cooldown = 0.;
-                let ret = FrameProcResult::None;
-
-                let mut try_hold = |type_| -> bool {
-                    find_structure_at(state, output_position, |bundle| {
-                        // console_log!(
-                        //     "found structure to output[{}]: {}, {}, {}",
-                        //     structure_idx,
-                        //     structure.name(),
-                        //     output_position.x,
-                        //     output_position.y
-                        // );
-                        if bundle.can_input(&type_) || bundle.components.movable {
-                            // ret = FrameProcResult::InventoryChanged(output_position);
-                            self.hold_item = Some(type_);
-                            self.cooldown += INSERTER_TIME;
-                            true
-                        } else {
-                            false
-                        }
-                    })
-                };
-
-                // let mut lets_try_hold = None;
-                // if let Some(&DropItem { type_, id, .. }) = state.find_item(&input_position) {
-                // if try_hold(structures, type_) {
-                //     state.remove_item(id);
-                // } else {
-                //     // console_log!("fail output_object: {:?}", type_);
-                // }
-                // } else if let Some(structure) = find_structure_at(structures, input_position) {
-                //     lets_try_hold = Some(structure.can_output());
-                //     // console_log!("outputting from a structure at {:?}", structure.position());
-                //     // if let Ok((item, callback)) = structure.output(state, &output_position) {
-                //     //     lets_try_hold = Some((item, callback));
-                //     // } else {
-                //     //     // console_log!("output failed");
-                //     // }
-                // }
-
-                // if let Some(output_items) = lets_try_hold {
-                //     if let Some(type_) = (|| {
-                // First, try matching the item that the structure at the output position can accept.
-                // if let Some(structure) = find_structure_at(structures, output_position) {
-                //     // console_log!(
-                //     //     "found structure to output[{}]: {}, {}, {}",
-                //     //     structure_idx,
-                //     //     structure.name(),
-                //     //     output_position.x,
-                //     //     output_position.y
-                //     // );
-                //     for item in output_items {
-                //         if structure.can_input(&item.0) || structure.dynamic.movable() {
-                //             // ret = FrameProcResult::InventoryChanged(output_position);
-                //             self.hold_item = Some(item.0);
-                //             self.cooldown += INSERTER_TIME;
-                //             return Some(item);
-                //         }
-                //     }
-                // } else if let Some(item) = output_items.into_iter().next() {
-                //     // If there is no structures at the output, anything can output.
-                //     self.hold_item = Some(item.0);
-                //     self.cooldown += INSERTER_TIME;
-                //     return Some(item);
-                // }
-                //     None
-                // })() {
-                // if let Some(structure) = find_structure_at(structures, input_position) {
-                //     structure.output(state, &type_.0)?;
-                //     return Ok(FrameProcResult::InventoryChanged(input_position));
-                // } else {
-                //     console_log!(
-                //         "We have confirmed that there is input structure, right???"
-                //     );
-                //     return Err(());
-                // }
-                // }
-                // if let Some(pos) = state.selected_structure_inventory {
-                //     if pos == input_position {
-                //         return Ok(FrameProcResult::InventoryChanged(input_position));
-                //         // if let Err(e) = state.on_show_inventory.call2(&window(), &JsValue::from(output_position.x), &JsValue::from(output_position.y)) {
-                //         //     console_log!("on_show_inventory fail: {:?}", e);
-                //         // }
-                //     }
-                // }
-                // console_log!("output succeeded: {:?}", item.type_);
-                // }
-                // }
-                return Ok(ret);
-            } else {
-                self.cooldown -= 1.;
-            }
-        } else if self.cooldown < 1. {
-            self.cooldown = 0.;
-            if let Some(item_type) = self.hold_item {
-                let mut try_move = |state: &mut FactorishState| {
-                    if let Ok(()) =
-                        state.new_object(output_position.x, output_position.y, item_type)
-                    {
-                        self.cooldown += INSERTER_TIME;
-                        self.hold_item = None;
-                    }
-                };
-                // if let Some(structure) = find_structure_at(structures, output_position) {
-                //     if structure
-                //         .input(&DropItem::new(
-                //             &mut state.serial_no,
-                //             item_type,
-                //             output_position.x,
-                //             output_position.y,
-                //         ))
-                //         .is_ok()
-                //     {
-                //         self.cooldown += INSERTER_TIME;
-                //         self.hold_item = None;
-                //         return Ok(FrameProcResult::InventoryChanged(output_position));
-                //     } else if structure.dynamic.movable() {
-                //         try_move(state)
-                //     }
-                // } else {
-                try_move(state);
-                // }
-            }
-        } else {
-            self.cooldown -= 1.;
-        }
         Ok(FrameProcResult::None)
     }
 
