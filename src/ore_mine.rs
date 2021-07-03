@@ -1,9 +1,10 @@
 use super::{
     burner::Burner,
     draw_direction_arrow,
-    items::ItemType,
+    items::{DropItem, ItemType},
     structure::{Energy, Structure, StructureComponents},
     FactorishState, FrameProcResult, Inventory, Position, Recipe, Rotation, TempEnt, TILE_SIZE,
+    TILE_SIZE_I,
 };
 use serde::{Deserialize, Serialize};
 use specs::{Builder, Entity, World, WorldExt};
@@ -260,15 +261,21 @@ impl Structure for OreMine {
                     let mut it = recipe.output.iter();
                     if let Some(item) = it.next() {
                         assert!(it.next().is_none());
-                        if let Err(_code) =
-                            state.new_object(output_position.x, output_position.y, *item.0)
-                        {
-                            // console_log!("Failed to create object: {:?}", code);
-                        } else if let Ok(val) = output(state, *item.0, position) {
-                            if val == 0 {
-                                self.recipe = None;
-                            }
-                        }
+                        // if let Err(_code) =
+                        //     state.new_object(output_position.x, output_position.y, *item.0)
+                        // {
+                        // console_log!("Failed to create object: {:?}", code);
+                        // } else if let Ok(val) = output(state, *item.0, position) {
+                        // if val == 0 {
+                        //     self.recipe = None;
+                        // }
+                        // }
+                        return Ok(FrameProcResult::CreateItem(DropItem::new(
+                            &mut state.serial_no,
+                            *item.0,
+                            output_position.x * TILE_SIZE_I,
+                            output_position.y * TILE_SIZE_I,
+                        )));
                     } else {
                         return Err(());
                     }

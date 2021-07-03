@@ -52,6 +52,7 @@ pub(crate) struct Size {
     pub height: i32,
 }
 
+#[derive(Debug)]
 pub(crate) struct BoundingBox {
     pub x0: i32,
     pub y0: i32,
@@ -111,6 +112,7 @@ impl Rotation {
 pub(crate) enum FrameProcResult {
     None,
     InventoryChanged(Position),
+    CreateItem(DropItem),
 }
 
 pub(crate) enum ItemResponse {

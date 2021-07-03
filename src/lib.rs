@@ -1171,64 +1171,55 @@ impl FactorishState {
         // }
         // }
 
-        struct StructureSystem<'b> {
-            state: &'b mut FactorishState,
-            events: Vec<FrameProcResult>,
-        }
+        let world = std::mem::take(&mut self.world);
 
-        impl<'a, 'b> System<'a> for StructureSystem<'b> {
-            type SystemData = (
-                WriteStorage<'a, Box<dyn Structure + Send + Sync>>,
-                ReadStorage<'a, Position>,
-                ReadStorage<'a, Rotation>,
-                WriteStorage<'a, Burner>,
-                WriteStorage<'a, Energy>,
-                WriteStorage<'a, Factory>,
-            );
+        let mut raw_events = vec![];
 
-            fn run(
-                &mut self,
-                (mut structure, position, rotation, mut burner, mut energy, mut factory): Self::SystemData,
-            ) {
-                use specs::Join;
-                for (structure, position, rotation, burner, energy, factory) in (
-                    &mut structure,
-                    &position,
-                    &rotation,
-                    (&mut burner).maybe(),
-                    (&mut energy).maybe(),
-                    (&mut factory).maybe(),
-                )
-                    .join()
-                {
-                    let mut components = StructureComponents {
-                        position: Some(*position),
-                        rotation: Some(*rotation),
-                        burner,
-                        energy,
-                        factory,
-                    };
-                    if let Ok(res) = structure.frame_proc(&mut components, self.state) {
-                        self.events.push(res);
-                    }
-                }
+        use specs::Join;
+        for (structure, position, rotation, burner, energy, factory) in (
+            &mut world.write_component::<StructureBoxed>(),
+            &world.read_component::<Position>(),
+            &world.read_component::<Rotation>(),
+            (&mut world.write_component::<Burner>()).maybe(),
+            (&mut world.write_component::<Energy>()).maybe(),
+            (&mut world.write_component::<Factory>()).maybe(),
+        )
+            .join()
+        {
+            let mut components = StructureComponents {
+                position: Some(*position),
+                rotation: Some(*rotation),
+                burner,
+                energy,
+                factory,
+            };
+            if let Ok(event) = structure.frame_proc(&mut components, self) {
+                raw_events.push(event);
             }
         }
 
-        let world = std::mem::take(&mut self.world);
-
-        let mut structure_system = StructureSystem {
-            state: self,
-            events: vec![],
-        };
-
-        structure_system.run_now(&world);
-        let events2 = structure_system.events;
-
         self.world = world;
 
-        for res in events2 {
-            frame_proc_result_to_event(Ok(res));
+        for event in raw_events {
+            if let FrameProcResult::CreateItem(item) = event {
+                let c = item.x / TILE_SIZE_I;
+                let r = item.y / TILE_SIZE_I;
+                if 0 <= c && c < self.width as i32 && 0 <= r && r < self.height as i32 {
+                    if let Some(entity) = self.find_structure_tile(&[c, r]) {
+                        if self.world.read_component::<Movable>().get(entity).is_none() {
+                            continue;
+                        }
+                    }
+                    // return board[c + r * ysize].structure.input(obj);
+                    if self.hit_check(item.x, item.y, Some(item.id)) {
+                        continue;
+                    }
+                    console_log!("adding item from CreateItem event: {} {}", item.x, item.y);
+                    self.drop_items.push(item);
+                }
+            } else {
+                frame_proc_result_to_event(Ok(event));
+            }
         }
 
         let mut burner_system = burner::BurnerSystem { events: vec![] };
@@ -1619,7 +1610,12 @@ impl FactorishState {
         Err(NewObjectErr::OutOfMap)
     }
 
-    fn harvest(&mut self, position: &Position, clear_item: bool) -> Result<bool, JsValue> {
+    fn harvest(
+        &mut self,
+        position: &Position,
+        clear_item: bool,
+        ignore: Option<Entity>,
+    ) -> Result<bool, JsValue> {
         use specs::Join;
         let mut harvested_structure = false;
         let mut popup_text = String::new();
@@ -1630,7 +1626,9 @@ impl FactorishState {
             &mut self.world.write_component::<StructureBoxed>(),
         )
             .join()
-            .filter(|(_, entity_position, _)| *entity_position == position)
+            .filter(|(entity, entity_position, _)| {
+                Some(*entity) != ignore && *entity_position == position
+            })
         {
             // .structures
             // .iter()
@@ -2257,6 +2255,7 @@ impl FactorishState {
                             .get(new_s)
                             .map(|s| s.bounding_box(new_s, self))
                             .flatten();
+                        console_log!("bbox: {:?}", bbox);
                         if let Some(bbox) = bbox {
                             for y in bbox.y0..bbox.y1 {
                                 for x in bbox.x0..bbox.x1 {
@@ -2265,15 +2264,17 @@ impl FactorishState {
                                         .read_component::<Movable>()
                                         .get(new_s)
                                         .is_some();
-                                    self.harvest(&Position { x, y }, clear_item)?;
+                                    self.harvest(&Position { x, y }, clear_item, Some(new_s))?;
                                 }
                             }
                         }
 
+                        self.world.maintain();
+
                         let mut dynamic_storage = self.world.write_component::<StructureBoxed>();
-                        let dynamic = dynamic_storage
-                            .get_mut(new_s)
-                            .ok_or_else(|| js_str!("Created structure doesn't have dynamic!"))?;
+                        let dynamic = dynamic_storage.get_mut(new_s).ok_or_else(|| {
+                            js_str!("Created structure {:?} doesn't have dynamic!", new_s)
+                        })?;
                         use specs::Join;
                         // for structure in (&mut dynamic_storage).join() {
                         //     structure
@@ -2345,7 +2346,7 @@ impl FactorishState {
                 self.ore_harvesting = None;
             } else {
                 // Right click means explicit cleanup, so we pick up items no matter what.
-                self.harvest(&cursor, true)?;
+                self.harvest(&cursor, true, None)?;
                 events.push(js_sys::Array::of1(&JsValue::from_str(
                     "updatePlayerInventory",
                 )));
