@@ -748,10 +748,20 @@ impl FactorishState {
                     (&self.world.read_component::<Burner>()).maybe(),
                     (&self.world.read_component::<Energy>()).maybe(),
                     (&self.world.read_component::<Factory>()).maybe(),
+                    (&self.world.read_component::<Movable>()).maybe(),
                 )
                     .join()
                     .map(
-                        |(entity, dynamic, position, rotation, burner, energy, factory)| {
+                        |(
+                            entity,
+                            dynamic,
+                            position,
+                            rotation,
+                            burner,
+                            energy,
+                            factory,
+                            movable,
+                        )| {
                             let mut map = serde_json::Map::new();
                             map.insert(
                                 "id".to_string(),
@@ -803,6 +813,9 @@ impl FactorishState {
                                     serde_json::to_value(factory)
                                         .map_err(|e| js_str!("Factory serialize error: {}", e))?,
                                 );
+                            }
+                            if movable.is_some() {
+                                map.insert("movable".to_string(), serde_json::Value::Null);
                             }
                             Ok(serde_json::Value::Object(map))
                         },
@@ -1194,7 +1207,10 @@ impl FactorishState {
                 factory,
             };
             if let Ok(event) = structure.frame_proc(&mut components, self) {
-                raw_events.push(event);
+                if let FrameProcResult::None = event {
+                } else {
+                    raw_events.push(event);
+                }
             }
         }
 
@@ -1214,7 +1230,6 @@ impl FactorishState {
                     if self.hit_check(item.x, item.y, Some(item.id)) {
                         continue;
                     }
-                    console_log!("adding item from CreateItem event: {} {}", item.x, item.y);
                     self.drop_items.push(item);
                 }
             } else {
@@ -2189,6 +2204,9 @@ impl FactorishState {
                 serde_json::from_value::<Factory>(factory.take())
                     .map_err(|s| js_str!("structure factory deserialization error: {}", s))?,
             );
+        }
+        if value.get_mut("movable").is_some() {
+            builder = builder.with(Movable);
         }
         Ok(builder.build())
     }

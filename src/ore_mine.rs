@@ -273,8 +273,8 @@ impl Structure for OreMine {
                         return Ok(FrameProcResult::CreateItem(DropItem::new(
                             &mut state.serial_no,
                             *item.0,
-                            output_position.x * TILE_SIZE_I,
-                            output_position.y * TILE_SIZE_I,
+                            output_position.x,
+                            output_position.y,
                         )));
                     } else {
                         return Err(());
