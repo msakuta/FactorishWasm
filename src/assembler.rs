@@ -7,10 +7,10 @@ use super::{
     TILE_SIZE,
 };
 use serde::{Deserialize, Serialize};
+use specs::{Builder, Entity, World, WorldExt};
 use std::collections::HashMap;
 use wasm_bindgen::prelude::*;
 use web_sys::CanvasRenderingContext2d;
-use specs::{World, WorldExt, Builder, Entity};
 
 fn generate_item_image(item_image: &str, icon_size: bool, count: usize) -> String {
     let size = 32;
@@ -46,8 +46,9 @@ fn _recipe_html(state: &FactorishState, recipe: &Recipe) -> String {
 pub(crate) struct Assembler {}
 
 impl Assembler {
-    pub(crate) fn new(world: &World, position: &Position) -> Entity {
-        world.create_entity()
+    pub(crate) fn new(world: &mut World, position: &Position) -> Entity {
+        world
+            .create_entity()
             .with(*position)
             .with(Box::new(Assembler {}) as Box<dyn Structure + Send + Sync>)
             .with(Energy {
@@ -119,6 +120,7 @@ impl Structure for Assembler {
 
     fn draw(
         &self,
+        _entity: Entity,
         components: &StructureComponents,
         state: &FactorishState,
         context: &CanvasRenderingContext2d,
@@ -181,13 +183,18 @@ impl Structure for Assembler {
         Ok(())
     }
 
-    fn desc(&self, components: &StructureComponents, _state: &FactorishState) -> String {
-        let (energy, factory) =
-            if let Some(bundle) = components.energy.as_ref().zip(components.factory.as_ref()) {
-                bundle
-            } else {
-                return "Energy or Factory component not found".to_string();
-            };
+    fn desc(&self, entity: Entity, state: &FactorishState) -> String {
+        use specs::Join;
+        let energy = state.world.read_component::<Energy>();
+        let factory = state.world.read_component::<Factory>();
+        let (energy, factory) = if let Some(bundle) = (&energy, &factory)
+            .join()
+            .get(entity, &state.world.entities())
+        {
+            bundle
+        } else {
+            return "Energy or Factory component not found".to_string();
+        };
         format!(
             "{}<br>{}{}",
             if let Some(recipe) = &factory.recipe {
@@ -202,10 +209,10 @@ impl Structure for Assembler {
                     energy.value,
                     if 0. < energy.max { energy.value / energy.max * 100. } else { 0. }),
                     )
-                + &generate_item_image(&_state.image_time.as_ref().unwrap().url, true, recipe.recipe_time as usize) + "<br>" +
+                + &generate_item_image(&state.image_time.as_ref().unwrap().url, true, recipe.recipe_time as usize) + "<br>" +
                 "Outputs: <br>" +
                 &recipe.output.iter()
-                    .map(|item| format!("{}<br>", &generate_item_image(get_item_image_url(_state, &item.0), true, *item.1)))
+                    .map(|item| format!("{}<br>", &generate_item_image(get_item_image_url(state, &item.0), true, *item.1)))
                     .fold::<String, _>("".to_string(), |a, s| a + &s)
             } else {
                 String::from("No recipe")
@@ -219,7 +226,6 @@ impl Structure for Assembler {
         &mut self,
         components: &mut StructureComponents,
         _state: &mut FactorishState,
-        structures: &mut dyn DynIterMut<Item = StructureBundle>,
     ) -> Result<FrameProcResult, ()> {
         if let StructureComponents {
             position: Some(position),
@@ -237,18 +243,18 @@ impl Structure for Assembler {
             // Refill the energy from the fuel
             if energy.value < recipe.power_cost {
                 let mut accumulated = 0.;
-                for position in self.find_power_sources(position, _state, structures) {
-                    if let Some(structure) = structures
-                        .dyn_iter_mut()
-                        .find(|structure| structure.components.position == Some(position))
-                    {
-                        let demand = energy.max - energy.value - accumulated;
-                        if let Some(energy) = structure.dynamic.power_outlet(demand) {
-                            accumulated += energy;
-                            // console_log!("draining {:?}kJ of energy with {:?} demand, from {:?}, accumulated {:?}", energy, demand, structure.name(), accumulated);
-                        }
-                    }
-                }
+                // for position in self.find_power_sources(position, _state, structures) {
+                //     if let Some(structure) = structures
+                //         .dyn_iter_mut()
+                //         .find(|structure| structure.components.position == Some(position))
+                //     {
+                //         let demand = energy.max - energy.value - accumulated;
+                //         if let Some(energy) = structure.dynamic.power_outlet(demand) {
+                //             accumulated += energy;
+                //             // console_log!("draining {:?}kJ of energy with {:?} demand, from {:?}, accumulated {:?}", energy, demand, structure.name(), accumulated);
+                //         }
+                //     }
+                // }
                 energy.value += accumulated;
                 ret = FrameProcResult::InventoryChanged(*position);
             }

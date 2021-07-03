@@ -1,11 +1,12 @@
 use super::{
     pipe::Pipe,
     serialize_impl,
-    structure::{DynIterMut, Structure, StructureBundle, StructureComponents},
+    structure::{DynIterMut, Structure, StructureBoxed, StructureComponents},
     water_well::{FluidBox, FluidType},
-    FactorishState, FrameProcResult, Recipe,
+    FactorishState, FrameProcResult, Position, Recipe,
 };
 use serde::{Deserialize, Serialize};
+use specs::{Builder, Entity, World, WorldExt};
 use wasm_bindgen::prelude::*;
 use web_sys::CanvasRenderingContext2d;
 
@@ -21,21 +22,25 @@ pub(crate) struct SteamEngine {
 }
 
 impl SteamEngine {
-    pub(crate) fn new() -> Self {
-        SteamEngine {
-            progress: None,
-            power: 0.,
-            max_power: 100.,
-            recipe: Some(Recipe {
-                input: HashMap::new(),
-                input_fluid: Some(FluidType::Steam),
-                output: HashMap::new(),
-                output_fluid: None,
-                power_cost: -100.,
-                recipe_time: 100.,
-            }),
-            input_fluid_box: FluidBox::new(true, false, [false; 4]),
-        }
+    pub(crate) fn new(world: &mut World, position: Position) -> Entity {
+        world
+            .create_entity()
+            .with(Box::new(SteamEngine {
+                progress: None,
+                power: 0.,
+                max_power: 100.,
+                recipe: Some(Recipe {
+                    input: HashMap::new(),
+                    input_fluid: Some(FluidType::Steam),
+                    output: HashMap::new(),
+                    output_fluid: None,
+                    power_cost: -100.,
+                    recipe_time: 100.,
+                }),
+                input_fluid_box: FluidBox::new(true, false, [false; 4]),
+            }) as StructureBoxed)
+            .with(position)
+            .build()
     }
 
     const FLUID_PER_PROGRESS: f64 = 100.;
@@ -61,6 +66,7 @@ impl Structure for SteamEngine {
 
     fn draw(
         &self,
+        entity: Entity,
         components: &StructureComponents,
         state: &FactorishState,
         context: &CanvasRenderingContext2d,
@@ -70,7 +76,7 @@ impl Structure for SteamEngine {
         if depth != 0 {
             return Ok(());
         };
-        Pipe::draw_int(self, components, state, context, depth, false)?;
+        Pipe::draw_int(entity, self, components, state, context, depth, false)?;
         let (x, y) = if let Some(position) = &components.position {
             (position.x as f64 * 32., position.y as f64 * 32.)
         } else {
@@ -103,7 +109,7 @@ impl Structure for SteamEngine {
         Ok(())
     }
 
-    fn desc(&self, _components: &StructureComponents, _state: &FactorishState) -> String {
+    fn desc(&self, _entity: Entity, _state: &FactorishState) -> String {
         if self.recipe.is_some() {
             // Progress bar
             format!("{}{}{}{}{}Input fluid: {}",
@@ -129,13 +135,12 @@ impl Structure for SteamEngine {
         &mut self,
         components: &mut StructureComponents,
         state: &mut FactorishState,
-        structures: &mut dyn DynIterMut<Item = StructureBundle>,
     ) -> Result<FrameProcResult, ()> {
         let position = components.position.as_ref().ok_or(())?;
-        let connections = self.connection(components, state, structures.as_dyn_iter());
+        let connections = [false; 4]; //self.connection(components, state, structures.as_dyn_iter());
         self.input_fluid_box.connect_to = connections;
-        self.input_fluid_box
-            .simulate(position, state, &mut structures.dyn_iter_mut());
+        // self.input_fluid_box
+        //     .simulate(position, state, &mut structures.dyn_iter_mut());
         if let Some(recipe) = &self.recipe {
             if self.input_fluid_box.type_ == recipe.input_fluid {
                 self.progress = Some(0.);

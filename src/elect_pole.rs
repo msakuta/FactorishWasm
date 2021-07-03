@@ -1,6 +1,7 @@
-use super::structure::{DynIterMut, Structure, StructureBundle, StructureComponents};
+use super::structure::{DynIterMut, Position, Structure, StructureBundle, StructureComponents};
 use super::{FactorishState, FrameProcResult};
 use serde::{Deserialize, Serialize};
+use specs::{Builder, Entity, World, WorldExt};
 use wasm_bindgen::prelude::*;
 use web_sys::CanvasRenderingContext2d;
 
@@ -10,8 +11,12 @@ pub(crate) struct ElectPole {
 }
 
 impl ElectPole {
-    pub(crate) fn new() -> Self {
-        ElectPole { power: 0. }
+    pub(crate) fn new(world: &mut World, position: Position) -> Entity {
+        world
+            .create_entity()
+            .with(Box::new(ElectPole { power: 0. }) as Box<dyn Structure + Send + Sync>)
+            .with(position)
+            .build()
     }
 
     const POWER_CAPACITY: f64 = 10.;
@@ -24,6 +29,7 @@ impl Structure for ElectPole {
 
     fn draw(
         &self,
+        entity: Entity,
         components: &StructureComponents,
         state: &FactorishState,
         context: &CanvasRenderingContext2d,
@@ -58,21 +64,20 @@ impl Structure for ElectPole {
         &mut self,
         components: &mut StructureComponents,
         _state: &mut FactorishState,
-        structures: &mut dyn DynIterMut<Item = StructureBundle>,
     ) -> Result<FrameProcResult, ()> {
         let position = components.position.as_ref().ok_or(())?;
-        for structure in structures.dyn_iter_mut() {
-            if let Some(target_position) = structure.components.position.as_ref() {
-                if target_position.distance(position) < 3 {
-                    if let Some(power) = structure
-                        .dynamic
-                        .power_outlet(Self::POWER_CAPACITY - self.power)
-                    {
-                        self.power += power;
-                    }
-                }
-            };
-        }
+        // for structure in structures.dyn_iter_mut() {
+        //     if let Some(target_position) = structure.components.position.as_ref() {
+        //         if target_position.distance(position) < 3 {
+        //             if let Some(power) = structure
+        //                 .dynamic
+        //                 .power_outlet(Self::POWER_CAPACITY - self.power)
+        //             {
+        //                 self.power += power;
+        //             }
+        //         }
+        //     };
+        // }
         Ok(FrameProcResult::None)
     }
 

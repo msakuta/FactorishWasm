@@ -7,9 +7,9 @@ use super::{
     FactorishState, FrameProcResult, Inventory, ItemType, Position, Recipe, TempEnt,
 };
 use serde::{Deserialize, Serialize};
+use specs::{Builder, Entity, World, WorldExt};
 use wasm_bindgen::prelude::*;
 use web_sys::CanvasRenderingContext2d;
-use specs::{World, WorldExt, Builder, Entity};
 
 use std::collections::HashMap;
 
@@ -24,8 +24,9 @@ pub(crate) struct Boiler {
 }
 
 impl Boiler {
-    pub(crate) fn new(world: &World, position: &Position) -> Entity {
-        world.create_entity()
+    pub(crate) fn new(world: &mut World, position: Position) -> Entity {
+        world
+            .create_entity()
             .with(Box::new(Boiler {
                 progress: None,
                 recipe: Some(Recipe {
@@ -39,15 +40,15 @@ impl Boiler {
                 input_fluid_box: FluidBox::new(true, false, [false; 4]),
                 output_fluid_box: FluidBox::new(false, true, [false; 4]),
             }) as Box<dyn Structure + Send + Sync>)
-            .with(*position)
+            .with(position)
             .with(Burner {
-                    inventory: Inventory::new(),
-                    capacity: FUEL_CAPACITY,
-                })
+                inventory: Inventory::new(),
+                capacity: FUEL_CAPACITY,
+            })
             .with(Energy {
-                    value: 0.,
-                    max: 100.,
-                })
+                value: 0.,
+                max: 100.,
+            })
             .build()
     }
 
@@ -77,6 +78,7 @@ impl Structure for Boiler {
 
     fn draw(
         &self,
+        entity: Entity,
         components: &StructureComponents,
         state: &FactorishState,
         context: &CanvasRenderingContext2d,
@@ -86,7 +88,7 @@ impl Structure for Boiler {
         if depth != 0 {
             return Ok(());
         };
-        Pipe::draw_int(self, components, state, context, depth, false)?;
+        Pipe::draw_int(entity, self, components, state, context, depth, false)?;
         let (x, y) = if let Some(position) = &components.position {
             (position.x as f64 * 32., position.y as f64 * 32.)
         } else {
@@ -129,13 +131,18 @@ impl Structure for Boiler {
         Ok(())
     }
 
-    fn desc(&self, components: &StructureComponents, _state: &FactorishState) -> String {
-        let (_burner, energy) =
-            if let Some(burner) = components.burner.as_ref().zip(components.energy.as_ref()) {
-                burner
-            } else {
-                return "Burner not found".to_string();
-            };
+    fn desc(&self, entity: Entity, state: &FactorishState) -> String {
+        use specs::Join;
+        let burner = state.world.read_component::<Burner>();
+        let energy = state.world.read_component::<Energy>();
+        let (_burner, energy) = if let Some(burner) = (&burner, &energy)
+            .join()
+            .get(entity, &state.world.entities())
+        {
+            burner
+        } else {
+            return "Burner not found".to_string();
+        };
         format!(
             "{}",
             if self.recipe.is_some() {
@@ -164,17 +171,16 @@ impl Structure for Boiler {
         &mut self,
         components: &mut StructureComponents,
         state: &mut FactorishState,
-        structures: &mut dyn DynIterMut<Item = StructureBundle>,
     ) -> Result<FrameProcResult, ()> {
-        let connections = self.connection(components, state, structures.as_dyn_iter());
+        let connections = [false; 4]; //self.connection(components, state, structures.as_dyn_iter());
         let position = components.position.as_ref().ok_or(())?;
         let burner = components.burner.as_mut().ok_or(())?;
         let energy = components.energy.as_mut().ok_or(())?;
         self.output_fluid_box.connect_to = connections;
-        self.input_fluid_box
-            .simulate(position, state, &mut structures.dyn_iter_mut());
-        self.output_fluid_box
-            .simulate(position, state, &mut structures.dyn_iter_mut());
+        // self.input_fluid_box
+        //     .simulate(position, state, &mut structures.dyn_iter_mut());
+        // self.output_fluid_box
+        //     .simulate(position, state, &mut structures.dyn_iter_mut());
         if let Some(recipe) = &self.recipe {
             if self.input_fluid_box.type_ == Some(FluidType::Water) {
                 self.progress = Some(0.);

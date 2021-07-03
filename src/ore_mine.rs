@@ -7,10 +7,10 @@ use super::{
     TILE_SIZE,
 };
 use serde::{Deserialize, Serialize};
+use specs::{Builder, Entity, World, WorldExt};
 use std::collections::HashMap;
 use wasm_bindgen::prelude::*;
 use web_sys::CanvasRenderingContext2d;
-use specs::{World, WorldExt, Entity, Builder};
 
 const FUEL_CAPACITY: usize = 10;
 
@@ -21,8 +21,9 @@ pub(crate) struct OreMine {
 }
 
 impl OreMine {
-    pub(crate) fn new(world: &World, x: i32, y: i32, rotation: Rotation) -> Entity {
-        world.create_entity()
+    pub(crate) fn new(world: &mut World, x: i32, y: i32, rotation: Rotation) -> Entity {
+        world
+            .create_entity()
             .with(Box::new(OreMine {
                 progress: 0.,
                 recipe: None,
@@ -48,6 +49,7 @@ impl Structure for OreMine {
 
     fn draw(
         &self,
+        entity: Entity,
         components: &StructureComponents,
         state: &FactorishState,
         context: &CanvasRenderingContext2d,
@@ -103,13 +105,18 @@ impl Structure for OreMine {
         Ok(())
     }
 
-    fn desc(&self, components: &StructureComponents, state: &FactorishState) -> String {
-        let (position, energy) =
-            if let Some(energy) = components.position.as_ref().zip(components.energy.as_ref()) {
-                energy
-            } else {
-                return "Position or Energy not found".to_string();
-            };
+    fn desc(&self, entity: Entity, state: &FactorishState) -> String {
+        use specs::Join;
+        let position = state.world.read_component::<Position>();
+        let energy = state.world.read_component::<Energy>();
+        let (position, energy) = if let Some(energy) = (&position, &energy)
+            .join()
+            .get(entity, &state.world.entities())
+        {
+            energy
+        } else {
+            return "Position or Energy not found".to_string();
+        };
         let tile = &state.board[position.x as usize + position.y as usize * state.width as usize];
         if let Some(_recipe) = &self.recipe {
             // Progress bar
@@ -135,7 +142,6 @@ impl Structure for OreMine {
         &mut self,
         components: &mut StructureComponents,
         state: &mut FactorishState,
-        structures: &mut dyn DynIterMut<Item = StructureBundle>,
     ) -> Result<FrameProcResult, ()> {
         let position = components.position.as_ref().ok_or(())?;
         let rotation = components.rotation.as_ref().ok_or(())?;
@@ -219,37 +225,37 @@ impl Structure for OreMine {
             if 1. <= self.progress + progress {
                 self.progress = 0.;
                 let output_position = position.add(rotation.delta());
-                let mut str_iter = structures.dyn_iter_mut();
-                if let Some(structure) =
-                    str_iter.find(|s| s.components.position == Some(output_position))
-                {
-                    let mut it = recipe.output.iter();
-                    if let Some(item) = it.next() {
-                        // Check whether we can input first
-                        if structure.can_input(item.0) {
-                            if let Ok(val) = output(state, *item.0, position) {
-                                structure
-                                    .input(&DropItem {
-                                        id: 0,
-                                        type_: *item.0,
-                                        x: output_position.x,
-                                        y: output_position.y,
-                                    })
-                                    .map_err(|_| ())?;
-                                if val == 0 {
-                                    self.recipe = None;
-                                }
-                                return Ok(FrameProcResult::InventoryChanged(output_position));
-                            } else {
-                                self.recipe = None;
-                                return Err(());
-                            };
-                        }
-                    }
-                    if !structure.dynamic.movable() {
-                        return Ok(FrameProcResult::None);
-                    }
-                }
+                // let mut str_iter = structures.dyn_iter_mut();
+                // if let Some(structure) =
+                //     str_iter.find(|s| s.components.position == Some(output_position))
+                // {
+                //     let mut it = recipe.output.iter();
+                //     if let Some(item) = it.next() {
+                //         // Check whether we can input first
+                //         if structure.can_input(item.0) {
+                //             if let Ok(val) = output(state, *item.0, position) {
+                //                 structure
+                //                     .input(&DropItem {
+                //                         id: 0,
+                //                         type_: *item.0,
+                //                         x: output_position.x,
+                //                         y: output_position.y,
+                //                     })
+                //                     .map_err(|_| ())?;
+                //                 if val == 0 {
+                //                     self.recipe = None;
+                //                 }
+                //                 return Ok(FrameProcResult::InventoryChanged(output_position));
+                //             } else {
+                //                 self.recipe = None;
+                //                 return Err(());
+                //             };
+                //         }
+                //     }
+                //     if !structure.dynamic.movable() {
+                //         return Ok(FrameProcResult::None);
+                //     }
+                // }
                 if !state.hit_check(output_position.x, output_position.y, None) {
                     // let dest_tile = state.board[dx as usize + dy as usize * state.width as usize];
                     let mut it = recipe.output.iter();

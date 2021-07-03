@@ -1,9 +1,10 @@
 use super::{
     pipe::Pipe,
-    structure::{DynIterMut, Structure, StructureBundle, StructureComponents},
+    structure::{DynIterMut, Structure, StructureBoxed, StructureBundle, StructureComponents},
     FactorishState, FrameProcResult, Position,
 };
 use serde::{Deserialize, Serialize};
+use specs::{Builder, Entity, World, WorldExt};
 use wasm_bindgen::prelude::*;
 use web_sys::CanvasRenderingContext2d;
 
@@ -139,10 +140,15 @@ pub(crate) struct WaterWell {
 }
 
 impl WaterWell {
-    pub(crate) fn new() -> Self {
-        WaterWell {
-            output_fluid_box: FluidBox::new(false, true, [false; 4]).set_type(&FluidType::Water),
-        }
+    pub(crate) fn new(world: &mut World, position: Position) -> Entity {
+        world
+            .create_entity()
+            .with(Box::new(Self {
+                output_fluid_box: FluidBox::new(false, true, [false; 4])
+                    .set_type(&FluidType::Water),
+            }) as StructureBoxed)
+            .with(position)
+            .build()
     }
 }
 
@@ -153,6 +159,7 @@ impl Structure for WaterWell {
 
     fn draw(
         &self,
+        entity: Entity,
         components: &StructureComponents,
         state: &FactorishState,
         context: &CanvasRenderingContext2d,
@@ -162,7 +169,7 @@ impl Structure for WaterWell {
         if depth != 0 {
             return Ok(());
         };
-        Pipe::draw_int(self, components, state, context, depth, false)?;
+        Pipe::draw_int(entity, self, components, state, context, depth, false)?;
         let (x, y) = if let Some(position) = components.position {
             (position.x as f64 * 32., position.y as f64 * 32.)
         } else {
@@ -178,7 +185,7 @@ impl Structure for WaterWell {
         Ok(())
     }
 
-    fn desc(&self, _components: &StructureComponents, _state: &FactorishState) -> String {
+    fn desc(&self, _entity: Entity, _state: &FactorishState) -> String {
         format!(
             "{}<br>{}",
             self.output_fluid_box.desc(),
@@ -190,16 +197,15 @@ impl Structure for WaterWell {
         &mut self,
         components: &mut StructureComponents,
         state: &mut FactorishState,
-        structures: &mut dyn DynIterMut<Item = StructureBundle>,
     ) -> Result<FrameProcResult, ()> {
         self.output_fluid_box.amount =
             (self.output_fluid_box.amount + 1.).min(self.output_fluid_box.max_amount);
-        let connections = self.connection(components, state, structures.as_dyn_iter());
-        self.output_fluid_box.connect_to = connections;
-        if let Some(position) = components.position.as_ref() {
-            self.output_fluid_box
-                .simulate(position, state, &mut structures.dyn_iter_mut());
-        }
+        let connections = [false; 4]; //self.connection(components, state, structures.as_dyn_iter());
+                                      // self.output_fluid_box.connect_to = connections;
+                                      // if let Some(position) = components.position.as_ref() {
+                                      //     self.output_fluid_box
+                                      //         .simulate(position, state, &mut structures.dyn_iter_mut());
+                                      // }
         Ok(FrameProcResult::None)
     }
 

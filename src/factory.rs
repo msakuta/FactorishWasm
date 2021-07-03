@@ -4,8 +4,8 @@ use super::{
     FactorishState, FrameProcResult, Inventory, InventoryTrait, Recipe,
 };
 use serde::{Deserialize, Serialize};
+use specs::{Component, DenseVecStorage, ReadStorage, System, WriteStorage};
 use wasm_bindgen::prelude::*;
-use specs::{Component, DenseVecStorage, System, ReadStorage, WriteStorage};
 
 #[derive(Serialize, Deserialize, Component)]
 #[storage(DenseVecStorage)]
@@ -146,7 +146,11 @@ pub(crate) struct FactorySystem {
 }
 
 impl<'a> System<'a> for FactorySystem {
-    type SystemData = (ReadStorage<'a, Position>, WriteStorage<'a, Factory>, WriteStorage<'a, Energy>);
+    type SystemData = (
+        ReadStorage<'a, Position>,
+        WriteStorage<'a, Factory>,
+        WriteStorage<'a, Energy>,
+    );
 
     fn run(&mut self, (position, mut factory, mut energy): Self::SystemData) {
         use specs::Join;

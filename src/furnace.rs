@@ -7,9 +7,9 @@ use super::{
     DropItem, FactorishState, Inventory, InventoryTrait, ItemType, Position, Recipe,
 };
 use serde::{Deserialize, Serialize};
+use specs::{Builder, Entity, World, WorldExt};
 use wasm_bindgen::prelude::*;
 use web_sys::CanvasRenderingContext2d;
-use specs::{World, WorldExt, Builder, Entity};
 
 const FUEL_CAPACITY: usize = 10;
 
@@ -17,8 +17,9 @@ const FUEL_CAPACITY: usize = 10;
 pub(crate) struct Furnace {}
 
 impl Furnace {
-    pub(crate) fn new(world: &World, position: &Position) -> Entity {
-        world.create_entity()
+    pub(crate) fn new(world: &mut World, position: &Position) -> Entity {
+        world
+            .create_entity()
             .with(Box::new(Furnace {}) as Box<dyn Structure + Send + Sync>)
             .with(*position)
             .with(Burner {
@@ -41,6 +42,7 @@ impl Structure for Furnace {
 
     fn draw(
         &self,
+        entity: Entity,
         components: &StructureComponents,
         state: &FactorishState,
         context: &CanvasRenderingContext2d,
@@ -90,13 +92,18 @@ impl Structure for Furnace {
         Ok(())
     }
 
-    fn desc(&self, components: &StructureComponents, _state: &FactorishState) -> String {
-        let (energy, factory) =
-            if let Some(bundle) = components.energy.as_ref().zip(components.factory.as_ref()) {
-                bundle
-            } else {
-                return "Energy or Factory component not found".to_string();
-            };
+    fn desc(&self, entity: Entity, state: &FactorishState) -> String {
+        use specs::Join;
+        let energy = state.world.read_component::<Energy>();
+        let factory = state.world.read_component::<Factory>();
+        let (energy, factory) = if let Some(bundle) = (&energy, &factory)
+            .join()
+            .get(entity, &state.world.entities())
+        {
+            bundle
+        } else {
+            return "Energy or Factory component not found".to_string();
+        };
         format!(
             "{}<br>{}{}",
             if factory.recipe.is_some() {

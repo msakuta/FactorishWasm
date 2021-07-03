@@ -1,9 +1,10 @@
 use super::{
     items::{DropItem, ItemType},
     structure::{ItemResponse, ItemResponseResult, Structure, StructureComponents},
-    FactorishState, FrameProcResult, Inventory, InventoryTrait,
+    FactorishState, FrameProcResult, Inventory, InventoryTrait, Position,
 };
 use serde::{Deserialize, Serialize};
+use specs::{Builder, Entity, World, WorldExt};
 use wasm_bindgen::prelude::*;
 use web_sys::CanvasRenderingContext2d;
 
@@ -15,10 +16,14 @@ pub(crate) struct Chest {
 }
 
 impl Chest {
-    pub(crate) fn new() -> Self {
-        Chest {
-            inventory: Inventory::new(),
-        }
+    pub(crate) fn new(world: &mut World, position: Position) -> Entity {
+        world
+            .create_entity()
+            .with(Box::new(Self {
+                inventory: Inventory::new(),
+            }) as Box<dyn Structure + Send + Sync>)
+            .with(position)
+            .build()
     }
 }
 
@@ -29,6 +34,7 @@ impl Structure for Chest {
 
     fn draw(
         &self,
+        entity: Entity,
         components: &StructureComponents,
         state: &FactorishState,
         context: &CanvasRenderingContext2d,
@@ -52,7 +58,7 @@ impl Structure for Chest {
         }
     }
 
-    fn desc(&self, _components: &StructureComponents, _state: &FactorishState) -> String {
+    fn desc(&self, _entity: Entity, _state: &FactorishState) -> String {
         format!(
             "Items: \n{}",
             self.inventory

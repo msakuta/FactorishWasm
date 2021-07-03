@@ -4,9 +4,9 @@ use super::structure::{
 };
 use super::{DropItem, FactorishState, Position, Rotation, TILE_SIZE};
 use serde::{Deserialize, Serialize};
+use specs::{Builder, Entity, World, WorldExt};
 use wasm_bindgen::prelude::*;
 use web_sys::CanvasRenderingContext2d;
-use specs::{World, WorldExt, Entity, Builder};
 
 #[derive(Serialize, Deserialize)]
 pub(crate) struct Splitter {
@@ -14,11 +14,13 @@ pub(crate) struct Splitter {
 }
 
 impl Splitter {
-    pub(crate) fn new(world: &World, position: Position, rotation: Rotation) -> Entity {
-        world.create_entity()
+    pub(crate) fn new(world: &mut World, position: Position, rotation: Rotation) -> Entity {
+        world
+            .create_entity()
             .with(Box::new(Splitter { direction: 0 }) as Box<dyn Structure + Send + Sync>)
             .with(position)
             .with(rotation)
+            .with(crate::structure::Movable)
             .build()
     }
 }
@@ -35,17 +37,13 @@ impl Structure for Splitter {
         }
     }
 
-    fn bounding_box(&self, components: &StructureComponents) -> Option<BoundingBox> {
-        let (position, rotation) = if let StructureComponents {
-            position: Some(position),
-            rotation: Some(rotation),
-            ..
-        } = components
-        {
-            (position, rotation)
-        } else {
-            return None;
-        };
+    fn bounding_box(&self, entity: Entity, state: &FactorishState) -> Option<BoundingBox> {
+        use specs::Join;
+        let position = state.world.read_component::<Position>();
+        let rotation = state.world.read_component::<Rotation>();
+        let (position, rotation) = (&position, &rotation)
+            .join()
+            .get(entity, &state.world.entities())?;
         Some(match *rotation {
             Rotation::Left => BoundingBox {
                 x0: position.x,
@@ -76,6 +74,7 @@ impl Structure for Splitter {
 
     fn draw(
         &self,
+        entity: Entity,
         components: &StructureComponents,
         state: &FactorishState,
         context: &CanvasRenderingContext2d,

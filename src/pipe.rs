@@ -1,9 +1,10 @@
 use super::{
-    structure::{DynIterMut, Structure, StructureBundle, StructureComponents},
+    structure::{DynIterMut, Structure, StructureBoxed, StructureBundle, StructureComponents},
     water_well::FluidBox,
-    FactorishState, FrameProcResult, Ref,
+    FactorishState, FrameProcResult, Position, Ref,
 };
 use serde::{Deserialize, Serialize};
+use specs::{Builder, Entity, World, WorldExt};
 use wasm_bindgen::prelude::*;
 use web_sys::CanvasRenderingContext2d;
 
@@ -13,13 +14,18 @@ pub(crate) struct Pipe {
 }
 
 impl Pipe {
-    pub(crate) fn new() -> Self {
-        Pipe {
-            fluid_box: FluidBox::new(true, true, [false; 4]),
-        }
+    pub(crate) fn new(world: &mut World, position: Position) -> Entity {
+        world
+            .create_entity()
+            .with(Box::new(Pipe {
+                fluid_box: FluidBox::new(true, true, [false; 4]),
+            }) as StructureBoxed)
+            .with(position)
+            .build()
     }
 
     pub(crate) fn draw_int(
+        entity: Entity,
         structure: &dyn Structure,
         components: &StructureComponents,
         state: &FactorishState,
@@ -44,10 +50,9 @@ impl Pipe {
 
                 // We could split and chain like above, but we don't have to, as long as we deal with immutable
                 // references.
-                let structures_slice: &[StructureBundle] = state.structures.as_slice();
+                // let structures_slice: &[StructureBundle] = state.structures.as_slice();
 
-                let connection_list =
-                    structure.connection(components, state, &Ref(structures_slice));
+                let connection_list = structure.connection(entity, state);
                 let connections = connection_list
                     .iter()
                     .enumerate()
@@ -84,16 +89,17 @@ impl Structure for Pipe {
 
     fn draw(
         &self,
+        entity: Entity,
         components: &StructureComponents,
         state: &FactorishState,
         context: &CanvasRenderingContext2d,
         depth: i32,
         _is_toolbar: bool,
     ) -> Result<(), JsValue> {
-        Self::draw_int(self, components, state, context, depth, true)
+        Self::draw_int(entity, self, components, state, context, depth, true)
     }
 
-    fn desc(&self, _components: &StructureComponents, _state: &FactorishState) -> String {
+    fn desc(&self, _entity: Entity, _state: &FactorishState) -> String {
         self.fluid_box.desc()
         // getHTML(generateItemImage("time", true, this.recipe.time), true) + "<br>" +
         // "Outputs: <br>" +
@@ -104,13 +110,12 @@ impl Structure for Pipe {
         &mut self,
         components: &mut StructureComponents,
         state: &mut FactorishState,
-        structures: &mut dyn DynIterMut<Item = StructureBundle>,
     ) -> Result<FrameProcResult, ()> {
-        self.fluid_box.connect_to = self.connection(components, state, structures.as_dyn_iter());
-        if let Some(position) = &components.position {
-            self.fluid_box
-                .simulate(position, state, &mut structures.dyn_iter_mut());
-        }
+        // self.fluid_box.connect_to = self.connection(components, state, structures.as_dyn_iter());
+        // if let Some(position) = &components.position {
+        //     self.fluid_box
+        //         .simulate(position, state, &mut structures.dyn_iter_mut());
+        // }
         Ok(FrameProcResult::None)
     }
 

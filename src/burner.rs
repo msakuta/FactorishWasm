@@ -4,9 +4,9 @@ use super::{
     FactorishState, FrameProcResult, Inventory, InventoryTrait, Position, COAL_POWER,
 };
 use serde::{Deserialize, Serialize};
+use specs::{Component, DenseVecStorage, ReadStorage, System, WriteStorage};
 use wasm_bindgen::JsValue;
 use web_sys::CanvasRenderingContext2d;
-use specs::{Component, DenseVecStorage, System, ReadStorage, WriteStorage};
 
 #[derive(Serialize, Deserialize, Component)]
 #[storage(DenseVecStorage)]
@@ -59,7 +59,6 @@ impl Burner {
         &mut self,
         position: Option<&mut Position>,
         energy: Option<&mut Energy>,
-        _structure: &mut dyn Structure,
     ) -> Result<FrameProcResult, ()> {
         let position = position.ok_or(())?;
         let energy = energy.ok_or(())?; //|| js_str!("Burner without Energy component"))?;
@@ -100,7 +99,11 @@ pub(crate) struct BurnerSystem {
 }
 
 impl<'a> System<'a> for BurnerSystem {
-    type SystemData = (ReadStorage<'a, Position>, WriteStorage<'a, Burner>, WriteStorage<'a, Energy>);
+    type SystemData = (
+        ReadStorage<'a, Position>,
+        WriteStorage<'a, Burner>,
+        WriteStorage<'a, Energy>,
+    );
 
     fn run(&mut self, (position, mut burner, mut energy): Self::SystemData) {
         use specs::Join;
@@ -111,7 +114,8 @@ impl<'a> System<'a> for BurnerSystem {
                     burner.inventory.remove_item(&ItemType::CoalOre);
                     energy.value += COAL_POWER;
                     energy.max = energy.max.max(energy.value);
-                    self.events.push(FrameProcResult::InventoryChanged(*position));
+                    self.events
+                        .push(FrameProcResult::InventoryChanged(*position));
                 }
             }
         }

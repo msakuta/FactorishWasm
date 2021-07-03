@@ -4,9 +4,12 @@ use super::{
 };
 use rotate_enum::RotateEnum;
 use serde::{Deserialize, Serialize};
+use specs::{
+    Component, DenseVecStorage, Entities, Entity, ReadStorage, System, VecStorage, World, WorldExt,
+    WriteStorage,
+};
 use wasm_bindgen::prelude::*;
 use web_sys::CanvasRenderingContext2d;
-use specs::{Component, Entities, Entity, ReadStorage, System, VecStorage, DenseVecStorage, WriteStorage};
 
 #[macro_export]
 macro_rules! serialize_impl {
@@ -159,9 +162,13 @@ pub(crate) trait Structure {
             height: 1,
         }
     }
-    fn bounding_box(&self, components: &StructureComponents) -> Option<BoundingBox> {
-        let position = &components.position?;
-        let (position, size) = (position, self.size());
+    fn bounding_box(&self, entity: Entity, state: &FactorishState) -> Option<BoundingBox> {
+        let position = state
+            .world
+            .read_component::<Position>()
+            .get(entity)
+            .copied()?;
+        let size = self.size();
         Some(BoundingBox {
             x0: position.x,
             y0: position.y,
@@ -169,27 +176,27 @@ pub(crate) trait Structure {
             y1: position.y + size.height,
         })
     }
-    fn contains(&self, components: &StructureComponents, pos: &Position) -> bool {
-        self.bounding_box(components)
+    fn contains(&self, entity: Entity, pos: &Position, state: &FactorishState) -> bool {
+        self.bounding_box(entity, state)
             .map(|bb| bb.x0 <= pos.x && pos.x < bb.x1 && bb.y0 <= pos.y && pos.y < bb.y1)
             .unwrap_or(false)
     }
     fn draw(
         &self,
+        entity: Entity,
         _components: &StructureComponents,
         state: &FactorishState,
         context: &CanvasRenderingContext2d,
         depth: i32,
         is_tooptip: bool,
     ) -> Result<(), JsValue>;
-    fn desc(&self, _components: &StructureComponents, _state: &FactorishState) -> String {
+    fn desc(&self, _entity: Entity, _state: &FactorishState) -> String {
         String::from("")
     }
     fn frame_proc(
         &mut self,
         _components: &mut StructureComponents,
         _state: &mut FactorishState,
-        _structures: &mut dyn DynIterMut<Item = StructureBundle>,
     ) -> Result<FrameProcResult, ()> {
         Ok(FrameProcResult::None)
     }
@@ -198,11 +205,7 @@ pub(crate) trait Structure {
         Ok(())
     }
     /// event handler for costruction events for this structure itself.
-    fn on_construction_self(
-        &mut self,
-        _others: &dyn DynIter<Item = StructureBundle>,
-        _construct: bool,
-    ) -> Result<(), JsValue> {
+    fn on_construction_self(&mut self, _construct: bool) -> Result<(), JsValue> {
         Ok(())
     }
     fn movable(&self) -> bool {
@@ -279,33 +282,33 @@ pub(crate) trait Structure {
     fn fluid_box_mut(&mut self) -> Option<Vec<&mut FluidBox>> {
         None
     }
-    fn connection(
-        &self,
-        components: &StructureComponents,
-        state: &FactorishState,
-        structures: &dyn DynIter<Item = StructureBundle>,
-    ) -> [bool; 4] {
-        let position = if let Some(position) = components.position.as_ref() {
-            position
+    fn connection(&self, entity: Entity, state: &FactorishState) -> [bool; 4] {
+        let position = if let Some(position) = state.world.read_component::<Position>().get(entity)
+        {
+            *position
         } else {
             return [false; 4];
         };
         // let mut structures_copy = structures.clone();
         let has_fluid_box = |x, y| {
+            use specs::Join;
             if x < 0 || state.width <= x as u32 || y < 0 || state.height <= y as u32 {
                 return false;
             }
-            if let Some(structure) = structures
-                .dyn_iter()
-                .find(|s| s.components.position == Some(Position { x, y }))
+            if let Some(structure) = (
+                &state.world.read_component::<StructureBoxed>(),
+                &state.world.read_component::<Position>(),
+            )
+                .join()
+                .find(|(_, position)| **position == Position { x, y })
             {
-                return structure.dynamic.fluid_box().is_some();
+                return structure.0.fluid_box().is_some();
             }
             false
         };
 
         // Fluid containers connect to other containers
-        let Position { x, y } = *position;
+        let Position { x, y } = position;
         let l = has_fluid_box(x - 1, y);
         let t = has_fluid_box(x, y - 1);
         let r = has_fluid_box(x + 1, y);
@@ -332,8 +335,6 @@ pub(crate) trait Structure {
     fn js_serialize(&self) -> serde_json::Result<serde_json::Value>;
 }
 
-
-
 #[derive(Serialize, Deserialize)]
 pub(crate) struct Energy {
     pub value: f64,
@@ -343,6 +344,9 @@ pub(crate) struct Energy {
 impl Component for Energy {
     type Storage = VecStorage<Self>;
 }
+
+#[derive(Component)]
+pub(crate) struct Movable;
 
 pub(crate) struct StructureComponents<'a> {
     pub position: Option<Position>,
@@ -376,14 +380,17 @@ impl<'a> Default for StructureComponents<'a> {
     }
 }
 
+pub(crate) type StructureDynamic = dyn Structure + Send + Sync;
+pub(crate) type StructureBoxed = Box<StructureDynamic>;
+
 pub(crate) struct StructureBundle<'a> {
-    pub dynamic: Box<dyn Structure + Send + Sync>,
+    pub dynamic: &'a mut StructureDynamic,
     pub components: StructureComponents<'a>,
 }
 
 impl<'a> StructureBundle<'a> {
     pub(crate) fn new(
-        dynamic: Box<dyn Structure + Send + Sync>,
+        dynamic: &'a mut StructureDynamic,
         position: Option<Position>,
         rotation: Option<Rotation>,
         burner: Option<&'a mut Burner>,

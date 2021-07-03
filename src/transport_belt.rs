@@ -5,19 +5,21 @@ use super::{
     DropItem, FactorishState, Position, Rotation, TILE_SIZE,
 };
 use serde::{Deserialize, Serialize};
+use specs::{Builder, Entity, World, WorldExt};
 use wasm_bindgen::prelude::*;
 use web_sys::CanvasRenderingContext2d;
-use specs::{World, WorldExt, Entity, Builder};
 
 #[derive(Serialize, Deserialize)]
 pub(crate) struct TransportBelt {}
 
 impl TransportBelt {
-    pub(crate) fn new(world: &World, position: Position, rotation: Rotation) -> Entity {
-        world.create_entity()
+    pub(crate) fn new(world: &mut World, position: Position, rotation: Rotation) -> Entity {
+        world
+            .create_entity()
             .with(Box::new(TransportBelt {}) as Box<dyn Structure + Send + Sync>)
             .with(position)
             .with(rotation)
+            .with(crate::structure::Movable)
             .build()
     }
 }
@@ -29,6 +31,7 @@ impl Structure for TransportBelt {
 
     fn draw(
         &self,
+        entity: Entity,
         components: &StructureComponents,
         state: &FactorishState,
         context: &CanvasRenderingContext2d,
