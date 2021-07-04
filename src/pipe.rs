@@ -41,6 +41,8 @@ impl Pipe {
         } else {
             (0., 0.)
         };
+        let input_fluid_box = components.input_fluid_box.as_ref();
+        let output_fluid_box = components.output_fluid_box.as_ref();
         match state.image_pipe.as_ref() {
             Some(img) => {
                 // let (front, mid) = state.structures.split_at_mut(i);
@@ -52,7 +54,18 @@ impl Pipe {
                 // references.
                 // let structures_slice: &[StructureBundle] = state.structures.as_slice();
 
-                let connection_list = [false; 4]; //structure.connection(entity, state);
+                let mut connection_list = [false; 4]; //structure.connection(entity, state);
+                let mut update_fluid_box = |fluid_box: Option<&FluidBox>| {
+                    if let Some(fb) = fluid_box {
+                        for (i, connect) in fb.connect_to.iter().enumerate() {
+                            if connect.is_some() {
+                                connection_list[i] = true;
+                            }
+                        }
+                    }
+                };
+                update_fluid_box(input_fluid_box.map(|i| &i.0));
+                update_fluid_box(output_fluid_box.map(|i| &i.0));
                 let connections = connection_list
                     .iter()
                     .enumerate()

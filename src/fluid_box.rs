@@ -1,6 +1,4 @@
-use super::{
-    FactorishState, Position,
-};
+use super::{FactorishState, Position};
 use serde::{Deserialize, Serialize};
 use specs::{Component, DenseVecStorage, Entity, World, WorldExt, WriteStorage};
 use wasm_bindgen::prelude::*;
@@ -25,7 +23,7 @@ pub(crate) struct FluidBox {
     pub filter: Option<FluidType>, // permits undefined
 }
 
-type Connection = (Entity, Entity);
+type Connection = (Entity, Entity, u8);
 
 impl FluidBox {
     pub(crate) fn new(input_enable: bool, output_enable: bool) -> Self {
@@ -57,7 +55,7 @@ impl FluidBox {
             )
     }
 
-    pub(crate) fn list_connections(world: &World) -> Vec<Connection> {
+    fn list_connections(world: &World) -> Vec<Connection> {
         use specs::Join;
         let entities = world.entities();
         let positions = world.read_component::<Position>();
@@ -70,23 +68,23 @@ impl FluidBox {
             if ifb2.is_none() && ofb2.is_none() {
                 continue;
             }
-            let mut has_fluid_box = |x, y| {
+            let mut has_fluid_box = |x, y, idx| {
                 if let Some(bundle) = (&entities, &positions, (&ifb).maybe(), (&ofb).maybe())
                     .join()
                     .find(|(_, position, _, _)| **position == Position { x, y })
                 {
                     if bundle.2.is_some() || bundle.3.is_some() {
-                        ret.push((entity, bundle.0));
+                        ret.push((entity, bundle.0, idx));
                     }
                 }
             };
 
             // Fluid containers connect to other containers
             let Position { x, y } = *position;
-            has_fluid_box(x - 1, y);
-            has_fluid_box(x, y - 1);
-            has_fluid_box(x + 1, y);
-            has_fluid_box(x, y + 1);
+            has_fluid_box(x - 1, y, 0);
+            has_fluid_box(x, y - 1, 1);
+            has_fluid_box(x + 1, y, 2);
+            has_fluid_box(x, y + 1, 3);
         }
         ret
     }
@@ -96,14 +94,8 @@ impl FluidBox {
         entity: Entity,
         connections: &[Connection],
     ) -> Result<(), JsValue> {
-        let mut idx = 0;
-        for (_, to) in connections.iter().filter(|(from, _)| *from == entity) {
-            if idx < self.connect_to.len() {
-                self.connect_to[idx] = Some(*to);
-                idx += 1;
-            } else {
-                return Err(js_str!("More than 4 connections in a fluid box!"));
-            }
+        for (_, to, idx) in connections.iter().filter(|(from, _, _)| *from == entity) {
+            self.connect_to[*idx as usize] = Some(*to);
         }
         Ok(())
     }
