@@ -195,17 +195,11 @@ impl Structure for Boiler {
         components: &mut StructureComponents,
         state: &mut FactorishState,
     ) -> Result<FrameProcResult, ()> {
-        let connections = [false; 4]; //self.connection(components, state, structures.as_dyn_iter());
         let position = components.position.as_ref().ok_or(())?;
         let burner = components.burner.as_mut().ok_or(())?;
         let energy = components.energy.as_mut().ok_or(())?;
         let input_fluid_box = components.input_fluid_box.as_mut().ok_or(())?;
         let output_fluid_box = components.output_fluid_box.as_mut().ok_or(())?;
-        // self.output_fluid_box.connect_to = connections;
-        // self.input_fluid_box
-        //     .simulate(position, state, &mut structures.dyn_iter_mut());
-        // self.output_fluid_box
-        //     .simulate(position, state, &mut structures.dyn_iter_mut());
         if let Some(recipe) = &self.recipe {
             if input_fluid_box.0.type_ == Some(FluidType::Water) {
                 self.progress = Some(0.);

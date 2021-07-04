@@ -1,11 +1,9 @@
 use super::{
-    structure::{StructureBundle, StructureComponents},
-    FactorishState, FrameProcResult, Position,
+    FactorishState, Position,
 };
 use serde::{Deserialize, Serialize};
-use specs::{Builder, Component, DenseVecStorage, Entity, World, WorldExt};
+use specs::{Component, DenseVecStorage, Entity, World, WorldExt, WriteStorage};
 use wasm_bindgen::prelude::*;
-use web_sys::CanvasRenderingContext2d;
 
 use std::cmp::Eq;
 
@@ -50,11 +48,12 @@ impl FluidBox {
     pub(crate) fn desc(&self) -> String {
         let amount_ratio = self.amount / self.max_amount * 100.;
         // Progress bar
-        format!("{}{}{}",
+        format!("{}{}{}{}",
             format!("{}: {:.0}%<br>", self.type_.map(|v| format!("{:?}", v)).unwrap_or_else(|| "None".to_string()), amount_ratio),
             "<div style='position: relative; width: 100px; height: 10px; background-color: #001f1f; margin: 2px; border: 1px solid #3f3f3f'>",
             format!("<div style='position: absolute; width: {}px; height: 10px; background-color: #ff00ff'></div></div>",
                 amount_ratio),
+            format!("Connect to: {:?}", self.connect_to),
             )
     }
 
@@ -62,14 +61,32 @@ impl FluidBox {
         use specs::Join;
         let entities = world.entities();
         let positions = world.read_component::<Position>();
+        let ifb = world.read_component::<InputFluidBox>();
         let ofb = world.read_component::<OutputFluidBox>();
         let mut ret = vec![];
-        for (entity, position, output_fluid_box) in (&entities, &positions, &ofb).join() {
-            for (entity2, position2, output_fluid_box2) in (&entities, &positions, &ofb).join() {
-                if (position.x - position2.x).abs() <= 1 && (position.y - position2.y).abs() <= 1 {
-                    ret.push((entity, entity2));
-                }
+        for (entity, position, ifb2, ofb2) in
+            (&entities, &positions, (&ifb).maybe(), (&ofb).maybe()).join()
+        {
+            if ifb2.is_none() && ofb2.is_none() {
+                continue;
             }
+            let mut has_fluid_box = |x, y| {
+                if let Some(bundle) = (&entities, &positions, (&ifb).maybe(), (&ofb).maybe())
+                    .join()
+                    .find(|(_, position, _, _)| **position == Position { x, y })
+                {
+                    if bundle.2.is_some() || bundle.3.is_some() {
+                        ret.push((entity, bundle.0));
+                    }
+                }
+            };
+
+            // Fluid containers connect to other containers
+            let Position { x, y } = *position;
+            has_fluid_box(x - 1, y);
+            has_fluid_box(x, y - 1);
+            has_fluid_box(x + 1, y);
+            has_fluid_box(x, y + 1);
         }
         ret
     }
@@ -80,9 +97,10 @@ impl FluidBox {
         connections: &[Connection],
     ) -> Result<(), JsValue> {
         let mut idx = 0;
-        for (_, to) in connections.iter().filter(|(from, to)| *from == entity) {
+        for (_, to) in connections.iter().filter(|(from, _)| *from == entity) {
             if idx < self.connect_to.len() {
                 self.connect_to[idx] = Some(*to);
+                idx += 1;
             } else {
                 return Err(js_str!("More than 4 connections in a fluid box!"));
             }
@@ -90,21 +108,19 @@ impl FluidBox {
         Ok(())
     }
 
-    pub(crate) fn simulate(&mut self, position: &Position, state: &FactorishState, world: &World) {
+    pub(crate) fn simulate(
+        &mut self,
+        input_fluid_box_storage: &mut WriteStorage<InputFluidBox>,
+        position: &Position,
+        state: &FactorishState,
+        world: &World,
+    ) {
         let mut _biggest_flow_idx = -1;
         let mut biggest_flow_amount = 1e-3; // At least this amount of flow is required for displaying flow direction
                                             // In an unlikely event, a fluid box without either input or output ports has nothing to do
         if self.amount == 0. || !self.input_enable && !self.output_enable {
             return;
         }
-        let rel_dir = [[-1, 0], [0, -1], [1, 0], [0, 1]];
-        // let connect_list = self
-        //     .connect_to
-        //     .iter()
-        //     .enumerate()
-        //     .map(|(i, c)| (i, *c))
-        //     .filter(|(_, c)| *c)
-        //     .collect::<Vec<_>>();
         let connect_to = self.connect_to;
         for (i, connect) in connect_to.iter().copied().enumerate() {
             let connect = if let Some(connect) = connect {
@@ -112,7 +128,6 @@ impl FluidBox {
             } else {
                 continue;
             };
-            let mut input_fluid_box_storage = world.write_component::<InputFluidBox>();
             let input_fluid_box = input_fluid_box_storage.get_mut(connect);
             let input_fluid_box = if let Some(input_fluid_box) = input_fluid_box {
                 input_fluid_box
@@ -166,13 +181,34 @@ impl FluidBox {
                     _biggest_flow_idx = i as isize;
                 }
             };
-            // if let Some(fluid_boxes) = structure.dynamic.fluid_box_mut() {
-            // for fluid_box in fluid_boxes {
             process_fluid_box(self, &mut input_fluid_box.0);
-            // }
-            // }
-            // }
         }
+    }
+
+    pub(crate) fn fluid_simulation(world: &World, state: &FactorishState) -> Result<(), JsValue> {
+        use specs::Join;
+        let connections = FluidBox::list_connections(&world);
+        let entities = world.entities();
+        let positions = world.read_component::<Position>();
+        let mut ifb = world.write_component::<InputFluidBox>();
+        let mut ofb = world.write_component::<OutputFluidBox>();
+        for (entity, output_fluid_box) in (&entities, &mut ofb).join() {
+            output_fluid_box
+                .0
+                .update_connections(entity, &connections)?;
+        }
+        for (entity, input_fluid_box) in (&entities, &mut ifb).join() {
+            input_fluid_box.0.update_connections(entity, &connections)?;
+        }
+        for (position, output_fluid_box) in (&positions, &mut ofb).join() {
+            output_fluid_box
+                .0
+                .simulate(&mut ifb, position, state, &world);
+        }
+        // for output_fluid_box in world.write_component::<OutputFluidBox>().as_mut_slice() {
+        //     output_fluid_box.0.simulate(position, self);
+        // }
+        Ok(())
     }
 }
 

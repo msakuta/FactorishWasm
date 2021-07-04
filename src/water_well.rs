@@ -72,6 +72,7 @@ impl Structure for WaterWell {
     ) -> Result<FrameProcResult, ()> {
         if let Some(ofb) = &mut components.output_fluid_box {
             ofb.0.amount = (ofb.0.amount + 1.).min(ofb.0.max_amount);
+            ofb.0.type_ = Some(FluidType::Water);
         }
         let connections = [false; 4]; //self.connection(components, state, structures.as_dyn_iter());
                                       // self.output_fluid_box.connect_to = connections;

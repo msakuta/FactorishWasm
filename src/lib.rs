@@ -1223,26 +1223,7 @@ impl FactorishState {
             }
         }
 
-        let connections = FluidBox::list_connections(&world);
-        let entities = world.entities();
-        let positions = world.read_component::<Position>();
-        let mut ofb = world.write_component::<OutputFluidBox>();
-        console_log!("connections {}", connections.len());
-        // console_log!("slice {}", fluid_box_slice.len());
-        for (entity, position, output_fluid_box) in (&entities, &positions, &mut ofb).join() {
-            output_fluid_box
-                .0
-                .update_connections(entity, &connections)?;
-        }
-        for (entity, position, output_fluid_box) in (&entities, &positions, &mut ofb).join() {
-            output_fluid_box.0.simulate(position, self, &world);
-        }
-        // for output_fluid_box in world.write_component::<OutputFluidBox>().as_mut_slice() {
-        //     output_fluid_box.0.simulate(position, self);
-        // }
-        drop(entities);
-        drop(positions);
-        drop(ofb);
+        FluidBox::fluid_simulation(&world, self)?;
 
         for (
             entity,
@@ -3142,48 +3123,49 @@ impl FactorishState {
         if self.debug_fluidbox {
             use specs::Join;
             context.save();
-            for (entity, dynamic) in (
+            for (entity, dynamic, input_fluid_box, output_fluid_box) in (
                 &self.world.entities(),
-                &self
-                    .world
-                    .read_component::<Box<dyn Structure + Send + Sync>>(),
+                &self.world.read_component::<StructureBoxed>(),
+                (&self.world.read_component::<InputFluidBox>()).maybe(),
+                (&self.world.read_component::<OutputFluidBox>()).maybe(),
             )
                 .join()
             {
-                if let Some(fluid_boxes) = dynamic.fluid_box() {
-                    let bb = try_continue!(entity_bbox(&self.world, entity));
-                    for (i, fb) in fluid_boxes.iter().enumerate() {
-                        const BAR_MARGIN: f64 = 4.;
-                        const BAR_WIDTH: f64 = 4.;
-                        context.set_stroke_style(&js_str!("red"));
-                        context.set_fill_style(&js_str!("black"));
-                        context.fill_rect(
-                            bb.x0 as f64 * TILE_SIZE + BAR_MARGIN + 6. * i as f64,
-                            bb.y0 as f64 * TILE_SIZE + BAR_MARGIN,
-                            BAR_WIDTH,
-                            (bb.y1 - bb.y0) as f64 * TILE_SIZE - BAR_MARGIN * 2.,
-                        );
-                        context.stroke_rect(
-                            bb.x0 as f64 * TILE_SIZE + BAR_MARGIN + 6. * i as f64,
-                            bb.y0 as f64 * TILE_SIZE + BAR_MARGIN,
-                            BAR_WIDTH,
-                            (bb.y1 - bb.y0) as f64 * TILE_SIZE - BAR_MARGIN * 2.,
-                        );
-                        context.set_fill_style(&js_str!(match fb.type_ {
-                            Some(FluidType::Water) => "#00ffff",
-                            Some(FluidType::Steam) => "#afafaf",
-                            _ => "#7f7f7f",
-                        }));
-                        let bar_height = fb.amount / fb.max_amount
-                            * ((bb.y1 - bb.y0) as f64 * TILE_SIZE - BAR_MARGIN * 2.);
-                        context.fill_rect(
-                            bb.x0 as f64 * TILE_SIZE + BAR_MARGIN + 6. * i as f64,
-                            bb.y1 as f64 * TILE_SIZE - BAR_MARGIN - bar_height,
-                            4.,
-                            bar_height,
-                        );
-                    }
-                }
+                let bb = try_continue!(entity_bbox(&self.world, entity));
+                let render_fluid_box = |fb: &FluidBox, i| {
+                    const BAR_MARGIN: f64 = 4.;
+                    const BAR_WIDTH: f64 = 4.;
+                    context.set_stroke_style(&js_str!("red"));
+                    context.set_fill_style(&js_str!("black"));
+                    context.fill_rect(
+                        bb.x0 as f64 * TILE_SIZE + BAR_MARGIN + 6. * i as f64,
+                        bb.y0 as f64 * TILE_SIZE + BAR_MARGIN,
+                        BAR_WIDTH,
+                        (bb.y1 - bb.y0) as f64 * TILE_SIZE - BAR_MARGIN * 2.,
+                    );
+                    context.stroke_rect(
+                        bb.x0 as f64 * TILE_SIZE + BAR_MARGIN + 6. * i as f64,
+                        bb.y0 as f64 * TILE_SIZE + BAR_MARGIN,
+                        BAR_WIDTH,
+                        (bb.y1 - bb.y0) as f64 * TILE_SIZE - BAR_MARGIN * 2.,
+                    );
+                    context.set_fill_style(&js_str!(match fb.type_ {
+                        Some(FluidType::Water) => "#00ffff",
+                        Some(FluidType::Steam) => "#afafaf",
+                        _ => "#7f7f7f",
+                    }));
+                    let bar_height = fb.amount / fb.max_amount
+                        * ((bb.y1 - bb.y0) as f64 * TILE_SIZE - BAR_MARGIN * 2.);
+                    context.fill_rect(
+                        bb.x0 as f64 * TILE_SIZE + BAR_MARGIN + 6. * i as f64,
+                        bb.y1 as f64 * TILE_SIZE - BAR_MARGIN - bar_height,
+                        4.,
+                        bar_height,
+                    );
+                };
+
+                input_fluid_box.map(|i| render_fluid_box(&i.0, 0));
+                output_fluid_box.map(|i| render_fluid_box(&i.0, 1));
             }
             context.restore();
         }

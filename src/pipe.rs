@@ -52,7 +52,7 @@ impl Pipe {
                 // references.
                 // let structures_slice: &[StructureBundle] = state.structures.as_slice();
 
-                let connection_list = structure.connection(entity, state);
+                let connection_list = [false; 4]; //structure.connection(entity, state);
                 let connections = connection_list
                     .iter()
                     .enumerate()
@@ -118,14 +118,6 @@ impl Structure for Pipe {
         //         .simulate(position, state, &mut structures.dyn_iter_mut());
         // }
         Ok(FrameProcResult::None)
-    }
-
-    fn fluid_box(&self) -> Option<Vec<&FluidBox>> {
-        Some(vec![&self.fluid_box])
-    }
-
-    fn fluid_box_mut(&mut self) -> Option<Vec<&mut FluidBox>> {
-        Some(vec![&mut self.fluid_box])
     }
 
     crate::serialize_impl!();
