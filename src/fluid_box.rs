@@ -25,6 +25,15 @@ pub(crate) struct FluidBox {
 
 type Connection = (Entity, Entity, u8);
 
+#[derive(Clone, Copy, Debug)]
+enum FluidBoxType {
+    Input,
+    Output,
+    Buffer,
+}
+
+type FluidFlow = (Entity, FluidBoxType, f64, Option<FluidType>);
+
 impl FluidBox {
     pub(crate) fn new(input_enable: bool, output_enable: bool) -> Self {
         Self {
@@ -61,19 +70,32 @@ impl FluidBox {
         let positions = world.read_component::<Position>();
         let ifb = world.read_component::<InputFluidBox>();
         let ofb = world.read_component::<OutputFluidBox>();
+        let bfb = world.read_component::<BufferFluidBox>();
         let mut ret = vec![];
-        for (entity, position, ifb2, ofb2) in
-            (&entities, &positions, (&ifb).maybe(), (&ofb).maybe()).join()
+        for (entity, position, ifb2, ofb2, bfb2) in (
+            &entities,
+            &positions,
+            (&ifb).maybe(),
+            (&ofb).maybe(),
+            (&bfb).maybe(),
+        )
+            .join()
         {
-            if ifb2.is_none() && ofb2.is_none() {
+            if ifb2.is_none() && ofb2.is_none() && bfb2.is_none() {
                 continue;
             }
             let mut has_fluid_box = |x, y, idx| {
-                if let Some(bundle) = (&entities, &positions, (&ifb).maybe(), (&ofb).maybe())
+                if let Some(bundle) = (
+                    &entities,
+                    &positions,
+                    (&ifb).maybe(),
+                    (&ofb).maybe(),
+                    (&bfb).maybe(),
+                )
                     .join()
-                    .find(|(_, position, _, _)| **position == Position { x, y })
+                    .find(|(_, position, _, _, _)| **position == Position { x, y })
                 {
-                    if bundle.2.is_some() || bundle.3.is_some() {
+                    if bundle.2.is_some() || bundle.3.is_some() || bundle.4.is_some() {
                         ret.push((entity, bundle.0, idx));
                     }
                 }
@@ -94,35 +116,31 @@ impl FluidBox {
         entity: Entity,
         connections: &[Connection],
     ) -> Result<(), JsValue> {
+        self.connect_to = [None; 4];
         for (_, to, idx) in connections.iter().filter(|(from, _, _)| *from == entity) {
             self.connect_to[*idx as usize] = Some(*to);
         }
         Ok(())
     }
 
-    pub(crate) fn simulate(
-        &mut self,
-        input_fluid_box_storage: &mut WriteStorage<InputFluidBox>,
-        position: &Position,
-        state: &FactorishState,
-        world: &World,
-    ) {
+    fn simulate(
+        &self,
+        self_entity: Entity,
+        self_type: FluidBoxType,
+        input_fluid_box_storage: &WriteStorage<InputFluidBox>,
+        buffer_fluid_box_storage: &WriteStorage<BufferFluidBox>,
+    ) -> Vec<FluidFlow> {
         let mut _biggest_flow_idx = -1;
         let mut biggest_flow_amount = 1e-3; // At least this amount of flow is required for displaying flow direction
                                             // In an unlikely event, a fluid box without either input or output ports has nothing to do
+        let mut ret = vec![];
         if self.amount == 0. || !self.input_enable && !self.output_enable {
-            return;
+            return ret;
         }
         let connect_to = self.connect_to;
         for (i, connect) in connect_to.iter().copied().enumerate() {
             let connect = if let Some(connect) = connect {
                 connect
-            } else {
-                continue;
-            };
-            let input_fluid_box = input_fluid_box_storage.get_mut(connect);
-            let input_fluid_box = if let Some(input_fluid_box) = input_fluid_box {
-                input_fluid_box
             } else {
                 continue;
             };
@@ -139,51 +157,60 @@ impl FluidBox {
             //     .map(|s| s)
             //     .find(|s| s.components.position == Some(pos))
             // {
-            let mut process_fluid_box = |self_box: &mut FluidBox, fluid_box: &mut FluidBox| {
-                // Different types of fluids won't mix
-                if 0. < fluid_box.amount
-                    && fluid_box.type_ != self_box.type_
-                    && fluid_box.type_.is_some()
-                {
-                    return;
-                }
-                let pressure = fluid_box.amount - self_box.amount;
-                let flow = pressure * 0.1;
-                // Check input/output valve state
-                if if flow < 0. {
-                    !self_box.output_enable
-                        || !fluid_box.input_enable
-                        || fluid_box.filter.is_some() && fluid_box.filter != self_box.type_
-                } else {
-                    !self_box.input_enable
-                        || !fluid_box.output_enable
-                        || self_box.filter.is_some() && self_box.filter != fluid_box.type_
-                } {
-                    return;
-                }
-                fluid_box.amount -= flow;
-                self_box.amount += flow;
-                if flow < 0. {
-                    fluid_box.type_ = self_box.type_;
-                } else {
-                    self_box.type_ = fluid_box.type_;
-                }
-                if biggest_flow_amount < flow.abs() {
-                    biggest_flow_amount = flow;
-                    _biggest_flow_idx = i as isize;
-                }
-            };
-            process_fluid_box(self, &mut input_fluid_box.0);
+            let mut process_fluid_box =
+                |self_box: &FluidBox, fluid_box: &FluidBox, entity: Entity, type_| {
+                    // Different types of fluids won't mix
+                    if 0. < fluid_box.amount
+                        && fluid_box.type_ != self_box.type_
+                        && fluid_box.type_.is_some()
+                    {
+                        return;
+                    }
+                    let pressure = fluid_box.amount - self_box.amount;
+                    let flow = pressure * 0.1;
+                    // Check input/output valve state
+                    if if flow < 0. {
+                        !self_box.output_enable
+                            || !fluid_box.input_enable
+                            || fluid_box.filter.is_some() && fluid_box.filter != self_box.type_
+                    } else {
+                        !self_box.input_enable
+                            || !fluid_box.output_enable
+                            || self_box.filter.is_some() && self_box.filter != fluid_box.type_
+                    } {
+                        return;
+                    }
+                    let fluid_type = if flow < 0. {
+                        self_box.type_
+                    } else {
+                        fluid_box.type_
+                    };
+                    ret.push((entity, type_, -flow, fluid_type));
+                    ret.push((self_entity, self_type, flow, fluid_type));
+                    if biggest_flow_amount < flow.abs() {
+                        biggest_flow_amount = flow;
+                        _biggest_flow_idx = i as isize;
+                    }
+                };
+
+            if let Some(input_fluid_box) = input_fluid_box_storage.get(connect) {
+                process_fluid_box(self, &input_fluid_box.0, connect, FluidBoxType::Input);
+            }
+
+            if let Some(input_fluid_box) = buffer_fluid_box_storage.get(connect) {
+                process_fluid_box(self, &input_fluid_box.0, connect, FluidBoxType::Buffer);
+            }
         }
+        ret
     }
 
-    pub(crate) fn fluid_simulation(world: &World, state: &FactorishState) -> Result<(), JsValue> {
+    pub(crate) fn fluid_simulation(world: &World) -> Result<(), JsValue> {
         use specs::Join;
         let connections = FluidBox::list_connections(&world);
         let entities = world.entities();
-        let positions = world.read_component::<Position>();
         let mut ifb = world.write_component::<InputFluidBox>();
         let mut ofb = world.write_component::<OutputFluidBox>();
+        let mut bfb = world.write_component::<BufferFluidBox>();
         for (entity, output_fluid_box) in (&entities, &mut ofb).join() {
             output_fluid_box
                 .0
@@ -192,14 +219,37 @@ impl FluidBox {
         for (entity, input_fluid_box) in (&entities, &mut ifb).join() {
             input_fluid_box.0.update_connections(entity, &connections)?;
         }
-        for (position, output_fluid_box) in (&positions, &mut ofb).join() {
-            output_fluid_box
+        for (entity, buffer_fluid_box) in (&entities, &mut bfb).join() {
+            buffer_fluid_box
                 .0
-                .simulate(&mut ifb, position, state, &world);
+                .update_connections(entity, &connections)?;
         }
-        // for output_fluid_box in world.write_component::<OutputFluidBox>().as_mut_slice() {
-        //     output_fluid_box.0.simulate(position, self);
-        // }
+        let mut flows = vec![];
+        for (entity, output_fluid_box) in (&entities, &ofb).join() {
+            flows.extend(
+                output_fluid_box
+                    .0
+                    .simulate(entity, FluidBoxType::Output, &ifb, &bfb),
+            );
+        }
+        for (entity, buffer_fluid_box) in (&entities, &bfb).join() {
+            flows.extend(
+                buffer_fluid_box
+                    .0
+                    .simulate(entity, FluidBoxType::Buffer, &ifb, &bfb),
+            );
+        }
+        for (entity, fb_type, flow, fluid_type) in flows {
+            let fb = match fb_type {
+                FluidBoxType::Input => ifb.get_mut(entity).map(|i| &mut i.0),
+                FluidBoxType::Output => ofb.get_mut(entity).map(|i| &mut i.0),
+                FluidBoxType::Buffer => bfb.get_mut(entity).map(|i| &mut i.0),
+            };
+            if let Some(fb) = fb {
+                fb.amount += flow;
+                fb.type_ = fluid_type;
+            }
+        }
         Ok(())
     }
 }
@@ -209,3 +259,6 @@ pub(crate) struct InputFluidBox(pub FluidBox);
 
 #[derive(Serialize, Deserialize, Component)]
 pub(crate) struct OutputFluidBox(pub FluidBox);
+
+#[derive(Serialize, Deserialize, Component)]
+pub(crate) struct BufferFluidBox(pub FluidBox);

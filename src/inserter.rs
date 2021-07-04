@@ -2,7 +2,7 @@ use super::{
     burner::Burner,
     draw_direction_arrow,
     factory::Factory,
-    fluid_box::{InputFluidBox, OutputFluidBox},
+    fluid_box::{BufferFluidBox, InputFluidBox, OutputFluidBox},
     items::{render_drop_item, DropItem, ItemType},
     structure::{Energy, Size, Structure, StructureBoxed, StructureBundle, StructureComponents},
     FactorishState, FrameProcResult, Inventory, InventoryTrait, Movable, Position, Rotation,
@@ -272,6 +272,7 @@ fn find_structure_at<T>(
     let movable = world.read_component::<Movable>();
     let mut input_fluid_box = world.write_component::<InputFluidBox>();
     let mut output_fluid_box = world.write_component::<OutputFluidBox>();
+    let mut buffer_fluid_box = world.write_component::<BufferFluidBox>();
 
     use specs::Join;
 
@@ -286,6 +287,7 @@ fn find_structure_at<T>(
         (&movable).maybe(),
         (&mut input_fluid_box).maybe(),
         (&mut output_fluid_box).maybe(),
+        (&mut buffer_fluid_box).maybe(),
     )
         .join()
         .find(|bundle| *bundle.1 == position)
@@ -302,6 +304,7 @@ fn find_structure_at<T>(
                     movable: bundle.7.is_some(),
                     input_fluid_box: bundle.8,
                     output_fluid_box: bundle.9,
+                    buffer_fluid_box: bundle.10,
                 },
             })
         })

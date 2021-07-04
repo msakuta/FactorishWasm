@@ -1,7 +1,7 @@
 use super::{
-    fluid_box::FluidBox,
-    structure::{DynIterMut, Structure, StructureBoxed, StructureBundle, StructureComponents},
-    FactorishState, FrameProcResult, Position, Ref,
+    fluid_box::{BufferFluidBox, FluidBox},
+    structure::{Structure, StructureBoxed, StructureComponents},
+    FactorishState, Position,
 };
 use serde::{Deserialize, Serialize};
 use specs::{Builder, Entity, World, WorldExt};
@@ -9,18 +9,15 @@ use wasm_bindgen::prelude::*;
 use web_sys::CanvasRenderingContext2d;
 
 #[derive(Serialize, Deserialize)]
-pub(crate) struct Pipe {
-    fluid_box: FluidBox,
-}
+pub(crate) struct Pipe;
 
 impl Pipe {
     pub(crate) fn new(world: &mut World, position: Position) -> Entity {
         world
             .create_entity()
-            .with(Box::new(Pipe {
-                fluid_box: FluidBox::new(true, true),
-            }) as StructureBoxed)
+            .with(Box::new(Pipe) as StructureBoxed)
             .with(position)
+            .with(BufferFluidBox(FluidBox::new(true, true)))
             .build()
     }
 
@@ -43,6 +40,7 @@ impl Pipe {
         };
         let input_fluid_box = components.input_fluid_box.as_ref();
         let output_fluid_box = components.output_fluid_box.as_ref();
+        let buffer_fluid_box = components.buffer_fluid_box.as_ref();
         match state.image_pipe.as_ref() {
             Some(img) => {
                 // let (front, mid) = state.structures.split_at_mut(i);
@@ -66,6 +64,7 @@ impl Pipe {
                 };
                 update_fluid_box(input_fluid_box.map(|i| &i.0));
                 update_fluid_box(output_fluid_box.map(|i| &i.0));
+                update_fluid_box(buffer_fluid_box.map(|i| &i.0));
                 let connections = connection_list
                     .iter()
                     .enumerate()
@@ -110,27 +109,6 @@ impl Structure for Pipe {
         _is_toolbar: bool,
     ) -> Result<(), JsValue> {
         Self::draw_int(entity, self, components, state, context, depth, true)
-    }
-
-    fn desc(&self, _entity: Entity, _state: &FactorishState) -> String {
-        self.fluid_box.desc()
-        // getHTML(generateItemImage("time", true, this.recipe.time), true) + "<br>" +
-        // "Outputs: <br>" +
-        // getHTML(generateItemImage(this.recipe.output, true, 1), true) + "<br>";
-    }
-
-    fn frame_proc(
-        &mut self,
-        _entity: Entity,
-        components: &mut StructureComponents,
-        state: &mut FactorishState,
-    ) -> Result<FrameProcResult, ()> {
-        // self.fluid_box.connect_to = self.connection(components, state, structures.as_dyn_iter());
-        // if let Some(position) = &components.position {
-        //     self.fluid_box
-        //         .simulate(position, state, &mut structures.dyn_iter_mut());
-        // }
-        Ok(FrameProcResult::None)
     }
 
     crate::serialize_impl!();

@@ -77,7 +77,7 @@ use burner::Burner;
 use chest::Chest;
 use elect_pole::ElectPole;
 use factory::Factory;
-use fluid_box::{FluidBox, FluidType, InputFluidBox, OutputFluidBox};
+use fluid_box::{BufferFluidBox, FluidBox, FluidType, InputFluidBox, OutputFluidBox};
 use furnace::Furnace;
 use inserter::Inserter;
 use items::{item_to_str, render_drop_item, str_to_item, DropItem, ItemType};
@@ -605,6 +605,7 @@ impl FactorishState {
         world.register::<Inserter>();
         world.register::<InputFluidBox>();
         world.register::<OutputFluidBox>();
+        world.register::<BufferFluidBox>();
 
         console_log!(
             "sizeof StructureBoxed: {}",
@@ -783,6 +784,7 @@ impl FactorishState {
                     (&self.world.read_component::<Inserter>()).maybe(),
                     (&self.world.read_component::<InputFluidBox>()).maybe(),
                     (&self.world.read_component::<OutputFluidBox>()).maybe(),
+                    (&self.world.read_component::<BufferFluidBox>()).maybe(),
                 )
                     .join()
                     .map(
@@ -799,6 +801,7 @@ impl FactorishState {
                             inserter,
                             input_fluid_box,
                             output_fluid_box,
+                            buffer_fluid_box,
                         )| {
                             let mut map = serde_json::Map::new();
                             map.insert(
@@ -842,6 +845,7 @@ impl FactorishState {
                             serialize_component!("inserter", inserter);
                             serialize_component!("input_fluid_box", input_fluid_box);
                             serialize_component!("output_fluid_box", output_fluid_box);
+                            serialize_component!("buffer_fluid_box", buffer_fluid_box);
                             Ok(serde_json::Value::Object(map))
                         },
                     )
@@ -1223,7 +1227,7 @@ impl FactorishState {
             }
         }
 
-        FluidBox::fluid_simulation(&world, self)?;
+        FluidBox::fluid_simulation(&world)?;
 
         for (
             entity,
@@ -1237,6 +1241,7 @@ impl FactorishState {
             movable,
             input_fluid_box,
             output_fluid_box,
+            buffer_fluid_box,
         ) in (
             &world.entities(),
             &mut world.write_component::<StructureBoxed>(),
@@ -1249,6 +1254,7 @@ impl FactorishState {
             (&world.read_component::<Movable>()).maybe(),
             (&mut world.write_component::<InputFluidBox>()).maybe(),
             (&mut world.write_component::<OutputFluidBox>()).maybe(),
+            (&mut world.write_component::<BufferFluidBox>()).maybe(),
         )
             .join()
         {
@@ -1262,6 +1268,7 @@ impl FactorishState {
                 movable: movable.is_some(),
                 input_fluid_box,
                 output_fluid_box,
+                buffer_fluid_box,
             };
             if let Ok(event) = structure.frame_proc(entity, &mut components, self) {
                 if let FrameProcResult::None = event {
@@ -1610,17 +1617,24 @@ impl FactorishState {
                 elem.set_inner_html(&(|| {
                     if let Some(entity) = self.find_structure_tile(&cursor) {
                         use specs::Join;
-                        if let Some((dynamic, position, input_fluid_box, output_fluid_box)) = (
+                        if let Some((
+                            dynamic,
+                            position,
+                            input_fluid_box,
+                            output_fluid_box,
+                            buffer_fluid_box,
+                        )) = (
                             &self.world.read_component::<StructureBoxed>(),
                             &self.world.read_component::<Position>(),
                             (&self.world.read_component::<InputFluidBox>()).maybe(),
                             (&self.world.read_component::<OutputFluidBox>()).maybe(),
+                            (&self.world.read_component::<BufferFluidBox>()).maybe(),
                         )
                             .join()
                             .get(entity, &self.world.entities())
                         {
                             return format!(
-                                r#"Type: {}<br>{}{}{}"#,
+                                r#"Type: {}<br>{}{}{}{}"#,
                                 dynamic.name(),
                                 dynamic.desc(entity, &self),
                                 if let Some(ifb) = input_fluid_box {
@@ -1630,6 +1644,11 @@ impl FactorishState {
                                 },
                                 if let Some(ofb) = output_fluid_box {
                                     "<br>Output Fluid: ".to_string() + &ofb.0.desc()
+                                } else {
+                                    "".to_string()
+                                },
+                                if let Some(bfb) = buffer_fluid_box {
+                                    "<br>Buffer Fluid: ".to_string() + &bfb.0.desc()
                                 } else {
                                     "".to_string()
                                 },
@@ -2282,6 +2301,7 @@ impl FactorishState {
         deserialize_component!("inserter", Inserter);
         deserialize_component!("input_fluid_box", InputFluidBox);
         deserialize_component!("output_fluid_box", OutputFluidBox);
+        deserialize_component!("buffer_fluid_box", BufferFluidBox);
         Ok(builder.build())
     }
 
@@ -3016,6 +3036,7 @@ impl FactorishState {
                 inserter,
                 input_fluid_box,
                 output_fluid_box,
+                buffer_fluid_box,
             ) in (
                 &self.world.entities(),
                 &self.world.read_component::<StructureBoxed>(),
@@ -3029,6 +3050,7 @@ impl FactorishState {
                 (&self.world.read_component::<Inserter>()).maybe(),
                 (&mut self.world.write_component::<InputFluidBox>()).maybe(),
                 (&mut self.world.write_component::<OutputFluidBox>()).maybe(),
+                (&mut self.world.write_component::<BufferFluidBox>()).maybe(),
             )
                 .join()
             {
@@ -3042,6 +3064,7 @@ impl FactorishState {
                     movable: movable.is_some(),
                     input_fluid_box,
                     output_fluid_box,
+                    buffer_fluid_box,
                 };
                 dynamic.draw(entity, &components, &self, &context, depth, false)?;
 
@@ -3123,11 +3146,12 @@ impl FactorishState {
         if self.debug_fluidbox {
             use specs::Join;
             context.save();
-            for (entity, dynamic, input_fluid_box, output_fluid_box) in (
+            for (entity, dynamic, input_fluid_box, output_fluid_box, buffer_fluid_box) in (
                 &self.world.entities(),
                 &self.world.read_component::<StructureBoxed>(),
                 (&self.world.read_component::<InputFluidBox>()).maybe(),
                 (&self.world.read_component::<OutputFluidBox>()).maybe(),
+                (&self.world.read_component::<BufferFluidBox>()).maybe(),
             )
                 .join()
             {
@@ -3166,6 +3190,7 @@ impl FactorishState {
 
                 input_fluid_box.map(|i| render_fluid_box(&i.0, 0));
                 output_fluid_box.map(|i| render_fluid_box(&i.0, 1));
+                buffer_fluid_box.map(|i| render_fluid_box(&i.0, 2));
             }
             context.restore();
         }

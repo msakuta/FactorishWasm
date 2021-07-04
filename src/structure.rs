@@ -1,7 +1,7 @@
 use super::{
     burner::Burner,
     factory::Factory,
-    fluid_box::{FluidBox, InputFluidBox, OutputFluidBox},
+    fluid_box::{BufferFluidBox, InputFluidBox, OutputFluidBox},
     items::ItemType,
     DropItem, FactorishState, Inventory, InventoryTrait, Recipe,
 };
@@ -351,6 +351,7 @@ pub(crate) struct StructureComponents<'a> {
     pub movable: bool,
     pub input_fluid_box: Option<&'a mut InputFluidBox>,
     pub output_fluid_box: Option<&'a mut OutputFluidBox>,
+    pub buffer_fluid_box: Option<&'a mut BufferFluidBox>,
 }
 
 impl<'a> StructureComponents<'a> {
@@ -365,6 +366,7 @@ impl<'a> StructureComponents<'a> {
             movable: false,
             input_fluid_box: None,
             output_fluid_box: None,
+            buffer_fluid_box: None,
         }
     }
 }
@@ -381,6 +383,7 @@ impl<'a> Default for StructureComponents<'a> {
             movable: false,
             input_fluid_box: None,
             output_fluid_box: None,
+            buffer_fluid_box: None,
         }
     }
 }
@@ -405,6 +408,7 @@ impl<'a> StructureBundle<'a> {
         movable: bool,
         input_fluid_box: Option<&'a mut InputFluidBox>,
         output_fluid_box: Option<&'a mut OutputFluidBox>,
+        buffer_fluid_box: Option<&'a mut BufferFluidBox>,
     ) -> Self {
         Self {
             dynamic,
@@ -418,6 +422,7 @@ impl<'a> StructureBundle<'a> {
                 movable,
                 input_fluid_box,
                 output_fluid_box,
+                buffer_fluid_box,
             },
         }
     }
