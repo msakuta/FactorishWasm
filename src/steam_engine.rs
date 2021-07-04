@@ -1,8 +1,8 @@
 use super::{
+    fluid_box::{FluidBox, FluidType},
     pipe::Pipe,
     serialize_impl,
-    structure::{DynIterMut, Structure, StructureBoxed, StructureComponents},
-    water_well::{FluidBox, FluidType},
+    structure::{Structure, StructureBoxed, StructureComponents},
     FactorishState, FrameProcResult, Position, Recipe,
 };
 use serde::{Deserialize, Serialize};
@@ -37,7 +37,7 @@ impl SteamEngine {
                     power_cost: -100.,
                     recipe_time: 100.,
                 }),
-                input_fluid_box: FluidBox::new(true, false, [false; 4]),
+                input_fluid_box: FluidBox::new(true, false),
             }) as StructureBoxed)
             .with(position)
             .build()
@@ -138,10 +138,6 @@ impl Structure for SteamEngine {
         state: &mut FactorishState,
     ) -> Result<FrameProcResult, ()> {
         let position = components.position.as_ref().ok_or(())?;
-        let connections = [false; 4]; //self.connection(components, state, structures.as_dyn_iter());
-        self.input_fluid_box.connect_to = connections;
-        // self.input_fluid_box
-        //     .simulate(position, state, &mut structures.dyn_iter_mut());
         if let Some(recipe) = &self.recipe {
             if self.input_fluid_box.type_ == recipe.input_fluid {
                 self.progress = Some(0.);

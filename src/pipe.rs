@@ -1,6 +1,6 @@
 use super::{
+    fluid_box::FluidBox,
     structure::{DynIterMut, Structure, StructureBoxed, StructureBundle, StructureComponents},
-    water_well::FluidBox,
     FactorishState, FrameProcResult, Position, Ref,
 };
 use serde::{Deserialize, Serialize};
@@ -18,7 +18,7 @@ impl Pipe {
         world
             .create_entity()
             .with(Box::new(Pipe {
-                fluid_box: FluidBox::new(true, true, [false; 4]),
+                fluid_box: FluidBox::new(true, true),
             }) as StructureBoxed)
             .with(position)
             .build()

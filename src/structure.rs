@@ -1,6 +1,9 @@
 use super::{
-    burner::Burner, factory::Factory, items::ItemType, water_well::FluidBox, DropItem,
-    FactorishState, Inventory, InventoryTrait, Recipe,
+    burner::Burner,
+    factory::Factory,
+    fluid_box::{FluidBox, InputFluidBox, OutputFluidBox},
+    items::ItemType,
+    DropItem, FactorishState, Inventory, InventoryTrait, Recipe,
 };
 use rotate_enum::RotateEnum;
 use serde::{Deserialize, Serialize};
@@ -385,6 +388,8 @@ pub(crate) struct StructureComponents<'a> {
     pub energy: Option<&'a mut Energy>,
     pub factory: Option<&'a mut Factory>,
     pub movable: bool,
+    pub input_fluid_box: Option<&'a mut InputFluidBox>,
+    pub output_fluid_box: Option<&'a mut OutputFluidBox>,
 }
 
 impl<'a> StructureComponents<'a> {
@@ -397,6 +402,8 @@ impl<'a> StructureComponents<'a> {
             energy: None,
             factory: None,
             movable: false,
+            input_fluid_box: None,
+            output_fluid_box: None,
         }
     }
 }
@@ -411,6 +418,8 @@ impl<'a> Default for StructureComponents<'a> {
             energy: None,
             factory: None,
             movable: false,
+            input_fluid_box: None,
+            output_fluid_box: None,
         }
     }
 }
@@ -433,6 +442,8 @@ impl<'a> StructureBundle<'a> {
         energy: Option<&'a mut Energy>,
         factory: Option<&'a mut Factory>,
         movable: bool,
+        input_fluid_box: Option<&'a mut InputFluidBox>,
+        output_fluid_box: Option<&'a mut OutputFluidBox>,
     ) -> Self {
         Self {
             dynamic,
@@ -444,6 +455,8 @@ impl<'a> StructureBundle<'a> {
                 energy,
                 factory,
                 movable,
+                input_fluid_box,
+                output_fluid_box,
             },
         }
     }

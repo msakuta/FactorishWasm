@@ -2,10 +2,10 @@ use super::{
     burner::Burner,
     draw_direction_arrow,
     factory::Factory,
+    fluid_box::{InputFluidBox, OutputFluidBox},
     items::{render_drop_item, DropItem, ItemType},
     structure::{Energy, Size, Structure, StructureBoxed, StructureBundle, StructureComponents},
     FactorishState, FrameProcResult, Inventory, InventoryTrait, Movable, Position, Rotation,
-    TILE_SIZE_I,
 };
 use serde::{Deserialize, Serialize};
 use specs::{Builder, Component, DenseVecStorage, Entity, World, WorldExt};
@@ -24,10 +24,7 @@ impl Inserter {
     pub(crate) fn new(world: &mut World, position: Position, rotation: Rotation) -> Entity {
         world
             .create_entity()
-            .with(Box::new(Inserter {
-                cooldown: 0.,
-                hold_item: None,
-            }) as StructureBoxed)
+            .with(Box::new(InserterDynamic) as StructureBoxed)
             .with(position)
             .with(rotation)
             .with(Inserter {
@@ -250,6 +247,14 @@ impl Inserter {
         }
         Ok(())
     }
+
+    fn destroy_inventory(&mut self) -> Inventory {
+        let mut ret = Inventory::new();
+        if let Some(item) = self.hold_item {
+            ret.add_item(&item);
+        }
+        ret
+    }
 }
 
 fn find_structure_at<T>(
@@ -265,6 +270,8 @@ fn find_structure_at<T>(
     let mut energy = world.write_component::<Energy>();
     let mut factory = world.write_component::<Factory>();
     let movable = world.read_component::<Movable>();
+    let mut input_fluid_box = world.write_component::<InputFluidBox>();
+    let mut output_fluid_box = world.write_component::<OutputFluidBox>();
 
     use specs::Join;
 
@@ -277,6 +284,8 @@ fn find_structure_at<T>(
         (&mut energy).maybe(),
         (&mut factory).maybe(),
         (&movable).maybe(),
+        (&mut input_fluid_box).maybe(),
+        (&mut output_fluid_box).maybe(),
     )
         .join()
         .find(|bundle| *bundle.1 == position)
@@ -291,13 +300,18 @@ fn find_structure_at<T>(
                     energy: bundle.5,
                     factory: bundle.6,
                     movable: bundle.7.is_some(),
+                    input_fluid_box: bundle.8,
+                    output_fluid_box: bundle.9,
                 },
             })
         })
         .flatten()
 }
 
-impl Structure for Inserter {
+#[derive(Serialize, Deserialize, Component)]
+pub(crate) struct InserterDynamic;
+
+impl Structure for InserterDynamic {
     fn name(&self) -> &str {
         "Inserter"
     }
@@ -343,26 +357,6 @@ impl Structure for Inserter {
         }
 
         Ok(())
-    }
-
-    fn frame_proc(
-        &mut self,
-        _entity: Entity,
-        components: &mut StructureComponents,
-        state: &mut FactorishState,
-    ) -> Result<FrameProcResult, ()> {
-        let position = components.position.as_ref().ok_or(())?;
-        let rotation = components.rotation.ok_or(())?;
-
-        Ok(FrameProcResult::None)
-    }
-
-    fn destroy_inventory(&mut self) -> Inventory {
-        let mut ret = Inventory::new();
-        if let Some(item) = self.hold_item {
-            ret.add_item(&item);
-        }
-        ret
     }
 
     crate::serialize_impl!();
