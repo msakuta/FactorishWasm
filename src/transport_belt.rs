@@ -1,7 +1,5 @@
 use super::{
-    structure::{
-        ItemResponse, ItemResponseResult, Structure, StructureComponents,
-    },
+    structure::{ItemResponse, ItemResponseResult, Structure, StructureComponents},
     DropItem, FactorishState, Position, Rotation, TILE_SIZE,
 };
 use serde::{Deserialize, Serialize};
@@ -22,37 +20,19 @@ impl TransportBelt {
             .with(crate::structure::Movable)
             .build()
     }
-}
 
-impl Structure for TransportBelt {
-    fn name(&self) -> &str {
-        "Transport Belt"
-    }
-
-    fn draw(
-        &self,
-        entity: Entity,
-        components: &StructureComponents,
+    pub(crate) fn draw_static(
+        x: f64,
+        y: f64,
         state: &FactorishState,
         context: &CanvasRenderingContext2d,
-        depth: i32,
-        _is_toolbar: bool,
+        rotation: &Rotation,
     ) -> Result<(), JsValue> {
-        if depth != 0 {
-            return Ok(());
-        };
         match state.image_belt.as_ref() {
             Some(img) => {
-                let (x, y) = if let Some(position) = components.position.as_ref() {
-                    (position.x as f64 * 32., position.y as f64 * 32.)
-                } else {
-                    (0., 0.)
-                };
                 context.save();
                 context.translate(x + 16., y + 16.)?;
-                components
-                    .rotation
-                    .map(|rotation| context.rotate(rotation.angle_rad()));
+                context.rotate(rotation.angle_rad())?;
                 context.translate(-(x + 16.), -(y + 16.))?;
                 for i in 0..2 {
                     context
@@ -72,8 +52,39 @@ impl Structure for TransportBelt {
             }
             None => return Err(JsValue::from_str("belt image not available")),
         }
-
         Ok(())
+    }
+}
+
+impl Structure for TransportBelt {
+    fn name(&self) -> &str {
+        "Transport Belt"
+    }
+
+    fn draw(
+        &self,
+        _entity: Entity,
+        components: &StructureComponents,
+        state: &FactorishState,
+        context: &CanvasRenderingContext2d,
+        depth: i32,
+        _is_toolbar: bool,
+    ) -> Result<(), JsValue> {
+        if depth != 0 {
+            return Ok(());
+        };
+        let (x, y) = if let Some(position) = components.position.as_ref() {
+            (position.x as f64 * 32., position.y as f64 * 32.)
+        } else {
+            (0., 0.)
+        };
+        TransportBelt::draw_static(
+            x,
+            y,
+            state,
+            context,
+            &components.rotation.unwrap_or(Rotation::Left),
+        )
     }
 
     fn item_response(

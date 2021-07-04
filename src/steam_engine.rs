@@ -2,7 +2,7 @@ use super::{
     components::fluid_box::{FluidBox, FluidType, InputFluidBox},
     pipe::Pipe,
     serialize_impl,
-    structure::{Structure, StructureBoxed, StructureComponents},
+    structure::{Rotation, Structure, StructureBoxed, StructureComponents},
     FactorishState, FrameProcResult, Position, Recipe,
 };
 use serde::{Deserialize, Serialize};
@@ -56,6 +56,46 @@ impl SteamEngine {
             0.
         }
     }
+
+    fn draw_int(
+        x: f64,
+        y: f64,
+        state: &FactorishState,
+        context: &CanvasRenderingContext2d,
+        working: bool,
+    ) -> Result<(), JsValue> {
+        match state.image_steam_engine.as_ref() {
+            Some(img) => {
+                let sx = if working {
+                    ((((state.sim_time * 5.) as isize) % 2 + 1) * 32) as f64
+                } else {
+                    0.
+                };
+                context.draw_image_with_image_bitmap_and_sw_and_sh_and_dx_and_dy_and_dw_and_dh(
+                    &img.bitmap,
+                    sx,
+                    0.,
+                    32.,
+                    32.,
+                    x,
+                    y,
+                    32.,
+                    32.,
+                )
+            }
+            None => return Err(JsValue::from_str("furnace image not available")),
+        }
+    }
+
+    pub(crate) fn draw_static(
+        x: f64,
+        y: f64,
+        state: &FactorishState,
+        context: &CanvasRenderingContext2d,
+    ) -> Result<(), JsValue> {
+        Self::draw_int(x, y, state, context, false)?;
+        Ok(())
+    }
 }
 
 impl Structure for SteamEngine {
@@ -75,7 +115,7 @@ impl Structure for SteamEngine {
         if depth != 0 {
             return Ok(());
         };
-        Pipe::draw_int(entity, self, components, state, context, depth, false)?;
+        Pipe::draw_int(components, state, context, depth, false)?;
         let (x, y) = if let Some(position) = &components.position {
             (position.x as f64 * 32., position.y as f64 * 32.)
         } else {
@@ -85,31 +125,9 @@ impl Structure for SteamEngine {
             .input_fluid_box
             .as_ref()
             .ok_or_else(|| js_str!("SteamEngine without InputFluidBox component"))?;
-        match state.image_steam_engine.as_ref() {
-            Some(img) => {
-                let sx = if self.progress.is_some()
-                    && Self::COMBUSTION_EPSILON < self.combustion_rate(&input_fluid_box)
-                {
-                    ((((state.sim_time * 5.) as isize) % 2 + 1) * 32) as f64
-                } else {
-                    0.
-                };
-                context.draw_image_with_image_bitmap_and_sw_and_sh_and_dx_and_dy_and_dw_and_dh(
-                    &img.bitmap,
-                    sx,
-                    0.,
-                    32.,
-                    32.,
-                    x,
-                    y,
-                    32.,
-                    32.,
-                )?;
-            }
-            None => return Err(JsValue::from_str("furnace image not available")),
-        }
-
-        Ok(())
+        let working = self.progress.is_some()
+            && Self::COMBUSTION_EPSILON < self.combustion_rate(&input_fluid_box);
+        SteamEngine::draw_int(x, y, state, context, working)
     }
 
     fn desc(&self, entity: Entity, state: &FactorishState) -> String {

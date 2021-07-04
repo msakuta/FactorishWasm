@@ -2,7 +2,7 @@ use super::{
     components::factory::Factory,
     items::get_item_image_url,
     serialize_impl,
-    structure::{DynIterMut, Energy, Structure, StructureBundle, StructureComponents},
+    structure::{DynIterMut, Energy, Rotation, Structure, StructureBundle, StructureComponents},
     FactorishState, FrameProcResult, InventoryTrait, ItemType, Position, PowerWire, Recipe,
     TILE_SIZE,
 };
@@ -111,6 +111,47 @@ impl Assembler {
         // console_log!("Assember power sources: {:?}", ret);
         ret
     }
+
+    fn draw_int(
+        x: f64,
+        y: f64,
+        state: &FactorishState,
+        context: &CanvasRenderingContext2d,
+        working: bool,
+    ) -> Result<(), JsValue> {
+        match state.image_assembler.as_ref() {
+            Some(img) => {
+                let sx = if working {
+                    ((((state.sim_time * 5.) as isize) % 4) * 32) as f64
+                } else {
+                    0.
+                };
+                context.draw_image_with_image_bitmap_and_sw_and_sh_and_dx_and_dy_and_dw_and_dh(
+                    &img.bitmap,
+                    sx,
+                    0.,
+                    TILE_SIZE,
+                    TILE_SIZE,
+                    x,
+                    y,
+                    TILE_SIZE,
+                    TILE_SIZE,
+                )?;
+            }
+            None => return Err(JsValue::from_str("assembler image not available")),
+        }
+        Ok(())
+    }
+
+    pub(crate) fn draw_static(
+        x: f64,
+        y: f64,
+        state: &FactorishState,
+        context: &CanvasRenderingContext2d,
+        rotation: &Rotation,
+    ) -> Result<(), JsValue> {
+        Self::draw_int(x, y, state, context, false)
+    }
 }
 
 impl Structure for Assembler {
@@ -133,35 +174,14 @@ impl Structure for Assembler {
             (0., 0.)
         };
         if depth == 0 {
-            match state.image_assembler.as_ref() {
-                Some(img) => {
-                    let sx = if let Some((energy, factory)) =
-                        components.energy.as_ref().zip(components.factory.as_ref())
-                    {
-                        if factory.progress.is_some() && 0. < energy.value {
-                            ((((state.sim_time * 5.) as isize) % 4) * 32) as f64
-                        } else {
-                            0.
-                        }
-                    } else {
-                        0.
-                    };
-                    context
-                        .draw_image_with_image_bitmap_and_sw_and_sh_and_dx_and_dy_and_dw_and_dh(
-                            &img.bitmap,
-                            sx,
-                            0.,
-                            TILE_SIZE,
-                            TILE_SIZE,
-                            x,
-                            y,
-                            TILE_SIZE,
-                            TILE_SIZE,
-                        )?;
-                }
-                None => return Err(JsValue::from_str("assembler image not available")),
-            }
-            return Ok(());
+            let working = if let Some((energy, factory)) =
+                components.energy.as_ref().zip(components.factory.as_ref())
+            {
+                factory.progress.is_some() && 0. < energy.value
+            } else {
+                false
+            };
+            return Assembler::draw_int(x, y, state, context, working);
         }
         if let Some((
             energy,

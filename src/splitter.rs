@@ -1,7 +1,4 @@
-use super::structure::{
-    ItemResponse, ItemResponseResult, Size, Structure,
-    StructureComponents,
-};
+use super::structure::{ItemResponse, ItemResponseResult, Size, Structure, StructureComponents};
 use super::{DropItem, FactorishState, Position, Rotation, TILE_SIZE};
 use serde::{Deserialize, Serialize};
 use specs::{Builder, Entity, World, WorldExt};
@@ -27,6 +24,79 @@ impl Splitter {
             })
             .build()
     }
+
+    fn draw_int(
+        x: f64,
+        y: f64,
+        state: &FactorishState,
+        context: &CanvasRenderingContext2d,
+    ) -> Result<(), JsValue> {
+        if let Some(belt) = state.image_belt.as_ref() {
+            for n in 0..2 {
+                for i in 0..2 {
+                    context
+                        .draw_image_with_image_bitmap_and_sw_and_sh_and_dx_and_dy_and_dw_and_dh(
+                            &belt.bitmap,
+                            i as f64 * 32. - (state.sim_time * 16.) % 32.,
+                            0.,
+                            32.,
+                            32.,
+                            x,
+                            y + n as f64 * TILE_SIZE,
+                            32.,
+                            32.,
+                        )?;
+                }
+            }
+            Ok(())
+        } else {
+            js_err!("belt image not available")
+        }
+    }
+
+    fn draw_splitter(
+        x: f64,
+        y: f64,
+        state: &FactorishState,
+        context: &CanvasRenderingContext2d,
+        direction: i8,
+    ) -> Result<(), JsValue> {
+        if let Some(splitter) = state.image_splitter.as_ref() {
+            for ix in 0..2 {
+                context.draw_image_with_image_bitmap_and_sw_and_sh_and_dx_and_dy_and_dw_and_dh(
+                    &splitter.bitmap,
+                    0.,
+                    (if direction == 0 { 1 - ix } else { ix }) as f64 * TILE_SIZE,
+                    TILE_SIZE,
+                    TILE_SIZE,
+                    x,
+                    y + ix as f64 * TILE_SIZE,
+                    TILE_SIZE,
+                    TILE_SIZE,
+                )?;
+            }
+            Ok(())
+        } else {
+            js_err!("splitter image not available")
+        }
+    }
+
+    pub(crate) fn draw_static(
+        x: f64,
+        y: f64,
+        state: &FactorishState,
+        context: &CanvasRenderingContext2d,
+        rotation: &Rotation,
+    ) -> Result<(), JsValue> {
+        context.save();
+        context.translate(x + 16., y + 16.)?;
+        context.rotate(rotation.angle_rad())?;
+        context.translate(-(x + 16.), -(y + 16.))?;
+        let ret = Self::draw_int(x, y, state, context)
+            .and_then(|_| Self::draw_splitter(x, y, state, context, 0));
+        context.restore();
+        ret
+    }
 }
 
 impl Structure for Splitter {
@@ -36,7 +106,7 @@ impl Structure for Splitter {
 
     fn draw(
         &self,
-        entity: Entity,
+        _entity: Entity,
         components: &StructureComponents,
         state: &FactorishState,
         context: &CanvasRenderingContext2d,
@@ -57,47 +127,9 @@ impl Structure for Splitter {
         context.rotate(components.rotation.map(|r| r.angle_rad()).unwrap_or(0.))?;
         context.translate(-(x + 16.), -(y + 16.))?;
         if depth == 0 {
-            if let Some(belt) = state.image_belt.as_ref() {
-                for n in 0..2 {
-                    for i in 0..2 {
-                        context
-                            .draw_image_with_image_bitmap_and_sw_and_sh_and_dx_and_dy_and_dw_and_dh(
-                                &belt.bitmap,
-                                i as f64 * 32. - (state.sim_time * 16.) % 32.,
-                                0.,
-                                32.,
-                                32.,
-                                x,
-                                y + n as f64 * TILE_SIZE,
-                                32.,
-                                32.,
-                            )?;
-                    }
-                }
-            } else {
-                ret = js_err!("belt image not available");
-            }
+            ret = Splitter::draw_int(x, y, state, context);
         } else if depth == 1 {
-            if let Some(splitter) = state.image_splitter.as_ref() {
-                if depth == 1 {
-                    for ix in 0..2 {
-                        context
-                            .draw_image_with_image_bitmap_and_sw_and_sh_and_dx_and_dy_and_dw_and_dh(
-                                &splitter.bitmap,
-                                0.,
-                                (if self.direction == 0 { 1 - ix } else { ix }) as f64 * TILE_SIZE,
-                                TILE_SIZE,
-                                TILE_SIZE,
-                                x,
-                                y + ix as f64 * TILE_SIZE,
-                                TILE_SIZE,
-                                TILE_SIZE,
-                            )?;
-                    }
-                }
-            } else {
-                ret = js_err!("splitter image not available");
-            }
+            ret = Splitter::draw_splitter(x, y, state, context, self.direction);
         }
         context.restore();
 

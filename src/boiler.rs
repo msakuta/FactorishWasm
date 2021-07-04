@@ -5,7 +5,7 @@ use super::{
     },
     pipe::Pipe,
     serialize_impl,
-    structure::{Energy, Structure, StructureComponents},
+    structure::{Energy, Rotation, Structure, StructureComponents},
     FactorishState, FrameProcResult, Inventory, ItemType, Position, Recipe, TempEnt,
 };
 use serde::{Deserialize, Serialize};
@@ -77,6 +77,48 @@ impl Boiler {
             0.
         }
     }
+
+    fn draw_int(
+        x: f64,
+        y: f64,
+        state: &FactorishState,
+        context: &CanvasRenderingContext2d,
+        working: bool,
+    ) -> Result<(), JsValue> {
+        match state.image_boiler.as_ref() {
+            Some(img) => {
+                let sx = if working {
+                    ((((state.sim_time * 5.) as isize) % 2 + 1) * 32) as f64
+                } else {
+                    0.
+                };
+                context.draw_image_with_image_bitmap_and_sw_and_sh_and_dx_and_dy_and_dw_and_dh(
+                    &img.bitmap,
+                    sx,
+                    0.,
+                    32.,
+                    32.,
+                    x,
+                    y,
+                    32.,
+                    32.,
+                )?;
+            }
+            None => return Err(JsValue::from_str("furnace image not available")),
+        }
+
+        Ok(())
+    }
+
+    pub(crate) fn draw_static(
+        x: f64,
+        y: f64,
+        state: &FactorishState,
+        context: &CanvasRenderingContext2d,
+        rotation: &Rotation,
+    ) -> Result<(), JsValue> {
+        Self::draw_int(x, y, state, context, false)
+    }
 }
 
 impl Structure for Boiler {
@@ -96,60 +138,39 @@ impl Structure for Boiler {
         if depth != 0 {
             return Ok(());
         };
-        Pipe::draw_int(entity, self, components, state, context, depth, false)?;
+        Pipe::draw_int(components, state, context, depth, false)?;
         let (x, y) = if let Some(position) = &components.position {
             (position.x as f64 * 32., position.y as f64 * 32.)
         } else {
             (0., 0.)
         };
-        match state.image_boiler.as_ref() {
-            Some(img) => {
-                let sx = if let Some(energy) = components.energy.as_ref() {
-                    let input_fluid_box = components
-                        .input_fluid_box
-                        .as_ref()
-                        .ok_or_else(|| js_str!("Boiler without InputFluidBox component"))?;
-                    let output_fluid_box = components
-                        .output_fluid_box
-                        .as_ref()
-                        .ok_or_else(|| js_str!("Boiler without OutputFluidBox component"))?;
-                    if self.progress.is_some()
-                        && components
-                            .burner
-                            .as_ref()
-                            .map(|burner| {
-                                Self::COMBUSTION_EPSILON
-                                    < self.combustion_rate(
-                                        burner,
-                                        energy,
-                                        &input_fluid_box.0,
-                                        &output_fluid_box.0,
-                                    )
-                            })
-                            .unwrap_or(false)
-                    {
-                        ((((state.sim_time * 5.) as isize) % 2 + 1) * 32) as f64
-                    } else {
-                        0.
-                    }
-                } else {
-                    0.
-                };
-                context.draw_image_with_image_bitmap_and_sw_and_sh_and_dx_and_dy_and_dw_and_dh(
-                    &img.bitmap,
-                    sx,
-                    0.,
-                    32.,
-                    32.,
-                    x,
-                    y,
-                    32.,
-                    32.,
-                )?;
-            }
-            None => return Err(JsValue::from_str("furnace image not available")),
-        }
-
+        let working = if let Some(energy) = components.energy.as_ref() {
+            let input_fluid_box = components
+                .input_fluid_box
+                .as_ref()
+                .ok_or_else(|| js_str!("Boiler without InputFluidBox component"))?;
+            let output_fluid_box = components
+                .output_fluid_box
+                .as_ref()
+                .ok_or_else(|| js_str!("Boiler without OutputFluidBox component"))?;
+            self.progress.is_some()
+                && components
+                    .burner
+                    .as_ref()
+                    .map(|burner| {
+                        Self::COMBUSTION_EPSILON
+                            < self.combustion_rate(
+                                burner,
+                                energy,
+                                &input_fluid_box.0,
+                                &output_fluid_box.0,
+                            )
+                    })
+                    .unwrap_or(false)
+        } else {
+            false
+        };
+        Boiler::draw_int(x, y, state, context, working)?;
         Ok(())
     }
 

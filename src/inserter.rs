@@ -189,7 +189,7 @@ impl Inserter {
 
     pub(crate) fn draw(
         &self,
-        entity: Entity,
+        _entity: Entity,
         components: &StructureComponents,
         state: &FactorishState,
         context: &CanvasRenderingContext2d,
@@ -316,6 +316,44 @@ fn find_structure_at<T>(
 #[derive(Serialize, Deserialize, Component)]
 pub(crate) struct InserterDynamic;
 
+impl InserterDynamic {
+    fn draw_int(
+        x: f64,
+        y: f64,
+        state: &FactorishState,
+        context: &CanvasRenderingContext2d,
+    ) -> Result<(), JsValue> {
+        match state.image_inserter.as_ref() {
+            Some(img) => {
+                context.draw_image_with_image_bitmap_and_sw_and_sh_and_dx_and_dy_and_dw_and_dh(
+                    &img.bitmap,
+                    0.,
+                    0.,
+                    32.,
+                    32.,
+                    x,
+                    y,
+                    32.,
+                    32.,
+                )?;
+            }
+            None => return Err(JsValue::from_str("inserter image not available")),
+        }
+        Ok(())
+    }
+
+    pub(crate) fn draw_static(
+        x: f64,
+        y: f64,
+        state: &FactorishState,
+        context: &CanvasRenderingContext2d,
+        rotation: &Rotation,
+    ) -> Result<(), JsValue> {
+        Self::draw_int(x, y, state, context)?;
+        draw_direction_arrow((x, y), &rotation, state, context)
+    }
+}
+
 impl Structure for InserterDynamic {
     fn name(&self) -> &str {
         "Inserter"
@@ -323,7 +361,7 @@ impl Structure for InserterDynamic {
 
     fn draw(
         &self,
-        entity: Entity,
+        _entity: Entity,
         components: &StructureComponents,
         state: &FactorishState,
         context: &CanvasRenderingContext2d,
@@ -339,23 +377,7 @@ impl Structure for InserterDynamic {
             .rotation
             .ok_or_else(|| js_str!("Inserter without rotation component"))?;
         match depth {
-            0 => match state.image_inserter.as_ref() {
-                Some(img) => {
-                    context
-                        .draw_image_with_image_bitmap_and_sw_and_sh_and_dx_and_dy_and_dw_and_dh(
-                            &img.bitmap,
-                            0.,
-                            0.,
-                            32.,
-                            32.,
-                            x,
-                            y,
-                            32.,
-                            32.,
-                        )?;
-                }
-                None => return Err(JsValue::from_str("inserter image not available")),
-            },
+            0 => InserterDynamic::draw_int(x, y, state, context)?,
             1 => (),
             2 => draw_direction_arrow((x, y), &rotation, state, context)?,
             _ => panic!(),

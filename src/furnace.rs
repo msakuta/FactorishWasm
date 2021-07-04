@@ -1,11 +1,8 @@
 use super::{
-    components::{
-        burner::Burner,
-        factory::Factory,
-    },
+    components::{burner::Burner, factory::Factory},
     items::item_to_str,
     serialize_impl,
-    structure::{Energy, Structure, StructureComponents},
+    structure::{Energy, Rotation, Structure, StructureComponents},
     DropItem, FactorishState, Inventory, InventoryTrait, ItemType, Position, Recipe,
 };
 use serde::{Deserialize, Serialize};
@@ -35,41 +32,18 @@ impl Furnace {
             .with(Factory::new())
             .build()
     }
-}
 
-impl Structure for Furnace {
-    fn name(&self) -> &str {
-        "Furnace"
-    }
-
-    fn draw(
-        &self,
-        entity: Entity,
-        components: &StructureComponents,
+    fn draw_int(
+        x: f64,
+        y: f64,
         state: &FactorishState,
         context: &CanvasRenderingContext2d,
-        depth: i32,
-        is_toolbar: bool,
+        working: bool,
     ) -> Result<(), JsValue> {
-        if depth != 0 {
-            return Ok(());
-        };
-
-        let (x, y) = if let Some(position) = &components.position {
-            (position.x as f64 * 32., position.y as f64 * 32.)
-        } else {
-            (0., 0.)
-        };
         match state.image_furnace.as_ref() {
             Some(img) => {
-                let sx = if let Some((energy, factory)) =
-                    components.energy.as_ref().zip(components.factory.as_ref())
-                {
-                    if factory.progress.is_some() && 0. < energy.value {
-                        ((((state.sim_time * 5.) as isize) % 2 + 1) * 32) as f64
-                    } else {
-                        0.
-                    }
+                let sx = if working {
+                    ((((state.sim_time * 5.) as isize) % 2 + 1) * 32) as f64
                 } else {
                     0.
                 };
@@ -87,11 +61,50 @@ impl Structure for Furnace {
             }
             None => return Err(JsValue::from_str("furnace image not available")),
         }
-        if !is_toolbar {
-            // crate::draw_fuel_alarm!(self, state, context);
-        }
-
         Ok(())
+    }
+
+    pub(crate) fn draw_static(
+        x: f64,
+        y: f64,
+        state: &FactorishState,
+        context: &CanvasRenderingContext2d,
+        rotation: &Rotation,
+    ) -> Result<(), JsValue> {
+        Self::draw_int(x, y, state, context, false)
+    }
+}
+
+impl Structure for Furnace {
+    fn name(&self) -> &str {
+        "Furnace"
+    }
+
+    fn draw(
+        &self,
+        _entity: Entity,
+        components: &StructureComponents,
+        state: &FactorishState,
+        context: &CanvasRenderingContext2d,
+        depth: i32,
+        _is_toolbar: bool,
+    ) -> Result<(), JsValue> {
+        if depth != 0 {
+            return Ok(());
+        };
+        let working = if let Some((energy, factory)) =
+            components.energy.as_ref().zip(components.factory.as_ref())
+        {
+            factory.progress.is_some() && 0. < energy.value
+        } else {
+            false
+        };
+        let (x, y) = if let Some(position) = &components.position {
+            (position.x as f64 * 32., position.y as f64 * 32.)
+        } else {
+            (0., 0.)
+        };
+        Furnace::draw_int(x, y, state, context, working)
     }
 
     fn desc(&self, entity: Entity, state: &FactorishState) -> String {

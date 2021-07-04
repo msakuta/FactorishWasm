@@ -39,6 +39,48 @@ impl OreMine {
             })
             .build()
     }
+
+    fn draw_int(
+        x: f64,
+        y: f64,
+        state: &FactorishState,
+        context: &CanvasRenderingContext2d,
+        working: bool,
+    ) -> Result<(), JsValue> {
+        match state.image_mine.as_ref() {
+            Some(img) => {
+                let sx = if working {
+                    (((state.sim_time * 5.) as isize) % 2 + 1) as f64 * TILE_SIZE
+                } else {
+                    0.
+                };
+                context.draw_image_with_image_bitmap_and_sw_and_sh_and_dx_and_dy_and_dw_and_dh(
+                    &img.bitmap,
+                    sx,
+                    0.,
+                    TILE_SIZE,
+                    TILE_SIZE,
+                    x,
+                    y,
+                    TILE_SIZE,
+                    TILE_SIZE,
+                )
+            }
+            None => return Err(JsValue::from_str("mine image not available")),
+        }
+    }
+
+    pub(crate) fn draw_static(
+        x: f64,
+        y: f64,
+        state: &FactorishState,
+        context: &CanvasRenderingContext2d,
+        rotation: &Rotation,
+    ) -> Result<(), JsValue> {
+        Self::draw_int(x, y, state, context, false)?;
+        draw_direction_arrow((x, y), rotation, state, context)?;
+        Ok(())
+    }
 }
 
 impl Structure for OreMine {
@@ -48,7 +90,7 @@ impl Structure for OreMine {
 
     fn draw(
         &self,
-        entity: Entity,
+        _entity: Entity,
         components: &StructureComponents,
         state: &FactorishState,
         context: &CanvasRenderingContext2d,
@@ -61,35 +103,16 @@ impl Structure for OreMine {
             (0., 0.)
         };
         match depth {
-            0 => match state.image_mine.as_ref() {
-                Some(img) => {
-                    let progress = if let Some(ref recipe) = self.recipe {
-                        (0f64/*self.power / recipe.power_cost*/)
-                            .min(1. / recipe.recipe_time)
-                            .min(1. - self.progress)
-                    } else {
-                        0.
-                    };
-                    let sx = if 0. < progress {
-                        (((state.sim_time * 5.) as isize) % 2 + 1) as f64 * TILE_SIZE
-                    } else {
-                        0.
-                    };
-                    context
-                        .draw_image_with_image_bitmap_and_sw_and_sh_and_dx_and_dy_and_dw_and_dh(
-                            &img.bitmap,
-                            sx,
-                            0.,
-                            TILE_SIZE,
-                            TILE_SIZE,
-                            x,
-                            y,
-                            TILE_SIZE,
-                            TILE_SIZE,
-                        )?;
-                }
-                None => return Err(JsValue::from_str("mine image not available")),
-            },
+            0 => {
+                let progress = if let Some(ref recipe) = self.recipe {
+                    (0f64/*self.power / recipe.power_cost*/)
+                        .min(1. / recipe.recipe_time)
+                        .min(1. - self.progress)
+                } else {
+                    0.
+                };
+                OreMine::draw_int(x, y, state, context, 0. < progress)?;
+            }
             2 => {
                 draw_direction_arrow(
                     (x, y),

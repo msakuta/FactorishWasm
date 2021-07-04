@@ -2790,21 +2790,36 @@ impl FactorishState {
         tool_index: usize,
         context: &CanvasRenderingContext2d,
     ) -> Result<(), JsValue> {
-        use specs::Join;
         context.clear_rect(0., 0., 32., 32.);
         if let Some(item) = self.tool_belt.get(tool_index).unwrap_or(&None) {
-            // let mut tool = self.new_structure(item, &Position { x: 0, y: 0 })?;
-            // let entities = self.world.write_component();
-            // entities.insert(tool, &self.tool_rotation);
-            // let mut components = StructureComponents::default();
-            // components.position = Some(Position{x: 0, y: 0});
-            // components.rotation = Some(self.tool_rotation);
-            // if let Some((entity, dynamic)) = (&self.world.entities(), &self.world.read_component::<Box<dyn Structure + Send + Sync>>()).join().get(tool, &self.world.entities()) {
-            //     for depth in 0..3 {
-            //         dynamic.draw(entity, &components, self, context, depth, true)?;
-            //     }
-            // }
-            // self.world.entities().delete(tool);
+            match *item {
+                ItemType::Chest => Chest::draw_static(0., 0., self, context)?,
+                ItemType::OreMine => {
+                    OreMine::draw_static(0., 0., self, context, &self.tool_rotation)?
+                }
+                ItemType::TransportBelt => {
+                    TransportBelt::draw_static(0., 0., self, context, &self.tool_rotation)?
+                }
+                ItemType::Inserter => {
+                    InserterDynamic::draw_static(0., 0., self, context, &self.tool_rotation)?
+                }
+                ItemType::Furnace => {
+                    Furnace::draw_static(0., 0., self, context, &self.tool_rotation)?
+                }
+                ItemType::Boiler => {
+                    Boiler::draw_static(0., 0., self, context, &self.tool_rotation)?
+                }
+                ItemType::Assembler => {
+                    Assembler::draw_static(0., 0., self, context, &self.tool_rotation)?
+                }
+                ItemType::WaterWell => WaterWell::draw_static(0., 0., self, context)?,
+                ItemType::SteamEngine => SteamEngine::draw_static(0., 0., self, context)?,
+                ItemType::Splitter => {
+                    Splitter::draw_static(0., 0., self, context, &self.tool_rotation)?
+                }
+                ItemType::Pipe => Pipe::draw_static(0., 0., self, context)?,
+                _ => (),
+            }
         }
         Ok(())
     }

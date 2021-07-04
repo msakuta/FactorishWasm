@@ -25,6 +25,21 @@ impl Chest {
             .with(position)
             .build()
     }
+
+    pub(crate) fn draw_static(
+        x: f64,
+        y: f64,
+        state: &FactorishState,
+        context: &CanvasRenderingContext2d,
+    ) -> Result<(), JsValue> {
+        match state.image_chest.as_ref() {
+            Some(img) => {
+                context.draw_image_with_image_bitmap(&img.bitmap, x, y)?;
+                Ok(())
+            }
+            None => Err(JsValue::from_str("chest image not available")),
+        }
+    }
 }
 
 impl Structure for Chest {
@@ -34,7 +49,7 @@ impl Structure for Chest {
 
     fn draw(
         &self,
-        entity: Entity,
+        _entity: Entity,
         components: &StructureComponents,
         state: &FactorishState,
         context: &CanvasRenderingContext2d,
@@ -49,13 +64,7 @@ impl Structure for Chest {
         } else {
             (0., 0.)
         };
-        match state.image_chest.as_ref() {
-            Some(img) => {
-                context.draw_image_with_image_bitmap(&img.bitmap, x, y)?;
-                Ok(())
-            }
-            None => Err(JsValue::from_str("chest image not available")),
-        }
+        Chest::draw_static(x, y, state, context)
     }
 
     fn desc(&self, _entity: Entity, _state: &FactorishState) -> String {
