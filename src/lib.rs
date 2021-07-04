@@ -53,11 +53,9 @@ macro_rules! try_continue {
 
 mod assembler;
 mod boiler;
-mod burner;
 mod chest;
+mod components;
 mod elect_pole;
-mod factory;
-mod fluid_box;
 mod furnace;
 mod inserter;
 mod items;
@@ -73,11 +71,13 @@ mod water_well;
 
 use assembler::Assembler;
 use boiler::Boiler;
-use burner::Burner;
 use chest::Chest;
+use components::{
+    burner::Burner,
+    factory::Factory,
+    fluid_box::{BufferFluidBox, FluidBox, FluidType, InputFluidBox, OutputFluidBox},
+};
 use elect_pole::ElectPole;
-use factory::Factory;
-use fluid_box::{BufferFluidBox, FluidBox, FluidType, InputFluidBox, OutputFluidBox};
 use furnace::Furnace;
 use inserter::Inserter;
 use items::{item_to_str, render_drop_item, str_to_item, DropItem, ItemType};
@@ -95,7 +95,7 @@ use transport_belt::TransportBelt;
 use water_well::WaterWell;
 
 use serde::{Deserialize, Serialize};
-use specs::{Builder, Component, Entities, Entity, VecStorage, World, WorldExt, WriteStorage};
+use specs::{Builder, Component, Entity, VecStorage, World, WorldExt};
 use std::{cell::RefCell, collections::HashMap, convert::TryFrom};
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::{Clamped, JsCast};
@@ -1373,7 +1373,7 @@ impl FactorishState {
             }
         }
 
-        let mut burner_system = burner::BurnerSystem { events: vec![] };
+        let mut burner_system = components::burner::BurnerSystem { events: vec![] };
 
         burner_system.run_now(&self.world);
 
@@ -1381,7 +1381,7 @@ impl FactorishState {
             frame_proc_result_to_event(Ok(res));
         }
 
-        let mut factory_system = factory::FactorySystem { events: vec![] };
+        let mut factory_system = components::factory::FactorySystem { events: vec![] };
 
         factory_system.run_now(&self.world);
 

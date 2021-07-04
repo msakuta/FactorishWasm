@@ -1,5 +1,5 @@
 use super::{
-    factory::Factory,
+    components::factory::Factory,
     items::get_item_image_url,
     serialize_impl,
     structure::{DynIterMut, Energy, Structure, StructureBundle, StructureComponents},

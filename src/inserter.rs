@@ -1,8 +1,10 @@
 use super::{
-    burner::Burner,
+    components::{
+        burner::Burner,
+        factory::Factory,
+        fluid_box::{BufferFluidBox, InputFluidBox, OutputFluidBox},
+    },
     draw_direction_arrow,
-    factory::Factory,
-    fluid_box::{BufferFluidBox, InputFluidBox, OutputFluidBox},
     items::{render_drop_item, DropItem, ItemType},
     structure::{Energy, Size, Structure, StructureBoxed, StructureBundle, StructureComponents},
     FactorishState, FrameProcResult, Inventory, InventoryTrait, Movable, Position, Rotation,

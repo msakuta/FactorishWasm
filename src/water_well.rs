@@ -1,7 +1,7 @@
 use super::{
-    fluid_box::{FluidBox, FluidType, OutputFluidBox},
+    components::fluid_box::{FluidBox, FluidType, OutputFluidBox},
     pipe::Pipe,
-    structure::{DynIterMut, Structure, StructureBoxed, StructureBundle, StructureComponents},
+    structure::{Structure, StructureBoxed, StructureComponents},
     FactorishState, FrameProcResult, Position,
 };
 use serde::{Deserialize, Serialize};

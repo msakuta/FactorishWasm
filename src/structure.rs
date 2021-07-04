@@ -1,16 +1,15 @@
 use super::{
-    burner::Burner,
-    factory::Factory,
-    fluid_box::{BufferFluidBox, InputFluidBox, OutputFluidBox},
+    components::{
+        burner::Burner,
+        factory::Factory,
+        fluid_box::{BufferFluidBox, InputFluidBox, OutputFluidBox},
+    },
     items::ItemType,
     DropItem, FactorishState, Inventory, InventoryTrait, Recipe,
 };
 use rotate_enum::RotateEnum;
 use serde::{Deserialize, Serialize};
-use specs::{
-    Component, DenseVecStorage, Entities, Entity, ReadStorage, System, VecStorage, World, WorldExt,
-    WriteStorage,
-};
+use specs::{Component, DenseVecStorage, Entity, VecStorage, World, WorldExt};
 use wasm_bindgen::prelude::*;
 use web_sys::CanvasRenderingContext2d;
 

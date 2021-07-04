@@ -1,5 +1,5 @@
 use super::{
-    fluid_box::{FluidBox, FluidType, InputFluidBox},
+    components::fluid_box::{FluidBox, FluidType, InputFluidBox},
     pipe::Pipe,
     serialize_impl,
     structure::{Structure, StructureBoxed, StructureComponents},

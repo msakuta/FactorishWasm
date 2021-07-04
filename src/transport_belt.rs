@@ -1,6 +1,6 @@
 use super::{
     structure::{
-        ItemResponse, ItemResponseResult, Structure, StructureBundle, StructureComponents,
+        ItemResponse, ItemResponseResult, Structure, StructureComponents,
     },
     DropItem, FactorishState, Position, Rotation, TILE_SIZE,
 };

@@ -1,6 +1,8 @@
 use super::{
-    burner::Burner,
-    fluid_box::{FluidBox, FluidType, InputFluidBox, OutputFluidBox},
+    components::{
+        burner::Burner,
+        fluid_box::{FluidBox, FluidType, InputFluidBox, OutputFluidBox},
+    },
     pipe::Pipe,
     serialize_impl,
     structure::{Energy, Structure, StructureComponents},

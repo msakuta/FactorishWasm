@@ -1,5 +1,5 @@
 use super::structure::{
-    BoundingBox, ItemResponse, ItemResponseResult, Size, Structure, StructureBundle,
+    ItemResponse, ItemResponseResult, Size, Structure,
     StructureComponents,
 };
 use super::{DropItem, FactorishState, Position, Rotation, TILE_SIZE};

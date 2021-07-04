@@ -1,6 +1,6 @@
-use super::{
+use crate::{
     items::{DropItem, ItemType},
-    structure::{Energy, Structure},
+    structure::Energy,
     FactorishState, FrameProcResult, Inventory, InventoryTrait, Position, COAL_POWER,
 };
 use serde::{Deserialize, Serialize};
@@ -16,10 +16,6 @@ pub(crate) struct Burner {
 }
 
 impl Burner {
-    pub fn js_serialize(&self) -> serde_json::Result<serde_json::Value> {
-        serde_json::to_value(self)
-    }
-
     pub fn draw(
         &self,
         energy: Option<&Energy>,
@@ -53,24 +49,6 @@ impl Burner {
         } else {
             0
         }
-    }
-
-    pub fn frame_proc(
-        &mut self,
-        position: Option<&mut Position>,
-        energy: Option<&mut Energy>,
-    ) -> Result<FrameProcResult, ()> {
-        let position = position.ok_or(())?;
-        let energy = energy.ok_or(())?; //|| js_str!("Burner without Energy component"))?;
-        if let Some(amount) = self.inventory.get_mut(&ItemType::CoalOre) {
-            if 0 < *amount && energy.value < 1e-3 {
-                self.inventory.remove_item(&ItemType::CoalOre);
-                energy.value += COAL_POWER;
-                energy.max = energy.max.max(energy.value);
-                return Ok(FrameProcResult::InventoryChanged(*position));
-            }
-        }
-        Ok(FrameProcResult::None)
     }
 
     pub fn input(&mut self, item: &DropItem) -> Result<(), JsValue> {

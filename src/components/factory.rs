@@ -1,4 +1,4 @@
-use super::{
+use crate::{
     items::{DropItem, ItemType},
     structure::{Energy, Position},
     FactorishState, FrameProcResult, Inventory, InventoryTrait, Recipe,

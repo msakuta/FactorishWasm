@@ -1,5 +1,5 @@
 use super::{
-    fluid_box::{BufferFluidBox, FluidBox},
+    components::fluid_box::{BufferFluidBox, FluidBox},
     structure::{Structure, StructureBoxed, StructureComponents},
     FactorishState, Position,
 };

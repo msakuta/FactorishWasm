@@ -1,6 +1,8 @@
 use super::{
-    burner::Burner,
-    factory::Factory,
+    components::{
+        burner::Burner,
+        factory::Factory,
+    },
     items::item_to_str,
     serialize_impl,
     structure::{Energy, Structure, StructureComponents},

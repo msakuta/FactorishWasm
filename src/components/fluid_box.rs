@@ -1,4 +1,4 @@
-use super::{FactorishState, Position};
+use crate::Position;
 use serde::{Deserialize, Serialize};
 use specs::{Component, DenseVecStorage, Entity, World, WorldExt, WriteStorage};
 use wasm_bindgen::prelude::*;
@@ -45,11 +45,6 @@ impl FluidBox {
             connect_to: [None; 4],
             filter: None,
         }
-    }
-
-    pub(super) fn set_type(mut self, type_: &FluidType) -> Self {
-        self.type_ = Some(*type_);
-        self
     }
 
     pub(crate) fn desc(&self) -> String {
