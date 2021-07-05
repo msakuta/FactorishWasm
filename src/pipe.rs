@@ -95,7 +95,7 @@ impl Pipe {
         update_fluid_box(input_fluid_box.map(|i| &i.0));
         update_fluid_box(output_fluid_box.map(|i| &i.0));
         update_fluid_box(buffer_fluid_box.map(|i| &i.0));
-        if !draw_center && !connection_list.iter().any(|v| *v) {
+        if draw_center || connection_list.iter().any(|v| *v) {
             Self::draw_pipe(x, y, state, context, connection_list)
         } else {
             Ok(())

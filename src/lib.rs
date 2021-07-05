@@ -3084,9 +3084,8 @@ impl FactorishState {
                 dynamic.draw(entity, &components, &self, &context, depth)?;
 
                 if depth == 1 {
-                    inserter.map(|inserter| {
-                        inserter.draw(entity, &components, &self, &context, depth)
-                    });
+                    inserter
+                        .map(|inserter| inserter.draw(entity, &components, &self, &context, depth));
                 }
 
                 if depth == 2 {
