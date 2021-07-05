@@ -124,7 +124,6 @@ impl Structure for Pipe {
         state: &FactorishState,
         context: &CanvasRenderingContext2d,
         depth: i32,
-        _is_toolbar: bool,
     ) -> Result<(), JsValue> {
         Self::draw_int(components, state, context, depth, true)
     }

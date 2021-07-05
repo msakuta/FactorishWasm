@@ -194,7 +194,6 @@ impl Inserter {
         state: &FactorishState,
         context: &CanvasRenderingContext2d,
         depth: i32,
-        _is_toolbar: bool,
     ) -> Result<(), JsValue> {
         let (x, y) = if let Some(position) = &components.position {
             (position.x as f64 * 32., position.y as f64 * 32.)
@@ -366,7 +365,6 @@ impl Structure for InserterDynamic {
         state: &FactorishState,
         context: &CanvasRenderingContext2d,
         depth: i32,
-        _is_toolbar: bool,
     ) -> Result<(), JsValue> {
         let (x, y) = if let Some(position) = &components.position {
             (position.x as f64 * 32., position.y as f64 * 32.)

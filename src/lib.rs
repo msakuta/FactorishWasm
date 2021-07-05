@@ -3081,11 +3081,11 @@ impl FactorishState {
                     output_fluid_box,
                     buffer_fluid_box,
                 };
-                dynamic.draw(entity, &components, &self, &context, depth, false)?;
+                dynamic.draw(entity, &components, &self, &context, depth)?;
 
                 if depth == 1 {
                     inserter.map(|inserter| {
-                        inserter.draw(entity, &components, &self, &context, depth, false)
+                        inserter.draw(entity, &components, &self, &context, depth)
                     });
                 }
 

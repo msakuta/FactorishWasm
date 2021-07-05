@@ -54,7 +54,6 @@ impl Structure for Chest {
         state: &FactorishState,
         context: &CanvasRenderingContext2d,
         depth: i32,
-        _is_toolbar: bool,
     ) -> Result<(), JsValue> {
         if depth != 0 {
             return Ok(());

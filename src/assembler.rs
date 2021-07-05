@@ -166,7 +166,6 @@ impl Structure for Assembler {
         state: &FactorishState,
         context: &CanvasRenderingContext2d,
         depth: i32,
-        is_toolbar: bool,
     ) -> Result<(), JsValue> {
         let (x, y) = if let Some(position) = &components.position {
             (position.x as f64 * TILE_SIZE, position.y as f64 * TILE_SIZE)
@@ -191,7 +190,7 @@ impl Structure for Assembler {
             },
         )) = components.energy.as_ref().zip(components.factory.as_ref())
         {
-            if !is_toolbar && energy.value == 0. && state.sim_time % 1. < 0.5 {
+            if energy.value == 0. && state.sim_time % 1. < 0.5 {
                 if let Some(img) = state.image_electricity_alarm.as_ref() {
                     context.draw_image_with_image_bitmap(&img.bitmap, x, y)?;
                 } else {

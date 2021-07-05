@@ -95,7 +95,6 @@ impl Structure for OreMine {
         state: &FactorishState,
         context: &CanvasRenderingContext2d,
         depth: i32,
-        _is_toolbar: bool,
     ) -> Result<(), JsValue> {
         let (x, y) = if let Some(position) = components.position.as_ref() {
             (position.x as f64 * TILE_SIZE, position.y as f64 * TILE_SIZE)
