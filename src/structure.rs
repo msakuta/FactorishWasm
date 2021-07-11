@@ -1,7 +1,10 @@
 use super::{
-    burner::Burner, factory::Factory, items::ItemType, water_well::FluidBox, DropItem,
-    FactorishState, Inventory, InventoryTrait, Recipe,
+    burner::Burner,
     dyn_iter::{DynIter, DynIterMut},
+    factory::Factory,
+    items::ItemType,
+    water_well::FluidBox,
+    DropItem, FactorishState, Inventory, InventoryTrait, Recipe,
 };
 use rotate_enum::RotateEnum;
 use serde::{Deserialize, Serialize};
@@ -242,12 +245,6 @@ pub(crate) trait Structure {
     fn get_selected_recipe(&self) -> Option<&Recipe> {
         None
     }
-    fn fluid_box(&self) -> Option<Vec<&FluidBox>> {
-        None
-    }
-    fn fluid_box_mut(&mut self) -> Option<Vec<&mut FluidBox>> {
-        None
-    }
     fn connection(
         &self,
         components: &StructureComponents,
@@ -268,7 +265,7 @@ pub(crate) trait Structure {
                 .dyn_iter()
                 .find(|s| s.components.position == Some(Position { x, y }))
             {
-                return structure.dynamic.fluid_box().is_some();
+                return !structure.components.fluid_boxes.is_empty();
             }
             false
         };
@@ -313,6 +310,7 @@ pub(crate) struct StructureComponents {
     pub burner: Option<Burner>,
     pub energy: Option<Energy>,
     pub factory: Option<Factory>,
+    pub fluid_boxes: Vec<FluidBox>,
 }
 
 impl StructureComponents {
@@ -323,6 +321,7 @@ impl StructureComponents {
             burner: None,
             energy: None,
             factory: None,
+            fluid_boxes: vec![],
         }
     }
 }
@@ -335,6 +334,7 @@ impl Default for StructureComponents {
             burner: None,
             energy: None,
             factory: None,
+            fluid_boxes: vec![],
         }
     }
 }
@@ -352,6 +352,7 @@ impl StructureBundle {
         burner: Option<Burner>,
         energy: Option<Energy>,
         factory: Option<Factory>,
+        fluid_boxes: Vec<FluidBox>,
     ) -> Self {
         Self {
             dynamic,
@@ -361,6 +362,7 @@ impl StructureBundle {
                 burner,
                 energy,
                 factory,
+                fluid_boxes,
             },
         }
     }

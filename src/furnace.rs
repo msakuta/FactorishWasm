@@ -30,6 +30,7 @@ impl Furnace {
                 max: 100.,
             }),
             Some(Factory::new()),
+            vec![],
         )
     }
 }

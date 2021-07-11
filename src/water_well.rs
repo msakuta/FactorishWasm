@@ -1,6 +1,8 @@
 use super::{
-    dyn_iter::DynIterMut, pipe::Pipe, structure::{StructureComponents, StructureBundle, Structure}, FactorishState, FrameProcResult,
-    Position,
+    dyn_iter::DynIterMut,
+    pipe::Pipe,
+    structure::{Structure, StructureBundle, StructureComponents},
+    FactorishState, FrameProcResult, Position,
 };
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
@@ -84,7 +86,10 @@ impl FluidBox {
             {
                 continue;
             }
-            if let Some(structure) = structures.dyn_iter_mut().find(|s| s.components.position == Some(pos)) {
+            if let Some(structure) = structures
+                .dyn_iter_mut()
+                .find(|s| s.components.position == Some(pos))
+            {
                 let mut process_fluid_box = |self_box: &mut FluidBox, fluid_box: &mut FluidBox| {
                     // Different types of fluids won't mix
                     if 0. < fluid_box.amount
@@ -123,10 +128,8 @@ impl FluidBox {
                         _biggest_flow_idx = i as isize;
                     }
                 };
-                if let Some(fluid_boxes) = structure.dynamic.fluid_box_mut() {
-                    for fluid_box in fluid_boxes {
-                        process_fluid_box(self, fluid_box);
-                    }
+                for fluid_box in &mut structure.components.fluid_boxes {
+                    process_fluid_box(self, fluid_box);
                 }
             }
         }
@@ -134,15 +137,19 @@ impl FluidBox {
 }
 
 #[derive(Serialize, Deserialize)]
-pub(crate) struct WaterWell {
-    output_fluid_box: FluidBox,
-}
+pub(crate) struct WaterWell;
 
 impl WaterWell {
-    pub(crate) fn new() -> Self {
-        WaterWell {
-            output_fluid_box: FluidBox::new(false, true, [false; 4]).set_type(&FluidType::Water),
-        }
+    pub(crate) fn new(position: Position) -> StructureBundle {
+        StructureBundle::new(
+            Box::new(WaterWell),
+            Some(position),
+            None,
+            None,
+            None,
+            None,
+            vec![FluidBox::new(false, true, [false; 4]).set_type(&FluidType::Water)],
+        )
     }
 }
 
@@ -178,10 +185,14 @@ impl Structure for WaterWell {
         Ok(())
     }
 
-    fn desc(&self, _components: &StructureComponents, _state: &FactorishState) -> String {
+    fn desc(&self, components: &StructureComponents, _state: &FactorishState) -> String {
         format!(
             "{}<br>{}",
-            self.output_fluid_box.desc(),
+            components
+                .fluid_boxes
+                .first()
+                .map(|fb| fb.desc())
+                .unwrap_or("".to_string()),
             "Outputs: Water<br>",
         )
     }
@@ -192,23 +203,15 @@ impl Structure for WaterWell {
         state: &mut FactorishState,
         structures: &mut dyn DynIterMut<Item = StructureBundle>,
     ) -> Result<FrameProcResult, ()> {
-        self.output_fluid_box.amount =
-            (self.output_fluid_box.amount + 1.).min(self.output_fluid_box.max_amount);
+        assert!(components.fluid_boxes.len() > 0);
         let connections = self.connection(components, state, structures.as_dyn_iter());
-        self.output_fluid_box.connect_to = connections;
+        let output_fluid_box = &mut components.fluid_boxes[0];
+        output_fluid_box.amount = (output_fluid_box.amount + 1.).min(output_fluid_box.max_amount);
+        output_fluid_box.connect_to = connections;
         if let Some(position) = components.position.as_ref() {
-            self.output_fluid_box
-                .simulate(position, state, structures);
+            output_fluid_box.simulate(position, state, structures);
         }
         Ok(FrameProcResult::None)
-    }
-
-    fn fluid_box(&self) -> Option<Vec<&FluidBox>> {
-        Some(vec![&self.output_fluid_box])
-    }
-
-    fn fluid_box_mut(&mut self) -> Option<Vec<&mut FluidBox>> {
-        Some(vec![&mut self.output_fluid_box])
     }
 
     crate::serialize_impl!();

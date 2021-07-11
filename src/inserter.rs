@@ -26,13 +26,7 @@ impl Inserter {
                 cooldown: 0.,
                 hold_item: None,
             }),
-            components: StructureComponents {
-                position: Some(position),
-                rotation: Some(rotation),
-                burner: None,
-                energy: None,
-                factory: None,
-            },
+            components: StructureComponents::new_with_position_and_rotation(position, rotation),
         }
     }
 

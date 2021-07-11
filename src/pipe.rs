@@ -1,6 +1,6 @@
 use super::{
     dyn_iter::{DynIterMut, Ref},
-    structure::{Structure, StructureBundle, StructureComponents},
+    structure::{Position, Structure, StructureBundle, StructureComponents},
     water_well::FluidBox,
     FactorishState, FrameProcResult,
 };
@@ -9,15 +9,19 @@ use wasm_bindgen::prelude::*;
 use web_sys::CanvasRenderingContext2d;
 
 #[derive(Serialize, Deserialize)]
-pub(crate) struct Pipe {
-    fluid_box: FluidBox,
-}
+pub(crate) struct Pipe;
 
 impl Pipe {
-    pub(crate) fn new() -> Self {
-        Pipe {
-            fluid_box: FluidBox::new(true, true, [false; 4]),
-        }
+    pub(crate) fn new(position: Position) -> StructureBundle {
+        StructureBundle::new(
+            Box::new(Pipe),
+            Some(position),
+            None,
+            None,
+            None,
+            None,
+            vec![FluidBox::new(true, true, [false; 4])],
+        )
     }
 
     pub(crate) fn draw_int(
@@ -94,8 +98,12 @@ impl Structure for Pipe {
         Self::draw_int(self, components, state, context, depth, true)
     }
 
-    fn desc(&self, _components: &StructureComponents, _state: &FactorishState) -> String {
-        self.fluid_box.desc()
+    fn desc(&self, components: &StructureComponents, _state: &FactorishState) -> String {
+        components
+            .fluid_boxes
+            .iter()
+            .map(|p| p.desc())
+            .fold("".to_string(), |acc, s| acc + &s)
         // getHTML(generateItemImage("time", true, this.recipe.time), true) + "<br>" +
         // "Outputs: <br>" +
         // getHTML(generateItemImage(this.recipe.output, true, 1), true) + "<br>";
@@ -107,20 +115,14 @@ impl Structure for Pipe {
         state: &mut FactorishState,
         structures: &mut dyn DynIterMut<Item = StructureBundle>,
     ) -> Result<FrameProcResult, ()> {
-        self.fluid_box.connect_to = self.connection(components, state, structures.as_dyn_iter());
-        if let Some(position) = &components.position {
-            self.fluid_box
-                .simulate(position, state, structures);
+        let connect_to = self.connection(components, state, structures.as_dyn_iter());
+        for fbox in &mut components.fluid_boxes {
+            fbox.connect_to = connect_to;
+            if let Some(position) = &components.position {
+                fbox.simulate(position, state, structures);
+            }
         }
         Ok(FrameProcResult::None)
-    }
-
-    fn fluid_box(&self) -> Option<Vec<&FluidBox>> {
-        Some(vec![&self.fluid_box])
-    }
-
-    fn fluid_box_mut(&mut self) -> Option<Vec<&mut FluidBox>> {
-        Some(vec![&mut self.fluid_box])
     }
 
     crate::serialize_impl!();

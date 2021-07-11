@@ -1,8 +1,8 @@
 use super::{
     burner::Burner,
     draw_direction_arrow,
-    items::ItemType,
     dyn_iter::DynIterMut,
+    items::ItemType,
     structure::{Energy, Structure, StructureBundle, StructureComponents},
     DropItem, FactorishState, FrameProcResult, Inventory, Position, Recipe, Rotation, TempEnt,
     TILE_SIZE,
@@ -38,6 +38,7 @@ impl OreMine {
                 max: 100.,
             }),
             None,
+            vec![],
         )
     }
 }

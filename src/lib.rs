@@ -649,23 +649,9 @@ impl FactorishState {
                 OreMine::new(12, 2, Rotation::Bottom),
                 Furnace::new(&Position::new(8, 3)),
                 Assembler::new(&Position::new(6, 3)),
-                StructureBundle::new(
-                    Box::new(WaterWell::new()),
-                    Some(Position::new(14, 5)),
-                    None,
-                    None,
-                    None,
-                    None,
-                ),
+                WaterWell::new(Position::new(14, 5)),
                 Boiler::new(&Position::new(13, 5)),
-                StructureBundle::new(
-                    Box::new(SteamEngine::new()),
-                    Some(Position::new(12, 5)),
-                    None,
-                    None,
-                    None,
-                    None,
-                ),
+                SteamEngine::new(Position::new(12, 5)),
             ],
             selected_structure_inventory: None,
             ore_harvesting: None,
@@ -754,6 +740,19 @@ impl FactorishState {
                                 "factory".to_string(),
                                 serde_json::to_value(factory)
                                     .map_err(|e| js_str!("Factory serialize error: {}", e))?,
+                            );
+                        }
+                        let fluid_boxes = &structure.components.fluid_boxes;
+                        if !fluid_boxes.is_empty() {
+                            map.insert(
+                                "fluid_boxes".to_string(),
+                                fluid_boxes
+                                    .iter()
+                                    .map(|fbox| {
+                                        serde_json::to_value(fbox)
+                                            .map_err(|e| js_str!("FluidBox serialize error: {}", e))
+                                    })
+                                    .collect::<Result<serde_json::Value, JsValue>>()?,
                             );
                         }
                         Ok(serde_json::Value::Object(map))
@@ -1747,9 +1746,9 @@ impl FactorishState {
                 return Ok(Assembler::new(cursor));
             }
             ItemType::Boiler => return Ok(Boiler::new(cursor)),
-            ItemType::WaterWell => Box::new(WaterWell::new()),
-            ItemType::Pipe => Box::new(Pipe::new()),
-            ItemType::SteamEngine => Box::new(SteamEngine::new()),
+            ItemType::WaterWell => return Ok(WaterWell::new(*cursor)),
+            ItemType::Pipe => return Ok(Pipe::new(*cursor)),
+            ItemType::SteamEngine => return Ok(SteamEngine::new(*cursor)),
             ItemType::ElectPole => Box::new(ElectPole::new()),
             _ => return js_err!("Can't make a structure from {:?}", tool),
         };
@@ -1761,6 +1760,7 @@ impl FactorishState {
                 burner: None,
                 energy: None,
                 factory: None,
+                fluid_boxes: vec![],
             },
         })
     }
@@ -1841,6 +1841,20 @@ impl FactorishState {
                         .map_err(|s| js_str!("structure factory deserialization error: {}", s))?
                 } else {
                     None
+                },
+                fluid_boxes: if let Some(serde_json::value::Value::Array(fluid_boxes)) =
+                    value.get_mut("fluid_boxes")
+                {
+                    fluid_boxes
+                        .into_iter()
+                        .map(|fb| {
+                            serde_json::from_value(fb.take()).map_err(|s| {
+                                js_str!("structure factory deserialization error: {}", s)
+                            })
+                        })
+                        .collect::<Result<Vec<_>, JsValue>>()?
+                } else {
+                    vec![]
                 },
             },
         })
@@ -2570,39 +2584,37 @@ impl FactorishState {
         if self.debug_fluidbox {
             context.save();
             for structure in &self.structures {
-                if let Some(fluid_boxes) = structure.dynamic.fluid_box() {
-                    let bb = try_continue!(structure.dynamic.bounding_box(&structure.components));
-                    for (i, fb) in fluid_boxes.iter().enumerate() {
-                        const BAR_MARGIN: f64 = 4.;
-                        const BAR_WIDTH: f64 = 4.;
-                        context.set_stroke_style(&js_str!("red"));
-                        context.set_fill_style(&js_str!("black"));
-                        context.fill_rect(
-                            bb.x0 as f64 * TILE_SIZE + BAR_MARGIN + 6. * i as f64,
-                            bb.y0 as f64 * TILE_SIZE + BAR_MARGIN,
-                            BAR_WIDTH,
-                            (bb.y1 - bb.y0) as f64 * TILE_SIZE - BAR_MARGIN * 2.,
-                        );
-                        context.stroke_rect(
-                            bb.x0 as f64 * TILE_SIZE + BAR_MARGIN + 6. * i as f64,
-                            bb.y0 as f64 * TILE_SIZE + BAR_MARGIN,
-                            BAR_WIDTH,
-                            (bb.y1 - bb.y0) as f64 * TILE_SIZE - BAR_MARGIN * 2.,
-                        );
-                        context.set_fill_style(&js_str!(match fb.type_ {
-                            Some(FluidType::Water) => "#00ffff",
-                            Some(FluidType::Steam) => "#afafaf",
-                            _ => "#7f7f7f",
-                        }));
-                        let bar_height = fb.amount / fb.max_amount
-                            * ((bb.y1 - bb.y0) as f64 * TILE_SIZE - BAR_MARGIN * 2.);
-                        context.fill_rect(
-                            bb.x0 as f64 * TILE_SIZE + BAR_MARGIN + 6. * i as f64,
-                            bb.y1 as f64 * TILE_SIZE - BAR_MARGIN - bar_height,
-                            4.,
-                            bar_height,
-                        );
-                    }
+                let bb = try_continue!(structure.dynamic.bounding_box(&structure.components));
+                for (i, fb) in structure.components.fluid_boxes.iter().enumerate() {
+                    const BAR_MARGIN: f64 = 4.;
+                    const BAR_WIDTH: f64 = 4.;
+                    context.set_stroke_style(&js_str!("red"));
+                    context.set_fill_style(&js_str!("black"));
+                    context.fill_rect(
+                        bb.x0 as f64 * TILE_SIZE + BAR_MARGIN + 6. * i as f64,
+                        bb.y0 as f64 * TILE_SIZE + BAR_MARGIN,
+                        BAR_WIDTH,
+                        (bb.y1 - bb.y0) as f64 * TILE_SIZE - BAR_MARGIN * 2.,
+                    );
+                    context.stroke_rect(
+                        bb.x0 as f64 * TILE_SIZE + BAR_MARGIN + 6. * i as f64,
+                        bb.y0 as f64 * TILE_SIZE + BAR_MARGIN,
+                        BAR_WIDTH,
+                        (bb.y1 - bb.y0) as f64 * TILE_SIZE - BAR_MARGIN * 2.,
+                    );
+                    context.set_fill_style(&js_str!(match fb.type_ {
+                        Some(FluidType::Water) => "#00ffff",
+                        Some(FluidType::Steam) => "#afafaf",
+                        _ => "#7f7f7f",
+                    }));
+                    let bar_height = fb.amount / fb.max_amount
+                        * ((bb.y1 - bb.y0) as f64 * TILE_SIZE - BAR_MARGIN * 2.);
+                    context.fill_rect(
+                        bb.x0 as f64 * TILE_SIZE + BAR_MARGIN + 6. * i as f64,
+                        bb.y1 as f64 * TILE_SIZE - BAR_MARGIN - bar_height,
+                        4.,
+                        bar_height,
+                    );
                 }
             }
             context.restore();

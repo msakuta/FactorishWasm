@@ -1,8 +1,8 @@
 use super::{
     burner::Burner,
+    dyn_iter::DynIterMut,
     pipe::Pipe,
     serialize_impl,
-    dyn_iter::DynIterMut,
     structure::{Energy, Structure, StructureBundle, StructureComponents},
     water_well::{FluidBox, FluidType},
     FactorishState, FrameProcResult, Inventory, ItemType, Position, Recipe, TempEnt,
@@ -19,8 +19,6 @@ const FUEL_CAPACITY: usize = 10;
 pub(crate) struct Boiler {
     progress: Option<f64>,
     recipe: Option<Recipe>,
-    input_fluid_box: FluidBox,
-    output_fluid_box: FluidBox,
 }
 
 impl Boiler {
@@ -36,8 +34,6 @@ impl Boiler {
                     power_cost: 100.,
                     recipe_time: 30.,
                 }),
-                input_fluid_box: FluidBox::new(true, false, [false; 4]),
-                output_fluid_box: FluidBox::new(false, true, [false; 4]),
             }),
             components: StructureComponents {
                 position: Some(*position),
@@ -51,6 +47,10 @@ impl Boiler {
                     max: 100.,
                 }),
                 factory: None,
+                fluid_boxes: vec![
+                    FluidBox::new(true, false, [false; 4]),
+                    FluidBox::new(false, true, [false; 4]),
+                ],
             },
         }
     }
@@ -58,13 +58,15 @@ impl Boiler {
     const FLUID_PER_PROGRESS: f64 = 100.;
     const COMBUSTION_EPSILON: f64 = 1e-6;
 
-    fn combustion_rate(&self, _burner: &Burner, energy: &Energy) -> f64 {
-        if let Some(ref recipe) = self.recipe {
+    fn combustion_rate(&self, energy: &Energy, fluid_boxes: &[FluidBox]) -> f64 {
+        if let ([input_fluid_box, output_fluid_box], Some(ref recipe)) =
+            (&fluid_boxes[..2], &self.recipe)
+        {
             (energy.value / recipe.power_cost)
                 .min(1. / recipe.recipe_time)
-                .min(self.input_fluid_box.amount / Self::FLUID_PER_PROGRESS)
+                .min(input_fluid_box.amount / Self::FLUID_PER_PROGRESS)
                 .min(
-                    (self.output_fluid_box.max_amount - self.output_fluid_box.amount)
+                    (output_fluid_box.max_amount - output_fluid_box.amount)
                         / Self::FLUID_PER_PROGRESS,
                 )
                 .min(1.)
@@ -100,13 +102,8 @@ impl Structure for Boiler {
             Some(img) => {
                 let sx = if let Some(energy) = components.energy.as_ref() {
                     if self.progress.is_some()
-                        && components
-                            .burner
-                            .as_ref()
-                            .map(|burner| {
-                                Self::COMBUSTION_EPSILON < self.combustion_rate(burner, energy)
-                            })
-                            .unwrap_or(false)
+                        && Self::COMBUSTION_EPSILON
+                            < self.combustion_rate(energy, &components.fluid_boxes)
                     {
                         ((((state.sim_time * 5.) as isize) % 2 + 1) * 32) as f64
                     } else {
@@ -153,8 +150,8 @@ impl Structure for Boiler {
                     <div style='position: absolute; width: {}px; height: 10px; background-color: #ff00ff'></div></div>"#,
                     energy.value,
                     if 0. < energy.max { (energy.value) / energy.max * 100. } else { 0. }),
-                    self.input_fluid_box.desc(),
-                    self.output_fluid_box.desc())
+                    components.fluid_boxes.get(0).map(|f| f.desc()).unwrap_or_else(|| "".to_string()),
+                    components.fluid_boxes.get(1).map(|f| f.desc()).unwrap_or_else(|| "".to_string()))
             // getHTML(generateItemImage("time", true, this.recipe.time), true) + "<br>" +
             // "Outputs: <br>" +
             // getHTML(generateItemImage(this.recipe.output, true, 1), true) + "<br>";
@@ -172,22 +169,23 @@ impl Structure for Boiler {
     ) -> Result<FrameProcResult, ()> {
         let connections = self.connection(components, state, structures.as_dyn_iter());
         let position = components.position.as_ref().ok_or(())?;
-        let burner = components.burner.as_mut().ok_or(())?;
         let energy = components.energy.as_mut().ok_or(())?;
-        self.output_fluid_box.connect_to = connections;
-        self.input_fluid_box
-            .simulate(position, state, structures);
-        self.output_fluid_box
-            .simulate(position, state, structures);
+        for fbox in &mut components.fluid_boxes {
+            fbox.connect_to = connections;
+            fbox.simulate(position, state, structures)
+        }
+        if components.fluid_boxes.len() < 2 {
+            return Err(());
+        }
         if let Some(recipe) = &self.recipe {
-            if self.input_fluid_box.type_ == Some(FluidType::Water) {
+            if components.fluid_boxes[0].type_ == Some(FluidType::Water) {
                 self.progress = Some(0.);
             }
             let ret = FrameProcResult::None;
 
             if let Some(prev_progress) = self.progress {
                 // Proceed only if we have sufficient energy in the buffer.
-                let progress = self.combustion_rate(burner, energy);
+                let progress = self.combustion_rate(energy, &components.fluid_boxes);
                 if state.rng.next() < progress * 10. {
                     state
                         .temp_ents
@@ -200,9 +198,13 @@ impl Structure for Boiler {
                 } else if Self::COMBUSTION_EPSILON < progress {
                     self.progress = Some(prev_progress + progress);
                     energy.value -= progress * recipe.power_cost;
-                    self.output_fluid_box.type_ = Some(FluidType::Steam);
-                    self.output_fluid_box.amount += progress * Self::FLUID_PER_PROGRESS;
-                    self.input_fluid_box.amount -= progress * Self::FLUID_PER_PROGRESS;
+                    if let [input_fluid_box, output_fluid_box] = &mut components.fluid_boxes[..2] {
+                        output_fluid_box.type_ = Some(FluidType::Steam);
+                        output_fluid_box.amount += progress * Self::FLUID_PER_PROGRESS;
+                        input_fluid_box.amount -= progress * Self::FLUID_PER_PROGRESS;
+                    } else {
+                        return Err(());
+                    };
                 }
             }
             return Ok(ret);
@@ -212,14 +214,6 @@ impl Structure for Boiler {
 
     fn get_selected_recipe(&self) -> Option<&Recipe> {
         self.recipe.as_ref()
-    }
-
-    fn fluid_box(&self) -> Option<Vec<&FluidBox>> {
-        Some(vec![&self.input_fluid_box, &self.output_fluid_box])
-    }
-
-    fn fluid_box_mut(&mut self) -> Option<Vec<&mut FluidBox>> {
-        Some(vec![&mut self.input_fluid_box, &mut self.output_fluid_box])
     }
 
     serialize_impl!();

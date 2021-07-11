@@ -1,8 +1,8 @@
 use super::{
+    dyn_iter::DynIterMut,
     factory::Factory,
     items::get_item_image_url,
     serialize_impl,
-    dyn_iter::DynIterMut,
     structure::{Energy, Structure, StructureBundle, StructureComponents},
     FactorishState, FrameProcResult, InventoryTrait, ItemType, Position, PowerWire, Recipe,
     TILE_SIZE,
@@ -57,6 +57,7 @@ impl Assembler {
                 max: 100.,
             }),
             Some(Factory::new()),
+            vec![],
         )
     }
 
