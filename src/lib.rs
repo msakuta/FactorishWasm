@@ -534,7 +534,33 @@ impl FactorishState {
         tool_belt[1] = Some(ItemType::Inserter);
         tool_belt[2] = Some(ItemType::TransportBelt);
         tool_belt[3] = Some(ItemType::Furnace);
-        Ok(FactorishState {
+
+        let mut structures: Vec<Box<dyn Structure>> = vec![
+            Box::new(TransportBelt::new(10, 3, Rotation::Left)),
+            Box::new(TransportBelt::new(11, 3, Rotation::Left)),
+            Box::new(TransportBelt::new(12, 3, Rotation::Left)),
+            Box::new(OreMine::new(12, 2, Rotation::Bottom)),
+            Box::new(Furnace::new(&Position::new(8, 3))),
+            Box::new(Assembler::new(&Position::new(6, 3))),
+            Box::new(WaterWell::new(&Position::new(14, 5))),
+            Box::new(Boiler::new(&Position::new(13, 5))),
+            Box::new(SteamEngine::new(&Position::new(12, 5))),
+        ];
+        structures.extend((10..=100).map(|x| {
+            let p = Box::new(Pipe::new(&Position::new(x, 10)));
+            p as Box<dyn Structure>
+        }));
+        structures.extend((11..=99).map(|x| {
+            Box::new(Pipe::new(&Position::new(10, x))) as Box<dyn Structure>
+        }));
+        structures.extend((10..=100).map(|x| {
+            Box::new(Pipe::new(&Position::new(x, 100))) as Box<dyn Structure>
+        }));
+        structures.extend((11..=99).map(|x| {
+            Box::new(Pipe::new(&Position::new(100, x))) as Box<dyn Structure>
+        }));
+
+        let mut ret = FactorishState {
             delta_time: 0.1,
             sim_time: 0.0,
             width,
@@ -645,7 +671,14 @@ impl FactorishState {
             temp_ents: vec![],
             rng: Xor128::new(3142125),
             // on_show_inventory,
-        })
+        };
+
+        let positions = ret.structures.iter().map(|s| *s.position()).collect::<Vec<_>>();
+        for position in positions {
+            ret.update_fluid_connections(&position).unwrap();
+        }
+
+        Ok(ret)
     }
 
     pub fn serialize_game(&self) -> Result<String, JsValue> {
