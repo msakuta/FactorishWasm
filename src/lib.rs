@@ -527,6 +527,8 @@ impl FactorishState {
         height: u32,
         on_player_update: js_sys::Function,
         // on_show_inventory: js_sys::Function,
+        resource_seed: u32,
+        resource_amount: f64,
         noise_scale: f64,
         noise_threshold: f64,
     ) -> Result<FactorishState, JsValue> {
@@ -612,7 +614,7 @@ impl FactorishState {
                     (width * height) as usize
                 ];
                 let bits = 1;
-                let mut rng = Xor128::new(3426624);
+                let mut rng = Xor128::new(resource_seed);
                 let iron_terms = gen_terms(&mut rng, bits);
                 let copper_terms = gen_terms(&mut rng, bits);
                 let coal_terms = gen_terms(&mut rng, bits);
@@ -621,13 +623,16 @@ impl FactorishState {
                         let [fx, fy] = [x as f64 / noise_scale, y as f64 / noise_scale];
                         let iron = (perlin_noise_pixel(fx, fy, bits, &iron_terms)
                             - noise_threshold)
-                            * 4000.;
+                            * 4.
+                            * resource_amount;
                         let copper = (perlin_noise_pixel(fx, fy, bits, &copper_terms)
                             - noise_threshold)
-                            * 4000.;
+                            * 4.
+                            * resource_amount;
                         let coal = (perlin_noise_pixel(fx, fy, bits, &coal_terms)
                             - noise_threshold)
-                            * 2000.;
+                            * 2.
+                            * resource_amount;
 
                         match [iron, copper, coal]
                             .iter()

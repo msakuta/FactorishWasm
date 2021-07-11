@@ -139,6 +139,17 @@ let ysize = 64;
         return {elem: slider, update: updateFromValue};
     }
 
+    let resourceSeed = 8913095;
+    const seedElem = document.getElementById("seed");
+    if(seedElem){
+        seedElem.value = resourceSeed;
+        seedElem.addEventListener("input", _ => {
+            resourceSeed = parseInt(seedElem.value)
+        });
+    }
+
+    let resourceAmount = 1000.;
+    sliderInit("resourceAmount", "resourceAmountLabel", value => resourceAmount = value);
     let noiseScale = 5.;
     sliderInit("noiseScale", "noiseScaleLabel", value => noiseScale = value);
     let noiseThreshold = 0.45;
@@ -158,7 +169,7 @@ let ysize = 64;
 
     let paused = false;
 
-    let sim = new FactorishState(xsize, ysize, updateInventory, noiseScale, noiseThreshold);
+    let sim = new FactorishState(xsize, ysize, updateInventory, resourceSeed, resourceAmount, noiseScale, noiseThreshold);
 
     const canvas = document.getElementById('canvas');
     const canvasSize = canvas.getBoundingClientRect();
@@ -1076,7 +1087,7 @@ let ysize = 64;
     const generateBoard = document.getElementById("generateBoard");
     generateBoard.addEventListener("click", () => {
         xsize = ysize = parseInt(document.getElementById("sizeSelect").value);
-        sim = new FactorishState(xsize, ysize, updateInventory, noiseScale, noiseThreshold);
+        sim = new FactorishState(xsize, ysize, updateInventory, resourceSeed, resourceAmount, noiseScale, noiseThreshold);
         try{
             sim.render_init(canvas, infoElem, loadedImages);
         } catch(e) {
