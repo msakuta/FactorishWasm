@@ -1,8 +1,6 @@
 use super::{
-    dyn_iter::{DynIterMut, Ref},
-    structure::Structure,
-    water_well::FluidBox,
-    FactorishState, FrameProcResult, Position,
+    dyn_iter::DynIterMut, structure::Structure, water_well::FluidBox, FactorishState,
+    FrameProcResult, Position,
 };
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
@@ -36,20 +34,20 @@ impl Pipe {
         let (x, y) = (position.x as f64 * 32., position.y as f64 * 32.);
         match state.image_pipe.as_ref() {
             Some(img) => {
-                // let (front, mid) = state.structures.split_at_mut(i);
-                // let (center, last) = mid
-                //     .split_first_mut()
-                //     .ok_or(JsValue::from_str("Structures split fail"))?;
-
-                // We could split and chain like above, but we don't have to, as long as we deal with immutable
-                // references.
-                let structures_slice: &[Box<dyn Structure>] = state.structures.as_slice();
-
-                let connection_list = structure.connection(state, &Ref(structures_slice));
-                let connections = connection_list
-                    .iter()
-                    .enumerate()
-                    .fold(0, |acc, (i, b)| acc | ((*b as u32) << i));
+                let connections = structure
+                    .fluid_box()
+                    .map(|fluid_boxes| {
+                        Some(
+                            fluid_boxes
+                                .first()?
+                                .connect_to
+                                .iter()
+                                .enumerate()
+                                .fold(0, |acc, (i, b)| acc | ((*b as u32) << i)),
+                        )
+                    })
+                    .flatten()
+                    .unwrap_or(0);
                 // Skip drawing center dot? if there are no connections
                 if !draw_center && connections == 0 {
                     return Ok(());
