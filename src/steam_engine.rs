@@ -138,13 +138,11 @@ impl Structure for SteamEngine {
     fn frame_proc(
         &mut self,
         components: &mut StructureComponents,
-        state: &mut FactorishState,
-        structures: &mut dyn DynIterMut<Item = StructureBundle>,
+        _state: &mut FactorishState,
+        _structures: &mut dyn DynIterMut<Item = StructureBundle>,
     ) -> Result<FrameProcResult, ()> {
         let position = components.position.as_ref().ok_or(())?;
-        let connections = self.connection(components, state, structures.as_dyn_iter());
-        let input_fluid_box = components.fluid_boxes.first_mut().ok_or(())?;
-        input_fluid_box.connect_to = connections;
+        let input_fluid_box = components.fluid_boxes.first().ok_or(())?;
         if let Some(recipe) = &self.recipe {
             if input_fluid_box.type_ == recipe.input_fluid {
                 self.progress = Some(0.);

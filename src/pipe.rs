@@ -1,8 +1,8 @@
 use super::{
-    dyn_iter::{DynIterMut, Ref},
+    dyn_iter::Ref,
     structure::{Position, Structure, StructureBundle, StructureComponents},
     water_well::FluidBox,
-    FactorishState, FrameProcResult,
+    FactorishState,
 };
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
@@ -107,19 +107,6 @@ impl Structure for Pipe {
         // getHTML(generateItemImage("time", true, this.recipe.time), true) + "<br>" +
         // "Outputs: <br>" +
         // getHTML(generateItemImage(this.recipe.output, true, 1), true) + "<br>";
-    }
-
-    fn frame_proc(
-        &mut self,
-        components: &mut StructureComponents,
-        state: &mut FactorishState,
-        structures: &mut dyn DynIterMut<Item = StructureBundle>,
-    ) -> Result<FrameProcResult, ()> {
-        let connect_to = self.connection(components, state, structures.as_dyn_iter());
-        for fbox in &mut components.fluid_boxes {
-            fbox.connect_to = connect_to;
-        }
-        Ok(FrameProcResult::None)
     }
 
     crate::serialize_impl!();

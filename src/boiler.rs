@@ -165,14 +165,10 @@ impl Structure for Boiler {
         &mut self,
         components: &mut StructureComponents,
         state: &mut FactorishState,
-        structures: &mut dyn DynIterMut<Item = StructureBundle>,
+        _structures: &mut dyn DynIterMut<Item = StructureBundle>,
     ) -> Result<FrameProcResult, ()> {
-        let connections = self.connection(components, state, structures.as_dyn_iter());
         let position = components.position.as_ref().ok_or(())?;
         let energy = components.energy.as_mut().ok_or(())?;
-        for fbox in &mut components.fluid_boxes {
-            fbox.connect_to = connections;
-        }
         if components.fluid_boxes.len() < 2 {
             return Err(());
         }

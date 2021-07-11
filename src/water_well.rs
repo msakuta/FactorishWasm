@@ -200,14 +200,12 @@ impl Structure for WaterWell {
     fn frame_proc(
         &mut self,
         components: &mut StructureComponents,
-        state: &mut FactorishState,
-        structures: &mut dyn DynIterMut<Item = StructureBundle>,
+        _state: &mut FactorishState,
+        _structures: &mut dyn DynIterMut<Item = StructureBundle>,
     ) -> Result<FrameProcResult, ()> {
         assert!(components.fluid_boxes.len() > 0);
-        let connections = self.connection(components, state, structures.as_dyn_iter());
         let output_fluid_box = &mut components.fluid_boxes[0];
         output_fluid_box.amount = (output_fluid_box.amount + 1.).min(output_fluid_box.max_amount);
-        output_fluid_box.connect_to = connections;
         Ok(FrameProcResult::None)
     }
 

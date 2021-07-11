@@ -39,6 +39,17 @@ impl Position {
     pub(crate) fn distance(&self, position: &Position) -> i32 {
         (position.x - self.x).abs().max((position.y - self.y).abs())
     }
+
+    /// Check whether the positions are neighbors. Return false if they are exactly the same.
+    pub(crate) fn is_neighbor(&self, pos2: &Position) -> bool {
+        [[-1, 0], [0, -1], [1, 0], [0, 1]].iter().any(|rel_pos| {
+            let pos = Position {
+                x: pos2.x + rel_pos[0],
+                y: pos2.y + rel_pos[1],
+            };
+            *self == pos
+        })
+    }
 }
 
 impl From<&[i32; 2]> for Position {

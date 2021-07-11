@@ -75,7 +75,7 @@ use assembler::Assembler;
 use boiler::Boiler;
 use burner::Burner;
 use chest::Chest;
-use dyn_iter::{Chained, MutRef, Ref};
+use dyn_iter::{Chained, DynIterMut, MutRef, Ref};
 use elect_pole::ElectPole;
 use furnace::Furnace;
 use inserter::Inserter;
@@ -965,6 +965,59 @@ impl FactorishState {
         }
     }
 
+    fn proc_structures_mutual(
+        &mut self,
+        mut f: impl FnMut(
+            &mut Self,
+            &mut StructureBundle,
+            &dyn DynIterMut<Item = StructureBundle>,
+        ) -> Result<(), JsValue>,
+    ) -> Result<(), JsValue> {
+        // This is silly way to avoid borrow checker that temporarily move the structures
+        // away from self so that they do not claim mutable borrow twice, but it works.
+        let mut structures = std::mem::take(&mut self.structures);
+        let mut res = Ok(());
+        for i in 0..structures.len() {
+            let (front, mid) = structures.split_at_mut(i);
+            let (center, last) = mid
+                .split_first_mut()
+                .ok_or_else(|| JsValue::from_str("Structures split fail"))?;
+            let mut other_structures = Chained(MutRef(front), MutRef(last));
+            res = f(self, center, &mut other_structures);
+            if res.is_err() {
+                break;
+            }
+        }
+        self.structures = structures;
+        res
+    }
+
+    fn update_fluid_connections(&mut self, position: &Position) -> Result<(), JsValue> {
+        self.proc_structures_mutual(|state, neighbor, others| {
+            if !neighbor
+                .components
+                .position
+                .map(|s_pos| s_pos.is_neighbor(&position))
+                .unwrap_or(false)
+            {
+                return Ok(());
+            }
+            let connections =
+                neighbor
+                    .dynamic
+                    .connection(&neighbor.components, state, others.as_dyn_iter());
+            console_log!(
+                "Connection recalculated for {:?}: {:?}",
+                neighbor.components.position,
+                connections
+            );
+            for fbox in &mut neighbor.components.fluid_boxes {
+                fbox.connect_to = connections;
+            }
+            Ok(())
+        })
+    }
+
     pub fn simulate(&mut self, delta_time: f64) -> Result<js_sys::Array, JsValue> {
         // console_log!("simulating delta_time {}, {}", delta_time, self.sim_time);
         const SERIALIZE_PERIOD: f64 = 100.;
@@ -1346,6 +1399,7 @@ impl FactorishState {
     fn harvest(&mut self, position: &Position, clear_item: bool) -> Result<bool, JsValue> {
         let mut harvested_structure = false;
         let mut popup_text = String::new();
+
         while let Some((index, structure)) = self
             .structures
             .iter()
@@ -1399,6 +1453,9 @@ impl FactorishState {
                 popup_text += &format!("+{} {}\n", count, &item_to_str(&item_type));
                 self.player.add_item(&item_type, count)
             }
+
+            self.update_fluid_connections(&position)?;
+
             self.on_player_update
                 .call1(&window(), &JsValue::from(self.get_player_inventory()?))
                 .unwrap_or_else(|_| JsValue::from(true));
@@ -1951,13 +2008,32 @@ impl FactorishState {
                         new_s
                             .dynamic
                             .on_construction_self(&Ref(&self.structures), true)?;
+
+                        let connections = new_s.dynamic.connection(
+                            &new_s.components,
+                            self,
+                            &Ref(&self.structures),
+                        );
+                        console_log!(
+                            "Connection recalculated for self {:?}: {:?}",
+                            new_s.components.position,
+                            connections
+                        );
+                        for fbox in &mut new_s.components.fluid_boxes {
+                            fbox.connect_to = connections;
+                        }
+
                         self.structures.push(new_s);
+
+                        self.update_fluid_connections(&cursor)?;
+
                         if let Ok(ref mut data) = self.minimap_buffer.try_borrow_mut() {
                             self.render_minimap_data_pixel(data, &cursor);
                         }
                         if let Some(count) = self.player.inventory.get_mut(&selected_tool) {
                             *count -= 1;
                         }
+
                         self.on_player_update
                             .call1(&window(), &JsValue::from(self.get_player_inventory()?))
                             .unwrap_or_else(|_| JsValue::from(true));
