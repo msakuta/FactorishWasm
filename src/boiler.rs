@@ -158,9 +158,9 @@ impl Structure for Boiler {
         let connections = self.connection(state, structures.as_dyn_iter());
         self.output_fluid_box.connect_to = connections;
         self.input_fluid_box
-            .simulate(&self.position, state, &mut structures.dyn_iter_mut());
+            .simulate(&self.position, state, structures);
         self.output_fluid_box
-            .simulate(&self.position, state, &mut structures.dyn_iter_mut());
+            .simulate(&self.position, state, structures);
         if let Some(recipe) = &self.recipe {
             if self.input_fluid_box.type_ == Some(FluidType::Water) {
                 self.progress = Some(0.);
