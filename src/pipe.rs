@@ -1,29 +1,32 @@
 use super::{
-    dyn_iter::{DynIterMut, Ref},
-    structure::Structure,
+    dyn_iter::Ref,
+    structure::{Position, Structure, StructureBundle, StructureComponents},
     water_well::FluidBox,
-    FactorishState, FrameProcResult, Position,
+    FactorishState,
 };
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 use web_sys::CanvasRenderingContext2d;
 
 #[derive(Serialize, Deserialize)]
-pub(crate) struct Pipe {
-    position: Position,
-    fluid_box: FluidBox,
-}
+pub(crate) struct Pipe;
 
 impl Pipe {
-    pub(crate) fn new(position: &Position) -> Self {
-        Pipe {
-            position: *position,
-            fluid_box: FluidBox::new(true, true, [false; 4]),
-        }
+    pub(crate) fn new(position: Position) -> StructureBundle {
+        StructureBundle::new(
+            Box::new(Pipe),
+            Some(position),
+            None,
+            None,
+            None,
+            None,
+            vec![FluidBox::new(true, true, [false; 4])],
+        )
     }
 
     pub(crate) fn draw_int(
         structure: &dyn Structure,
+        components: &StructureComponents,
         state: &FactorishState,
         context: &CanvasRenderingContext2d,
         depth: i32,
@@ -32,8 +35,11 @@ impl Pipe {
         if depth != 0 {
             return Ok(());
         };
-        let position = structure.position();
-        let (x, y) = (position.x as f64 * 32., position.y as f64 * 32.);
+        let (x, y) = if let Some(position) = components.position.as_ref() {
+            (position.x as f64 * 32., position.y as f64 * 32.)
+        } else {
+            (0., 0.)
+        };
         match state.image_pipe.as_ref() {
             Some(img) => {
                 // let (front, mid) = state.structures.split_at_mut(i);
@@ -43,9 +49,10 @@ impl Pipe {
 
                 // We could split and chain like above, but we don't have to, as long as we deal with immutable
                 // references.
-                let structures_slice: &[Box<dyn Structure>] = state.structures.as_slice();
+                let structures_slice: &[StructureBundle] = state.structures.as_slice();
 
-                let connection_list = structure.connection(state, &Ref(structures_slice));
+                let connection_list =
+                    structure.connection(components, state, &Ref(structures_slice));
                 let connections = connection_list
                     .iter()
                     .enumerate()
@@ -80,43 +87,26 @@ impl Structure for Pipe {
         "Pipe"
     }
 
-    fn position(&self) -> &Position {
-        &self.position
-    }
-
     fn draw(
         &self,
+        components: &StructureComponents,
         state: &FactorishState,
         context: &CanvasRenderingContext2d,
         depth: i32,
         _is_toolbar: bool,
     ) -> Result<(), JsValue> {
-        Self::draw_int(self, state, context, depth, true)
+        Self::draw_int(self, components, state, context, depth, true)
     }
 
-    fn desc(&self, _state: &FactorishState) -> String {
-        self.fluid_box.desc()
+    fn desc(&self, components: &StructureComponents, _state: &FactorishState) -> String {
+        components
+            .fluid_boxes
+            .iter()
+            .map(|p| p.desc())
+            .fold("".to_string(), |acc, s| acc + &s)
         // getHTML(generateItemImage("time", true, this.recipe.time), true) + "<br>" +
         // "Outputs: <br>" +
         // getHTML(generateItemImage(this.recipe.output, true, 1), true) + "<br>";
-    }
-
-    fn frame_proc(
-        &mut self,
-        state: &mut FactorishState,
-        structures: &mut dyn DynIterMut<Item = Box<dyn Structure>>,
-    ) -> Result<FrameProcResult, ()> {
-        self.fluid_box.connect_to = self.connection(state, structures.as_dyn_iter());
-        self.fluid_box.simulate(&self.position, state, structures);
-        Ok(FrameProcResult::None)
-    }
-
-    fn fluid_box(&self) -> Option<Vec<&FluidBox>> {
-        Some(vec![&self.fluid_box])
-    }
-
-    fn fluid_box_mut(&mut self) -> Option<Vec<&mut FluidBox>> {
-        Some(vec![&mut self.fluid_box])
     }
 
     crate::serialize_impl!();

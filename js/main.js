@@ -307,7 +307,11 @@ let ysize = 64;
         for(var i = 0; i < toolBarCanvases.length; i++){
             var canvasElem = toolBarCanvases[i];
             var context = canvasElem.getContext('2d');
-            sim.render_tool(i, context);
+            try{
+                sim.render_tool(i, context);
+            } catch(e) {
+                console.error(e);
+            }
         }
     }
 
@@ -409,7 +413,7 @@ let ysize = 64;
         else
             img.style.backgroundSize = size + 'px ' + size + 'px';
         img.setAttribute('draggable', 'false');
-        if(iconSize && count){
+        if(iconSize){
             var container = document.createElement('span');
             container.style.position = 'relative';
             container.style.display = 'inline-block';
@@ -418,7 +422,7 @@ let ysize = 64;
             container.appendChild(img);
             var overlay = document.createElement('div');
             overlay.setAttribute('class', 'overlay noselect');
-            overlay.innerHTML = count;
+            overlay.innerHTML = count || 0;
             container.appendChild(overlay);
             return container;
         }
@@ -639,7 +643,8 @@ let ysize = 64;
                     const imageFile = getImageFile(i);
                     burnerItemElem.src = 'url(' + (imageFile instanceof Array ?
                         imageFile[0] : imageFile) + ')';
-                    burnerItemElem.children[1].innerHTML = v;
+                    if(1 < burnerItemElem.children.length)
+                        burnerItemElem.children[1].innerHTML = v;
                 }
                 burnerItemElem.ondragstart = function(ev){
                     console.log("dragStart");
@@ -1024,7 +1029,12 @@ let ysize = 64;
     window.setInterval(function(){
         if(!paused)
             processEvents(sim.simulate(0.05));
-        let result = sim.render(ctx);
+        try{
+            sim.render(ctx);
+        }
+        catch(e){
+            console.error(e);
+        }
 
         const selPos = sim.get_selected_inventory();
         if(selPos){

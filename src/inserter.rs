@@ -2,7 +2,7 @@ use super::{
     draw_direction_arrow,
     dyn_iter::DynIterMut,
     items::{render_drop_item, ItemType},
-    structure::Structure,
+    structure::{Structure, StructureBundle, StructureComponents},
     DropItem, FactorishState, FrameProcResult, Inventory, InventoryTrait, Position, Rotation,
 };
 use serde::{Deserialize, Serialize};
@@ -11,7 +11,6 @@ use web_sys::CanvasRenderingContext2d;
 
 #[derive(Serialize, Deserialize)]
 pub(crate) struct Inserter {
-    position: Position,
     rotation: Rotation,
     cooldown: f64,
     hold_item: Option<ItemType>,
@@ -20,12 +19,14 @@ pub(crate) struct Inserter {
 const INSERTER_TIME: f64 = 20.;
 
 impl Inserter {
-    pub(crate) fn new(x: i32, y: i32, rotation: Rotation) -> Self {
-        Inserter {
-            position: Position { x, y },
-            rotation,
-            cooldown: 0.,
-            hold_item: None,
+    pub(crate) fn new(position: Position, rotation: Rotation) -> StructureBundle {
+        StructureBundle {
+            dynamic: Box::new(Inserter {
+                rotation,
+                cooldown: 0.,
+                hold_item: None,
+            }),
+            components: StructureComponents::new_with_position_and_rotation(position, rotation),
         }
     }
 
@@ -47,18 +48,19 @@ impl Structure for Inserter {
         "Inserter"
     }
 
-    fn position(&self) -> &Position {
-        &self.position
-    }
-
     fn draw(
         &self,
+        components: &StructureComponents,
         state: &FactorishState,
         context: &CanvasRenderingContext2d,
         depth: i32,
         _is_toolbar: bool,
     ) -> Result<(), JsValue> {
-        let (x, y) = (self.position.x as f64 * 32., self.position.y as f64 * 32.);
+        let (x, y) = if let Some(position) = &components.position {
+            (position.x as f64 * 32., position.y as f64 * 32.)
+        } else {
+            (0., 0.)
+        };
         match depth {
             0 => match state.image_inserter.as_ref() {
                 Some(img) => {
@@ -130,19 +132,21 @@ impl Structure for Inserter {
 
     fn frame_proc(
         &mut self,
+        components: &mut StructureComponents,
         state: &mut FactorishState,
-        structures: &mut dyn DynIterMut<Item = Box<dyn Structure>>,
+        structures: &mut dyn DynIterMut<Item = StructureBundle>,
     ) -> Result<FrameProcResult, ()> {
-        let input_position = self.position.add(self.rotation.delta_inv());
-        let output_position = self.position.add(self.rotation.delta());
+        let position = components.position.as_ref().ok_or(())?;
+        let input_position = position.add(self.rotation.delta_inv());
+        let output_position = position.add(self.rotation.delta());
 
         fn find_structure_at(
-            structures: &mut dyn DynIterMut<Item = Box<dyn Structure>>,
+            structures: &mut dyn DynIterMut<Item = StructureBundle>,
             position: Position,
-        ) -> Option<&mut Box<dyn Structure>> {
+        ) -> Option<&mut StructureBundle> {
             structures
                 .dyn_iter_mut()
-                .find(|structure| *structure.position() == position)
+                .find(|structure| structure.components.position == Some(position))
         }
 
         if self.hold_item.is_none() {
@@ -151,7 +155,7 @@ impl Structure for Inserter {
                 let ret = FrameProcResult::None;
 
                 let mut try_hold =
-                    |structures: &mut dyn DynIterMut<Item = Box<dyn Structure>>, type_| -> bool {
+                    |structures: &mut dyn DynIterMut<Item = StructureBundle>, type_| -> bool {
                         if let Some(structure) = find_structure_at(structures, output_position) {
                             // console_log!(
                             //     "found structure to output[{}]: {}, {}, {}",
@@ -160,7 +164,7 @@ impl Structure for Inserter {
                             //     output_position.x,
                             //     output_position.y
                             // );
-                            if structure.can_input(&type_) || structure.movable() {
+                            if structure.can_input(&type_) || structure.dynamic.movable() {
                                 // ret = FrameProcResult::InventoryChanged(output_position);
                                 self.hold_item = Some(type_);
                                 self.cooldown += INSERTER_TIME;
@@ -204,7 +208,7 @@ impl Structure for Inserter {
                             //     output_position.y
                             // );
                             for item in output_items {
-                                if structure.can_input(&item.0) || structure.movable() {
+                                if structure.can_input(&item.0) || structure.dynamic.movable() {
                                     // ret = FrameProcResult::InventoryChanged(output_position);
                                     self.hold_item = Some(item.0);
                                     self.cooldown += INSERTER_TIME;
@@ -268,7 +272,7 @@ impl Structure for Inserter {
                         self.cooldown += INSERTER_TIME;
                         self.hold_item = None;
                         return Ok(FrameProcResult::InventoryChanged(output_position));
-                    } else if structure.movable() {
+                    } else if structure.dynamic.movable() {
                         try_move(state)
                     }
                 } else {
@@ -279,16 +283,6 @@ impl Structure for Inserter {
             self.cooldown -= 1.;
         }
         Ok(FrameProcResult::None)
-    }
-
-    fn rotate(&mut self) -> Result<(), ()> {
-        self.rotation = self.rotation.next();
-        Ok(())
-    }
-
-    fn set_rotation(&mut self, rotation: &Rotation) -> Result<(), ()> {
-        self.rotation = *rotation;
-        Ok(())
     }
 
     fn destroy_inventory(&mut self) -> Inventory {
