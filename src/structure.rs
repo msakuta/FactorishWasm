@@ -226,7 +226,7 @@ pub(crate) trait Structure {
     fn burner_inventory(&self) -> Option<&Inventory> {
         None
     }
-    fn add_burner_inventory(&mut self, item_type: &ItemType, amount: isize) -> isize {
+    fn add_burner_inventory(&mut self, _item_type: &ItemType, _amount: isize) -> isize {
         0
     }
     fn burner_energy(&self) -> Option<(f64, f64)> {
