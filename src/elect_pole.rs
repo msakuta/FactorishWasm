@@ -1,5 +1,6 @@
-use super::structure::{DynIterMut, Structure};
-use super::{FactorishState, FrameProcResult, Position};
+use super::{
+    dyn_iter::DynIterMut, structure::Structure, FactorishState, FrameProcResult, Position,
+};
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 use web_sys::CanvasRenderingContext2d;

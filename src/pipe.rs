@@ -1,6 +1,9 @@
-use super::structure::{DynIterMut, Structure};
-use super::water_well::FluidBox;
-use super::{FactorishState, FrameProcResult, Position, Ref};
+use super::{
+    dyn_iter::{DynIterMut, Ref},
+    structure::Structure,
+    water_well::FluidBox,
+    FactorishState, FrameProcResult, Position,
+};
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 use web_sys::CanvasRenderingContext2d;

@@ -1,8 +1,6 @@
-use super::items::item_to_str;
-use super::structure::{DynIterMut, Structure};
 use super::{
-    DropItem, FactorishState, FrameProcResult, Inventory, InventoryTrait, ItemType, Position,
-    Recipe, TempEnt, COAL_POWER,
+    dyn_iter::DynIterMut, items::item_to_str, structure::Structure, DropItem, FactorishState,
+    FrameProcResult, Inventory, InventoryTrait, ItemType, Position, Recipe, TempEnt, COAL_POWER,
 };
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;

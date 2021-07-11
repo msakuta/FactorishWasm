@@ -1,8 +1,9 @@
-use super::items::{render_drop_item, ItemType};
-use super::structure::{DynIterMut, Structure};
 use super::{
-    draw_direction_arrow, DropItem, FactorishState, FrameProcResult, Inventory, InventoryTrait,
-    Position, Rotation,
+    draw_direction_arrow,
+    dyn_iter::DynIterMut,
+    items::{render_drop_item, ItemType},
+    structure::Structure,
+    DropItem, FactorishState, FrameProcResult, Inventory, InventoryTrait, Position, Rotation,
 };
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;

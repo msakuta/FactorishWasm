@@ -1,6 +1,9 @@
-use super::items::ItemType;
-use super::water_well::FluidBox;
-use super::{DropItem, FactorishState, Inventory, InventoryTrait, Recipe};
+use super::{
+    dyn_iter::{DynIter, DynIterMut},
+    items::ItemType,
+    water_well::FluidBox,
+    DropItem, FactorishState, Inventory, InventoryTrait, Recipe,
+};
 use rotate_enum::RotateEnum;
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
@@ -133,37 +136,6 @@ pub(crate) enum ItemResponse {
 pub(crate) type ItemResponseResult = (ItemResponse, Option<FrameProcResult>);
 
 use std::fmt::Debug;
-
-pub(crate) trait DynIter {
-    type Item;
-    fn dyn_iter(&self) -> Box<dyn Iterator<Item = &Self::Item> + '_>;
-    fn as_dyn_iter(&self) -> &dyn DynIter<Item = Self::Item>;
-}
-impl<T, Item> DynIter for T
-where
-    for<'a> &'a T: IntoIterator<Item = &'a Item>,
-{
-    type Item = Item;
-    fn dyn_iter(&self) -> Box<dyn Iterator<Item = &Self::Item> + '_> {
-        Box::new(self.into_iter())
-    }
-    fn as_dyn_iter(&self) -> &dyn DynIter<Item = Self::Item> {
-        self
-    }
-}
-
-pub(crate) trait DynIterMut: DynIter {
-    fn dyn_iter_mut(&mut self) -> Box<dyn Iterator<Item = &mut Self::Item> + '_>;
-}
-impl<T, Item> DynIterMut for T
-where
-    for<'a> &'a T: IntoIterator<Item = &'a Item>,
-    for<'a> &'a mut T: IntoIterator<Item = &'a mut Item>,
-{
-    fn dyn_iter_mut(&mut self) -> Box<dyn Iterator<Item = &mut Self::Item> + '_> {
-        Box::new(self.into_iter())
-    }
-}
 
 pub(crate) trait Structure {
     fn name(&self) -> &str;
