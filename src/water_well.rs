@@ -208,9 +208,6 @@ impl Structure for WaterWell {
         let output_fluid_box = &mut components.fluid_boxes[0];
         output_fluid_box.amount = (output_fluid_box.amount + 1.).min(output_fluid_box.max_amount);
         output_fluid_box.connect_to = connections;
-        if let Some(position) = components.position.as_ref() {
-            output_fluid_box.simulate(position, state, structures);
-        }
         Ok(FrameProcResult::None)
     }
 

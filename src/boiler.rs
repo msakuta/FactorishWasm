@@ -172,7 +172,6 @@ impl Structure for Boiler {
         let energy = components.energy.as_mut().ok_or(())?;
         for fbox in &mut components.fluid_boxes {
             fbox.connect_to = connections;
-            fbox.simulate(position, state, structures)
         }
         if components.fluid_boxes.len() < 2 {
             return Err(());

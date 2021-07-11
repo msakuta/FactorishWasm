@@ -1051,11 +1051,17 @@ impl FactorishState {
             let (center, last) = mid
                 .split_first_mut()
                 .ok_or_else(|| JsValue::from_str("Structures split fail"))?;
+            let mut other_structures = Chained(MutRef(front), MutRef(last));
             let components = &mut center.components;
+            if let Some(position) = &components.position {
+                for fbox in &mut components.fluid_boxes {
+                    fbox.simulate(position, self, &mut other_structures)
+                }
+            }
             frame_proc_result_to_event(center.dynamic.frame_proc(
                 components,
                 self,
-                &mut Chained(MutRef(front), MutRef(last)),
+                &mut other_structures,
             ));
             if let Some(burner) = &mut components.burner {
                 frame_proc_result_to_event(burner.frame_proc(

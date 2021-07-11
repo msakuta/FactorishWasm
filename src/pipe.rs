@@ -118,9 +118,6 @@ impl Structure for Pipe {
         let connect_to = self.connection(components, state, structures.as_dyn_iter());
         for fbox in &mut components.fluid_boxes {
             fbox.connect_to = connect_to;
-            if let Some(position) = &components.position {
-                fbox.simulate(position, state, structures);
-            }
         }
         Ok(FrameProcResult::None)
     }

@@ -145,7 +145,6 @@ impl Structure for SteamEngine {
         let connections = self.connection(components, state, structures.as_dyn_iter());
         let input_fluid_box = components.fluid_boxes.first_mut().ok_or(())?;
         input_fluid_box.connect_to = connections;
-        input_fluid_box.simulate(position, state, structures);
         if let Some(recipe) = &self.recipe {
             if input_fluid_box.type_ == recipe.input_fluid {
                 self.progress = Some(0.);
