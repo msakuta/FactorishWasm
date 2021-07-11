@@ -68,7 +68,7 @@ use furnace::Furnace;
 use inserter::Inserter;
 use items::{item_to_str, render_drop_item, str_to_item, DropItem, ItemType};
 use ore_mine::OreMine;
-use perlin_noise::{perlin_noise_pixel, Xor128};
+use perlin_noise::{gen_terms, perlin_noise_pixel, Xor128};
 use pipe::Pipe;
 use splitter::Splitter;
 use steam_engine::SteamEngine;
@@ -527,6 +527,8 @@ impl FactorishState {
         height: u32,
         on_player_update: js_sys::Function,
         // on_show_inventory: js_sys::Function,
+        noise_scale: f64,
+        noise_threshold: f64,
     ) -> Result<FactorishState, JsValue> {
         console_log!("FactorishState constructor");
         let mut tool_belt = [None; 10];
@@ -609,17 +611,33 @@ impl FactorishState {
                     };
                     (width * height) as usize
                 ];
+                let bits = 1;
+                let mut rng = Xor128::new(3426624);
+                let iron_terms = gen_terms(&mut rng, bits);
+                let copper_terms = gen_terms(&mut rng, bits);
+                let coal_terms = gen_terms(&mut rng, bits);
                 for y in 0..height {
                     for x in 0..width {
-                        let [fx, fy] = [x as f64, y as f64];
-                        let iron = (perlin_noise_pixel(fx, fy, 8) * 4000. - 3000.).max(0.) as u32;
-                        let copper = (perlin_noise_pixel(fx, fy, 9) * 4000. - 3000.).max(0.) as u32;
-                        let coal = (perlin_noise_pixel(fx, fy, 10) * 2000. - 1500.).max(0.) as u32;
+                        let [fx, fy] = [x as f64 / noise_scale, y as f64 / noise_scale];
+                        let iron = (perlin_noise_pixel(fx, fy, bits, &iron_terms)
+                            - noise_threshold)
+                            * 4000.;
+                        let copper = (perlin_noise_pixel(fx, fy, bits, &copper_terms)
+                            - noise_threshold)
+                            * 4000.;
+                        let coal = (perlin_noise_pixel(fx, fy, bits, &coal_terms)
+                            - noise_threshold)
+                            * 2000.;
 
-                        match [iron, copper, coal].iter().enumerate().max_by_key(|v| v.1) {
-                            Some((0, _)) => ret[(x + y * width) as usize].coal_ore = coal,
-                            Some((1, _)) => ret[(x + y * width) as usize].copper_ore = copper,
-                            Some((2, _)) => ret[(x + y * width) as usize].iron_ore = iron,
+                        match [iron, copper, coal]
+                            .iter()
+                            .map(|v| v.max(0.) as u32)
+                            .enumerate()
+                            .max_by_key(|v| v.1)
+                        {
+                            Some((0, v)) => ret[(x + y * width) as usize].iron_ore = v,
+                            Some((1, v)) => ret[(x + y * width) as usize].copper_ore = v,
+                            Some((2, v)) => ret[(x + y * width) as usize].coal_ore = v,
                             _ => (),
                         }
                     }

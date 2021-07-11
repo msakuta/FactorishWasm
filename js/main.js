@@ -88,9 +88,77 @@ let ysize = 64;
         return [name, src, await createImageBitmap(await res.blob())];
     });
 
+    function sliderInit(sliderId, labelId, writer, logarithmic=false){
+        const slider = document.getElementById(sliderId);
+        const label = document.getElementById(labelId);
+        label.innerHTML = slider.value;
+    
+        const sliderStats = () => {
+          const [minp, maxp] = ["min", "max"].map(attr => parseFloat(slider.getAttribute(attr)));
+          if(minp <= 0){
+            throw "Minimum value for logarithmic slider must not be 0";
+          }
+          const [minv, maxv] = [minp, maxp].map(Math.log);
+          // calculate adjustment factor
+          const scale = (maxv-minv) / (maxp-minp);
+          return {minp, maxp, minv, maxv, scale};
+        };
+    
+        const updateFromInput = (_event) => {
+          let value;
+          if(logarithmic){
+            const {minp, minv, scale} = sliderStats();
+            value = Math.exp(minv + scale*(parseFloat(slider.value) - minp));
+            label.innerHTML = value.toFixed(8);
+          }
+          else{
+            value = parseFloat(slider.value);
+            label.innerHTML = value;
+          }
+          writer(value);
+        }
+        const updateFromValue = (value) => {
+          if(logarithmic){
+            const {minp, scale, minv} = sliderStats();
+    
+            // Inverse of updateFromInput
+            slider.value = (Math.log(value) - minv) / scale + minp;
+            label.innerHTML = value.toFixed(8);
+          }
+          else{
+            slider.value = value;
+            label.innerHTML = value;
+          }
+          writer(value);
+        };
+        if(logarithmic){
+          // Update the UI according to logarithmic scale even before the user touches the slider
+          updateFromValue(parseFloat(slider.value));
+        }
+        slider.addEventListener("input", updateFromInput);
+        return {elem: slider, update: updateFromValue};
+    }
+
+    let noiseScale = 5.;
+    sliderInit("noiseScale", "noiseScaleLabel", value => noiseScale = value);
+    let noiseThreshold = 0.45;
+    sliderInit("noiseThreshold", "noiseThresholdLabel", value => noiseThreshold = value);
+
+    function initPane(buttonId, containerId){
+        const button = document.getElementById(buttonId);
+        const container = document.getElementById(containerId);
+        if(button){
+            button.addEventListener("click", (event) => {
+                container.style.display = container.style.display === "none" ? "block" : "none";
+            });
+        }
+    }
+    initPane("paramsButton", "paramsContainer");
+    initPane("viewButton", "viewContainer");
+
     let paused = false;
 
-    let sim = new FactorishState(xsize, ysize, updateInventory);
+    let sim = new FactorishState(xsize, ysize, updateInventory, noiseScale, noiseThreshold);
 
     const canvas = document.getElementById('canvas');
     const canvasSize = canvas.getBoundingClientRect();
@@ -1008,7 +1076,7 @@ let ysize = 64;
     const generateBoard = document.getElementById("generateBoard");
     generateBoard.addEventListener("click", () => {
         xsize = ysize = parseInt(document.getElementById("sizeSelect").value);
-        sim = new FactorishState(xsize, ysize, updateInventory);
+        sim = new FactorishState(xsize, ysize, updateInventory, noiseScale, noiseThreshold);
         try{
             sim.render_init(canvas, infoElem, loadedImages);
         } catch(e) {
