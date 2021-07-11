@@ -1,7 +1,8 @@
 use super::{
     pipe::Pipe,
     serialize_impl,
-    structure::{DynIterMut, Structure, StructureBundle, StructureComponents},
+    dyn_iter::DynIterMut,
+    structure::{Structure, StructureBundle, StructureComponents},
     water_well::{FluidBox, FluidType},
     FactorishState, FrameProcResult, Recipe,
 };
@@ -135,7 +136,7 @@ impl Structure for SteamEngine {
         let connections = self.connection(components, state, structures.as_dyn_iter());
         self.input_fluid_box.connect_to = connections;
         self.input_fluid_box
-            .simulate(position, state, &mut structures.dyn_iter_mut());
+            .simulate(position, state, structures);
         if let Some(recipe) = &self.recipe {
             if self.input_fluid_box.type_ == recipe.input_fluid {
                 self.progress = Some(0.);

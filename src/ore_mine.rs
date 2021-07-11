@@ -2,7 +2,8 @@ use super::{
     burner::Burner,
     draw_direction_arrow,
     items::ItemType,
-    structure::{DynIterMut, Energy, Structure, StructureBundle, StructureComponents},
+    dyn_iter::DynIterMut,
+    structure::{Energy, Structure, StructureBundle, StructureComponents},
     DropItem, FactorishState, FrameProcResult, Inventory, Position, Recipe, Rotation, TempEnt,
     TILE_SIZE,
 };

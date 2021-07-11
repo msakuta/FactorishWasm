@@ -2,7 +2,8 @@ use super::{
     factory::Factory,
     items::get_item_image_url,
     serialize_impl,
-    structure::{DynIterMut, Energy, Structure, StructureBundle, StructureComponents},
+    dyn_iter::DynIterMut,
+    structure::{Energy, Structure, StructureBundle, StructureComponents},
     FactorishState, FrameProcResult, InventoryTrait, ItemType, Position, PowerWire, Recipe,
     TILE_SIZE,
 };

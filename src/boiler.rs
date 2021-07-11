@@ -2,7 +2,8 @@ use super::{
     burner::Burner,
     pipe::Pipe,
     serialize_impl,
-    structure::{DynIterMut, Energy, Structure, StructureBundle, StructureComponents},
+    dyn_iter::DynIterMut,
+    structure::{Energy, Structure, StructureBundle, StructureComponents},
     water_well::{FluidBox, FluidType},
     FactorishState, FrameProcResult, Inventory, ItemType, Position, Recipe, TempEnt,
 };
@@ -175,9 +176,9 @@ impl Structure for Boiler {
         let energy = components.energy.as_mut().ok_or(())?;
         self.output_fluid_box.connect_to = connections;
         self.input_fluid_box
-            .simulate(position, state, &mut structures.dyn_iter_mut());
+            .simulate(position, state, structures);
         self.output_fluid_box
-            .simulate(position, state, &mut structures.dyn_iter_mut());
+            .simulate(position, state, structures);
         if let Some(recipe) = &self.recipe {
             if self.input_fluid_box.type_ == Some(FluidType::Water) {
                 self.progress = Some(0.);

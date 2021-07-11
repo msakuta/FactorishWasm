@@ -1,7 +1,8 @@
 use super::{
-    structure::{DynIterMut, Structure, StructureBundle, StructureComponents},
+    dyn_iter::{DynIterMut, Ref},
+    structure::{Structure, StructureBundle, StructureComponents},
     water_well::FluidBox,
-    FactorishState, FrameProcResult, Ref,
+    FactorishState, FrameProcResult,
 };
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
@@ -109,7 +110,7 @@ impl Structure for Pipe {
         self.fluid_box.connect_to = self.connection(components, state, structures.as_dyn_iter());
         if let Some(position) = &components.position {
             self.fluid_box
-                .simulate(position, state, &mut structures.dyn_iter_mut());
+                .simulate(position, state, structures);
         }
         Ok(FrameProcResult::None)
     }

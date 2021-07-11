@@ -1,7 +1,6 @@
 use super::{
-    pipe::Pipe,
-    structure::{DynIterMut, Structure, StructureBundle, StructureComponents},
-    FactorishState, FrameProcResult, Position,
+    dyn_iter::DynIterMut, pipe::Pipe, structure::{StructureComponents, StructureBundle, Structure}, FactorishState, FrameProcResult,
+    Position,
 };
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
@@ -59,7 +58,7 @@ impl FluidBox {
         &mut self,
         position: &Position,
         state: &mut FactorishState,
-        structures: &mut dyn Iterator<Item = &mut StructureBundle>,
+        structures: &mut dyn DynIterMut<Item = StructureBundle>,
     ) {
         let mut _biggest_flow_idx = -1;
         let mut biggest_flow_amount = 1e-3; // At least this amount of flow is required for displaying flow direction
@@ -72,10 +71,10 @@ impl FluidBox {
             .connect_to
             .iter()
             .enumerate()
-            .map(|(i, c)| (i, *c))
-            .filter(|(_, c)| *c)
+            .filter(|(_, c)| **c)
+            .map(|(i, _)| i)
             .collect::<Vec<_>>();
-        for (i, _connect) in connect_list {
+        for i in connect_list {
             let dir_idx = i % 4;
             let pos = Position {
                 x: position.x + rel_dir[dir_idx][0],
@@ -85,19 +84,20 @@ impl FluidBox {
             {
                 continue;
             }
-            if let Some(structure) = structures
-                .map(|s| s)
-                .find(|s| s.components.position == Some(pos))
-            {
+            if let Some(structure) = structures.dyn_iter_mut().find(|s| s.components.position == Some(pos)) {
                 let mut process_fluid_box = |self_box: &mut FluidBox, fluid_box: &mut FluidBox| {
                     // Different types of fluids won't mix
                     if 0. < fluid_box.amount
+                        && 0. < self_box.amount
                         && fluid_box.type_ != self_box.type_
                         && fluid_box.type_.is_some()
                     {
                         return;
                     }
                     let pressure = fluid_box.amount - self_box.amount;
+                    if 0. < pressure {
+                        return;
+                    }
                     let flow = pressure * 0.1;
                     // Check input/output valve state
                     if if flow < 0. {
@@ -198,7 +198,7 @@ impl Structure for WaterWell {
         self.output_fluid_box.connect_to = connections;
         if let Some(position) = components.position.as_ref() {
             self.output_fluid_box
-                .simulate(position, state, &mut structures.dyn_iter_mut());
+                .simulate(position, state, structures);
         }
         Ok(FrameProcResult::None)
     }

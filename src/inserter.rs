@@ -1,7 +1,8 @@
 use super::{
     draw_direction_arrow,
+    dyn_iter::DynIterMut,
     items::{render_drop_item, ItemType},
-    structure::{DynIterMut, Structure, StructureBundle, StructureComponents},
+    structure::{Structure, StructureBundle, StructureComponents},
     DropItem, FactorishState, FrameProcResult, Inventory, InventoryTrait, Position, Rotation,
 };
 use serde::{Deserialize, Serialize};
