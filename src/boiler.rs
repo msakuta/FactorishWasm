@@ -155,8 +155,6 @@ impl Structure for Boiler {
         state: &mut FactorishState,
         structures: &mut dyn DynIterMut<Item = Box<dyn Structure>>,
     ) -> Result<FrameProcResult, ()> {
-        let connections = self.connection(state, structures.as_dyn_iter());
-        self.output_fluid_box.connect_to = connections;
         self.input_fluid_box
             .simulate(&self.position, state, structures);
         self.output_fluid_box

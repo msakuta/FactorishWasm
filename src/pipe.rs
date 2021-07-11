@@ -106,7 +106,6 @@ impl Structure for Pipe {
         state: &mut FactorishState,
         structures: &mut dyn DynIterMut<Item = Box<dyn Structure>>,
     ) -> Result<FrameProcResult, ()> {
-        self.fluid_box.connect_to = self.connection(state, structures.as_dyn_iter());
         self.fluid_box.simulate(&self.position, state, structures);
         Ok(FrameProcResult::None)
     }

@@ -194,8 +194,6 @@ impl Structure for WaterWell {
     ) -> Result<FrameProcResult, ()> {
         self.output_fluid_box.amount =
             (self.output_fluid_box.amount + 1.).min(self.output_fluid_box.max_amount);
-        let connections = self.connection(state, structures.as_dyn_iter());
-        self.output_fluid_box.connect_to = connections;
         self.output_fluid_box
             .simulate(&self.position, state, structures);
         Ok(FrameProcResult::None)

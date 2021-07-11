@@ -62,7 +62,7 @@ mod water_well;
 use assembler::Assembler;
 use boiler::Boiler;
 use chest::Chest;
-use dyn_iter::{Chained, MutRef, Ref};
+use dyn_iter::{Chained, DynIterMut, MutRef, Ref};
 use elect_pole::ElectPole;
 use furnace::Furnace;
 use inserter::Inserter;
@@ -72,7 +72,7 @@ use perlin_noise::{perlin_noise_pixel, Xor128};
 use pipe::Pipe;
 use splitter::Splitter;
 use steam_engine::SteamEngine;
-use structure::{FrameProcResult, ItemResponse, Position, Rotation, Structure};
+use structure::{FrameProcResult, ItemResponse, Position, Rotation, Structure, StructureBoxed};
 use transport_belt::TransportBelt;
 use water_well::{FluidType, WaterWell};
 
@@ -888,6 +888,53 @@ impl FactorishState {
         }
     }
 
+    fn proc_structures_mutual(
+        &mut self,
+        mut f: impl FnMut(
+            &mut Self,
+            &mut StructureBoxed,
+            &dyn DynIterMut<Item = StructureBoxed>,
+        ) -> Result<(), JsValue>,
+    ) -> Result<(), JsValue> {
+        // This is silly way to avoid borrow checker that temporarily move the structures
+        // away from self so that they do not claim mutable borrow twice, but it works.
+        let mut structures = std::mem::take(&mut self.structures);
+        let mut res = Ok(());
+        for i in 0..structures.len() {
+            let (front, mid) = structures.split_at_mut(i);
+            let (center, last) = mid
+                .split_first_mut()
+                .ok_or_else(|| JsValue::from_str("Structures split fail"))?;
+            let mut other_structures = Chained(MutRef(front), MutRef(last));
+            res = f(self, center, &mut other_structures);
+            if res.is_err() {
+                break;
+            }
+        }
+        self.structures = structures;
+        res
+    }
+
+    fn update_fluid_connections(&mut self, position: &Position) -> Result<(), JsValue> {
+        self.proc_structures_mutual(|state, neighbor, others| {
+            if !neighbor.position().is_neighbor(&position) {
+                return Ok(());
+            }
+            let connections = neighbor.connection(state, others.as_dyn_iter());
+            console_log!(
+                "Connection recalculated for {:?}: {:?}",
+                neighbor.position(),
+                connections
+            );
+            if let Some(fluid_boxes) = neighbor.fluid_box_mut() {
+                for fbox in fluid_boxes {
+                    fbox.connect_to = connections;
+                }
+            }
+            Ok(())
+        })
+    }
+
     pub fn simulate(&mut self, delta_time: f64) -> Result<js_sys::Array, JsValue> {
         // console_log!("simulating delta_time {}, {}", delta_time, self.sim_time);
         const SERIALIZE_PERIOD: f64 = 100.;
@@ -1250,6 +1297,9 @@ impl FactorishState {
                 popup_text += &format!("+{} {}\n", count, &item_to_str(&item_type));
                 self.player.add_item(&item_type, count)
             }
+
+            self.update_fluid_connections(&position)?;
+
             self.on_player_update
                 .call1(&window(), &JsValue::from(self.get_player_inventory()?))
                 .unwrap_or_else(|_| JsValue::from(true));
@@ -1711,7 +1761,23 @@ impl FactorishState {
                         }
                         self.structures = structures;
                         new_s.on_construction_self(&Ref(&self.structures), true)?;
+
+                        let connections = new_s.connection(self, &Ref(&self.structures));
+                        console_log!(
+                            "Connection recalculated for self {:?}: {:?}",
+                            new_s.position(),
+                            connections
+                        );
+                        if let Some(fluid_boxes) = new_s.fluid_box_mut() {
+                            for fbox in fluid_boxes {
+                                fbox.connect_to = connections;
+                            }
+                        }
+
                         self.structures.push(new_s);
+
+                        self.update_fluid_connections(&cursor)?;
+
                         if let Ok(ref mut data) = self.minimap_buffer.try_borrow_mut() {
                             self.render_minimap_data_pixel(data, &cursor);
                         }
