@@ -141,9 +141,12 @@ const POPUP_TEXT_LIFE: i32 = 30;
 
 #[derive(Copy, Clone, Serialize, Deserialize)]
 struct Cell {
+    water: bool,
     iron_ore: u32,
     coal_ore: u32,
     copper_ore: u32,
+    #[serde(skip)]
+    image: u8,
 }
 
 impl Cell {
@@ -476,6 +479,7 @@ pub struct FactorishState {
 
     // on_show_inventory: js_sys::Function,
     image_dirt: Option<ImageBundle>,
+    image_back_tiles: Option<ImageBundle>,
     image_ore: Option<ImageBundle>,
     image_coal: Option<ImageBundle>,
     image_copper: Option<ImageBundle>,
@@ -576,6 +580,7 @@ impl FactorishState {
             debug_bbox: false,
             debug_fluidbox: false,
             image_dirt: None,
+            image_back_tiles: None,
             image_ore: None,
             image_coal: None,
             image_copper: None,
@@ -607,20 +612,29 @@ impl FactorishState {
             board: {
                 let mut ret = vec![
                     Cell {
+                        water: false,
                         iron_ore: 0,
                         coal_ore: 0,
                         copper_ore: 0,
+                        image: 0,
                     };
                     (width * height) as usize
                 ];
                 let bits = 1;
                 let mut rng = Xor128::new(resource_seed);
+                let ocean_terms = gen_terms(&mut rng, bits);
                 let iron_terms = gen_terms(&mut rng, bits);
                 let copper_terms = gen_terms(&mut rng, bits);
                 let coal_terms = gen_terms(&mut rng, bits);
                 for y in 0..height {
                     for x in 0..width {
                         let [fx, fy] = [x as f64 / noise_scale, y as f64 / noise_scale];
+                        let cell = &mut ret[(x + y * width) as usize];
+                        cell.water =
+                            noise_threshold < perlin_noise_pixel(fx, fy, bits, &ocean_terms);
+                        if cell.water {
+                            continue; // No ores in water
+                        }
                         let iron = (perlin_noise_pixel(fx, fy, bits, &iron_terms)
                             - noise_threshold)
                             * 4.
@@ -640,11 +654,45 @@ impl FactorishState {
                             .enumerate()
                             .max_by_key(|v| v.1)
                         {
-                            Some((0, v)) => ret[(x + y * width) as usize].iron_ore = v,
-                            Some((1, v)) => ret[(x + y * width) as usize].copper_ore = v,
-                            Some((2, v)) => ret[(x + y * width) as usize].coal_ore = v,
+                            Some((0, v)) => cell.iron_ore = v,
+                            Some((1, v)) => cell.copper_ore = v,
+                            Some((2, v)) => cell.coal_ore = v,
                             _ => (),
                         }
+                    }
+                }
+                for uy in 0..height {
+                    let y = uy as i32;
+                    for ux in 0..width {
+                        let x = ux as i32;
+                        if ret[(ux + uy * width) as usize].water {
+                            ret[(ux + uy * width) as usize].image = 15;
+                            continue;
+                        }
+                        let get_at = |x: i32, y: i32| {
+                            if x < 0 || width as i32 <= x || y < 0 || height as i32 <= y {
+                                false
+                            } else {
+                                ret[(x as u32 + y as u32 * width) as usize].water
+                            }
+                        };
+                        let l = get_at(x - 1, y) as u8;
+                        let t = get_at(x, y - 1) as u8;
+                        let r = get_at(x + 1, y) as u8;
+                        let b = get_at(x, y + 1) as u8;
+                        let lt = get_at(x - 1, y - 1) as u8;
+                        let rt = get_at(x + 1, y - 1) as u8;
+                        let rb = get_at(x + 1, y + 1) as u8;
+                        let lb = get_at(x - 1, y + 1) as u8;
+                        let neighbor = l | (t << 1) | (r << 2) | (b << 3);
+                        let diagonal = lt | (rt << 1) | (rb << 2) | (lb << 3);
+                        ret[(ux + uy * width) as usize].image = if neighbor != 0 {
+                            neighbor
+                        } else if diagonal != 0 {
+                            diagonal | (1 << 4)
+                        } else {
+                            0
+                        };
                     }
                 }
                 ret
@@ -824,9 +872,11 @@ impl FactorishState {
             .ok_or_else(|| js_str!("board in saved data is not an array"))?;
         self.board = vec![
             Cell {
+                water: false,
                 coal_ore: 0,
                 iron_ore: 0,
-                copper_ore: 0
+                copper_ore: 0,
+                image: 0,
             };
             (self.width * self.height) as usize
         ];
@@ -2058,6 +2108,7 @@ impl FactorishState {
             }
         };
         self.image_dirt = Some(load_image("dirt")?);
+        self.image_back_tiles = Some(load_image("backTiles")?);
         self.image_ore = Some(load_image("iron")?);
         self.image_coal = Some(load_image("coal")?);
         self.image_copper = Some(load_image("copper")?);
@@ -2302,11 +2353,12 @@ impl FactorishState {
         match self
             .image_dirt
             .as_ref()
+            .zip(self.image_back_tiles.as_ref())
             .zip(self.image_ore.as_ref())
             .zip(self.image_coal.as_ref())
             .zip(self.image_copper.as_ref())
         {
-            Some((((img, img_ore), img_coal), img_copper)) => {
+            Some(((((img, back_tiles), img_ore), img_coal), img_copper)) => {
                 // let mut cell_draws = 0;
                 let left = (-self.viewport_x).max(0.) as u32;
                 let top = (-self.viewport_y).max(0.) as u32;
@@ -2318,11 +2370,19 @@ impl FactorishState {
                     .min(self.height);
                 for y in top..bottom {
                     for x in left..right {
-                        context.draw_image_with_image_bitmap(
-                            &img.bitmap,
-                            x as f64 * 32.,
-                            y as f64 * 32.,
-                        )?;
+                        let cell = &self.board[(x + y * self.width) as usize];
+                        if cell.water || cell.image != 0 {
+                            let srcx = cell.image % 4;
+                            let srcy = cell.image / 4;
+                            context.draw_image_with_image_bitmap_and_sw_and_sh_and_dx_and_dy_and_dw_and_dh(
+                                &back_tiles.bitmap, (srcx * 32) as f64, (srcy * 32) as f64, 32., 32., x as f64 * 32., y as f64 * 32., 32., 32.)?;
+                        } else {
+                            context.draw_image_with_image_bitmap(
+                                &img.bitmap,
+                                x as f64 * 32.,
+                                y as f64 * 32.,
+                            )?;
+                        }
                         let draw_ore = |ore: u32, img: &ImageBitmap| -> Result<(), JsValue> {
                             if 0 < ore {
                                 let idx = (ore / 10).min(3);
@@ -2332,18 +2392,9 @@ impl FactorishState {
                             }
                             Ok(())
                         };
-                        draw_ore(
-                            self.board[(x + y * self.width) as usize].iron_ore,
-                            &img_ore.bitmap,
-                        )?;
-                        draw_ore(
-                            self.board[(x + y * self.width) as usize].coal_ore,
-                            &img_coal.bitmap,
-                        )?;
-                        draw_ore(
-                            self.board[(x + y * self.width) as usize].copper_ore,
-                            &img_copper.bitmap,
-                        )?;
+                        draw_ore(cell.iron_ore, &img_ore.bitmap)?;
+                        draw_ore(cell.coal_ore, &img_coal.bitmap)?;
+                        draw_ore(cell.copper_ore, &img_copper.bitmap)?;
                         // cell_draws += 1;
                     }
                 }

@@ -1,5 +1,6 @@
 import time from "../img/time.png";
 import dirt from "../img/dirt.png";
+import backTiles from "../img/back32.png";
 import iron from "../img/iron.png";
 import coal from "../img/coal.png";
 import copper from "../img/copper.png";
@@ -55,6 +56,7 @@ let ysize = 64;
     // we should have bitmaps ready.
     let loadImages = [
         ["dirt", dirt],
+        ["backTiles", backTiles],
         ["iron", iron],
         ["coal", coal],
         ["copper", copper],
