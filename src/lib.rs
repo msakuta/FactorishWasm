@@ -440,6 +440,46 @@ struct OreHarvesting {
     timer: i32,
 }
 
+fn calculate_back_image(ret: &mut [Cell], width: u32, height: u32) {
+    let mut num_water = 0;
+    for uy in 0..height {
+        let y = uy as i32;
+        for ux in 0..width {
+            let x = ux as i32;
+            if ret[(ux + uy * width) as usize].water {
+                ret[(ux + uy * width) as usize].image = 15;
+                num_water += 1;
+                continue;
+            }
+            let get_at = |x: i32, y: i32| {
+                if x < 0 || width as i32 <= x || y < 0 || height as i32 <= y {
+                    false
+                } else {
+                    ret[(x as u32 + y as u32 * width) as usize].water
+                }
+            };
+            let l = get_at(x - 1, y) as u8;
+            let t = get_at(x, y - 1) as u8;
+            let r = get_at(x + 1, y) as u8;
+            let b = get_at(x, y + 1) as u8;
+            let lt = get_at(x - 1, y - 1) as u8;
+            let rt = get_at(x + 1, y - 1) as u8;
+            let rb = get_at(x + 1, y + 1) as u8;
+            let lb = get_at(x - 1, y + 1) as u8;
+            let neighbor = l | (t << 1) | (r << 2) | (b << 3);
+            let diagonal = lt | (rt << 1) | (rb << 2) | (lb << 3);
+            ret[(ux + uy * width) as usize].image = if neighbor != 0 {
+                neighbor
+            } else if diagonal != 0 {
+                diagonal | (1 << 4)
+            } else {
+                0
+            };
+        }
+    }
+    console_log!("num_water: {}", num_water);
+}
+
 #[wasm_bindgen]
 pub struct FactorishState {
     #[allow(dead_code)]
@@ -661,40 +701,7 @@ impl FactorishState {
                         }
                     }
                 }
-                for uy in 0..height {
-                    let y = uy as i32;
-                    for ux in 0..width {
-                        let x = ux as i32;
-                        if ret[(ux + uy * width) as usize].water {
-                            ret[(ux + uy * width) as usize].image = 15;
-                            continue;
-                        }
-                        let get_at = |x: i32, y: i32| {
-                            if x < 0 || width as i32 <= x || y < 0 || height as i32 <= y {
-                                false
-                            } else {
-                                ret[(x as u32 + y as u32 * width) as usize].water
-                            }
-                        };
-                        let l = get_at(x - 1, y) as u8;
-                        let t = get_at(x, y - 1) as u8;
-                        let r = get_at(x + 1, y) as u8;
-                        let b = get_at(x, y + 1) as u8;
-                        let lt = get_at(x - 1, y - 1) as u8;
-                        let rt = get_at(x + 1, y - 1) as u8;
-                        let rb = get_at(x + 1, y + 1) as u8;
-                        let lb = get_at(x - 1, y + 1) as u8;
-                        let neighbor = l | (t << 1) | (r << 2) | (b << 3);
-                        let diagonal = lt | (rt << 1) | (rb << 2) | (lb << 3);
-                        ret[(ux + uy * width) as usize].image = if neighbor != 0 {
-                            neighbor
-                        } else if diagonal != 0 {
-                            diagonal | (1 << 4)
-                        } else {
-                            0
-                        };
-                    }
-                }
+                calculate_back_image(&mut ret, width, height);
                 ret
             },
             structures: vec![
@@ -792,7 +799,7 @@ impl FactorishState {
                     .iter()
                     .enumerate()
                     .filter(|(_, cell)| {
-                        0 < cell.coal_ore || 0 < cell.iron_ore || 0 < cell.copper_ore
+                        0 < cell.coal_ore || 0 < cell.iron_ore || 0 < cell.copper_ore || cell.water
                     })
                     .map(|(idx, cell)| {
                         let mut map = serde_json::Map::new();
@@ -886,6 +893,8 @@ impl FactorishState {
             let y: usize = json_as_u64(json_get(&position, 1)?)? as usize;
             self.board[x + y * self.width as usize] = from_value(json_take(tile, "cell")?)?;
         }
+
+        calculate_back_image(&mut self.board, self.width, self.height);
 
         let version = if let Some(version) = json.get("version") {
             version
