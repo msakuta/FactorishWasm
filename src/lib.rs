@@ -137,7 +137,7 @@ const DROP_ITEM_SIZE: f64 = 8.;
 const DROP_ITEM_SIZE_I: i32 = DROP_ITEM_SIZE as i32;
 
 const COAL_POWER: f64 = 100.; // kilojoules
-const SAVE_VERSION: i32 = 1;
+const SAVE_VERSION: i64 = 2;
 const ORE_HARVEST_TIME: i32 = 20;
 const POPUP_TEXT_LIFE: i32 = 30;
 
@@ -859,10 +859,24 @@ impl FactorishState {
     pub fn deserialize_game(&mut self, data: &str) -> Result<(), JsValue> {
         use serde_json::Value;
 
-        self.structures.clear();
-        self.drop_items.clear();
         let mut json: Value =
             serde_json::from_str(&data).map_err(|_| js_str!("Deserialize error"))?;
+
+        // Check version first
+        let version = if let Some(version) = json.get("version") {
+            version
+                .as_i64()
+                .ok_or_else(|| js_str!("Version string cannot be parsed as int"))?
+        } else {
+            0
+        };
+
+        if version < SAVE_VERSION {
+            return js_err!("Save data version is too old. Please start a new game.");
+        }
+
+        self.structures.clear();
+        self.drop_items.clear();
 
         fn json_get<I: serde_json::value::Index + std::fmt::Display + Copy>(
             value: &serde_json::Value,
@@ -917,14 +931,6 @@ impl FactorishState {
 
         calculate_back_image(&mut self.board, self.width, self.height);
 
-        let version = if let Some(version) = json.get("version") {
-            version
-                .as_i64()
-                .ok_or_else(|| js_str!("Version string cannot be parsed as int"))?
-        } else {
-            0
-        };
-
         let structures = json
             .get_mut("structures")
             .ok_or_else(|| js_str!("structures not found in saved data"))?
@@ -934,34 +940,12 @@ impl FactorishState {
             .map(|structure| Self::structure_from_json(structure))
             .collect::<Result<Vec<Box<dyn Structure>>, JsValue>>()?;
 
-        if version == 0 {
-            console_log!(
-                "Migrating save file from {} to {}...",
-                version,
-                SAVE_VERSION
-            );
-            for structure in &structures {
-                if structure.power_sink() || structure.power_source() {
-                    for structure2 in &structures {
-                        if structure.power_sink() && structure2.power_source()
-                            || structure.power_source() && structure2.power_sink()
-                        {
-                            self.add_power_wire(PowerWire(
-                                *structure.position(),
-                                *structure2.position(),
-                            ))?;
-                        }
-                    }
-                }
-            }
-        } else {
-            self.power_wires = serde_json::from_value(
-                json.get_mut("power_wires")
-                    .ok_or_else(|| js_str!("power_wires not found in saved data"))?
-                    .take(),
-            )
-            .map_err(|e| js_str!("power_wires deserialization error: {}", e))?;
-        }
+        self.power_wires = serde_json::from_value(
+            json.get_mut("power_wires")
+                .ok_or_else(|| js_str!("power_wires not found in saved data"))?
+                .take(),
+        )
+        .map_err(|e| js_str!("power_wires deserialization error: {}", e))?;
 
         self.structures = structures;
 
@@ -1776,6 +1760,9 @@ impl FactorishState {
             ItemType::Assembler => Box::new(map_err(serde_json::from_value::<Assembler>(payload))?),
             ItemType::Boiler => Box::new(map_err(serde_json::from_value::<Boiler>(payload))?),
             ItemType::WaterWell => Box::new(map_err(serde_json::from_value::<WaterWell>(payload))?),
+            ItemType::OffshorePump => {
+                Box::new(map_err(serde_json::from_value::<OffshorePump>(payload))?)
+            }
             ItemType::Pipe => Box::new(map_err(serde_json::from_value::<Pipe>(payload))?),
             ItemType::SteamEngine => {
                 Box::new(map_err(serde_json::from_value::<SteamEngine>(payload))?)
