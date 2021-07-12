@@ -149,6 +149,21 @@ struct Cell {
     copper_ore: u32,
     #[serde(skip)]
     image: u8,
+    #[serde(skip)]
+    grass_image: u8,
+}
+
+impl Default for Cell {
+    fn default() -> Self {
+        Cell {
+            water: false,
+            iron_ore: 0,
+            coal_ore: 0,
+            copper_ore: 0,
+            image: 0,
+            grass_image: 0,
+        }
+    }
 }
 
 impl Cell {
@@ -447,14 +462,17 @@ struct OreHarvesting {
 }
 
 fn calculate_back_image(ret: &mut [Cell], width: u32, height: u32) {
-    let mut num_water = 0;
+    let mut rng = Xor128::new(23424321);
+    // Some number with fractional part is desirable, but we don't care too precisely since it is just a visual aid.
+    let noise_scale = 3.75213;
+    let bits = 1;
+    let grass_terms = gen_terms(&mut rng, bits);
     for uy in 0..height {
         let y = uy as i32;
         for ux in 0..width {
             let x = ux as i32;
             if ret[(ux + uy * width) as usize].water {
                 ret[(ux + uy * width) as usize].image = 15;
-                num_water += 1;
                 continue;
             }
             let get_at = |x: i32, y: i32| {
@@ -474,16 +492,27 @@ fn calculate_back_image(ret: &mut [Cell], width: u32, height: u32) {
             let lb = get_at(x - 1, y + 1) as u8;
             let neighbor = l | (t << 1) | (r << 2) | (b << 3);
             let diagonal = lt | (rt << 1) | (rb << 2) | (lb << 3);
-            ret[(ux + uy * width) as usize].image = if neighbor != 0 {
+            let cell = &mut ret[(ux + uy * width) as usize];
+            cell.image = if neighbor != 0 {
                 neighbor
             } else if diagonal != 0 {
                 diagonal | (1 << 4)
             } else {
                 0
             };
+
+            cell.grass_image = ((perlin_noise_pixel(
+                x as f64 / noise_scale,
+                y as f64 / noise_scale,
+                bits,
+                &grass_terms,
+            ) - 0.)
+                * 4.
+                * 6.)
+                .max(0.)
+                .min(6.) as u8;
         }
     }
-    console_log!("num_water: {}", num_water);
 }
 
 #[wasm_bindgen]
@@ -526,6 +555,7 @@ pub struct FactorishState {
     // on_show_inventory: js_sys::Function,
     image_dirt: Option<ImageBundle>,
     image_back_tiles: Option<ImageBundle>,
+    image_weeds: Option<ImageBundle>,
     image_ore: Option<ImageBundle>,
     image_coal: Option<ImageBundle>,
     image_copper: Option<ImageBundle>,
@@ -629,6 +659,7 @@ impl FactorishState {
             debug_fluidbox: false,
             image_dirt: None,
             image_back_tiles: None,
+            image_weeds: None,
             image_ore: None,
             image_coal: None,
             image_copper: None,
@@ -659,16 +690,7 @@ impl FactorishState {
             image_fuel_alarm: None,
             image_electricity_alarm: None,
             board: {
-                let mut ret = vec![
-                    Cell {
-                        water: false,
-                        iron_ore: 0,
-                        coal_ore: 0,
-                        copper_ore: 0,
-                        image: 0,
-                    };
-                    (width * height) as usize
-                ];
+                let mut ret = vec![Cell::default(); (width * height) as usize];
                 let bits = 1;
                 let mut rng = Xor128::new(terrain_seed);
                 let ocean_terms = gen_terms(&mut rng, bits);
@@ -885,16 +907,7 @@ impl FactorishState {
             .ok_or_else(|| js_str!("board not found in saved data"))?
             .as_array_mut()
             .ok_or_else(|| js_str!("board in saved data is not an array"))?;
-        self.board = vec![
-            Cell {
-                water: false,
-                coal_ore: 0,
-                iron_ore: 0,
-                copper_ore: 0,
-                image: 0,
-            };
-            (self.width * self.height) as usize
-        ];
+        self.board = vec![Cell::default(); (self.width * self.height) as usize];
         for tile in tiles {
             let position = json_get(tile, "position")?;
             let x: usize = json_as_u64(json_get(&position, 0)?)? as usize;
@@ -2132,6 +2145,7 @@ impl FactorishState {
         };
         self.image_dirt = Some(load_image("dirt")?);
         self.image_back_tiles = Some(load_image("backTiles")?);
+        self.image_weeds = Some(load_image("weeds")?);
         self.image_ore = Some(load_image("iron")?);
         self.image_coal = Some(load_image("coal")?);
         self.image_copper = Some(load_image("copper")?);
@@ -2395,17 +2409,23 @@ impl FactorishState {
                 for y in top..bottom {
                     for x in left..right {
                         let cell = &self.board[(x + y * self.width) as usize];
+                        let (dx, dy) = (x as f64 * 32., y as f64 * 32.);
                         if cell.water || cell.image != 0 {
                             let srcx = cell.image % 4;
                             let srcy = cell.image / 4;
                             context.draw_image_with_image_bitmap_and_sw_and_sh_and_dx_and_dy_and_dw_and_dh(
-                                &back_tiles.bitmap, (srcx * 32) as f64, (srcy * 32) as f64, 32., 32., x as f64 * 32., y as f64 * 32., 32., 32.)?;
+                                &back_tiles.bitmap, (srcx * 32) as f64, (srcy * 32) as f64, 32., 32., dx, dy, 32., 32.)?;
                         } else {
-                            context.draw_image_with_image_bitmap(
-                                &img.bitmap,
-                                x as f64 * 32.,
-                                y as f64 * 32.,
-                            )?;
+                            context.draw_image_with_image_bitmap(&img.bitmap, dx, dy)?;
+                            if let Some(weeds) = &self.image_weeds {
+                                if 0 < cell.grass_image {
+                                    context.draw_image_with_image_bitmap_and_sw_and_sh_and_dx_and_dy_and_dw_and_dh(
+                                        &weeds.bitmap,
+                                        (cell.grass_image * 32) as f64, 0., 32., 32., dx, dy, 32., 32.)?;
+                                }
+                            } else {
+                                console_log!("Weed image not found");
+                            }
                         }
                         let draw_ore = |ore: u32, img: &ImageBitmap| -> Result<(), JsValue> {
                             if 0 < ore {
