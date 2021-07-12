@@ -1,5 +1,7 @@
 import time from "../img/time.png";
 import dirt from "../img/dirt.png";
+import backTiles from "../img/back32.png";
+import weeds from "../img/weeds.png";
 import iron from "../img/iron.png";
 import coal from "../img/coal.png";
 import copper from "../img/copper.png";
@@ -10,6 +12,7 @@ import mine from "../img/mine.png";
 import assembler from "../img/assembler.png";
 import furnace from "../img/furnace.png";
 import waterWell from "../img/waterwell.png";
+import offshorePump from "../img/offshore-pump.png";
 import boiler from "../img/boiler.png";
 import pipe from "../img/pipe.png";
 import inserter from "../img/inserter-base.png";
@@ -55,6 +58,8 @@ let ysize = 64;
     // we should have bitmaps ready.
     let loadImages = [
         ["dirt", dirt],
+        ["backTiles", backTiles],
+        ["weeds", weeds],
         ["iron", iron],
         ["coal", coal],
         ["copper", copper],
@@ -68,6 +73,7 @@ let ysize = 64;
         ["electPole", electPole],
         ["splitter", splitter],
         ["waterWell", waterWell],
+        ["offshorePump", offshorePump],
         ["pipe", pipe],
         ["inserter", inserter],
         ["direction", direction],
@@ -139,15 +145,17 @@ let ysize = 64;
         return {elem: slider, update: updateFromValue};
     }
 
-    let resourceSeed = 8913095;
+    let terrainSeed = 8913095;
     const seedElem = document.getElementById("seed");
     if(seedElem){
-        seedElem.value = resourceSeed;
+        seedElem.value = terrainSeed;
         seedElem.addEventListener("input", _ => {
-            resourceSeed = parseInt(seedElem.value)
+            terrainSeed = parseInt(seedElem.value)
         });
     }
 
+    let waterNoiseThreshold = 0.35;
+    sliderInit("waterNoiseThreshold", "waterNoiseThresholdLabel", value => waterNoiseThreshold = value);
     let resourceAmount = 1000.;
     sliderInit("resourceAmount", "resourceAmountLabel", value => resourceAmount = value);
     let noiseScale = 5.;
@@ -169,7 +177,7 @@ let ysize = 64;
 
     let paused = false;
 
-    let sim = new FactorishState(xsize, ysize, updateInventory, resourceSeed, resourceAmount, noiseScale, noiseThreshold);
+    let sim = new FactorishState(xsize, ysize, updateInventory, terrainSeed, waterNoiseThreshold, resourceAmount, noiseScale, noiseThreshold);
 
     const canvas = document.getElementById('canvas');
     const canvasSize = canvas.getBoundingClientRect();
@@ -439,6 +447,8 @@ let ysize = 64;
             return [assembler, 4];
         case 'Water Well':
             return waterWell;
+        case 'Offshore Pump':
+            return offshorePump;
         case 'Boiler':
             return [boiler, 3];
         case 'Pipe':
@@ -1087,7 +1097,7 @@ let ysize = 64;
     const generateBoard = document.getElementById("generateBoard");
     generateBoard.addEventListener("click", () => {
         xsize = ysize = parseInt(document.getElementById("sizeSelect").value);
-        sim = new FactorishState(xsize, ysize, updateInventory, resourceSeed, resourceAmount, noiseScale, noiseThreshold);
+        sim = new FactorishState(xsize, ysize, updateInventory, terrainSeed, waterNoiseThreshold, resourceAmount, noiseScale, noiseThreshold);
         try{
             sim.render_init(canvas, infoElem, loadedImages);
         } catch(e) {

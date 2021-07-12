@@ -49,6 +49,7 @@ mod elect_pole;
 mod furnace;
 mod inserter;
 mod items;
+mod offshore_pump;
 mod ore_mine;
 mod perlin_noise;
 mod pipe;
@@ -67,6 +68,7 @@ use elect_pole::ElectPole;
 use furnace::Furnace;
 use inserter::Inserter;
 use items::{item_to_str, render_drop_item, str_to_item, DropItem, ItemType};
+use offshore_pump::OffshorePump;
 use ore_mine::OreMine;
 use perlin_noise::{gen_terms, perlin_noise_pixel, Xor128};
 use pipe::Pipe;
@@ -135,15 +137,33 @@ const DROP_ITEM_SIZE: f64 = 8.;
 const DROP_ITEM_SIZE_I: i32 = DROP_ITEM_SIZE as i32;
 
 const COAL_POWER: f64 = 100.; // kilojoules
-const SAVE_VERSION: i32 = 1;
+const SAVE_VERSION: i64 = 2;
 const ORE_HARVEST_TIME: i32 = 20;
 const POPUP_TEXT_LIFE: i32 = 30;
 
 #[derive(Copy, Clone, Serialize, Deserialize)]
 struct Cell {
+    water: bool,
     iron_ore: u32,
     coal_ore: u32,
     copper_ore: u32,
+    #[serde(skip)]
+    image: u8,
+    #[serde(skip)]
+    grass_image: u8,
+}
+
+impl Default for Cell {
+    fn default() -> Self {
+        Cell {
+            water: false,
+            iron_ore: 0,
+            coal_ore: 0,
+            copper_ore: 0,
+            image: 0,
+            grass_image: 0,
+        }
+    }
 }
 
 impl Cell {
@@ -238,7 +258,7 @@ struct ToolDef {
     item_type: ItemType,
     desc: &'static str,
 }
-const tool_defs: [ToolDef; 12] = [
+const tool_defs: [ToolDef; 13] = [
     ToolDef {
         item_type: ItemType::TransportBelt,
         desc: "Transports items on ground",
@@ -274,6 +294,10 @@ const tool_defs: [ToolDef; 12] = [
     ToolDef {
         item_type: ItemType::WaterWell,
         desc: "Pumps underground water at a fixed rate of 0.01 units per tick.",
+    },
+    ToolDef {
+        item_type: ItemType::OffshorePump,
+        desc: "Pumps water from coastline.",
     },
     ToolDef {
         item_type: ItemType::Pipe,
@@ -437,6 +461,60 @@ struct OreHarvesting {
     timer: i32,
 }
 
+fn calculate_back_image(ret: &mut [Cell], width: u32, height: u32) {
+    let mut rng = Xor128::new(23424321);
+    // Some number with fractional part is desirable, but we don't care too precisely since it is just a visual aid.
+    let noise_scale = 3.75213;
+    let bits = 1;
+    let grass_terms = gen_terms(&mut rng, bits);
+    for uy in 0..height {
+        let y = uy as i32;
+        for ux in 0..width {
+            let x = ux as i32;
+            if ret[(ux + uy * width) as usize].water {
+                ret[(ux + uy * width) as usize].image = 15;
+                continue;
+            }
+            let get_at = |x: i32, y: i32| {
+                if x < 0 || width as i32 <= x || y < 0 || height as i32 <= y {
+                    false
+                } else {
+                    ret[(x as u32 + y as u32 * width) as usize].water
+                }
+            };
+            let l = get_at(x - 1, y) as u8;
+            let t = get_at(x, y - 1) as u8;
+            let r = get_at(x + 1, y) as u8;
+            let b = get_at(x, y + 1) as u8;
+            let lt = get_at(x - 1, y - 1) as u8;
+            let rt = get_at(x + 1, y - 1) as u8;
+            let rb = get_at(x + 1, y + 1) as u8;
+            let lb = get_at(x - 1, y + 1) as u8;
+            let neighbor = l | (t << 1) | (r << 2) | (b << 3);
+            let diagonal = lt | (rt << 1) | (rb << 2) | (lb << 3);
+            let cell = &mut ret[(ux + uy * width) as usize];
+            cell.image = if neighbor != 0 {
+                neighbor
+            } else if diagonal != 0 {
+                diagonal | (1 << 4)
+            } else {
+                0
+            };
+
+            cell.grass_image = ((perlin_noise_pixel(
+                x as f64 / noise_scale,
+                y as f64 / noise_scale,
+                bits,
+                &grass_terms,
+            ) - 0.)
+                * 4.
+                * 6.)
+                .max(0.)
+                .min(6.) as u8;
+        }
+    }
+}
+
 #[wasm_bindgen]
 pub struct FactorishState {
     #[allow(dead_code)]
@@ -476,6 +554,8 @@ pub struct FactorishState {
 
     // on_show_inventory: js_sys::Function,
     image_dirt: Option<ImageBundle>,
+    image_back_tiles: Option<ImageBundle>,
+    image_weeds: Option<ImageBundle>,
     image_ore: Option<ImageBundle>,
     image_coal: Option<ImageBundle>,
     image_copper: Option<ImageBundle>,
@@ -487,6 +567,7 @@ pub struct FactorishState {
     image_boiler: Option<ImageBundle>,
     image_steam_engine: Option<ImageBundle>,
     image_water_well: Option<ImageBundle>,
+    image_offshore_pump: Option<ImageBundle>,
     image_pipe: Option<ImageBundle>,
     image_elect_pole: Option<ImageBundle>,
     image_splitter: Option<ImageBundle>,
@@ -527,7 +608,8 @@ impl FactorishState {
         height: u32,
         on_player_update: js_sys::Function,
         // on_show_inventory: js_sys::Function,
-        resource_seed: u32,
+        terrain_seed: u32,
+        water_noise_threshold: f64,
         resource_amount: f64,
         noise_scale: f64,
         noise_threshold: f64,
@@ -561,7 +643,7 @@ impl FactorishState {
                     (ItemType::Furnace, 3usize),
                     (ItemType::Assembler, 3usize),
                     (ItemType::Boiler, 3usize),
-                    (ItemType::WaterWell, 1usize),
+                    (ItemType::OffshorePump, 2usize),
                     (ItemType::Pipe, 15usize),
                     (ItemType::SteamEngine, 2usize),
                 ]
@@ -576,6 +658,8 @@ impl FactorishState {
             debug_bbox: false,
             debug_fluidbox: false,
             image_dirt: None,
+            image_back_tiles: None,
+            image_weeds: None,
             image_ore: None,
             image_coal: None,
             image_copper: None,
@@ -587,6 +671,7 @@ impl FactorishState {
             image_boiler: None,
             image_steam_engine: None,
             image_water_well: None,
+            image_offshore_pump: None,
             image_pipe: None,
             image_elect_pole: None,
             image_splitter: None,
@@ -605,22 +690,22 @@ impl FactorishState {
             image_fuel_alarm: None,
             image_electricity_alarm: None,
             board: {
-                let mut ret = vec![
-                    Cell {
-                        iron_ore: 0,
-                        coal_ore: 0,
-                        copper_ore: 0,
-                    };
-                    (width * height) as usize
-                ];
+                let mut ret = vec![Cell::default(); (width * height) as usize];
                 let bits = 1;
-                let mut rng = Xor128::new(resource_seed);
+                let mut rng = Xor128::new(terrain_seed);
+                let ocean_terms = gen_terms(&mut rng, bits);
                 let iron_terms = gen_terms(&mut rng, bits);
                 let copper_terms = gen_terms(&mut rng, bits);
                 let coal_terms = gen_terms(&mut rng, bits);
                 for y in 0..height {
                     for x in 0..width {
                         let [fx, fy] = [x as f64 / noise_scale, y as f64 / noise_scale];
+                        let cell = &mut ret[(x + y * width) as usize];
+                        cell.water =
+                            water_noise_threshold < perlin_noise_pixel(fx, fy, bits, &ocean_terms);
+                        if cell.water {
+                            continue; // No ores in water
+                        }
                         let iron = (perlin_noise_pixel(fx, fy, bits, &iron_terms)
                             - noise_threshold)
                             * 4.
@@ -640,13 +725,14 @@ impl FactorishState {
                             .enumerate()
                             .max_by_key(|v| v.1)
                         {
-                            Some((0, v)) => ret[(x + y * width) as usize].iron_ore = v,
-                            Some((1, v)) => ret[(x + y * width) as usize].copper_ore = v,
-                            Some((2, v)) => ret[(x + y * width) as usize].coal_ore = v,
+                            Some((0, v)) => cell.iron_ore = v,
+                            Some((1, v)) => cell.copper_ore = v,
+                            Some((2, v)) => cell.coal_ore = v,
                             _ => (),
                         }
                     }
                 }
+                calculate_back_image(&mut ret, width, height);
                 ret
             },
             structures: vec![
@@ -656,7 +742,6 @@ impl FactorishState {
                 Box::new(OreMine::new(12, 2, Rotation::Bottom)),
                 Box::new(Furnace::new(&Position::new(8, 3))),
                 Box::new(Assembler::new(&Position::new(6, 3))),
-                Box::new(WaterWell::new(&Position::new(14, 5))),
                 Box::new(Boiler::new(&Position::new(13, 5))),
                 Box::new(SteamEngine::new(&Position::new(12, 5))),
             ],
@@ -744,7 +829,7 @@ impl FactorishState {
                     .iter()
                     .enumerate()
                     .filter(|(_, cell)| {
-                        0 < cell.coal_ore || 0 < cell.iron_ore || 0 < cell.copper_ore
+                        0 < cell.coal_ore || 0 < cell.iron_ore || 0 < cell.copper_ore || cell.water
                     })
                     .map(|(idx, cell)| {
                         let mut map = serde_json::Map::new();
@@ -774,10 +859,24 @@ impl FactorishState {
     pub fn deserialize_game(&mut self, data: &str) -> Result<(), JsValue> {
         use serde_json::Value;
 
-        self.structures.clear();
-        self.drop_items.clear();
         let mut json: Value =
             serde_json::from_str(&data).map_err(|_| js_str!("Deserialize error"))?;
+
+        // Check version first
+        let version = if let Some(version) = json.get("version") {
+            version
+                .as_i64()
+                .ok_or_else(|| js_str!("Version string cannot be parsed as int"))?
+        } else {
+            0
+        };
+
+        if version < SAVE_VERSION {
+            return js_err!("Save data version is too old. Please start a new game.");
+        }
+
+        self.structures.clear();
+        self.drop_items.clear();
 
         fn json_get<I: serde_json::value::Index + std::fmt::Display + Copy>(
             value: &serde_json::Value,
@@ -822,14 +921,7 @@ impl FactorishState {
             .ok_or_else(|| js_str!("board not found in saved data"))?
             .as_array_mut()
             .ok_or_else(|| js_str!("board in saved data is not an array"))?;
-        self.board = vec![
-            Cell {
-                coal_ore: 0,
-                iron_ore: 0,
-                copper_ore: 0
-            };
-            (self.width * self.height) as usize
-        ];
+        self.board = vec![Cell::default(); (self.width * self.height) as usize];
         for tile in tiles {
             let position = json_get(tile, "position")?;
             let x: usize = json_as_u64(json_get(&position, 0)?)? as usize;
@@ -837,13 +929,7 @@ impl FactorishState {
             self.board[x + y * self.width as usize] = from_value(json_take(tile, "cell")?)?;
         }
 
-        let version = if let Some(version) = json.get("version") {
-            version
-                .as_i64()
-                .ok_or_else(|| js_str!("Version string cannot be parsed as int"))?
-        } else {
-            0
-        };
+        calculate_back_image(&mut self.board, self.width, self.height);
 
         let structures = json
             .get_mut("structures")
@@ -854,34 +940,12 @@ impl FactorishState {
             .map(|structure| Self::structure_from_json(structure))
             .collect::<Result<Vec<Box<dyn Structure>>, JsValue>>()?;
 
-        if version == 0 {
-            console_log!(
-                "Migrating save file from {} to {}...",
-                version,
-                SAVE_VERSION
-            );
-            for structure in &structures {
-                if structure.power_sink() || structure.power_source() {
-                    for structure2 in &structures {
-                        if structure.power_sink() && structure2.power_source()
-                            || structure.power_source() && structure2.power_sink()
-                        {
-                            self.add_power_wire(PowerWire(
-                                *structure.position(),
-                                *structure2.position(),
-                            ))?;
-                        }
-                    }
-                }
-            }
-        } else {
-            self.power_wires = serde_json::from_value(
-                json.get_mut("power_wires")
-                    .ok_or_else(|| js_str!("power_wires not found in saved data"))?
-                    .take(),
-            )
-            .map_err(|e| js_str!("power_wires deserialization error: {}", e))?;
-        }
+        self.power_wires = serde_json::from_value(
+            json.get_mut("power_wires")
+                .ok_or_else(|| js_str!("power_wires not found in saved data"))?
+                .take(),
+        )
+        .map_err(|e| js_str!("power_wires deserialization error: {}", e))?;
 
         self.structures = structures;
 
@@ -1652,6 +1716,7 @@ impl FactorishState {
             ItemType::Assembler => Box::new(Assembler::new(cursor)),
             ItemType::Boiler => Box::new(Boiler::new(cursor)),
             ItemType::WaterWell => Box::new(WaterWell::new(cursor)),
+            ItemType::OffshorePump => Box::new(OffshorePump::new(cursor)),
             ItemType::Pipe => Box::new(Pipe::new(cursor)),
             ItemType::SteamEngine => Box::new(SteamEngine::new(cursor)),
             ItemType::ElectPole => Box::new(ElectPole::new(cursor)),
@@ -1695,6 +1760,9 @@ impl FactorishState {
             ItemType::Assembler => Box::new(map_err(serde_json::from_value::<Assembler>(payload))?),
             ItemType::Boiler => Box::new(map_err(serde_json::from_value::<Boiler>(payload))?),
             ItemType::WaterWell => Box::new(map_err(serde_json::from_value::<WaterWell>(payload))?),
+            ItemType::OffshorePump => {
+                Box::new(map_err(serde_json::from_value::<OffshorePump>(payload))?)
+            }
             ItemType::Pipe => Box::new(map_err(serde_json::from_value::<Pipe>(payload))?),
             ItemType::SteamEngine => {
                 Box::new(map_err(serde_json::from_value::<SteamEngine>(payload))?)
@@ -1757,8 +1825,11 @@ impl FactorishState {
 
         if button == 0 {
             if let Some(selected_tool) = self.get_selected_tool_or_item_opt() {
-                if let Some(count) = self.player.inventory.get(&selected_tool) {
-                    if 1 <= *count {
+                let cell = self.tile_at(&cursor);
+                if let Some((count, cell)) =
+                    self.player.inventory.get(&selected_tool).zip(cell.as_ref())
+                {
+                    if 1 <= *count && cell.water ^ (selected_tool != ItemType::OffshorePump) {
                         let mut new_s = self.new_structure(&selected_tool, &cursor)?;
                         let bbox = new_s.bounding_box();
                         for y in bbox.y0..bbox.y1 {
@@ -1956,7 +2027,9 @@ impl FactorishState {
     }
 
     fn color_of_cell(cell: &Cell) -> [u8; 3] {
-        if 0 < cell.iron_ore {
+        if cell.water {
+            [0x00, 0x00, 0xff]
+        } else if 0 < cell.iron_ore {
             [0x3f, 0xaf, 0xff]
         } else if 0 < cell.coal_ore {
             [0x1f, 0x1f, 0x1f]
@@ -2058,6 +2131,8 @@ impl FactorishState {
             }
         };
         self.image_dirt = Some(load_image("dirt")?);
+        self.image_back_tiles = Some(load_image("backTiles")?);
+        self.image_weeds = Some(load_image("weeds")?);
         self.image_ore = Some(load_image("iron")?);
         self.image_coal = Some(load_image("coal")?);
         self.image_copper = Some(load_image("copper")?);
@@ -2069,6 +2144,7 @@ impl FactorishState {
         self.image_boiler = Some(load_image("boiler")?);
         self.image_steam_engine = Some(load_image("steamEngine")?);
         self.image_water_well = Some(load_image("waterWell")?);
+        self.image_offshore_pump = Some(load_image("offshorePump")?);
         self.image_pipe = Some(load_image("pipe")?);
         self.image_elect_pole = Some(load_image("electPole")?);
         self.image_splitter = Some(load_image("splitter")?);
@@ -2302,11 +2378,12 @@ impl FactorishState {
         match self
             .image_dirt
             .as_ref()
+            .zip(self.image_back_tiles.as_ref())
             .zip(self.image_ore.as_ref())
             .zip(self.image_coal.as_ref())
             .zip(self.image_copper.as_ref())
         {
-            Some((((img, img_ore), img_coal), img_copper)) => {
+            Some(((((img, back_tiles), img_ore), img_coal), img_copper)) => {
                 // let mut cell_draws = 0;
                 let left = (-self.viewport_x).max(0.) as u32;
                 let top = (-self.viewport_y).max(0.) as u32;
@@ -2318,11 +2395,25 @@ impl FactorishState {
                     .min(self.height);
                 for y in top..bottom {
                     for x in left..right {
-                        context.draw_image_with_image_bitmap(
-                            &img.bitmap,
-                            x as f64 * 32.,
-                            y as f64 * 32.,
-                        )?;
+                        let cell = &self.board[(x + y * self.width) as usize];
+                        let (dx, dy) = (x as f64 * 32., y as f64 * 32.);
+                        if cell.water || cell.image != 0 {
+                            let srcx = cell.image % 4;
+                            let srcy = cell.image / 4;
+                            context.draw_image_with_image_bitmap_and_sw_and_sh_and_dx_and_dy_and_dw_and_dh(
+                                &back_tiles.bitmap, (srcx * 32) as f64, (srcy * 32) as f64, 32., 32., dx, dy, 32., 32.)?;
+                        } else {
+                            context.draw_image_with_image_bitmap(&img.bitmap, dx, dy)?;
+                            if let Some(weeds) = &self.image_weeds {
+                                if 0 < cell.grass_image {
+                                    context.draw_image_with_image_bitmap_and_sw_and_sh_and_dx_and_dy_and_dw_and_dh(
+                                        &weeds.bitmap,
+                                        (cell.grass_image * 32) as f64, 0., 32., 32., dx, dy, 32., 32.)?;
+                                }
+                            } else {
+                                console_log!("Weed image not found");
+                            }
+                        }
                         let draw_ore = |ore: u32, img: &ImageBitmap| -> Result<(), JsValue> {
                             if 0 < ore {
                                 let idx = (ore / 10).min(3);
@@ -2332,18 +2423,9 @@ impl FactorishState {
                             }
                             Ok(())
                         };
-                        draw_ore(
-                            self.board[(x + y * self.width) as usize].iron_ore,
-                            &img_ore.bitmap,
-                        )?;
-                        draw_ore(
-                            self.board[(x + y * self.width) as usize].coal_ore,
-                            &img_coal.bitmap,
-                        )?;
-                        draw_ore(
-                            self.board[(x + y * self.width) as usize].copper_ore,
-                            &img_copper.bitmap,
-                        )?;
+                        draw_ore(cell.iron_ore, &img_ore.bitmap)?;
+                        draw_ore(cell.coal_ore, &img_coal.bitmap)?;
+                        draw_ore(cell.copper_ore, &img_copper.bitmap)?;
                         // cell_draws += 1;
                     }
                 }

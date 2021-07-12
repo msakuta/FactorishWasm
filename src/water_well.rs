@@ -38,7 +38,7 @@ impl FluidBox {
         }
     }
 
-    fn set_type(mut self, type_: &FluidType) -> Self {
+    pub(crate) fn set_type(mut self, type_: &FluidType) -> Self {
         self.type_ = Some(*type_);
         self
     }
