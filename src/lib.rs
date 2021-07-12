@@ -2016,7 +2016,9 @@ impl FactorishState {
     }
 
     fn color_of_cell(cell: &Cell) -> [u8; 3] {
-        if 0 < cell.iron_ore {
+        if cell.water {
+            [0x00, 0x00, 0xff]
+        } else if 0 < cell.iron_ore {
             [0x3f, 0xaf, 0xff]
         } else if 0 < cell.coal_ore {
             [0x1f, 0x1f, 0x1f]

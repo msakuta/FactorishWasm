@@ -150,7 +150,7 @@ let ysize = 64;
         });
     }
 
-    let waterNoiseThreshold = 0.45;
+    let waterNoiseThreshold = 0.35;
     sliderInit("waterNoiseThreshold", "waterNoiseThresholdLabel", value => waterNoiseThreshold = value);
     let resourceAmount = 1000.;
     sliderInit("resourceAmount", "resourceAmountLabel", value => resourceAmount = value);
