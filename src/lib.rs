@@ -1817,8 +1817,11 @@ impl FactorishState {
 
         if button == 0 {
             if let Some(selected_tool) = self.get_selected_tool_or_item_opt() {
-                if let Some(count) = self.player.inventory.get(&selected_tool) {
-                    if 1 <= *count {
+                let cell = self.tile_at(&cursor);
+                if let Some((count, cell)) =
+                    self.player.inventory.get(&selected_tool).zip(cell.as_ref())
+                {
+                    if 1 <= *count && !cell.water {
                         let mut new_s = self.new_structure(&selected_tool, &cursor)?;
                         let bbox = new_s.bounding_box();
                         for y in bbox.y0..bbox.y1 {
