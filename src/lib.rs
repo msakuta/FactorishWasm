@@ -49,6 +49,7 @@ mod elect_pole;
 mod furnace;
 mod inserter;
 mod items;
+mod offshore_pump;
 mod ore_mine;
 mod perlin_noise;
 mod pipe;
@@ -67,6 +68,7 @@ use elect_pole::ElectPole;
 use furnace::Furnace;
 use inserter::Inserter;
 use items::{item_to_str, render_drop_item, str_to_item, DropItem, ItemType};
+use offshore_pump::OffshorePump;
 use ore_mine::OreMine;
 use perlin_noise::{gen_terms, perlin_noise_pixel, Xor128};
 use pipe::Pipe;
@@ -241,7 +243,7 @@ struct ToolDef {
     item_type: ItemType,
     desc: &'static str,
 }
-const tool_defs: [ToolDef; 12] = [
+const tool_defs: [ToolDef; 13] = [
     ToolDef {
         item_type: ItemType::TransportBelt,
         desc: "Transports items on ground",
@@ -277,6 +279,10 @@ const tool_defs: [ToolDef; 12] = [
     ToolDef {
         item_type: ItemType::WaterWell,
         desc: "Pumps underground water at a fixed rate of 0.01 units per tick.",
+    },
+    ToolDef {
+        item_type: ItemType::OffshorePump,
+        desc: "Pumps water from coastline.",
     },
     ToolDef {
         item_type: ItemType::Pipe,
@@ -531,6 +537,7 @@ pub struct FactorishState {
     image_boiler: Option<ImageBundle>,
     image_steam_engine: Option<ImageBundle>,
     image_water_well: Option<ImageBundle>,
+    image_offshore_pump: Option<ImageBundle>,
     image_pipe: Option<ImageBundle>,
     image_elect_pole: Option<ImageBundle>,
     image_splitter: Option<ImageBundle>,
@@ -606,7 +613,7 @@ impl FactorishState {
                     (ItemType::Furnace, 3usize),
                     (ItemType::Assembler, 3usize),
                     (ItemType::Boiler, 3usize),
-                    (ItemType::WaterWell, 1usize),
+                    (ItemType::OffshorePump, 2usize),
                     (ItemType::Pipe, 15usize),
                     (ItemType::SteamEngine, 2usize),
                 ]
@@ -633,6 +640,7 @@ impl FactorishState {
             image_boiler: None,
             image_steam_engine: None,
             image_water_well: None,
+            image_offshore_pump: None,
             image_pipe: None,
             image_elect_pole: None,
             image_splitter: None,
@@ -712,7 +720,6 @@ impl FactorishState {
                 Box::new(OreMine::new(12, 2, Rotation::Bottom)),
                 Box::new(Furnace::new(&Position::new(8, 3))),
                 Box::new(Assembler::new(&Position::new(6, 3))),
-                Box::new(WaterWell::new(&Position::new(14, 5))),
                 Box::new(Boiler::new(&Position::new(13, 5))),
                 Box::new(SteamEngine::new(&Position::new(12, 5))),
             ],
@@ -1712,6 +1719,7 @@ impl FactorishState {
             ItemType::Assembler => Box::new(Assembler::new(cursor)),
             ItemType::Boiler => Box::new(Boiler::new(cursor)),
             ItemType::WaterWell => Box::new(WaterWell::new(cursor)),
+            ItemType::OffshorePump => Box::new(OffshorePump::new(cursor)),
             ItemType::Pipe => Box::new(Pipe::new(cursor)),
             ItemType::SteamEngine => Box::new(SteamEngine::new(cursor)),
             ItemType::ElectPole => Box::new(ElectPole::new(cursor)),
@@ -1821,7 +1829,7 @@ impl FactorishState {
                 if let Some((count, cell)) =
                     self.player.inventory.get(&selected_tool).zip(cell.as_ref())
                 {
-                    if 1 <= *count && !cell.water {
+                    if 1 <= *count && cell.water ^ (selected_tool != ItemType::OffshorePump) {
                         let mut new_s = self.new_structure(&selected_tool, &cursor)?;
                         let bbox = new_s.bounding_box();
                         for y in bbox.y0..bbox.y1 {
@@ -2135,6 +2143,7 @@ impl FactorishState {
         self.image_boiler = Some(load_image("boiler")?);
         self.image_steam_engine = Some(load_image("steamEngine")?);
         self.image_water_well = Some(load_image("waterWell")?);
+        self.image_offshore_pump = Some(load_image("offshorePump")?);
         self.image_pipe = Some(load_image("pipe")?);
         self.image_elect_pole = Some(load_image("electPole")?);
         self.image_splitter = Some(load_image("splitter")?);

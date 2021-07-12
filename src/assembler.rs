@@ -387,10 +387,10 @@ impl Structure for Assembler {
                 20.,
             ),
             Recipe::new(
-                hash_map!(ItemType::IronPlate => 2, ItemType::CopperPlate => 3),
-                hash_map!(ItemType::WaterWell => 1),
-                100.,
-                100.,
+                hash_map!(ItemType::IronPlate => 5, ItemType::Gear => 5),
+                hash_map!(ItemType::OffshorePump => 1),
+                150.,
+                150.,
             ),
             Recipe::new(
                 hash_map!(ItemType::IronPlate => 5, ItemType::CopperPlate => 5),

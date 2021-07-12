@@ -11,6 +11,7 @@ import mine from "../img/mine.png";
 import assembler from "../img/assembler.png";
 import furnace from "../img/furnace.png";
 import waterWell from "../img/waterwell.png";
+import offshorePump from "../img/offshore-pump.png";
 import boiler from "../img/boiler.png";
 import pipe from "../img/pipe.png";
 import inserter from "../img/inserter-base.png";
@@ -70,6 +71,7 @@ let ysize = 64;
         ["electPole", electPole],
         ["splitter", splitter],
         ["waterWell", waterWell],
+        ["offshorePump", offshorePump],
         ["pipe", pipe],
         ["inserter", inserter],
         ["direction", direction],
@@ -443,6 +445,8 @@ let ysize = 64;
             return [assembler, 4];
         case 'Water Well':
             return waterWell;
+        case 'Offshore Pump':
+            return offshorePump;
         case 'Boiler':
             return [boiler, 3];
         case 'Pipe':
