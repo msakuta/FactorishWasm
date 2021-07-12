@@ -716,7 +716,7 @@ impl FactorishState {
                             * resource_amount;
                         let coal = (perlin_noise_pixel(fx, fy, bits, &coal_terms)
                             - noise_threshold)
-                            * 2.
+                            * 4.
                             * resource_amount;
 
                         match [iron, copper, coal]
