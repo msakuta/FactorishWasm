@@ -571,7 +571,8 @@ impl FactorishState {
         height: u32,
         on_player_update: js_sys::Function,
         // on_show_inventory: js_sys::Function,
-        resource_seed: u32,
+        terrain_seed: u32,
+        water_noise_threshold: f64,
         resource_amount: f64,
         noise_scale: f64,
         noise_threshold: f64,
@@ -661,7 +662,7 @@ impl FactorishState {
                     (width * height) as usize
                 ];
                 let bits = 1;
-                let mut rng = Xor128::new(resource_seed);
+                let mut rng = Xor128::new(terrain_seed);
                 let ocean_terms = gen_terms(&mut rng, bits);
                 let iron_terms = gen_terms(&mut rng, bits);
                 let copper_terms = gen_terms(&mut rng, bits);
@@ -671,7 +672,7 @@ impl FactorishState {
                         let [fx, fy] = [x as f64 / noise_scale, y as f64 / noise_scale];
                         let cell = &mut ret[(x + y * width) as usize];
                         cell.water =
-                            noise_threshold < perlin_noise_pixel(fx, fy, bits, &ocean_terms);
+                            water_noise_threshold < perlin_noise_pixel(fx, fy, bits, &ocean_terms);
                         if cell.water {
                             continue; // No ores in water
                         }
