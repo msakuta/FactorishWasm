@@ -1428,21 +1428,26 @@ impl FactorishState {
     fn harvest(&mut self, position: &Position, clear_item: bool) -> Result<bool, JsValue> {
         let mut harvested_structure = false;
         let mut popup_text = String::new();
-        while let Some((index, structure)) = self
-            .structures
-            .iter()
-            .filter_map(|s| s.dynamic.as_ref())
-            .enumerate()
-            .find(|(_, structure)| structure.contains(position))
-        {
+        for i in 0..self.structures.len() {
+            if !self.structures[i]
+                .dynamic
+                .as_deref()
+                .map(|d| d.contains(position))
+                .unwrap_or(false)
+            {
+                continue;
+            }
+            let mut structure = self.structures[i]
+                .dynamic
+                .take()
+                .expect("should be active entity");
+            self.structures[i].gen += 1;
             self.player
                 .inventory
                 .add_item(&str_to_item(&structure.name()).ok_or_else(|| {
                     JsValue::from_str(&format!("wrong structure name: {:?}", structure.name()))
                 })?);
             popup_text += &format!("+1 {}\n", structure.name());
-            let structure = self.structures.remove(index);
-            let mut structure = structure.dynamic.unwrap();
             for notify_structure in &mut self.structures {
                 if let Some(s) = notify_structure.dynamic.as_deref_mut() {
                     s.on_construction(structure.as_mut(), false)?;
@@ -1950,10 +1955,38 @@ impl FactorishState {
                             }
                         }
 
-                        self.structures.push(StructureEntry {
-                            gen: 0,
-                            dynamic: Some(new_s),
-                        });
+                        if let Some((i, slot)) = self
+                            .structures
+                            .iter_mut()
+                            .enumerate()
+                            .find(|(_, s)| s.dynamic.is_none())
+                        {
+                            slot.dynamic = Some(new_s);
+                            let gen = slot.gen;
+                            console_log!(
+                                "Inserted to an empty slot: {}/{}, id: {}.{}",
+                                self.structures
+                                    .iter()
+                                    .filter(|s| s.dynamic.is_none())
+                                    .count(),
+                                self.structures.len(),
+                                i,
+                                gen
+                            );
+                        } else {
+                            self.structures.push(StructureEntry {
+                                gen: 0,
+                                dynamic: Some(new_s),
+                            });
+                            console_log!(
+                                "Pushed to the end: {}/{}",
+                                self.structures
+                                    .iter()
+                                    .filter(|s| s.dynamic.is_none())
+                                    .count(),
+                                self.structures.len()
+                            );
+                        }
 
                         self.update_fluid_connections(&cursor)?;
 
