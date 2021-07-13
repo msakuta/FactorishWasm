@@ -1,7 +1,10 @@
 use super::{
-    draw_direction_arrow, dyn_iter::DynIterMut, items::ItemType, structure::Structure, DropItem,
-    FactorishState, FrameProcResult, Inventory, InventoryTrait, Position, Recipe, Rotation,
-    TempEnt, COAL_POWER, TILE_SIZE,
+    draw_direction_arrow,
+    dyn_iter::DynIterMut,
+    items::ItemType,
+    structure::{Structure, StructureEntry},
+    DropItem, FactorishState, FrameProcResult, Inventory, InventoryTrait, Position, Recipe,
+    Rotation, TempEnt, COAL_POWER, TILE_SIZE,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -123,7 +126,7 @@ impl Structure for OreMine {
     fn frame_proc(
         &mut self,
         state: &mut FactorishState,
-        structures: &mut dyn DynIterMut<Item = Box<dyn Structure>>,
+        structures: &mut dyn DynIterMut<Item = StructureEntry>,
     ) -> Result<FrameProcResult, ()> {
         let otile = &state.tile_at(&self.position);
         if otile.is_none() {
@@ -211,8 +214,11 @@ impl Structure for OreMine {
             if 1. <= self.progress + progress {
                 self.progress = 0.;
                 let output_position = self.position.add(self.rotation.delta());
-                let mut str_iter = structures.dyn_iter_mut();
-                if let Some(structure) = str_iter.find(|s| *s.position() == output_position) {
+                let str_iter = structures.dyn_iter_mut();
+                if let Some(structure) = str_iter
+                    .filter_map(|s| s.dynamic.as_mut())
+                    .find(|s| *s.position() == output_position)
+                {
                     let mut it = recipe.output.iter();
                     if let Some(item) = it.next() {
                         // Check whether we can input first

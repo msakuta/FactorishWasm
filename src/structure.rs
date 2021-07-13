@@ -35,6 +35,11 @@ macro_rules! draw_fuel_alarm {
     };
 }
 
+pub(crate) struct StructureId {
+    pub id: u32,
+    pub gen: u32,
+}
+
 #[derive(Eq, PartialEq, Hash, Copy, Clone, Debug, Serialize, Deserialize)]
 pub(crate) struct Position {
     pub x: i32,
@@ -183,7 +188,7 @@ pub(crate) trait Structure {
     fn frame_proc(
         &mut self,
         _state: &mut FactorishState,
-        _structures: &mut dyn DynIterMut<Item = Box<dyn Structure>>,
+        _structures: &mut dyn DynIterMut<Item = StructureEntry>,
     ) -> Result<FrameProcResult, ()> {
         Ok(FrameProcResult::None)
     }
@@ -194,7 +199,7 @@ pub(crate) trait Structure {
     /// event handler for costruction events for this structure itself.
     fn on_construction_self(
         &mut self,
-        _others: &dyn DynIter<Item = Box<dyn Structure>>,
+        _others: &dyn DynIter<Item = StructureEntry>,
         _construct: bool,
     ) -> Result<(), JsValue> {
         Ok(())
@@ -280,7 +285,7 @@ pub(crate) trait Structure {
     fn connection(
         &self,
         state: &FactorishState,
-        structures: &dyn DynIter<Item = Box<dyn Structure>>,
+        structures: &dyn DynIter<Item = StructureEntry>,
     ) -> [bool; 4] {
         // let mut structures_copy = structures.clone();
         let has_fluid_box = |x, y| {
@@ -289,6 +294,7 @@ pub(crate) trait Structure {
             }
             if let Some(structure) = structures
                 .dyn_iter()
+                .filter_map(|s| s.dynamic.as_deref())
                 .find(|s| *s.position() == Position { x, y })
             {
                 return structure.fluid_box().is_some();
@@ -325,3 +331,8 @@ pub(crate) trait Structure {
 }
 
 pub(crate) type StructureBoxed = Box<dyn Structure>;
+
+pub(crate) struct StructureEntry {
+    pub gen: u32,
+    pub dynamic: Option<StructureBoxed>,
+}

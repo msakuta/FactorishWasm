@@ -63,7 +63,7 @@ mod water_well;
 use assembler::Assembler;
 use boiler::Boiler;
 use chest::Chest;
-use dyn_iter::{Chained, DynIterMut, MutRef, Ref};
+use dyn_iter::{Chained, DynIter, DynIterMut, MutRef, Ref};
 use elect_pole::ElectPole;
 use furnace::Furnace;
 use inserter::Inserter;
@@ -74,7 +74,9 @@ use perlin_noise::{gen_terms, perlin_noise_pixel, Xor128};
 use pipe::Pipe;
 use splitter::Splitter;
 use steam_engine::SteamEngine;
-use structure::{FrameProcResult, ItemResponse, Position, Rotation, Structure, StructureBoxed};
+use structure::{
+    FrameProcResult, ItemResponse, Position, Rotation, Structure, StructureBoxed, StructureEntry,
+};
 use transport_belt::TransportBelt;
 use water_well::{FluidType, WaterWell};
 
@@ -236,6 +238,24 @@ impl InventoryTrait for Inventory {
         self.iter()
             .map(|item| format!("{:?}: {}<br>", item.0, item.1))
             .fold(String::from(""), |accum, item| accum + &item)
+    }
+}
+
+struct StructureIterator<'a>(&'a mut [StructureEntry], &'a mut [StructureEntry]);
+
+impl<'a> DynIter for StructureIterator<'a> {
+    type Item = StructureEntry;
+    fn dyn_iter(&self) -> Box<dyn Iterator<Item = &Self::Item> + '_> {
+        Box::new(self.0.iter().chain(self.1.iter()))
+    }
+    fn as_dyn_iter(&self) -> &dyn DynIter<Item = Self::Item> {
+        self
+    }
+}
+
+impl<'a> DynIterMut for StructureIterator<'a> {
+    fn dyn_iter_mut(&mut self) -> Box<dyn Iterator<Item = &mut Self::Item> + '_> {
+        Box::new(self.0.iter_mut().chain(self.1.iter_mut()))
     }
 }
 
@@ -528,7 +548,7 @@ pub struct FactorishState {
     viewport_y: f64,
     view_scale: f64,
     board: Vec<Cell>,
-    structures: Vec<Box<dyn Structure>>,
+    structures: Vec<StructureEntry>,
     selected_structure_inventory: Option<Position>,
     drop_items: Vec<DropItem>,
     serial_no: u32,
@@ -615,6 +635,14 @@ impl FactorishState {
         noise_threshold: f64,
     ) -> Result<FactorishState, JsValue> {
         console_log!("FactorishState constructor");
+
+        fn wrap_structure(s: StructureBoxed) -> StructureEntry {
+            StructureEntry {
+                gen: 0,
+                dynamic: Some(s),
+            }
+        }
+
         let mut tool_belt = [None; 10];
         tool_belt[0] = Some(ItemType::OreMine);
         tool_belt[1] = Some(ItemType::Inserter);
@@ -736,14 +764,14 @@ impl FactorishState {
                 ret
             },
             structures: vec![
-                Box::new(TransportBelt::new(10, 3, Rotation::Left)),
-                Box::new(TransportBelt::new(11, 3, Rotation::Left)),
-                Box::new(TransportBelt::new(12, 3, Rotation::Left)),
-                Box::new(OreMine::new(12, 2, Rotation::Bottom)),
-                Box::new(Furnace::new(&Position::new(8, 3))),
-                Box::new(Assembler::new(&Position::new(6, 3))),
-                Box::new(Boiler::new(&Position::new(13, 5))),
-                Box::new(SteamEngine::new(&Position::new(12, 5))),
+                wrap_structure(Box::new(TransportBelt::new(10, 3, Rotation::Left))),
+                wrap_structure(Box::new(TransportBelt::new(11, 3, Rotation::Left))),
+                wrap_structure(Box::new(TransportBelt::new(12, 3, Rotation::Left))),
+                wrap_structure(Box::new(OreMine::new(12, 2, Rotation::Bottom))),
+                wrap_structure(Box::new(Furnace::new(&Position::new(8, 3)))),
+                wrap_structure(Box::new(Assembler::new(&Position::new(6, 3)))),
+                wrap_structure(Box::new(Boiler::new(&Position::new(13, 5)))),
+                wrap_structure(Box::new(SteamEngine::new(&Position::new(12, 5)))),
             ],
             selected_structure_inventory: None,
             ore_harvesting: None,
@@ -785,6 +813,7 @@ impl FactorishState {
             serde_json::Value::from(
                 self.structures
                     .iter()
+                    .filter_map(|entry| entry.dynamic.as_ref())
                     .map(|structure| {
                         let mut map = serde_json::Map::new();
                         map.insert(
@@ -937,8 +966,13 @@ impl FactorishState {
             .as_array_mut()
             .ok_or_else(|| js_str!("structures in saved data is not an array"))?
             .iter_mut()
-            .map(|structure| Self::structure_from_json(structure))
-            .collect::<Result<Vec<Box<dyn Structure>>, JsValue>>()?;
+            .map(|structure| {
+                Ok(StructureEntry {
+                    gen: 0,
+                    dynamic: Some(Self::structure_from_json(structure)?),
+                })
+            })
+            .collect::<Result<Vec<StructureEntry>, JsValue>>()?;
 
         self.power_wires = serde_json::from_value(
             json.get_mut("power_wires")
@@ -980,7 +1014,7 @@ impl FactorishState {
         mut f: impl FnMut(
             &mut Self,
             &mut StructureBoxed,
-            &dyn DynIterMut<Item = StructureBoxed>,
+            &dyn DynIterMut<Item = StructureEntry>,
         ) -> Result<(), JsValue>,
     ) -> Result<(), JsValue> {
         // This is silly way to avoid borrow checker that temporarily move the structures
@@ -992,10 +1026,14 @@ impl FactorishState {
             let (center, last) = mid
                 .split_first_mut()
                 .ok_or_else(|| JsValue::from_str("Structures split fail"))?;
-            let mut other_structures = Chained(MutRef(front), MutRef(last));
-            res = f(self, center, &mut other_structures);
-            if res.is_err() {
-                break;
+            if let Some(d) = center.dynamic.as_mut() {
+                let other_structures = Chained(MutRef(front), MutRef(last));
+                // let mut other_structures = dyn_iter::FilterMapped(|s: &mut StructureEntry| s.dynamic);
+                // let mut o = &other_structures as &dyn DynIterMut<Item = StructureBoxed>;
+                res = f(self, d, &other_structures);
+                if res.is_err() {
+                    break;
+                }
             }
         }
         self.structures = structures;
@@ -1108,9 +1146,11 @@ impl FactorishState {
             let (center, last) = mid
                 .split_first_mut()
                 .ok_or_else(|| JsValue::from_str("Structures split fail"))?;
-            frame_proc_result_to_event(
-                center.frame_proc(self, &mut Chained(MutRef(front), MutRef(last))),
-            );
+            if let Some(dynamic) = center.dynamic.as_deref_mut() {
+                frame_proc_result_to_event(
+                    dynamic.frame_proc(self, &mut StructureIterator(front, last)), // dynamic.frame_proc(self, &mut Chained(MutRef(front), MutRef(last)))
+                );
+            }
         }
 
         let mut to_remove = vec![];
@@ -1123,6 +1163,7 @@ impl FactorishState {
             {
                 if let Some(item_response_result) = structures
                     .iter_mut()
+                    .filter_map(|s| s.dynamic.as_mut())
                     .find(|s| {
                         s.contains(&Position {
                             x: item.x / TILE_SIZE_I,
@@ -1140,7 +1181,11 @@ impl FactorishState {
                                 x: moved_x / 32,
                                 y: moved_y / 32,
                             };
-                            if let Some(s) = structures.iter().find(|s| s.contains(&position)) {
+                            if let Some(s) = structures
+                                .iter()
+                                .filter_map(|s| s.dynamic.as_deref())
+                                .find(|s| s.contains(&position))
+                            {
                                 if !s.movable() {
                                     continue;
                                 }
@@ -1204,16 +1249,15 @@ impl FactorishState {
 
     /// Look up a structure at a given tile coordinates
     fn find_structure_tile(&self, tile: &[i32]) -> Option<&dyn Structure> {
-        self.structures
-            .iter()
+        self.structure_iter()
             .find(|s| s.position().x == tile[0] && s.position().y == tile[1])
-            .map(|s| s.as_ref())
     }
 
     /// Mutable variant of find_structure_tile
     fn find_structure_tile_mut(&mut self, tile: &[i32]) -> Option<&mut Box<dyn Structure>> {
         self.structures
             .iter_mut()
+            .filter_map(|s| s.dynamic.as_mut())
             .find(|s| s.position().x == tile[0] && s.position().y == tile[1])
         // .map(|s| s.as_mut())
     }
@@ -1224,8 +1268,7 @@ impl FactorishState {
     ///
     /// Because mutable version of find_structure_tile doesn't work.
     fn find_structure_tile_idx(&self, tile: &[i32]) -> Option<usize> {
-        self.structures
-            .iter()
+        self.structure_iter()
             .enumerate()
             .find(|(_, s)| s.position().x == tile[0] && s.position().y == tile[1])
             .map(|(idx, _)| idx)
@@ -1322,10 +1365,12 @@ impl FactorishState {
         } else {
             if let Some(ref cursor) = self.cursor {
                 if let Some(idx) = self.find_structure_tile_idx(cursor) {
-                    return self.structures[idx]
-                        .rotate()
-                        .map_err(|()| RotateErr::NotSupported)
-                        .map(|_| false);
+                    if let Some(d) = self.structures[idx].dynamic.as_mut() {
+                        d.as_mut()
+                            .rotate()
+                            .map_err(|()| RotateErr::NotSupported)
+                            .map(|_| false)?;
+                    }
                 }
             }
             Err(RotateErr::NotFound)
@@ -1358,6 +1403,7 @@ impl FactorishState {
         while let Some((index, structure)) = self
             .structures
             .iter()
+            .filter_map(|s| s.dynamic.as_ref())
             .enumerate()
             .find(|(_, structure)| structure.contains(position))
         {
@@ -1367,9 +1413,12 @@ impl FactorishState {
                     JsValue::from_str(&format!("wrong structure name: {:?}", structure.name()))
                 })?);
             popup_text += &format!("+1 {}\n", structure.name());
-            let mut structure = self.structures.remove(index);
+            let structure = self.structures.remove(index);
+            let mut structure = structure.dynamic.unwrap();
             for notify_structure in &mut self.structures {
-                notify_structure.on_construction(structure.as_mut(), false)?;
+                if let Some(s) = notify_structure.dynamic.as_deref_mut() {
+                    s.on_construction(structure.as_mut(), false)?;
+                }
             }
             let position = *structure.position();
             self.power_wires = std::mem::take(&mut self.power_wires)
@@ -1630,7 +1679,10 @@ impl FactorishState {
             let structure = self
                 .structures
                 .get_mut(idx)
-                .ok_or_else(|| js_str!("structure out of bounds"))?;
+                .ok_or_else(|| js_str!("structure out of bounds"))?
+                .dynamic
+                .as_deref_mut()
+                .ok_or_else(|| js_str!("Dead structure"))?;
             match inventory_type {
                 InventoryType::Burner => {
                     if to_player {
@@ -1838,10 +1890,12 @@ impl FactorishState {
                             }
                         }
                         for structure in &mut self.structures {
-                            structure.on_construction(new_s.as_mut(), true)?;
+                            if let Some(s) = structure.dynamic.as_deref_mut() {
+                                s.on_construction(new_s.as_mut(), true)?;
+                            }
                         }
                         let structures = std::mem::take(&mut self.structures);
-                        for structure in &structures {
+                        for structure in structures.iter().filter_map(|s| s.dynamic.as_deref()) {
                             if (new_s.power_sink() && structure.power_source()
                                 || new_s.power_source() && structure.power_sink())
                                 && new_s.position().distance(structure.position())
@@ -1868,7 +1922,10 @@ impl FactorishState {
                             }
                         }
 
-                        self.structures.push(new_s);
+                        self.structures.push(StructureEntry {
+                            gen: 0,
+                            dynamic: Some(new_s),
+                        });
 
                         self.update_fluid_connections(&cursor)?;
 
@@ -2059,7 +2116,7 @@ impl FactorishState {
 
         // context.set_fill_style(&JsValue::from_str("#00ff7f"));
         let color = [0x00, 0xff, 0x7f];
-        for structure in &self.structures {
+        for structure in self.structure_iter() {
             let Position { x, y } = structure.position();
             let start = ((x + y * self.width as i32) * 4) as usize;
             data[start..start + 3].copy_from_slice(&color);
@@ -2071,11 +2128,13 @@ impl FactorishState {
     fn render_minimap_data_pixel(&self, data: &mut Vec<u8>, position: &Position) {
         let Position { x, y } = *position;
         let color;
-        if self
-            .structures
-            .iter()
-            .any(|structure| *structure.position() == *position)
-        {
+        if self.structures.iter().any(|structure| {
+            structure
+                .dynamic
+                .as_deref()
+                .map(|s| *s.position() == *position)
+                .unwrap_or(false)
+        }) {
             color = [0x00, 0xff, 0x7f];
         } else {
             let cell = self.tile_at(position).unwrap();
@@ -2267,8 +2326,7 @@ impl FactorishState {
                 .find(|def| def.item_type == item)
                 .and(Some(item)),
             Some(SelectedItem::StructInventory(pos, item)) => self
-                .structures
-                .iter()
+                .structure_iter()
                 .find(|s| *s.position() == pos)
                 .and_then(|s| s.inventory(false))
                 .and_then(|inventory| inventory.get(&item))
@@ -2366,6 +2424,11 @@ impl FactorishState {
         self.popup_texts.push(pop);
     }
 
+    /// Returns an iterator over valid structures
+    fn structure_iter(&self) -> impl Iterator<Item = &dyn Structure> {
+        self.structures.iter().filter_map(|s| s.dynamic.as_deref())
+    }
+
     pub fn render(&self, context: CanvasRenderingContext2d) -> Result<(), JsValue> {
         use std::f64;
 
@@ -2443,7 +2506,7 @@ impl FactorishState {
         }
 
         let draw_structures = |depth| -> Result<(), JsValue> {
-            for structure in &self.structures {
+            for structure in self.structure_iter() {
                 structure.draw(&self, &context, depth, false)?;
             }
             Ok(())
@@ -2481,7 +2544,7 @@ impl FactorishState {
             context.save();
             context.set_stroke_style(&js_str!("red"));
             context.set_line_width(1.);
-            for structure in &self.structures {
+            for structure in self.structure_iter() {
                 let bb = structure.bounding_box();
                 context.stroke_rect(
                     bb.x0 as f64 * TILE_SIZE,
@@ -2504,7 +2567,7 @@ impl FactorishState {
 
         if self.debug_fluidbox {
             context.save();
-            for structure in &self.structures {
+            for structure in self.structure_iter() {
                 if let Some(fluid_boxes) = structure.fluid_box() {
                     let bb = structure.bounding_box();
                     for (i, fb) in fluid_boxes.iter().enumerate() {
