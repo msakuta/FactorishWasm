@@ -2,7 +2,7 @@ use super::pipe::Pipe;
 use super::{
     dyn_iter::DynIterMut,
     serialize_impl,
-    structure::{Structure, StructureEntry},
+    structure::Structure,
     water_well::{FluidBox, FluidType},
     DropItem, FactorishState, FrameProcResult, Inventory, InventoryTrait, ItemType, Position,
     Recipe, TempEnt, COAL_POWER,
@@ -153,7 +153,7 @@ impl Structure for Boiler {
     fn frame_proc(
         &mut self,
         state: &mut FactorishState,
-        structures: &mut dyn DynIterMut<Item = StructureEntry>,
+        structures: &mut dyn DynIterMut<Item = dyn Structure>,
     ) -> Result<FrameProcResult, ()> {
         self.input_fluid_box
             .simulate(&self.position, state, structures);

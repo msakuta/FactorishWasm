@@ -1,8 +1,6 @@
 use super::{
-    dyn_iter::DynIterMut,
-    structure::{Structure, StructureEntry},
-    water_well::FluidBox,
-    FactorishState, FrameProcResult, Position,
+    dyn_iter::DynIterMut, structure::Structure, water_well::FluidBox, FactorishState,
+    FrameProcResult, Position,
 };
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
@@ -104,7 +102,7 @@ impl Structure for Pipe {
     fn frame_proc(
         &mut self,
         state: &mut FactorishState,
-        structures: &mut dyn DynIterMut<Item = StructureEntry>,
+        structures: &mut dyn DynIterMut<Item = dyn Structure>,
     ) -> Result<FrameProcResult, ()> {
         self.fluid_box.simulate(&self.position, state, structures);
         Ok(FrameProcResult::None)

@@ -1,8 +1,5 @@
 use super::{
-    dyn_iter::DynIterMut,
-    items::get_item_image_url,
-    serialize_impl,
-    structure::{Structure, StructureEntry},
+    dyn_iter::DynIterMut, items::get_item_image_url, serialize_impl, structure::Structure,
     DropItem, FactorishState, FrameProcResult, Inventory, InventoryTrait, ItemType, Position,
     PowerWire, Recipe, TILE_SIZE,
 };
@@ -207,7 +204,7 @@ impl Structure for Assembler {
     fn frame_proc(
         &mut self,
         _state: &mut FactorishState,
-        _structures: &mut dyn DynIterMut<Item = StructureEntry>,
+        _structures: &mut dyn DynIterMut<Item = dyn Structure>,
     ) -> Result<FrameProcResult, ()> {
         if let Some(recipe) = &self.recipe {
             let mut ret = FrameProcResult::None;

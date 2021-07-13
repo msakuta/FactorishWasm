@@ -1,8 +1,6 @@
 use super::{
-    dyn_iter::DynIterMut,
-    pipe::Pipe,
-    structure::{Structure, StructureEntry},
-    FactorishState, FrameProcResult, Position,
+    dyn_iter::DynIterMut, pipe::Pipe, structure::Structure, FactorishState, FrameProcResult,
+    Position,
 };
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
@@ -60,7 +58,7 @@ impl FluidBox {
         &mut self,
         position: &Position,
         state: &mut FactorishState,
-        structures: &mut dyn DynIterMut<Item = StructureEntry>,
+        structures: &mut dyn DynIterMut<Item = dyn Structure>,
     ) {
         let mut _biggest_flow_idx = -1;
         let mut biggest_flow_amount = 1e-3; // At least this amount of flow is required for displaying flow direction
@@ -86,11 +84,7 @@ impl FluidBox {
             {
                 continue;
             }
-            if let Some(structure) = structures
-                .dyn_iter_mut()
-                .filter_map(|s| s.dynamic.as_deref_mut())
-                .find(|s| *s.position() == pos)
-            {
+            if let Some(structure) = structures.dyn_iter_mut().find(|s| *s.position() == pos) {
                 let mut process_fluid_box = |self_box: &mut FluidBox, fluid_box: &mut FluidBox| {
                     // Different types of fluids won't mix
                     if 0. < fluid_box.amount
@@ -196,7 +190,7 @@ impl Structure for WaterWell {
     fn frame_proc(
         &mut self,
         state: &mut FactorishState,
-        structures: &mut dyn DynIterMut<Item = StructureEntry>,
+        structures: &mut dyn DynIterMut<Item = dyn Structure>,
     ) -> Result<FrameProcResult, ()> {
         self.output_fluid_box.amount =
             (self.output_fluid_box.amount + 1.).min(self.output_fluid_box.max_amount);

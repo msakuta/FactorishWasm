@@ -188,7 +188,7 @@ pub(crate) trait Structure {
     fn frame_proc(
         &mut self,
         _state: &mut FactorishState,
-        _structures: &mut dyn DynIterMut<Item = StructureEntry>,
+        _structures: &mut dyn DynIterMut<Item = dyn Structure>,
     ) -> Result<FrameProcResult, ()> {
         Ok(FrameProcResult::None)
     }

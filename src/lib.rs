@@ -241,9 +241,9 @@ impl InventoryTrait for Inventory {
     }
 }
 
-struct StructureIterator<'a>(&'a mut [StructureEntry], &'a mut [StructureEntry]);
+struct StructureEntryIterator<'a>(&'a mut [StructureEntry], &'a mut [StructureEntry]);
 
-impl<'a> DynIter for StructureIterator<'a> {
+impl<'a> DynIter for StructureEntryIterator<'a> {
     type Item = StructureEntry;
     fn dyn_iter(&self) -> Box<dyn Iterator<Item = &Self::Item> + '_> {
         Box::new(self.0.iter().chain(self.1.iter()))
@@ -253,9 +253,37 @@ impl<'a> DynIter for StructureIterator<'a> {
     }
 }
 
-impl<'a> DynIterMut for StructureIterator<'a> {
+impl<'a> DynIterMut for StructureEntryIterator<'a> {
     fn dyn_iter_mut(&mut self) -> Box<dyn Iterator<Item = &mut Self::Item> + '_> {
         Box::new(self.0.iter_mut().chain(self.1.iter_mut()))
+    }
+}
+
+struct StructureDynIter<'a>(&'a mut [StructureEntry], &'a mut [StructureEntry]);
+
+impl<'a> DynIter for StructureDynIter<'a> {
+    type Item = dyn Structure;
+    fn dyn_iter(&self) -> Box<dyn Iterator<Item = &Self::Item> + '_> {
+        Box::new(
+            self.0
+                .iter()
+                .chain(self.1.iter())
+                .filter_map(|s| s.dynamic.as_deref()),
+        )
+    }
+    fn as_dyn_iter(&self) -> &dyn DynIter<Item = Self::Item> {
+        self
+    }
+}
+
+impl<'a> DynIterMut for StructureDynIter<'a> {
+    fn dyn_iter_mut(&mut self) -> Box<dyn Iterator<Item = &mut Self::Item> + '_> {
+        Box::new(
+            self.0
+                .iter_mut()
+                .chain(self.1.iter_mut())
+                .filter_map(|s| s.dynamic.as_deref_mut()),
+        )
     }
 }
 
@@ -1148,7 +1176,7 @@ impl FactorishState {
                 .ok_or_else(|| JsValue::from_str("Structures split fail"))?;
             if let Some(dynamic) = center.dynamic.as_deref_mut() {
                 frame_proc_result_to_event(
-                    dynamic.frame_proc(self, &mut StructureIterator(front, last)), // dynamic.frame_proc(self, &mut Chained(MutRef(front), MutRef(last)))
+                    dynamic.frame_proc(self, &mut StructureDynIter(front, last)), // dynamic.frame_proc(self, &mut Chained(MutRef(front), MutRef(last)))
                 );
             }
         }
