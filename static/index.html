@@ -16,6 +16,17 @@
 				width: fit-content;
 			}
 
+			.params {
+				border: #7f007f solid 2px;
+				position: relative;
+				left: 50%;
+				margin-left: -15em;
+				margin-top: 0.5em;
+				width: 30em;
+				text-align: justify;
+				padding: 0.5em;
+			}
+
 			#container, #container2{
 				position: relative;
 				width: 900px;
@@ -182,19 +193,53 @@
 	<body>
 		<h1>FactorishWasm</h1>
 		<p style="font-size: 80%; font-style: italic">- Factorio-style base building game with WebAssembly -</p>
-		Size:
-		<select id="sizeSelect">
-			<option>16</option>
-			<option>24</option>
-			<option selected>32</option>
-			<option>48</option>
-			<option>64</option>
-			<option>128</option>
-			<option>256</option>
-		</select>
-		<input type="button" id="generateBoard" value="Start">
-		<label><input type="checkbox" id="showDebugBBox">Show Debug Bounding Box</label>
-		<label><input type="checkbox" id="showDebugFluidBox">Show Debug Fluid Box</label>
+		<button id="paramsButton">New Game Settings</button>
+		<button id="viewButton">View Options</button>
+		<div style="position: relative;">
+			<div id="paramsContainer" class="params" style="display: none;">
+				<div style="font-size: 120%; font-weight: 700;">New game settings</div>
+				<div>
+					Size:
+					<select id="sizeSelect">
+						<option>16</option>
+						<option>24</option>
+						<option>32</option>
+						<option>48</option>
+						<option selected>64</option>
+						<option>128</option>
+						<option>256</option>
+					</select>
+				</div>
+				<div>
+					Terrain Seed=<span id="seedLabel"></span>
+					<input id="seed" type="number">
+				</div>
+				<div>
+					Water Noise Threshold=<span id="waterNoiseThresholdLabel"></span>
+					<input id="waterNoiseThreshold" type="range" max="1" min="0" step="1e-3" value="0.35">
+				</div>
+				<div>
+					Resource Amount=<span id="resourceAmountLabel"></span>
+					<input id="resourceAmount" type="range" max="10000" min="100" step="100" value="1000">
+				</div>
+				<div>
+					Resource Noise Scale=<span id="noiseScaleLabel"></span>
+					<input id="noiseScale" type="range" max="20" min="2" step="1" value="5">
+				</div>
+				<div>
+					Resource Noise threshold=<span id="noiseThresholdLabel"></span>
+					<input id="noiseThreshold" type="range" max="1" min="0" step="1e-3" value="0.45">
+				</div>
+				<div style="text-align: center;">
+					<button type="button" id="generateBoard">Start a new game!</button>
+				</div>
+			</div>
+			<div id="viewContainer" class="params" style="display: none;">
+				<div style="font-size: 120%; font-weight: 700">View settings</div>
+				<label><input type="checkbox" id="showDebugBBox">Show Debug Bounding Box</label>
+				<label><input type="checkbox" id="showDebugFluidBox">Show Debug Fluid Box</label>
+			</div>
+		</div>
 		<hr>
 		<div style="position: relative">
 			<div id="container2">

@@ -2,7 +2,7 @@ use super::{
     draw_direction_arrow,
     dyn_iter::DynIterMut,
     items::{render_drop_item, ItemType},
-    structure::Structure,
+    structure::{Structure, StructureDynIter},
     DropItem, FactorishState, FrameProcResult, Inventory, InventoryTrait, Position, Rotation,
 };
 use serde::{Deserialize, Serialize};
@@ -131,15 +131,16 @@ impl Structure for Inserter {
     fn frame_proc(
         &mut self,
         state: &mut FactorishState,
-        structures: &mut dyn DynIterMut<Item = Box<dyn Structure>>,
+        structures: &mut StructureDynIter,
     ) -> Result<FrameProcResult, ()> {
         let input_position = self.position.add(self.rotation.delta_inv());
         let output_position = self.position.add(self.rotation.delta());
 
-        fn find_structure_at(
-            structures: &mut dyn DynIterMut<Item = Box<dyn Structure>>,
+        // It is unclear why I need to put explicit lifetimes to avoid compile errors.
+        fn find_structure_at<'a, 'b>(
+            structures: &'a mut dyn DynIterMut<Item = dyn Structure + 'b>,
             position: Position,
-        ) -> Option<&mut Box<dyn Structure>> {
+        ) -> Option<&'a mut (dyn Structure + 'b)> {
             structures
                 .dyn_iter_mut()
                 .find(|structure| *structure.position() == position)
@@ -151,7 +152,7 @@ impl Structure for Inserter {
                 let ret = FrameProcResult::None;
 
                 let mut try_hold =
-                    |structures: &mut dyn DynIterMut<Item = Box<dyn Structure>>, type_| -> bool {
+                    |structures: &mut dyn DynIterMut<Item = dyn Structure + '_>, type_| -> bool {
                         if let Some(structure) = find_structure_at(structures, output_position) {
                             // console_log!(
                             //     "found structure to output[{}]: {}, {}, {}",

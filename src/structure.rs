@@ -35,6 +35,151 @@ macro_rules! draw_fuel_alarm {
     };
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone, Copy)]
+pub(crate) struct StructureId {
+    pub id: u32,
+    pub gen: u32,
+}
+
+pub(crate) struct StructureEntryIterator<'a>(&'a mut [StructureEntry], &'a mut [StructureEntry]);
+
+impl<'a> DynIter for StructureEntryIterator<'a> {
+    type Item = StructureEntry;
+    fn dyn_iter(&self) -> Box<dyn Iterator<Item = &Self::Item> + '_> {
+        Box::new(self.0.iter().chain(self.1.iter()))
+    }
+    fn as_dyn_iter(&self) -> &dyn DynIter<Item = Self::Item> {
+        self
+    }
+}
+
+impl<'a> DynIterMut for StructureEntryIterator<'a> {
+    fn dyn_iter_mut(&mut self) -> Box<dyn Iterator<Item = &mut Self::Item> + '_> {
+        Box::new(self.0.iter_mut().chain(self.1.iter_mut()))
+    }
+}
+
+/// A structure that allow random access to structure array excluding single element.
+/// It is convenient when you want to have mutable reference to two elements in the array at the same time.
+pub(crate) struct StructureDynIter<'a> {
+    left_start: usize,
+    left: &'a mut [StructureEntry],
+    right_start: usize,
+    right: &'a mut [StructureEntry],
+}
+
+impl<'a> StructureDynIter<'a> {
+    pub(crate) fn new(
+        source: &'a mut [StructureEntry],
+        split_idx: usize,
+    ) -> Result<(&'a mut StructureEntry, Self), JsValue> {
+        let (left, right) = source.split_at_mut(split_idx);
+        let (center, right) = right
+            .split_first_mut()
+            .ok_or_else(|| JsValue::from_str("Structures split fail"))?;
+        Ok((
+            center,
+            Self {
+                left_start: 0,
+                left,
+                right_start: split_idx + 1,
+                right,
+            },
+        ))
+    }
+
+    /// Accessor without generation checking.
+    pub(crate) fn get_at(&self, idx: usize) -> Option<&StructureEntry> {
+        if self.left_start <= idx && idx < self.left_start + self.left.len() {
+            self.left.get(idx - self.left_start)
+        } else if self.right_start <= idx && idx < self.right_start + self.right.len() {
+            self.right.get(idx - self.right_start)
+        } else {
+            None
+        }
+    }
+
+    /// Mutable accessor without generation checking.
+    pub(crate) fn get_at_mut(&mut self, idx: usize) -> Option<&mut StructureEntry> {
+        if self.left_start <= idx && idx < self.left_start + self.left.len() {
+            self.left.get_mut(idx - self.left_start)
+        } else if self.right_start <= idx && idx < self.right_start + self.right.len() {
+            self.right.get_mut(idx - self.right_start)
+        } else {
+            None
+        }
+    }
+
+    /// Accessor with generation checking.
+    pub(crate) fn get(&self, id: StructureId) -> Option<&dyn Structure> {
+        let idx = id.id as usize;
+        if self.left_start <= idx && idx < self.left_start + self.left.len() {
+            self.left
+                .get(idx - self.left_start)
+                .filter(|s| s.gen == id.gen)
+                .map(|s| s.dynamic.as_deref())
+                .flatten()
+        } else if self.right_start <= idx && idx < self.right_start + self.right.len() {
+            self.right
+                .get(idx - self.right_start)
+                .filter(|s| s.gen == id.gen)
+                .map(|s| s.dynamic.as_deref())
+                .flatten()
+        } else {
+            None
+        }
+    }
+
+    /// Mutable accessor with generation checking.
+    pub(crate) fn get_mut(&mut self, id: StructureId) -> Option<&mut (dyn Structure + '_)> {
+        let idx = id.id as usize;
+        if self.left_start <= idx && idx < self.left_start + self.left.len() {
+            self.left
+                .get_mut(idx - self.left_start)
+                .filter(|s| s.gen == id.gen)
+                .map(|s| s.dynamic.as_deref_mut().map(|s| s as &mut dyn Structure))
+                // Interestingly, we need .map(|s| s as &mut dyn Structure) to compile.
+                // .map(|s| s.dynamic.as_deref_mut())
+                .flatten()
+        } else if self.right_start <= idx && idx < self.right_start + self.right.len() {
+            self.right
+                .get_mut(idx - self.right_start)
+                .filter(|s| s.gen == id.gen)
+                .map(|s| s.dynamic.as_deref_mut().map(|s| s as &mut dyn Structure))
+                // .map(|s| s.dynamic.as_deref_mut())
+                .flatten()
+        } else {
+            None
+        }
+    }
+}
+
+impl<'a> DynIter for StructureDynIter<'a> {
+    type Item = dyn Structure;
+    fn dyn_iter(&self) -> Box<dyn Iterator<Item = &Self::Item> + '_> {
+        Box::new(
+            self.left
+                .iter()
+                .chain(self.right.iter())
+                .filter_map(|s| s.dynamic.as_deref()),
+        )
+    }
+    fn as_dyn_iter(&self) -> &dyn DynIter<Item = Self::Item> {
+        self
+    }
+}
+
+impl<'a> DynIterMut for StructureDynIter<'a> {
+    fn dyn_iter_mut(&mut self) -> Box<dyn Iterator<Item = &mut Self::Item> + '_> {
+        Box::new(
+            self.left
+                .iter_mut()
+                .chain(self.right.iter_mut())
+                .filter_map(|s| s.dynamic.as_deref_mut()),
+        )
+    }
+}
+
 #[derive(Eq, PartialEq, Hash, Copy, Clone, Debug, Serialize, Deserialize)]
 pub(crate) struct Position {
     pub x: i32,
@@ -64,6 +209,19 @@ impl Position {
             };
             *self == pos
         })
+    }
+
+    pub(crate) fn neighbor_index(&self, pos2: &Position) -> Option<u32> {
+        for (i, rel_pos) in [[-1, 0], [0, -1], [1, 0], [0, 1]].iter().enumerate() {
+            let pos = Position {
+                x: pos2.x + rel_pos[0],
+                y: pos2.y + rel_pos[1],
+            };
+            if *self == pos {
+                return Some(i as u32);
+            }
+        }
+        None
     }
 }
 
@@ -183,7 +341,7 @@ pub(crate) trait Structure {
     fn frame_proc(
         &mut self,
         _state: &mut FactorishState,
-        _structures: &mut dyn DynIterMut<Item = Box<dyn Structure>>,
+        _structures: &mut StructureDynIter,
     ) -> Result<FrameProcResult, ()> {
         Ok(FrameProcResult::None)
     }
@@ -194,7 +352,7 @@ pub(crate) trait Structure {
     /// event handler for costruction events for this structure itself.
     fn on_construction_self(
         &mut self,
-        _others: &dyn DynIter<Item = Box<dyn Structure>>,
+        _others: &dyn DynIter<Item = StructureEntry>,
         _construct: bool,
     ) -> Result<(), JsValue> {
         Ok(())
@@ -280,7 +438,7 @@ pub(crate) trait Structure {
     fn connection(
         &self,
         state: &FactorishState,
-        structures: &dyn DynIter<Item = Box<dyn Structure>>,
+        structures: &dyn DynIter<Item = StructureEntry>,
     ) -> [bool; 4] {
         // let mut structures_copy = structures.clone();
         let has_fluid_box = |x, y| {
@@ -289,6 +447,7 @@ pub(crate) trait Structure {
             }
             if let Some(structure) = structures
                 .dyn_iter()
+                .filter_map(|s| s.dynamic.as_deref())
                 .find(|s| *s.position() == Position { x, y })
             {
                 return structure.fluid_box().is_some();
@@ -325,3 +484,8 @@ pub(crate) trait Structure {
 }
 
 pub(crate) type StructureBoxed = Box<dyn Structure>;
+
+pub(crate) struct StructureEntry {
+    pub gen: u32,
+    pub dynamic: Option<StructureBoxed>,
+}

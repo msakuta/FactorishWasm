@@ -2,7 +2,7 @@ use super::{
     dyn_iter::DynIterMut,
     pipe::Pipe,
     serialize_impl,
-    structure::Structure,
+    structure::{Structure, StructureDynIter},
     water_well::{FluidBox, FluidType},
     FactorishState, FrameProcResult, Position, Recipe,
 };
@@ -37,7 +37,7 @@ impl SteamEngine {
                 power_cost: -100.,
                 recipe_time: 100.,
             }),
-            input_fluid_box: FluidBox::new(true, false, [false; 4]),
+            input_fluid_box: FluidBox::new(true, false, [None; 4]),
         }
     }
 
@@ -130,7 +130,7 @@ impl Structure for SteamEngine {
     fn frame_proc(
         &mut self,
         state: &mut FactorishState,
-        structures: &mut dyn DynIterMut<Item = Box<dyn Structure>>,
+        structures: &mut StructureDynIter,
     ) -> Result<FrameProcResult, ()> {
         self.input_fluid_box
             .simulate(&self.position, state, structures);

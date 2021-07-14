@@ -1,5 +1,7 @@
 use super::{
-    dyn_iter::DynIterMut, structure::Structure, FactorishState, FrameProcResult, Position,
+    dyn_iter::DynIterMut,
+    structure::{Structure, StructureDynIter},
+    FactorishState, FrameProcResult, Position,
 };
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
@@ -62,7 +64,7 @@ impl Structure for ElectPole {
     fn frame_proc(
         &mut self,
         _state: &mut FactorishState,
-        structures: &mut dyn DynIterMut<Item = Box<dyn Structure>>,
+        structures: &mut StructureDynIter,
     ) -> Result<FrameProcResult, ()> {
         for structure in structures.dyn_iter_mut() {
             let target_position = structure.position();

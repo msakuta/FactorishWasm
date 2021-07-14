@@ -1,5 +1,8 @@
 use super::{
-    dyn_iter::DynIterMut, items::get_item_image_url, serialize_impl, structure::Structure,
+    dyn_iter::DynIterMut,
+    items::get_item_image_url,
+    serialize_impl,
+    structure::{Structure, StructureDynIter},
     DropItem, FactorishState, FrameProcResult, Inventory, InventoryTrait, ItemType, Position,
     PowerWire, Recipe, TILE_SIZE,
 };
@@ -204,30 +207,30 @@ impl Structure for Assembler {
     fn frame_proc(
         &mut self,
         _state: &mut FactorishState,
-        structures: &mut dyn DynIterMut<Item = Box<dyn Structure>>,
+        _structures: &mut StructureDynIter,
     ) -> Result<FrameProcResult, ()> {
         if let Some(recipe) = &self.recipe {
             let mut ret = FrameProcResult::None;
             // First, check if we need to refill the energy buffer in order to continue the current work.
             // Refill the energy from the fuel
-            if self.power < recipe.power_cost {
-                let mut accumulated = 0.;
-                for position in self.find_power_sources(_state, structures) {
-                    if let Some(structure) = structures
-                        .dyn_iter_mut()
-                        .find(|structure| *structure.position() == position)
-                    {
-                        let demand = self.max_power - self.power - accumulated;
-                        if let Some(energy) = structure.power_outlet(demand) {
-                            accumulated += energy;
-                            // console_log!("draining {:?}kJ of energy with {:?} demand, from {:?}, accumulated {:?}", energy, demand, structure.name(), accumulated);
-                        }
-                    }
-                }
-                self.power += accumulated;
-                self.input_inventory.remove_item(&ItemType::CoalOre);
-                ret = FrameProcResult::InventoryChanged(self.position);
-            }
+            // if self.power < recipe.power_cost {
+            //     let mut accumulated = 0.;
+            //     for position in self.find_power_sources(_state, structures) {
+            //         if let Some(structure) = structures
+            //             .dyn_iter_mut()
+            //             .find(|structure| *structure.position() == position)
+            //         {
+            //             let demand = self.max_power - self.power - accumulated;
+            //             if let Some(energy) = structure.power_outlet(demand) {
+            //                 accumulated += energy;
+            //                 // console_log!("draining {:?}kJ of energy with {:?} demand, from {:?}, accumulated {:?}", energy, demand, structure.name(), accumulated);
+            //             }
+            //         }
+            //     }
+            //     self.power += accumulated;
+            //     self.input_inventory.remove_item(&ItemType::CoalOre);
+            //     ret = FrameProcResult::InventoryChanged(self.position);
+            // }
 
             if self.progress.is_none() {
                 // First, check if we have enough ingredients to finish this recipe.
@@ -387,10 +390,10 @@ impl Structure for Assembler {
                 20.,
             ),
             Recipe::new(
-                hash_map!(ItemType::IronPlate => 2, ItemType::CopperPlate => 3),
-                hash_map!(ItemType::WaterWell => 1),
-                100.,
-                100.,
+                hash_map!(ItemType::IronPlate => 5, ItemType::Gear => 5),
+                hash_map!(ItemType::OffshorePump => 1),
+                150.,
+                150.,
             ),
             Recipe::new(
                 hash_map!(ItemType::IronPlate => 5, ItemType::CopperPlate => 5),
