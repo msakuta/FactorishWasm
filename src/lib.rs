@@ -75,7 +75,8 @@ use pipe::Pipe;
 use splitter::Splitter;
 use steam_engine::SteamEngine;
 use structure::{
-    FrameProcResult, ItemResponse, Position, Rotation, Structure, StructureBoxed, StructureEntry,
+    FrameProcResult, ItemResponse, Position, Rotation, Structure, StructureBoxed, StructureDynIter,
+    StructureEntry, StructureId,
 };
 use transport_belt::TransportBelt;
 use water_well::{FluidType, WaterWell};
@@ -238,52 +239,6 @@ impl InventoryTrait for Inventory {
         self.iter()
             .map(|item| format!("{:?}: {}<br>", item.0, item.1))
             .fold(String::from(""), |accum, item| accum + &item)
-    }
-}
-
-struct StructureEntryIterator<'a>(&'a mut [StructureEntry], &'a mut [StructureEntry]);
-
-impl<'a> DynIter for StructureEntryIterator<'a> {
-    type Item = StructureEntry;
-    fn dyn_iter(&self) -> Box<dyn Iterator<Item = &Self::Item> + '_> {
-        Box::new(self.0.iter().chain(self.1.iter()))
-    }
-    fn as_dyn_iter(&self) -> &dyn DynIter<Item = Self::Item> {
-        self
-    }
-}
-
-impl<'a> DynIterMut for StructureEntryIterator<'a> {
-    fn dyn_iter_mut(&mut self) -> Box<dyn Iterator<Item = &mut Self::Item> + '_> {
-        Box::new(self.0.iter_mut().chain(self.1.iter_mut()))
-    }
-}
-
-struct StructureDynIter<'a>(&'a mut [StructureEntry], &'a mut [StructureEntry]);
-
-impl<'a> DynIter for StructureDynIter<'a> {
-    type Item = dyn Structure;
-    fn dyn_iter(&self) -> Box<dyn Iterator<Item = &Self::Item> + '_> {
-        Box::new(
-            self.0
-                .iter()
-                .chain(self.1.iter())
-                .filter_map(|s| s.dynamic.as_deref()),
-        )
-    }
-    fn as_dyn_iter(&self) -> &dyn DynIter<Item = Self::Item> {
-        self
-    }
-}
-
-impl<'a> DynIterMut for StructureDynIter<'a> {
-    fn dyn_iter_mut(&mut self) -> Box<dyn Iterator<Item = &mut Self::Item> + '_> {
-        Box::new(
-            self.0
-                .iter_mut()
-                .chain(self.1.iter_mut())
-                .filter_map(|s| s.dynamic.as_deref_mut()),
-        )
     }
 }
 
@@ -1068,24 +1023,94 @@ impl FactorishState {
         res
     }
 
+    fn get_pair_mut(
+        &mut self,
+        a: usize,
+        b: usize,
+    ) -> (
+        Option<(StructureId, &mut StructureBoxed)>,
+        Option<(StructureId, &mut StructureBoxed)>,
+    ) {
+        if a < b {
+            let (left, right) = self.structures.split_at_mut(b);
+            let a_gen = left[a].gen;
+            (
+                left[a].dynamic.as_mut().map(|s| {
+                    (
+                        StructureId {
+                            id: a as u32,
+                            gen: a_gen,
+                        },
+                        s,
+                    )
+                }),
+                right
+                    .first_mut()
+                    .map(|s| {
+                        Some((
+                            StructureId {
+                                id: b as u32,
+                                gen: s.gen,
+                            },
+                            s.dynamic.as_mut()?,
+                        ))
+                    })
+                    .flatten(),
+            )
+        } else if b < a {
+            let (left, right) = self.structures.split_at_mut(a);
+            let b_gen = left[b].gen;
+            (
+                right
+                    .first_mut()
+                    .map(|s| {
+                        Some((
+                            StructureId {
+                                id: a as u32,
+                                gen: s.gen,
+                            },
+                            s.dynamic.as_mut()?,
+                        ))
+                    })
+                    .flatten(),
+                left[b].dynamic.as_mut().map(|s| {
+                    (
+                        StructureId {
+                            id: b as u32,
+                            gen: b_gen,
+                        },
+                        s,
+                    )
+                }),
+            )
+        } else {
+            (None, None)
+        }
+    }
+
     fn update_fluid_connections(&mut self, position: &Position) -> Result<(), JsValue> {
-        self.proc_structures_mutual(|state, neighbor, others| {
-            if !neighbor.position().is_neighbor(&position) {
-                return Ok(());
-            }
-            let connections = neighbor.connection(state, others.as_dyn_iter());
-            console_log!(
-                "Connection recalculated for {:?}: {:?}",
-                neighbor.position(),
-                connections
-            );
-            if let Some(fluid_boxes) = neighbor.fluid_box_mut() {
-                for fbox in fluid_boxes {
-                    fbox.connect_to = connections;
+        for i in 0..self.structures.len() {
+            for j in 0..self.structures.len() {
+                if i != j {
+                    if let (Some(a), Some(b)) = self.get_pair_mut(i, j) {
+                        let (aid, bid) = (a.0, b.0);
+                        if let Some(((idx, mut av), mut bv)) =
+                            a.1.position()
+                                .neighbor_index(b.1.position())
+                                .zip(a.1.fluid_box_mut())
+                                .zip(b.1.fluid_box_mut())
+                        {
+                            av.iter_mut()
+                                .for_each(|fb| fb.connect_to[(idx as usize + 2) % 4] = Some(aid));
+                            bv.iter_mut()
+                                .for_each(|fb| fb.connect_to[idx as usize] = Some(bid));
+                        }
+                    }
                 }
             }
-            Ok(())
-        })
+        }
+
+        Ok(())
     }
 
     pub fn simulate(&mut self, delta_time: f64) -> Result<js_sys::Array, JsValue> {
@@ -1943,17 +1968,17 @@ impl FactorishState {
                         self.structures = structures;
                         new_s.on_construction_self(&Ref(&self.structures), true)?;
 
-                        let connections = new_s.connection(self, &Ref(&self.structures));
-                        console_log!(
-                            "Connection recalculated for self {:?}: {:?}",
-                            new_s.position(),
-                            connections
-                        );
-                        if let Some(fluid_boxes) = new_s.fluid_box_mut() {
-                            for fbox in fluid_boxes {
-                                fbox.connect_to = connections;
-                            }
-                        }
+                        // let connections = new_s.connection(self, &Ref(&self.structures));
+                        // console_log!(
+                        //     "Connection recalculated for self {:?}: {:?}",
+                        //     new_s.position(),
+                        //     connections
+                        // );
+                        // if let Some(fluid_boxes) = new_s.fluid_box_mut() {
+                        //     for fbox in fluid_boxes {
+                        //         fbox.connect_to = connections;
+                        //     }
+                        // }
 
                         if let Some((i, slot)) = self
                             .structures

@@ -16,7 +16,7 @@ impl Pipe {
     pub(crate) fn new(position: &Position) -> Self {
         Pipe {
             position: *position,
-            fluid_box: FluidBox::new(true, true, [false; 4]),
+            fluid_box: FluidBox::new(true, true, [None; 4]),
         }
     }
 
@@ -43,7 +43,8 @@ impl Pipe {
                                 .connect_to
                                 .iter()
                                 .enumerate()
-                                .fold(0, |acc, (i, b)| acc | ((*b as u32) << i)),
+                                .filter(|(_, b)| b.is_some())
+                                .fold(0, |acc, (i, b)| acc | (1 << i)),
                         )
                     })
                     .flatten()

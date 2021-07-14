@@ -37,7 +37,7 @@ impl SteamEngine {
                 power_cost: -100.,
                 recipe_time: 100.,
             }),
-            input_fluid_box: FluidBox::new(true, false, [false; 4]),
+            input_fluid_box: FluidBox::new(true, false, [None; 4]),
         }
     }
 

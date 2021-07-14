@@ -1,5 +1,5 @@
 use super::{
-    dyn_iter::{DynIter, DynIterMut},
+    dyn_iter::{DynIter, DynIterDeref, DynIterMut},
     items::ItemType,
     water_well::FluidBox,
     DropItem, FactorishState, Inventory, InventoryTrait, Recipe,
@@ -35,9 +35,56 @@ macro_rules! draw_fuel_alarm {
     };
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone, Copy)]
 pub(crate) struct StructureId {
     pub id: u32,
     pub gen: u32,
+}
+
+pub(crate) struct StructureEntryIterator<'a>(&'a mut [StructureEntry], &'a mut [StructureEntry]);
+
+impl<'a> DynIter for StructureEntryIterator<'a> {
+    type Item = StructureEntry;
+    fn dyn_iter(&self) -> Box<dyn Iterator<Item = &Self::Item> + '_> {
+        Box::new(self.0.iter().chain(self.1.iter()))
+    }
+    fn as_dyn_iter(&self) -> &dyn DynIter<Item = Self::Item> {
+        self
+    }
+}
+
+impl<'a> DynIterMut for StructureEntryIterator<'a> {
+    fn dyn_iter_mut(&mut self) -> Box<dyn Iterator<Item = &mut Self::Item> + '_> {
+        Box::new(self.0.iter_mut().chain(self.1.iter_mut()))
+    }
+}
+
+pub(crate) struct StructureDynIter<'a>(pub &'a mut [StructureEntry], pub &'a mut [StructureEntry]);
+
+impl<'a> DynIter for StructureDynIter<'a> {
+    type Item = dyn Structure;
+    fn dyn_iter(&self) -> Box<dyn Iterator<Item = &Self::Item> + '_> {
+        Box::new(
+            self.0
+                .iter()
+                .chain(self.1.iter())
+                .filter_map(|s| s.dynamic.as_deref()),
+        )
+    }
+    fn as_dyn_iter(&self) -> &dyn DynIter<Item = Self::Item> {
+        self
+    }
+}
+
+impl<'a> DynIterMut for StructureDynIter<'a> {
+    fn dyn_iter_mut(&mut self) -> Box<dyn Iterator<Item = &mut Self::Item> + '_> {
+        Box::new(
+            self.0
+                .iter_mut()
+                .chain(self.1.iter_mut())
+                .filter_map(|s| s.dynamic.as_deref_mut()),
+        )
+    }
 }
 
 #[derive(Eq, PartialEq, Hash, Copy, Clone, Debug, Serialize, Deserialize)]
@@ -69,6 +116,19 @@ impl Position {
             };
             *self == pos
         })
+    }
+
+    pub(crate) fn neighbor_index(&self, pos2: &Position) -> Option<u32> {
+        for (i, rel_pos) in [[-1, 0], [0, -1], [1, 0], [0, 1]].iter().enumerate() {
+            let pos = Position {
+                x: pos2.x + rel_pos[0],
+                y: pos2.y + rel_pos[1],
+            };
+            if *self == pos {
+                return Some(i as u32);
+            }
+        }
+        None
     }
 }
 

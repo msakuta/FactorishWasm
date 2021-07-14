@@ -1,6 +1,8 @@
 use super::{
-    dyn_iter::DynIterMut, pipe::Pipe, structure::Structure, FactorishState, FrameProcResult,
-    Position,
+    dyn_iter::DynIterMut,
+    pipe::Pipe,
+    structure::{Structure, StructureId},
+    FactorishState, FrameProcResult, Position,
 };
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
@@ -21,12 +23,16 @@ pub(crate) struct FluidBox {
     pub max_amount: f64,
     pub input_enable: bool,
     pub output_enable: bool,
-    pub connect_to: [bool; 4],
+    pub connect_to: [Option<StructureId>; 4],
     pub filter: Option<FluidType>, // permits undefined
 }
 
 impl FluidBox {
-    pub(crate) fn new(input_enable: bool, output_enable: bool, connect_to: [bool; 4]) -> Self {
+    pub(crate) fn new(
+        input_enable: bool,
+        output_enable: bool,
+        connect_to: [Option<StructureId>; 4],
+    ) -> Self {
         Self {
             type_: None,
             amount: 0.,
@@ -71,7 +77,7 @@ impl FluidBox {
             .connect_to
             .iter()
             .enumerate()
-            .filter(|(_, c)| **c)
+            .filter(|(_, c)| c.is_some())
             .map(|(i, _)| i)
             .collect::<Vec<_>>();
         for i in connect_list {
@@ -143,7 +149,7 @@ impl WaterWell {
     pub(crate) fn new(position: &Position) -> Self {
         WaterWell {
             position: *position,
-            output_fluid_box: FluidBox::new(false, true, [false; 4]).set_type(&FluidType::Water),
+            output_fluid_box: FluidBox::new(false, true, [None; 4]).set_type(&FluidType::Water),
         }
     }
 }

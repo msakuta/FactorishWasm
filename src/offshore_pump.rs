@@ -19,7 +19,7 @@ impl OffshorePump {
     pub(crate) fn new(position: &Position) -> Self {
         OffshorePump {
             position: *position,
-            output_fluid_box: FluidBox::new(false, true, [false; 4]).set_type(&FluidType::Water),
+            output_fluid_box: FluidBox::new(false, true, [None; 4]).set_type(&FluidType::Water),
         }
     }
 }
