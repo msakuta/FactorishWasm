@@ -1089,7 +1089,18 @@ impl FactorishState {
     }
 
     fn update_fluid_connections(&mut self, position: &Position) -> Result<(), JsValue> {
-        for i in 0..self.structures.len() {
+        if let Some(i) = self
+            .structures
+            .iter()
+            .enumerate()
+            .find(|s| {
+                s.1.dynamic
+                    .as_deref()
+                    .map(|a| *a.position() == *position && a.fluid_box().is_some())
+                    .unwrap_or(false)
+            })
+            .map(|v| v.0)
+        {
             for j in 0..self.structures.len() {
                 if i != j {
                     if let (Some(a), Some(b)) = self.get_pair_mut(i, j) {
@@ -1105,6 +1116,22 @@ impl FactorishState {
                             bv.iter_mut()
                                 .for_each(|fb| fb.connect_to[idx as usize] = Some(bid));
                         }
+                    }
+                }
+            }
+        } else {
+            for j in 0..self.structures.len() {
+                if let Some((idx, b)) = self
+                    .structures
+                    .get_mut(j)
+                    .map(|s| s.dynamic.as_deref_mut())
+                    .flatten()
+                    .map(|s| Some((position.neighbor_index(s.position())?, s)))
+                    .flatten()
+                {
+                    if let Some(mut bv) = b.fluid_box_mut() {
+                        bv.iter_mut()
+                            .for_each(|fb| fb.connect_to[idx as usize] = None);
                     }
                 }
             }
