@@ -1,3 +1,5 @@
+use crate::dyn_iter::DynIter;
+
 use super::{
     dyn_iter::DynIterMut,
     items::get_item_image_url,
@@ -69,13 +71,14 @@ impl Assembler {
     fn find_power_sources(
         &self,
         state: &mut FactorishState,
-        structures: &mut dyn DynIterMut<Item = Box<dyn Structure>>,
+        structures: &mut StructureDynIter,
     ) -> Vec<Position> {
         let mut checked = HashMap::<PowerWire, ()>::new();
         let mut expand_list = HashMap::<Position, Vec<PowerWire>>::new();
         let mut ret = vec![];
         let mut check_struct = |position: &Position| {
             if structures
+                .as_dyn_iter()
                 .dyn_iter()
                 .any(|structure| structure.power_source() && *structure.position() == *position)
             {
@@ -207,30 +210,30 @@ impl Structure for Assembler {
     fn frame_proc(
         &mut self,
         _state: &mut FactorishState,
-        _structures: &mut StructureDynIter,
+        structures: &mut StructureDynIter,
     ) -> Result<FrameProcResult, ()> {
         if let Some(recipe) = &self.recipe {
             let mut ret = FrameProcResult::None;
             // First, check if we need to refill the energy buffer in order to continue the current work.
             // Refill the energy from the fuel
-            // if self.power < recipe.power_cost {
-            //     let mut accumulated = 0.;
-            //     for position in self.find_power_sources(_state, structures) {
-            //         if let Some(structure) = structures
-            //             .dyn_iter_mut()
-            //             .find(|structure| *structure.position() == position)
-            //         {
-            //             let demand = self.max_power - self.power - accumulated;
-            //             if let Some(energy) = structure.power_outlet(demand) {
-            //                 accumulated += energy;
-            //                 // console_log!("draining {:?}kJ of energy with {:?} demand, from {:?}, accumulated {:?}", energy, demand, structure.name(), accumulated);
-            //             }
-            //         }
-            //     }
-            //     self.power += accumulated;
-            //     self.input_inventory.remove_item(&ItemType::CoalOre);
-            //     ret = FrameProcResult::InventoryChanged(self.position);
-            // }
+            if self.power < recipe.power_cost {
+                let mut accumulated = 0.;
+                for position in self.find_power_sources(_state, structures) {
+                    if let Some(structure) = structures
+                        .dyn_iter_mut()
+                        .find(|structure| *structure.position() == position)
+                    {
+                        let demand = self.max_power - self.power - accumulated;
+                        if let Some(energy) = structure.power_outlet(demand) {
+                            accumulated += energy;
+                            // console_log!("draining {:?}kJ of energy with {:?} demand, from {:?}, accumulated {:?}", energy, demand, structure.name(), accumulated);
+                        }
+                    }
+                }
+                self.power += accumulated;
+                self.input_inventory.remove_item(&ItemType::CoalOre);
+                ret = FrameProcResult::InventoryChanged(self.position);
+            }
 
             if self.progress.is_none() {
                 // First, check if we have enough ingredients to finish this recipe.
