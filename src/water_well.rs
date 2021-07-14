@@ -23,6 +23,7 @@ pub(crate) struct FluidBox {
     pub max_amount: f64,
     pub input_enable: bool,
     pub output_enable: bool,
+    #[serde(skip)]
     pub connect_to: [Option<StructureId>; 4],
     pub filter: Option<FluidType>, // permits undefined
 }
@@ -79,13 +80,6 @@ impl FluidBox {
             .enumerate()
             .filter_map(|(i, c)| Some((i, (*c)?)));
         for (i, id) in connect_list {
-            console_log!(
-                "water({:?}) fbox[{}]: {:?} real: {:?}",
-                position,
-                i,
-                id,
-                structures.get_at(id.id as usize).map(|i| i.gen)
-            );
             if let Some(fluid_boxes) = structures.get_mut(id).map(|s| s.fluid_box_mut()).flatten() {
                 for fluid_box in fluid_boxes {
                     // Different types of fluids won't mix

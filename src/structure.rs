@@ -1,5 +1,5 @@
 use super::{
-    dyn_iter::{DynIter, DynIterDeref, DynIterMut},
+    dyn_iter::{DynIter, DynIterMut},
     items::ItemType,
     water_well::FluidBox,
     DropItem, FactorishState, Inventory, InventoryTrait, Recipe,

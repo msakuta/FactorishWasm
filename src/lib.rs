@@ -966,6 +966,16 @@ impl FactorishState {
 
         self.structures = structures;
 
+        // We need to collect the positions into a temporary Vec to allow passing &mut self to update_fluid_connections
+        for pos in self
+            .structures
+            .iter()
+            .filter_map(|s| Some(*s.dynamic.as_deref()?.position()))
+            .collect::<Vec<_>>()
+        {
+            self.update_fluid_connections(&pos)?;
+        }
+
         self.drop_items = serde_json::from_value(
             json.get_mut("items")
                 .ok_or_else(|| js_str!("\"items\" not found"))?
