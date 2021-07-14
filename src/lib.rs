@@ -632,29 +632,29 @@ impl FactorishState {
         tool_belt[2] = Some(ItemType::TransportBelt);
         tool_belt[3] = Some(ItemType::Furnace);
 
-        let mut structures: Vec<Box<dyn Structure>> = vec![
-            Box::new(TransportBelt::new(10, 3, Rotation::Left)),
-            Box::new(TransportBelt::new(11, 3, Rotation::Left)),
-            Box::new(TransportBelt::new(12, 3, Rotation::Left)),
-            Box::new(OreMine::new(12, 2, Rotation::Bottom)),
-            Box::new(Furnace::new(&Position::new(8, 3))),
-            Box::new(Assembler::new(&Position::new(6, 3))),
-            Box::new(WaterWell::new(&Position::new(14, 5))),
-            Box::new(Boiler::new(&Position::new(13, 5))),
-            Box::new(SteamEngine::new(&Position::new(12, 5))),
+        let mut structures: Vec<StructureEntry> = vec![
+            wrap_structure(Box::new(TransportBelt::new(10, 3, Rotation::Left))),
+            wrap_structure(Box::new(TransportBelt::new(11, 3, Rotation::Left))),
+            wrap_structure(Box::new(TransportBelt::new(12, 3, Rotation::Left))),
+            wrap_structure(Box::new(OreMine::new(12, 2, Rotation::Bottom))),
+            wrap_structure(Box::new(Furnace::new(&Position::new(8, 3)))),
+            wrap_structure(Box::new(Assembler::new(&Position::new(6, 3)))),
+            wrap_structure(Box::new(WaterWell::new(&Position::new(14, 5)))),
+            wrap_structure(Box::new(Boiler::new(&Position::new(13, 5)))),
+            wrap_structure(Box::new(SteamEngine::new(&Position::new(12, 5)))),
         ];
         structures.extend((10..=100).map(|x| {
             let p = Box::new(Pipe::new(&Position::new(x, 10)));
-            p as Box<dyn Structure>
+            wrap_structure(p as Box<dyn Structure>)
         }));
         structures.extend((11..=99).map(|x| {
-            Box::new(Pipe::new(&Position::new(10, x))) as Box<dyn Structure>
+            wrap_structure(Box::new(Pipe::new(&Position::new(10, x))) as Box<dyn Structure>)
         }));
         structures.extend((10..=100).map(|x| {
-            Box::new(Pipe::new(&Position::new(x, 100))) as Box<dyn Structure>
+            wrap_structure(Box::new(Pipe::new(&Position::new(x, 100))) as Box<dyn Structure>)
         }));
         structures.extend((11..=99).map(|x| {
-            Box::new(Pipe::new(&Position::new(100, x))) as Box<dyn Structure>
+            wrap_structure(Box::new(Pipe::new(&Position::new(100, x))) as Box<dyn Structure>)
         }));
 
         let mut ret = FactorishState {
@@ -772,16 +772,7 @@ impl FactorishState {
                 calculate_back_image(&mut ret, width, height);
                 ret
             },
-            structures: vec![
-                wrap_structure(Box::new(TransportBelt::new(10, 3, Rotation::Left))),
-                wrap_structure(Box::new(TransportBelt::new(11, 3, Rotation::Left))),
-                wrap_structure(Box::new(TransportBelt::new(12, 3, Rotation::Left))),
-                wrap_structure(Box::new(OreMine::new(12, 2, Rotation::Bottom))),
-                wrap_structure(Box::new(Furnace::new(&Position::new(8, 3)))),
-                wrap_structure(Box::new(Assembler::new(&Position::new(6, 3)))),
-                wrap_structure(Box::new(Boiler::new(&Position::new(13, 5)))),
-                wrap_structure(Box::new(SteamEngine::new(&Position::new(12, 5)))),
-            ],
+            structures,
             selected_structure_inventory: None,
             ore_harvesting: None,
             drop_items: vec![],
@@ -792,7 +783,12 @@ impl FactorishState {
             // on_show_inventory,
         };
 
-        let positions = ret.structures.iter().map(|s| *s.position()).collect::<Vec<_>>();
+        let positions = ret
+            .structures
+            .iter()
+            .map(|s| s.dynamic.as_deref().map(|d| *d.position()))
+            .flatten()
+            .collect::<Vec<_>>();
         for position in positions {
             ret.update_fluid_connections(&position).unwrap();
         }
