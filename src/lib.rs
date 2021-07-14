@@ -63,7 +63,7 @@ mod water_well;
 use assembler::Assembler;
 use boiler::Boiler;
 use chest::Chest;
-use dyn_iter::{Chained, DynIter, DynIterMut, MutRef, Ref};
+use dyn_iter::{Chained, DynIterMut, MutRef, Ref};
 use elect_pole::ElectPole;
 use furnace::Furnace;
 use inserter::Inserter;
@@ -1002,6 +1002,7 @@ impl FactorishState {
         }
     }
 
+    #[allow(dead_code)]
     fn proc_structures_mutual(
         &mut self,
         mut f: impl FnMut(

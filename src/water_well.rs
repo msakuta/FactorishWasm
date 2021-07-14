@@ -1,5 +1,4 @@
 use super::{
-    dyn_iter::DynIterMut,
     pipe::Pipe,
     structure::{Structure, StructureDynIter, StructureId},
     FactorishState, FrameProcResult, Position,
@@ -62,12 +61,7 @@ impl FluidBox {
             )
     }
 
-    pub(crate) fn simulate(
-        &mut self,
-        position: &Position,
-        state: &mut FactorishState,
-        structures: &mut StructureDynIter,
-    ) {
+    pub(crate) fn simulate(&mut self, structures: &mut StructureDynIter) {
         let mut _biggest_flow_idx = -1;
         let mut biggest_flow_amount = 1e-3; // At least this amount of flow is required for displaying flow direction
                                             // In an unlikely event, a fluid box without either input or output ports has nothing to do
@@ -180,14 +174,13 @@ impl Structure for WaterWell {
 
     fn frame_proc(
         &mut self,
-        state: &mut FactorishState,
+        _state: &mut FactorishState,
         structures: &mut StructureDynIter,
     ) -> Result<FrameProcResult, ()> {
         structures.get_mut(StructureId { id: 0, gen: 0 });
         self.output_fluid_box.amount =
             (self.output_fluid_box.amount + 1.).min(self.output_fluid_box.max_amount);
-        self.output_fluid_box
-            .simulate(&self.position, state, structures);
+        self.output_fluid_box.simulate(structures);
         Ok(FrameProcResult::None)
     }
 

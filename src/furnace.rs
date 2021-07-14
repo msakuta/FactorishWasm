@@ -1,5 +1,4 @@
 use super::{
-    dyn_iter::DynIterMut,
     items::item_to_str,
     structure::{Structure, StructureDynIter},
     DropItem, FactorishState, FrameProcResult, Inventory, InventoryTrait, ItemType, Position,

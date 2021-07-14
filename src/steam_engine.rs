@@ -1,5 +1,4 @@
 use super::{
-    dyn_iter::DynIterMut,
     pipe::Pipe,
     serialize_impl,
     structure::{Structure, StructureDynIter},
@@ -129,11 +128,10 @@ impl Structure for SteamEngine {
 
     fn frame_proc(
         &mut self,
-        state: &mut FactorishState,
+        _state: &mut FactorishState,
         structures: &mut StructureDynIter,
     ) -> Result<FrameProcResult, ()> {
-        self.input_fluid_box
-            .simulate(&self.position, state, structures);
+        self.input_fluid_box.simulate(structures);
         if let Some(recipe) = &self.recipe {
             if self.input_fluid_box.type_ == recipe.input_fluid {
                 self.progress = Some(0.);

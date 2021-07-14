@@ -89,6 +89,7 @@ impl<'a> StructureDynIter<'a> {
     }
 
     /// Accessor without generation checking.
+    #[allow(dead_code)]
     pub(crate) fn get_at(&self, idx: usize) -> Option<&StructureEntry> {
         if self.left_start <= idx && idx < self.left_start + self.left.len() {
             self.left.get(idx - self.left_start)
@@ -100,6 +101,7 @@ impl<'a> StructureDynIter<'a> {
     }
 
     /// Mutable accessor without generation checking.
+    #[allow(dead_code)]
     pub(crate) fn get_at_mut(&mut self, idx: usize) -> Option<&mut StructureEntry> {
         if self.left_start <= idx && idx < self.left_start + self.left.len() {
             self.left.get_mut(idx - self.left_start)
@@ -111,6 +113,7 @@ impl<'a> StructureDynIter<'a> {
     }
 
     /// Accessor with generation checking.
+    #[allow(dead_code)]
     pub(crate) fn get(&self, id: StructureId) -> Option<&dyn Structure> {
         let idx = id.id as usize;
         if self.left_start <= idx && idx < self.left_start + self.left.len() {
@@ -201,6 +204,7 @@ impl Position {
     }
 
     /// Check whether the positions are neighbors. Return false if they are exactly the same.
+    #[allow(dead_code)]
     pub(crate) fn is_neighbor(&self, pos2: &Position) -> bool {
         [[-1, 0], [0, -1], [1, 0], [0, 1]].iter().any(|rel_pos| {
             let pos = Position {
