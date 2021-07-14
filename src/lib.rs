@@ -2276,9 +2276,11 @@ impl FactorishState {
         // context.set_fill_style(&JsValue::from_str("#00ff7f"));
         let color = [0x00, 0xff, 0x7f];
         for structure in self.structure_iter() {
-            let Position { x, y } = structure.position();
-            let start = ((x + y * self.width as i32) * 4) as usize;
-            data[start..start + 3].copy_from_slice(&color);
+            let Position { x, y } = *structure.position();
+            if x < self.width as i32 && y < self.height as i32 {
+                let start = ((x + y * self.width as i32) * 4) as usize;
+                data[start..start + 3].copy_from_slice(&color);
+            }
         }
 
         Ok(())
