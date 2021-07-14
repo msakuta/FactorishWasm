@@ -2,7 +2,7 @@ use super::{
     draw_direction_arrow,
     dyn_iter::DynIterMut,
     items::{render_drop_item, ItemType},
-    structure::Structure,
+    structure::{Structure, StructureDynIter},
     DropItem, FactorishState, FrameProcResult, Inventory, InventoryTrait, Position, Rotation,
 };
 use serde::{Deserialize, Serialize};
@@ -131,7 +131,7 @@ impl Structure for Inserter {
     fn frame_proc(
         &mut self,
         state: &mut FactorishState,
-        structures: &mut dyn DynIterMut<Item = dyn Structure + '_>,
+        structures: &mut StructureDynIter,
     ) -> Result<FrameProcResult, ()> {
         let input_position = self.position.add(self.rotation.delta_inv());
         let output_position = self.position.add(self.rotation.delta());

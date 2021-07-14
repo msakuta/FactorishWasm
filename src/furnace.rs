@@ -1,6 +1,9 @@
 use super::{
-    dyn_iter::DynIterMut, items::item_to_str, structure::Structure, DropItem, FactorishState,
-    FrameProcResult, Inventory, InventoryTrait, ItemType, Position, Recipe, TempEnt, COAL_POWER,
+    dyn_iter::DynIterMut,
+    items::item_to_str,
+    structure::{Structure, StructureDynIter},
+    DropItem, FactorishState, FrameProcResult, Inventory, InventoryTrait, ItemType, Position,
+    Recipe, TempEnt, COAL_POWER,
 };
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
@@ -110,7 +113,7 @@ impl Structure for Furnace {
     fn frame_proc(
         &mut self,
         state: &mut FactorishState,
-        _structures: &mut dyn DynIterMut<Item = dyn Structure>,
+        _structures: &mut StructureDynIter,
     ) -> Result<FrameProcResult, ()> {
         if let Some(recipe) = &self.recipe {
             let mut ret = FrameProcResult::None;

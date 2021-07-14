@@ -1112,9 +1112,9 @@ impl FactorishState {
                                 .zip(b.1.fluid_box_mut())
                         {
                             av.iter_mut()
-                                .for_each(|fb| fb.connect_to[(idx as usize + 2) % 4] = Some(aid));
+                                .for_each(|fb| fb.connect_to[(idx as usize + 2) % 4] = Some(bid));
                             bv.iter_mut()
-                                .for_each(|fb| fb.connect_to[idx as usize] = Some(bid));
+                                .for_each(|fb| fb.connect_to[idx as usize] = Some(aid));
                         }
                     }
                 }
@@ -1222,13 +1222,10 @@ impl FactorishState {
         // away from self so that they do not claim mutable borrow twice, but it works.
         let mut structures = std::mem::take(&mut self.structures);
         for i in 0..structures.len() {
-            let (front, mid) = structures.split_at_mut(i);
-            let (center, last) = mid
-                .split_first_mut()
-                .ok_or_else(|| JsValue::from_str("Structures split fail"))?;
+            let (center, mut dyn_iter) = StructureDynIter::new(&mut structures, i)?;
             if let Some(dynamic) = center.dynamic.as_deref_mut() {
                 frame_proc_result_to_event(
-                    dynamic.frame_proc(self, &mut StructureDynIter(front, last)), // dynamic.frame_proc(self, &mut Chained(MutRef(front), MutRef(last)))
+                    dynamic.frame_proc(self, &mut dyn_iter), // dynamic.frame_proc(self, &mut Chained(MutRef(front), MutRef(last)))
                 );
             }
         }

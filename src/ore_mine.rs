@@ -1,7 +1,10 @@
 use super::{
-    draw_direction_arrow, dyn_iter::DynIterMut, items::ItemType, structure::Structure, DropItem,
-    FactorishState, FrameProcResult, Inventory, InventoryTrait, Position, Recipe, Rotation,
-    TempEnt, COAL_POWER, TILE_SIZE,
+    draw_direction_arrow,
+    dyn_iter::DynIterMut,
+    items::ItemType,
+    structure::{Structure, StructureDynIter},
+    DropItem, FactorishState, FrameProcResult, Inventory, InventoryTrait, Position, Recipe,
+    Rotation, TempEnt, COAL_POWER, TILE_SIZE,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -123,7 +126,7 @@ impl Structure for OreMine {
     fn frame_proc(
         &mut self,
         state: &mut FactorishState,
-        structures: &mut dyn DynIterMut<Item = dyn Structure>,
+        structures: &mut StructureDynIter,
     ) -> Result<FrameProcResult, ()> {
         let otile = &state.tile_at(&self.position);
         if otile.is_none() {
