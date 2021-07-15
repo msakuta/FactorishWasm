@@ -643,12 +643,22 @@ impl FactorishState {
             wrap_structure(Box::new(Boiler::new(&Position::new(13, 5)))),
             wrap_structure(Box::new(SteamEngine::new(&Position::new(12, 5)))),
         ];
-        structures.extend((10..=100).map(|x| {
-            let p = Box::new(Pipe::new(&Position::new(x, 10)));
-            wrap_structure(p as Box<dyn Structure>)
+        use std::iter::Iterator;
+        structures.extend((10..=100).filter_map(|x| {
+            if x % 2 == 0 {
+                let p = Box::new(Chest::new(&Position::new(x, 10)));
+                Some(wrap_structure(p as Box<dyn Structure>))
+            } else {
+                let p = Box::new(Inserter::new(x, 10, Rotation::Right));
+                Some(wrap_structure(p as Box<dyn Structure>))
+            }
         }));
         structures.extend((11..=99).map(|x| {
-            wrap_structure(Box::new(Pipe::new(&Position::new(10, x))) as Box<dyn Structure>)
+            if x % 2 == 0 {
+                wrap_structure(Box::new(Chest::new(&Position::new(10, x))) as Box<dyn Structure>)
+            } else {
+                wrap_structure(Box::new(Inserter::new(x, 10, Rotation::Left)) as Box<dyn Structure>)
+            }
         }));
         structures.extend((10..=100).map(|x| {
             wrap_structure(Box::new(Pipe::new(&Position::new(x, 100))) as Box<dyn Structure>)
