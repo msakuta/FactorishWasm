@@ -976,6 +976,13 @@ impl FactorishState {
             self.update_fluid_connections(&pos)?;
         }
 
+        for i in 0..self.structures.len() {
+            let (s, others) = StructureDynIter::new(&mut self.structures, i)?;
+            let id = StructureId { id: i as u32, gen: s.gen };
+            s.dynamic.as_deref_mut().map(|d| d.on_construction_self(id, &others, true))
+                .unwrap_or(Ok(()))?;
+        }
+
         self.drop_items = serde_json::from_value(
             json.get_mut("items")
                 .ok_or_else(|| js_str!("\"items\" not found"))?
