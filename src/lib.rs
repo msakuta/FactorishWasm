@@ -653,18 +653,27 @@ impl FactorishState {
                 Some(wrap_structure(p as Box<dyn Structure>))
             }
         }));
+        structures.extend((10..=100).map(|x| {
+            wrap_structure(if x % 2 == 0 {
+                Box::new(Chest::new(&Position::new(x, 100))) as Box<dyn Structure>
+            } else {
+                Box::new(Inserter::new(x, 100, Rotation::Left)) as Box<dyn Structure>
+            })
+        }));
         structures.extend((11..=99).map(|x| {
             if x % 2 == 0 {
                 wrap_structure(Box::new(Chest::new(&Position::new(10, x))) as Box<dyn Structure>)
             } else {
-                wrap_structure(Box::new(Inserter::new(x, 10, Rotation::Left)) as Box<dyn Structure>)
+                wrap_structure(Box::new(Inserter::new(10, x, Rotation::Top)) as Box<dyn Structure>)
             }
         }));
-        structures.extend((10..=100).map(|x| {
-            wrap_structure(Box::new(Pipe::new(&Position::new(x, 100))) as Box<dyn Structure>)
-        }));
         structures.extend((11..=99).map(|x| {
-            wrap_structure(Box::new(Pipe::new(&Position::new(100, x))) as Box<dyn Structure>)
+            wrap_structure(
+                if x % 2 == 0 {
+                    Box::new(Chest::new(&Position::new(100, x))) as Box<dyn Structure>
+                } else {
+                    Box::new(Inserter::new(100, x, Rotation::Bottom)) as Box<dyn Structure>
+                })
         }));
 
         let mut ret = FactorishState {
