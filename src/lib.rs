@@ -63,7 +63,7 @@ mod water_well;
 use assembler::Assembler;
 use boiler::Boiler;
 use chest::Chest;
-use dyn_iter::{Chained, DynIterMut, MutRef, Ref};
+use dyn_iter::{Chained, DynIterMut, MutRef};
 use elect_pole::ElectPole;
 use furnace::Furnace;
 use inserter::Inserter;
@@ -1523,7 +1523,11 @@ impl FactorishState {
                 .into_iter()
                 .filter(|power_wire| power_wire.0 != position && power_wire.1 != position)
                 .collect();
-            structure.on_construction_self(&Ref(&self.structures), false)?;
+            structure.on_construction_self(
+                StructureId { id: i as u32, gen },
+                &StructureDynIter::new_all(&mut self.structures)?,
+                false,
+            )?;
             if let Ok(ref mut data) = self.minimap_buffer.try_borrow_mut() {
                 self.render_minimap_data_pixel(data, &position);
             }
@@ -2001,7 +2005,6 @@ impl FactorishState {
                             }
                         }
                         self.structures = structures;
-                        new_s.on_construction_self(&Ref(&self.structures), true)?;
 
                         // let connections = new_s.connection(self, &Ref(&self.structures));
                         // console_log!(
@@ -2023,6 +2026,12 @@ impl FactorishState {
                             .find(|(_, s)| s.dynamic.is_none())
                             .map(|(i, slot)| (i, slot.gen))
                             .unwrap_or_else(|| (self.structures.len(), 0));
+
+                        new_s.on_construction_self(
+                            StructureId { id: i as u32, gen },
+                            &StructureDynIter::new_all(&mut self.structures)?,
+                            true,
+                        )?;
 
                         // Notify structures after slot has been decided
                         for structure in &mut self.structures {

@@ -69,6 +69,15 @@ pub(crate) struct StructureDynIter<'a> {
 }
 
 impl<'a> StructureDynIter<'a> {
+    pub(crate) fn new_all(source: &'a mut [StructureEntry]) -> Result<Self, JsValue> {
+        Ok(Self {
+            left_start: 0,
+            right_start: source.len(),
+            left: source,
+            right: &mut [],
+        })
+    }
+
     pub(crate) fn new(
         source: &'a mut [StructureEntry],
         split_idx: usize,
@@ -154,6 +163,31 @@ impl<'a> StructureDynIter<'a> {
         } else {
             None
         }
+    }
+
+    pub(crate) fn dyn_iter_id(&self) -> impl Iterator<Item = (StructureId, &dyn Structure)> + '_ {
+        self.left
+            .iter()
+            .enumerate()
+            .map(move |(i, val)| {
+                (
+                    StructureId {
+                        id: (i + self.left_start) as u32,
+                        gen: val.gen,
+                    },
+                    val,
+                )
+            })
+            .chain(self.right.iter().enumerate().map(move |(i, val)| {
+                (
+                    StructureId {
+                        id: (i + self.right_start) as u32,
+                        gen: val.gen,
+                    },
+                    val,
+                )
+            }))
+            .filter_map(|(i, s)| Some((i, s.dynamic.as_deref()?)))
     }
 }
 
@@ -361,7 +395,8 @@ pub(crate) trait Structure {
     /// event handler for costruction events for this structure itself.
     fn on_construction_self(
         &mut self,
-        _others: &dyn DynIter<Item = StructureEntry>,
+        _id: StructureId,
+        _others: &StructureDynIter,
         _construct: bool,
     ) -> Result<(), JsValue> {
         Ok(())
