@@ -1501,6 +1501,7 @@ impl FactorishState {
                 .dynamic
                 .take()
                 .expect("should be active entity");
+            let gen = self.structures[i].gen;
             self.structures[i].gen += 1;
             self.player
                 .inventory
@@ -1510,7 +1511,11 @@ impl FactorishState {
             popup_text += &format!("+1 {}\n", structure.name());
             for notify_structure in &mut self.structures {
                 if let Some(s) = notify_structure.dynamic.as_deref_mut() {
-                    s.on_construction(structure.as_mut(), false)?;
+                    s.on_construction(
+                        StructureId { id: i as u32, gen },
+                        structure.as_mut(),
+                        false,
+                    )?;
                 }
             }
             let position = *structure.position();
@@ -1982,11 +1987,6 @@ impl FactorishState {
                                 self.harvest(&Position { x, y }, !new_s.movable())?;
                             }
                         }
-                        for structure in &mut self.structures {
-                            if let Some(s) = structure.dynamic.as_deref_mut() {
-                                s.on_construction(new_s.as_mut(), true)?;
-                            }
-                        }
                         let structures = std::mem::take(&mut self.structures);
                         for structure in structures.iter().filter_map(|s| s.dynamic.as_deref()) {
                             if (new_s.power_sink() && structure.power_source()
@@ -2015,14 +2015,29 @@ impl FactorishState {
                         //     }
                         // }
 
-                        if let Some((i, slot)) = self
+                        // First, find an empty slot
+                        let (i, gen) = self
                             .structures
                             .iter_mut()
                             .enumerate()
                             .find(|(_, s)| s.dynamic.is_none())
-                        {
-                            slot.dynamic = Some(new_s);
-                            let gen = slot.gen;
+                            .map(|(i, slot)| (i, slot.gen))
+                            .unwrap_or_else(|| (self.structures.len(), 0));
+
+                        // Notify structures after slot has been decided
+                        for structure in &mut self.structures {
+                            if let Some(s) = structure.dynamic.as_deref_mut() {
+                                s.on_construction(
+                                    StructureId { id: i as u32, gen },
+                                    new_s.as_mut(),
+                                    true,
+                                )?;
+                            }
+                        }
+
+                        if i < self.structures.len() {
+                            self.structures[i].dynamic = Some(new_s);
+
                             console_log!(
                                 "Inserted to an empty slot: {}/{}, id: {}.{}",
                                 self.structures

@@ -2,7 +2,7 @@ use super::{
     draw_direction_arrow,
     dyn_iter::DynIterMut,
     items::{render_drop_item, ItemType},
-    structure::{Structure, StructureDynIter},
+    structure::{Structure, StructureDynIter, StructureId},
     DropItem, FactorishState, FrameProcResult, Inventory, InventoryTrait, Position, Rotation,
 };
 use serde::{Deserialize, Serialize};
@@ -15,6 +15,10 @@ pub(crate) struct Inserter {
     rotation: Rotation,
     cooldown: f64,
     hold_item: Option<ItemType>,
+    #[serde(skip)]
+    input_structure: Option<StructureId>,
+    #[serde(skip)]
+    output_structure: Option<StructureId>,
 }
 
 const INSERTER_TIME: f64 = 20.;
@@ -26,6 +30,8 @@ impl Inserter {
             rotation,
             cooldown: 0.,
             hold_item: None,
+            input_structure: None,
+            output_structure: None,
         }
     }
 
@@ -280,6 +286,33 @@ impl Structure for Inserter {
             self.cooldown -= 1.;
         }
         Ok(FrameProcResult::None)
+    }
+
+    fn on_construction(
+        &mut self,
+        other_id: StructureId,
+        other: &dyn Structure,
+        construct: bool,
+    ) -> Result<(), JsValue> {
+        let input_position = self.position.add(self.rotation.delta_inv());
+        let output_position = self.position.add(self.rotation.delta());
+        if *other.position() == input_position {
+            self.input_structure = if construct { Some(other_id) } else { None };
+            console_log!(
+                "{} input_structure {:?}",
+                if construct { "set" } else { "unset" },
+                other_id
+            );
+        }
+        if *other.position() == output_position {
+            self.output_structure = if construct { Some(other_id) } else { None };
+            console_log!(
+                "{} input_structure {:?}",
+                if construct { "set" } else { "unset" },
+                other_id
+            );
+        }
+        Ok(())
     }
 
     fn rotate(&mut self) -> Result<(), ()> {
