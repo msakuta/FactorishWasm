@@ -812,6 +812,13 @@ impl FactorishState {
             ret.update_fluid_connections(&position).unwrap();
         }
 
+        for i in 0..ret.structures.len() {
+            let (s, others) = StructureDynIter::new(&mut ret.structures, i)?;
+            let id = StructureId { id: i as u32, gen: s.gen };
+            s.dynamic.as_deref_mut().map(|d| d.on_construction_self(id, &others, true))
+                .unwrap_or(Ok(()))?;
+        }
+
         Ok(ret)
     }
 
