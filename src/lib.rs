@@ -63,7 +63,7 @@ mod water_well;
 use assembler::Assembler;
 use boiler::Boiler;
 use chest::Chest;
-use dyn_iter::{Chained, DynIter, DynIterMut, MutRef, Ref};
+use dyn_iter::{Chained, DynIterMut, MutRef};
 use elect_pole::ElectPole;
 use furnace::Furnace;
 use inserter::Inserter;
@@ -1024,6 +1024,13 @@ impl FactorishState {
             self.update_fluid_connections(&pos)?;
         }
 
+        for i in 0..self.structures.len() {
+            let (s, others) = StructureDynIter::new(&mut self.structures, i)?;
+            let id = StructureId { id: i as u32, gen: s.gen };
+            s.dynamic.as_deref_mut().map(|d| d.on_construction_self(id, &others, true))
+                .unwrap_or(Ok(()))?;
+        }
+
         self.drop_items = serde_json::from_value(
             json.get_mut("items")
                 .ok_or_else(|| js_str!("\"items\" not found"))?
@@ -1050,6 +1057,7 @@ impl FactorishState {
         }
     }
 
+    #[allow(dead_code)]
     fn proc_structures_mutual(
         &mut self,
         mut f: impl FnMut(
@@ -1548,6 +1556,7 @@ impl FactorishState {
                 .dynamic
                 .take()
                 .expect("should be active entity");
+            let gen = self.structures[i].gen;
             self.structures[i].gen += 1;
             self.player
                 .inventory
@@ -1557,7 +1566,11 @@ impl FactorishState {
             popup_text += &format!("+1 {}\n", structure.name());
             for notify_structure in &mut self.structures {
                 if let Some(s) = notify_structure.dynamic.as_deref_mut() {
-                    s.on_construction(structure.as_mut(), false)?;
+                    s.on_construction(
+                        StructureId { id: i as u32, gen },
+                        structure.as_mut(),
+                        false,
+                    )?;
                 }
             }
             let position = *structure.position();
@@ -1565,7 +1578,11 @@ impl FactorishState {
                 .into_iter()
                 .filter(|power_wire| power_wire.0 != position && power_wire.1 != position)
                 .collect();
-            structure.on_construction_self(&Ref(&self.structures), false)?;
+            structure.on_construction_self(
+                StructureId { id: i as u32, gen },
+                &StructureDynIter::new_all(&mut self.structures)?,
+                false,
+            )?;
             if let Ok(ref mut data) = self.minimap_buffer.try_borrow_mut() {
                 self.render_minimap_data_pixel(data, &position);
             }
@@ -2029,11 +2046,6 @@ impl FactorishState {
                                 self.harvest(&Position { x, y }, !new_s.movable())?;
                             }
                         }
-                        for structure in &mut self.structures {
-                            if let Some(s) = structure.dynamic.as_deref_mut() {
-                                s.on_construction(new_s.as_mut(), true)?;
-                            }
-                        }
                         let structures = std::mem::take(&mut self.structures);
                         for structure in structures.iter().filter_map(|s| s.dynamic.as_deref()) {
                             if (new_s.power_sink() && structure.power_source()
@@ -2048,7 +2060,6 @@ impl FactorishState {
                             }
                         }
                         self.structures = structures;
-                        new_s.on_construction_self(&Ref(&self.structures), true)?;
 
                         // let connections = new_s.connection(self, &Ref(&self.structures));
                         // console_log!(
@@ -2062,14 +2073,35 @@ impl FactorishState {
                         //     }
                         // }
 
-                        if let Some((i, slot)) = self
+                        // First, find an empty slot
+                        let (i, gen) = self
                             .structures
                             .iter_mut()
                             .enumerate()
                             .find(|(_, s)| s.dynamic.is_none())
-                        {
-                            slot.dynamic = Some(new_s);
-                            let gen = slot.gen;
+                            .map(|(i, slot)| (i, slot.gen))
+                            .unwrap_or_else(|| (self.structures.len(), 0));
+
+                        new_s.on_construction_self(
+                            StructureId { id: i as u32, gen },
+                            &StructureDynIter::new_all(&mut self.structures)?,
+                            true,
+                        )?;
+
+                        // Notify structures after slot has been decided
+                        for structure in &mut self.structures {
+                            if let Some(s) = structure.dynamic.as_deref_mut() {
+                                s.on_construction(
+                                    StructureId { id: i as u32, gen },
+                                    new_s.as_mut(),
+                                    true,
+                                )?;
+                            }
+                        }
+
+                        if i < self.structures.len() {
+                            self.structures[i].dynamic = Some(new_s);
+
                             console_log!(
                                 "Inserted to an empty slot: {}/{}, id: {}.{}",
                                 self.structures

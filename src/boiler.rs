@@ -1,6 +1,5 @@
 use super::pipe::Pipe;
 use super::{
-    dyn_iter::DynIterMut,
     serialize_impl,
     structure::{Structure, StructureDynIter},
     water_well::{FluidBox, FluidType},
@@ -155,10 +154,8 @@ impl Structure for Boiler {
         state: &mut FactorishState,
         structures: &mut StructureDynIter,
     ) -> Result<FrameProcResult, ()> {
-        self.input_fluid_box
-            .simulate(&self.position, state, structures);
-        self.output_fluid_box
-            .simulate(&self.position, state, structures);
+        self.input_fluid_box.simulate(structures);
+        self.output_fluid_box.simulate(structures);
         if let Some(recipe) = &self.recipe {
             if self.input_fluid_box.type_ == Some(FluidType::Water) {
                 self.progress = Some(0.);

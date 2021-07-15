@@ -69,6 +69,15 @@ pub(crate) struct StructureDynIter<'a> {
 }
 
 impl<'a> StructureDynIter<'a> {
+    pub(crate) fn new_all(source: &'a mut [StructureEntry]) -> Result<Self, JsValue> {
+        Ok(Self {
+            left_start: 0,
+            right_start: source.len(),
+            left: source,
+            right: &mut [],
+        })
+    }
+
     pub(crate) fn new(
         source: &'a mut [StructureEntry],
         split_idx: usize,
@@ -89,6 +98,7 @@ impl<'a> StructureDynIter<'a> {
     }
 
     /// Accessor without generation checking.
+    #[allow(dead_code)]
     pub(crate) fn get_at(&self, idx: usize) -> Option<&StructureEntry> {
         if self.left_start <= idx && idx < self.left_start + self.left.len() {
             self.left.get(idx - self.left_start)
@@ -100,6 +110,7 @@ impl<'a> StructureDynIter<'a> {
     }
 
     /// Mutable accessor without generation checking.
+    #[allow(dead_code)]
     pub(crate) fn get_at_mut(&mut self, idx: usize) -> Option<&mut StructureEntry> {
         if self.left_start <= idx && idx < self.left_start + self.left.len() {
             self.left.get_mut(idx - self.left_start)
@@ -111,6 +122,7 @@ impl<'a> StructureDynIter<'a> {
     }
 
     /// Accessor with generation checking.
+    #[allow(dead_code)]
     pub(crate) fn get(&self, id: StructureId) -> Option<&dyn Structure> {
         let idx = id.id as usize;
         if self.left_start <= idx && idx < self.left_start + self.left.len() {
@@ -151,6 +163,31 @@ impl<'a> StructureDynIter<'a> {
         } else {
             None
         }
+    }
+
+    pub(crate) fn dyn_iter_id(&self) -> impl Iterator<Item = (StructureId, &dyn Structure)> + '_ {
+        self.left
+            .iter()
+            .enumerate()
+            .map(move |(i, val)| {
+                (
+                    StructureId {
+                        id: (i + self.left_start) as u32,
+                        gen: val.gen,
+                    },
+                    val,
+                )
+            })
+            .chain(self.right.iter().enumerate().map(move |(i, val)| {
+                (
+                    StructureId {
+                        id: (i + self.right_start) as u32,
+                        gen: val.gen,
+                    },
+                    val,
+                )
+            }))
+            .filter_map(|(i, s)| Some((i, s.dynamic.as_deref()?)))
     }
 }
 
@@ -201,6 +238,7 @@ impl Position {
     }
 
     /// Check whether the positions are neighbors. Return false if they are exactly the same.
+    #[allow(dead_code)]
     pub(crate) fn is_neighbor(&self, pos2: &Position) -> bool {
         [[-1, 0], [0, -1], [1, 0], [0, 1]].iter().any(|rel_pos| {
             let pos = Position {
@@ -346,13 +384,19 @@ pub(crate) trait Structure {
         Ok(FrameProcResult::None)
     }
     /// event handler for costruction events around the structure.
-    fn on_construction(&mut self, _other: &dyn Structure, _construct: bool) -> Result<(), JsValue> {
+    fn on_construction(
+        &mut self,
+        _other_id: StructureId,
+        _other: &dyn Structure,
+        _construct: bool,
+    ) -> Result<(), JsValue> {
         Ok(())
     }
     /// event handler for costruction events for this structure itself.
     fn on_construction_self(
         &mut self,
-        _others: &dyn DynIter<Item = StructureEntry>,
+        _id: StructureId,
+        _others: &StructureDynIter,
         _construct: bool,
     ) -> Result<(), JsValue> {
         Ok(())

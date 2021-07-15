@@ -1,5 +1,4 @@
 use super::{
-    dyn_iter::DynIterMut,
     structure::{Structure, StructureDynIter},
     water_well::FluidBox,
     FactorishState, FrameProcResult, Position,
@@ -46,7 +45,7 @@ impl Pipe {
                                 .iter()
                                 .enumerate()
                                 .filter(|(_, b)| b.is_some())
-                                .fold(0, |acc, (i, b)| acc | (1 << i)),
+                                .fold(0, |acc, (i, _)| acc | (1 << i)),
                         )
                     })
                     .flatten()
@@ -104,10 +103,10 @@ impl Structure for Pipe {
 
     fn frame_proc(
         &mut self,
-        state: &mut FactorishState,
+        _state: &mut FactorishState,
         structures: &mut StructureDynIter,
     ) -> Result<FrameProcResult, ()> {
-        self.fluid_box.simulate(&self.position, state, structures);
+        self.fluid_box.simulate(structures);
         Ok(FrameProcResult::None)
     }
 

@@ -1,5 +1,4 @@
 use super::{
-    dyn_iter::DynIterMut,
     pipe::Pipe,
     structure::{Structure, StructureDynIter},
     water_well::{FluidBox, FluidType},
@@ -65,13 +64,12 @@ impl Structure for OffshorePump {
 
     fn frame_proc(
         &mut self,
-        state: &mut FactorishState,
+        _state: &mut FactorishState,
         structures: &mut StructureDynIter,
     ) -> Result<FrameProcResult, ()> {
         self.output_fluid_box.amount =
             (self.output_fluid_box.amount + 1.).min(self.output_fluid_box.max_amount);
-        self.output_fluid_box
-            .simulate(&self.position, state, structures);
+        self.output_fluid_box.simulate(structures);
         Ok(FrameProcResult::None)
     }
 
