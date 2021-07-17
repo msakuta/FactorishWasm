@@ -996,13 +996,6 @@ impl FactorishState {
 
         let s_d_iter = StructureDynIter::new_all(&mut self.structures)?;
         self.power_networks = build_power_networks(&s_d_iter, &self.power_wires);
-        console_log!(
-            "deserialize: power_networks: {:?}",
-            self.power_networks
-                .iter()
-                .map(|nw| format!("{} sources {} sinks", nw.sources.len(), nw.sinks.len()))
-                .collect::<Vec<_>>()
-        );
 
         self.drop_items = serde_json::from_value(
             json.get_mut("items")
@@ -1575,13 +1568,6 @@ impl FactorishState {
                 &StructureDynIter::new_all(&mut self.structures)?,
                 &self.power_wires,
             );
-            console_log!(
-                "harvest structure: power_networks: {:?}",
-                self.power_networks
-                    .iter()
-                    .map(|nw| format!("{} sources {} sinks", nw.sources.len(), nw.sinks.len()))
-                    .collect::<Vec<_>>()
-            );
 
             self.update_fluid_connections(&position)?;
 
@@ -2126,17 +2112,6 @@ impl FactorishState {
                         self.power_networks = build_power_networks(
                             &StructureDynIter::new_all(&mut self.structures)?,
                             &self.power_wires,
-                        );
-                        console_log!(
-                            "build structure: power_networks: {:?}",
-                            self.power_networks
-                                .iter()
-                                .map(|nw| format!(
-                                    "{} sources {} sinks",
-                                    nw.sources.len(),
-                                    nw.sinks.len()
-                                ))
-                                .collect::<Vec<_>>()
                         );
 
                         self.update_fluid_connections(&cursor)?;
