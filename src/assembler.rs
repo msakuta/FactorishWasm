@@ -65,60 +65,6 @@ impl Assembler {
             recipe: None,
         }
     }
-
-    /// Find all power sources that are connected to this structure through wires.
-    fn find_power_sources(
-        &self,
-        state: &mut FactorishState,
-        structures: &mut StructureDynIter,
-    ) -> Vec<Position> {
-        let mut checked = HashMap::<PowerWire, ()>::new();
-        let mut expand_list = HashMap::<Position, Vec<PowerWire>>::new();
-        let mut ret = vec![];
-        let mut check_struct = |position: &Position| {
-            if structures
-                .as_dyn_iter()
-                .dyn_iter()
-                .any(|structure| structure.power_source() && *structure.position() == *position)
-            {
-                ret.push(*position);
-            }
-        };
-        for wire in &state.power_wires {
-            if wire.0 == self.position {
-                expand_list.insert(wire.1, vec![*wire]);
-                checked.insert(*wire, ());
-                check_struct(&wire.1);
-            } else if wire.1 == self.position {
-                expand_list.insert(wire.0, vec![*wire]);
-                checked.insert(*wire, ());
-                check_struct(&wire.0);
-            }
-        }
-        // Simple Dijkstra
-        while !expand_list.is_empty() {
-            let mut next_expand = HashMap::<Position, Vec<PowerWire>>::new();
-            for check in &expand_list {
-                for wire in &state.power_wires {
-                    if checked.get(wire).is_some() {
-                        continue;
-                    }
-                    if wire.0 == *check.0 {
-                        next_expand.insert(wire.1, vec![*wire]);
-                        checked.insert(*wire, ());
-                        check_struct(&wire.1);
-                    } else if wire.1 == *check.0 {
-                        next_expand.insert(wire.0, vec![*wire]);
-                        checked.insert(*wire, ());
-                        check_struct(&wire.1);
-                    }
-                }
-            }
-            expand_list = next_expand;
-        }
-        // console_log!("Assember power sources: {:?}", ret);
-        ret
-    }
 }
 
 impl Structure for Assembler {
