@@ -69,13 +69,13 @@ pub(crate) struct StructureDynIter<'a> {
 }
 
 impl<'a> StructureDynIter<'a> {
-    pub(crate) fn new_all(source: &'a mut [StructureEntry]) -> Result<Self, JsValue> {
-        Ok(Self {
+    pub(crate) fn new_all(source: &'a mut [StructureEntry]) -> Self {
+        Self {
             left_start: 0,
             right_start: source.len(),
             left: source,
             right: &mut [],
-        })
+        }
     }
 
     pub(crate) fn new(
