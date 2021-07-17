@@ -35,7 +35,7 @@ macro_rules! draw_fuel_alarm {
     };
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) struct StructureId {
     pub id: u32,
     pub gen: u32,
