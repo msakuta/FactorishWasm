@@ -1157,6 +1157,14 @@ impl FactorishState {
         }
     }
 
+    fn get_structure(&self, id: StructureId) -> Option<&dyn Structure> {
+        self.structures.iter()
+            .enumerate()
+            .find(|(i, s)| id.id == *i as u32 && id.gen == s.gen)
+            .map(|(_, s)| s.dynamic.as_deref())
+            .flatten()
+    }
+
     fn update_fluid_connections(&mut self, position: &Position) -> Result<(), JsValue> {
         if let Some(i) = self
             .structures
@@ -2753,10 +2761,7 @@ impl FactorishState {
             for PowerWire(first, second) in wires {
                 context.begin_path();
                 let first = if let Some(d) = self
-                    .structures
-                    .get(first.id as usize)
-                    .map(|s| s.dynamic.as_ref())
-                    .flatten()
+                    .get_structure(*first)
                 {
                     d.position()
                 } else {
@@ -2767,10 +2772,7 @@ impl FactorishState {
                     first.y as f64 * TILE_SIZE + WIRE_ATTACH_Y,
                 );
                 let second = if let Some(d) = self
-                    .structures
-                    .get(second.id as usize)
-                    .map(|s| s.dynamic.as_ref())
-                    .flatten()
+                    .get_structure(*second)
                 {
                     d.position()
                 } else {
