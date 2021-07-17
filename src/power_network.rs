@@ -2,13 +2,13 @@ use super::{
     structure::{StructureDynIter, StructureId},
     Position, PowerWire,
 };
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 #[derive(Debug)]
 pub(crate) struct PowerNetwork {
     pub wires: Vec<(StructureId, StructureId)>,
-    pub sources: Vec<StructureId>,
-    pub sinks: Vec<StructureId>,
+    pub sources: HashSet<StructureId>,
+    pub sinks: HashSet<StructureId>,
 }
 
 pub(crate) fn build_power_networks(
@@ -24,13 +24,13 @@ pub(crate) fn build_power_networks(
         }
         let mut expand_list = HashMap::<Position, Vec<PowerWire>>::new();
         let mut wires = vec![];
-        let mut sources = vec![];
-        let mut sinks = vec![];
+        let mut sources = HashSet::new();
+        let mut sinks = HashSet::new();
         if s.power_source() {
-            sources.push(id);
+            sources.insert(id);
         }
         if s.power_sink() {
-            sinks.push(id);
+            sinks.insert(id);
         }
 
         let mut check_struct = |position: &Position| {
@@ -39,10 +39,10 @@ pub(crate) fn build_power_networks(
                 .find(|(_, structure)| *structure.position() == *position)
             {
                 if s.power_source() {
-                    sources.push(id);
+                    sources.insert(id);
                 }
                 if s.power_sink() {
-                    sinks.push(id);
+                    sinks.insert(id);
                 }
                 Some(id)
             } else {

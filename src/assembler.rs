@@ -221,7 +221,7 @@ impl Structure for Assembler {
                 for network in &state
                     .power_networks
                     .iter()
-                    .find(|network| network.sinks.iter().find(|id| **id == me).is_some())
+                    .find(|network| network.sinks.contains(&me))
                 {
                     for id in network.sources.iter() {
                         if let Some(source) = structures.get_mut(*id) {

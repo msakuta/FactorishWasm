@@ -663,20 +663,25 @@ impl FactorishState {
                 Box::new(ElectPole::new(&Position::new(x, 100))) as Box<dyn Structure>
             })
         }));
-        structures.extend((11..=99).map(|x| {
-            if x % 2 == 0 {
-                wrap_structure(Box::new(Assembler::new(&Position::new(10, x))) as Box<dyn Structure>)
-            } else {
-                wrap_structure(Box::new(ElectPole::new(&Position::new(10, x))) as Box<dyn Structure>)
-            }
-        }));
-        structures.extend((11..=99).map(|x| {
-            wrap_structure(
+        structures.extend(
+            (11..=99).map(|x| {
                 if x % 2 == 0 {
-                    Box::new(Assembler::new(&Position::new(100, x))) as Box<dyn Structure>
+                    wrap_structure(
+                        Box::new(Assembler::new(&Position::new(10, x))) as Box<dyn Structure>
+                    )
                 } else {
-                    Box::new(ElectPole::new(&Position::new(100, x))) as Box<dyn Structure>
-                })
+                    wrap_structure(
+                        Box::new(ElectPole::new(&Position::new(10, x))) as Box<dyn Structure>
+                    )
+                }
+            }),
+        );
+        structures.extend((11..=99).map(|x| {
+            wrap_structure(if x % 2 == 0 {
+                Box::new(Assembler::new(&Position::new(100, x))) as Box<dyn Structure>
+            } else {
+                Box::new(ElectPole::new(&Position::new(100, x))) as Box<dyn Structure>
+            })
         }));
 
         let mut ret = FactorishState {
@@ -816,22 +821,30 @@ impl FactorishState {
             ret.update_fluid_connections(&position).unwrap();
         }
 
-        for s in ret.structures.iter_mut().filter_map(|s| s.dynamic.as_deref_mut()) {
+        for s in ret
+            .structures
+            .iter_mut()
+            .filter_map(|s| s.dynamic.as_deref_mut())
+        {
             s.select_recipe(0).ok();
         }
 
         let structures = std::mem::take(&mut ret.structures);
-        for (i, structure1) in structures.iter().enumerate().filter_map(|(i, s)| Some((i, s.dynamic.as_deref()?))) {
-            for structure2 in structures[i+1..].iter().filter_map(|s| s.dynamic.as_deref()) {
+        for (i, structure1) in structures
+            .iter()
+            .enumerate()
+            .filter_map(|(i, s)| Some((i, s.dynamic.as_deref()?)))
+        {
+            for structure2 in structures[i + 1..]
+                .iter()
+                .filter_map(|s| s.dynamic.as_deref())
+            {
                 if (structure1.power_sink() && structure2.power_source()
                     || structure1.power_source() && structure2.power_sink())
                     && structure1.position().distance(structure2.position())
                         <= structure1.wire_reach().min(structure2.wire_reach()) as i32
                 {
-                    ret.add_power_wire(PowerWire(
-                        *structure1.position(),
-                        *structure2.position(),
-                    ))?;
+                    ret.add_power_wire(PowerWire(*structure1.position(), *structure2.position()))?;
                 }
             }
         }
@@ -839,8 +852,13 @@ impl FactorishState {
 
         for i in 0..ret.structures.len() {
             let (s, others) = StructureDynIter::new(&mut ret.structures, i)?;
-            let id = StructureId { id: i as u32, gen: s.gen };
-            s.dynamic.as_deref_mut().map(|d| d.on_construction_self(id, &others, true))
+            let id = StructureId {
+                id: i as u32,
+                gen: s.gen,
+            };
+            s.dynamic
+                .as_deref_mut()
+                .map(|d| d.on_construction_self(id, &others, true))
                 .unwrap_or(Ok(()))?;
         }
 
@@ -1070,7 +1088,13 @@ impl FactorishState {
 
         let s_d_iter = StructureDynIter::new_all(&mut self.structures)?;
         self.power_networks = build_power_networks(&s_d_iter, &self.power_wires);
-        console_log!("power_networks: {:?}", self.power_networks);
+        console_log!(
+            "deserialize: power_networks: {:?}",
+            self.power_networks
+                .iter()
+                .map(|nw| format!("{} sources {} sinks", nw.sources.len(), nw.sinks.len()))
+                .collect::<Vec<_>>()
+        );
 
         self.drop_items = serde_json::from_value(
             json.get_mut("items")
@@ -1646,6 +1670,9 @@ impl FactorishState {
             console_log!(
                 "harvest structure: power_networks: {:?}",
                 self.power_networks
+                    .iter()
+                    .map(|nw| format!("{} sources {} sinks", nw.sources.len(), nw.sinks.len()))
+                    .collect::<Vec<_>>()
             );
 
             self.update_fluid_connections(&position)?;
@@ -2188,7 +2215,17 @@ impl FactorishState {
                             &StructureDynIter::new_all(&mut self.structures)?,
                             &self.power_wires,
                         );
-                        console_log!("build structure: power_networks: {:?}", self.power_networks);
+                        console_log!(
+                            "build structure: power_networks: {:?}",
+                            self.power_networks
+                                .iter()
+                                .map(|nw| format!(
+                                    "{} sources {} sinks",
+                                    nw.sources.len(),
+                                    nw.sinks.len()
+                                ))
+                                .collect::<Vec<_>>()
+                        );
 
                         self.update_fluid_connections(&cursor)?;
 
