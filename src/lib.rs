@@ -853,6 +853,9 @@ impl FactorishState {
         ret.structures = structures;
 
         ret.power_networks = build_power_networks(&StructureDynIter::new_all(&mut ret.structures), &ret.power_wires);
+        console_log!("power: {:?}", ret.power_networks.iter().map(|nw| format!("wires {} sources {} sinks {}", nw.wires.len(), nw.sources.len(), nw.sinks.len())).collect::<Vec<_>>());
+        console_log!("Assemblers: {}", ret.structure_iter().filter(|s| s.name() == "Assembler").count());
+        console_log!("ElectPole: {}", ret.structure_iter().filter(|s| s.name() == "Electric Pole").count());
 
         for i in 0..ret.structures.len() {
             let (s, others) = StructureDynIter::new(&mut ret.structures, i)?;
