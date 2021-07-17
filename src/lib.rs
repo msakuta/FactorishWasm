@@ -53,6 +53,7 @@ mod offshore_pump;
 mod ore_mine;
 mod perlin_noise;
 mod pipe;
+mod power_network;
 mod splitter;
 mod steam_engine;
 mod structure;
@@ -72,6 +73,7 @@ use offshore_pump::OffshorePump;
 use ore_mine::OreMine;
 use perlin_noise::{gen_terms, perlin_noise_pixel, Xor128};
 use pipe::Pipe;
+use power_network::{build_power_networks, PowerNetwork};
 use splitter::Splitter;
 use steam_engine::SteamEngine;
 use structure::{
@@ -536,6 +538,7 @@ pub struct FactorishState {
     drop_items: Vec<DropItem>,
     serial_no: u32,
     tool_belt: [Option<ItemType>; 10],
+    power_networks: Vec<PowerNetwork>,
 
     selected_item: Option<SelectedItem>,
     ore_harvesting: Option<OreHarvesting>,
@@ -665,6 +668,7 @@ impl FactorishState {
             info_elem: None,
             minimap_buffer: RefCell::new(vec![]),
             power_wires: vec![],
+            power_networks: vec![],
             popup_texts: vec![],
             debug_bbox: false,
             debug_fluidbox: false,
@@ -978,10 +982,19 @@ impl FactorishState {
 
         for i in 0..self.structures.len() {
             let (s, others) = StructureDynIter::new(&mut self.structures, i)?;
-            let id = StructureId { id: i as u32, gen: s.gen };
-            s.dynamic.as_deref_mut().map(|d| d.on_construction_self(id, &others, true))
+            let id = StructureId {
+                id: i as u32,
+                gen: s.gen,
+            };
+            s.dynamic
+                .as_deref_mut()
+                .map(|d| d.on_construction_self(id, &others, true))
                 .unwrap_or(Ok(()))?;
         }
+
+        let s_d_iter = StructureDynIter::new_all(&mut self.structures)?;
+        self.power_networks = build_power_networks(&s_d_iter, &self.power_wires);
+        console_log!("power_networks: {:?}", self.power_networks);
 
         self.drop_items = serde_json::from_value(
             json.get_mut("items")
