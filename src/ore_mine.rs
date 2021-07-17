@@ -2,7 +2,7 @@ use super::{
     draw_direction_arrow,
     dyn_iter::DynIterMut,
     items::ItemType,
-    structure::{Structure, StructureDynIter},
+    structure::{Structure, StructureDynIter, StructureId},
     DropItem, FactorishState, FrameProcResult, Inventory, InventoryTrait, Position, Recipe,
     Rotation, TempEnt, COAL_POWER, TILE_SIZE,
 };
@@ -125,6 +125,7 @@ impl Structure for OreMine {
 
     fn frame_proc(
         &mut self,
+        _me: StructureId,
         state: &mut FactorishState,
         structures: &mut StructureDynIter,
     ) -> Result<FrameProcResult, ()> {

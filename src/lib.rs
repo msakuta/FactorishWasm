@@ -1256,7 +1256,14 @@ impl FactorishState {
             let (center, mut dyn_iter) = StructureDynIter::new(&mut structures, i)?;
             if let Some(dynamic) = center.dynamic.as_deref_mut() {
                 frame_proc_result_to_event(
-                    dynamic.frame_proc(self, &mut dyn_iter), // dynamic.frame_proc(self, &mut Chained(MutRef(front), MutRef(last)))
+                    dynamic.frame_proc(
+                        StructureId {
+                            id: i as u32,
+                            gen: center.gen,
+                        },
+                        self,
+                        &mut dyn_iter,
+                    ), // dynamic.frame_proc(self, &mut Chained(MutRef(front), MutRef(last)))
                 );
             }
         }

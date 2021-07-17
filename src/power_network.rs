@@ -5,10 +5,10 @@ use super::{
 use std::collections::HashMap;
 
 #[derive(Debug)]
-pub(in crate) struct PowerNetwork {
-    wires: Vec<(StructureId, StructureId)>,
-    sources: Vec<StructureId>,
-    sinks: Vec<StructureId>,
+pub(crate) struct PowerNetwork {
+    pub wires: Vec<(StructureId, StructureId)>,
+    pub sources: Vec<StructureId>,
+    pub sinks: Vec<StructureId>,
 }
 
 pub(crate) fn build_power_networks(

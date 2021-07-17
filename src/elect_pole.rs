@@ -1,6 +1,6 @@
 use super::{
     dyn_iter::DynIterMut,
-    structure::{Structure, StructureDynIter},
+    structure::{Structure, StructureDynIter, StructureId},
     FactorishState, FrameProcResult, Position,
 };
 use serde::{Deserialize, Serialize};
@@ -63,6 +63,7 @@ impl Structure for ElectPole {
 
     fn frame_proc(
         &mut self,
+        _me: StructureId,
         _state: &mut FactorishState,
         structures: &mut StructureDynIter,
     ) -> Result<FrameProcResult, ()> {

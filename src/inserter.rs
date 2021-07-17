@@ -164,6 +164,7 @@ impl Structure for Inserter {
 
     fn frame_proc(
         &mut self,
+        _me: StructureId,
         state: &mut FactorishState,
         structures: &mut StructureDynIter,
     ) -> Result<FrameProcResult, ()> {

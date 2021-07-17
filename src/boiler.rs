@@ -1,7 +1,7 @@
 use super::pipe::Pipe;
 use super::{
     serialize_impl,
-    structure::{Structure, StructureDynIter},
+    structure::{Structure, StructureDynIter, StructureId},
     water_well::{FluidBox, FluidType},
     DropItem, FactorishState, FrameProcResult, Inventory, InventoryTrait, ItemType, Position,
     Recipe, TempEnt, COAL_POWER,
@@ -151,6 +151,7 @@ impl Structure for Boiler {
 
     fn frame_proc(
         &mut self,
+        _me: StructureId,
         state: &mut FactorishState,
         structures: &mut StructureDynIter,
     ) -> Result<FrameProcResult, ()> {

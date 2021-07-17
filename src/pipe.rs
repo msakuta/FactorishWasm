@@ -1,5 +1,5 @@
 use super::{
-    structure::{Structure, StructureDynIter},
+    structure::{Structure, StructureDynIter, StructureId},
     water_well::FluidBox,
     FactorishState, FrameProcResult, Position,
 };
@@ -103,6 +103,7 @@ impl Structure for Pipe {
 
     fn frame_proc(
         &mut self,
+        _me: StructureId,
         _state: &mut FactorishState,
         structures: &mut StructureDynIter,
     ) -> Result<FrameProcResult, ()> {

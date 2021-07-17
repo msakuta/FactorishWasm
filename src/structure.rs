@@ -35,7 +35,7 @@ macro_rules! draw_fuel_alarm {
     };
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, Copy)]
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq)]
 pub(crate) struct StructureId {
     pub id: u32,
     pub gen: u32,
@@ -378,6 +378,7 @@ pub(crate) trait Structure {
     }
     fn frame_proc(
         &mut self,
+        _me: StructureId,
         _state: &mut FactorishState,
         _structures: &mut StructureDynIter,
     ) -> Result<FrameProcResult, ()> {
