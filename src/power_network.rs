@@ -52,6 +52,9 @@ pub(crate) fn build_power_networks(
 
         let mut lr = None;
         for wire in power_wires {
+            if checked.contains_key(wire) {
+                continue;
+            }
             let left = if wire.0 == *s.position() {
                 expand_list.insert(wire.1, vec![*wire]);
                 checked.insert(*wire, ());
@@ -96,11 +99,14 @@ pub(crate) fn build_power_networks(
             }
             expand_list = next_expand;
         }
-        ret.push(PowerNetwork {
-            wires,
-            sources,
-            sinks,
-        });
+
+        if !sources.is_empty() && !sinks.is_empty() {
+            ret.push(PowerNetwork {
+                wires,
+                sources,
+                sinks,
+            });
+        }
     }
     ret
 }

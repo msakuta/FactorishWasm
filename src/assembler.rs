@@ -1,7 +1,6 @@
 use crate::dyn_iter::DynIter;
 
 use super::{
-    dyn_iter::DynIterMut,
     items::get_item_image_url,
     serialize_impl,
     structure::{Structure, StructureDynIter, StructureId},

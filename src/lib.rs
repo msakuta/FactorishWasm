@@ -1563,6 +1563,15 @@ impl FactorishState {
                 self.player.add_item(&item_type, count)
             }
 
+            self.power_networks = build_power_networks(
+                &StructureDynIter::new_all(&mut self.structures)?,
+                &self.power_wires,
+            );
+            console_log!(
+                "harvest structure: power_networks: {:?}",
+                self.power_networks
+            );
+
             self.update_fluid_connections(&position)?;
 
             self.on_player_update
@@ -2060,7 +2069,7 @@ impl FactorishState {
                             true,
                         )?;
 
-                        // Notify structures after slot has been decided
+                        // Notify structures after a slot has been decided
                         for structure in &mut self.structures {
                             if let Some(s) = structure.dynamic.as_deref_mut() {
                                 s.on_construction(
@@ -2098,6 +2107,12 @@ impl FactorishState {
                                 self.structures.len()
                             );
                         }
+
+                        self.power_networks = build_power_networks(
+                            &StructureDynIter::new_all(&mut self.structures)?,
+                            &self.power_wires,
+                        );
+                        console_log!("build structure: power_networks: {:?}", self.power_networks);
 
                         self.update_fluid_connections(&cursor)?;
 
