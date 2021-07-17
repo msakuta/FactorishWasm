@@ -832,25 +832,27 @@ impl FactorishState {
         }
 
         let structures = std::mem::take(&mut ret.structures);
-        for (i, structure1) in structures
-            .iter()
-            .enumerate()
-            .filter_map(|(i, s)| Some((i, s.dynamic.as_deref()?)))
+        for i in 0..structures.len()
         {
-            for structure2 in structures[i + 1..]
-                .iter()
-                .filter_map(|s| s.dynamic.as_deref())
+            for j in i+1..structures.len()
             {
+                let structure1 = structures[i].dynamic.as_deref().unwrap();
+                let structure2 = structures[j].dynamic.as_deref().unwrap();
                 if (structure1.power_sink() && structure2.power_source()
                     || structure1.power_source() && structure2.power_sink())
                     && structure1.position().distance(structure2.position())
                         <= structure1.wire_reach().min(structure2.wire_reach()) as i32
                 {
-                    ret.add_power_wire(PowerWire(*structure1.position(), *structure2.position()))?;
+                    let add = PowerWire(StructureId{ id: i as u32, gen: 0 }, StructureId{ id: j as u32, gen: 0 });
+                    if ret.power_wires.iter().find(|p| **p == add).is_none() {
+                        ret.power_wires.push(add);
+                    }
                 }
             }
         }
         ret.structures = structures;
+
+        ret.power_networks = build_power_networks(&StructureDynIter::new_all(&mut ret.structures), &ret.power_wires);
 
         for i in 0..ret.structures.len() {
             let (s, others) = StructureDynIter::new(&mut ret.structures, i)?;
