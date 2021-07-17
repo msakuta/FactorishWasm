@@ -142,7 +142,7 @@ const DROP_ITEM_SIZE: f64 = 8.;
 const DROP_ITEM_SIZE_I: i32 = DROP_ITEM_SIZE as i32;
 
 const COAL_POWER: f64 = 100.; // kilojoules
-const SAVE_VERSION: i64 = 2;
+const SAVE_VERSION: i64 = 3;
 const ORE_HARVEST_TIME: i32 = 20;
 const POPUP_TEXT_LIFE: i32 = 30;
 
@@ -426,8 +426,8 @@ impl TempEnt {
     }
 }
 
-#[derive(Eq, PartialEq, Hash, Copy, Clone, Serialize, Deserialize)]
-struct PowerWire(Position, Position);
+#[derive(Eq, PartialEq, Hash, Copy, Clone, Serialize, Deserialize, Debug)]
+struct PowerWire(StructureId, StructureId);
 
 struct PopupText {
     text: String,
@@ -820,11 +820,37 @@ impl FactorishState {
                     .collect::<Result<Vec<serde_json::Value>, JsValue>>()?,
             ),
         );
+
+        // This mapping is necessary to fill the gaps from deleted structures since we only serialize live structures.
+        let id_to_index = self
+            .structures
+            .iter()
+            .enumerate()
+            .map(|(id, s)| {
+                (
+                    StructureId {
+                        id: id as u32,
+                        gen: s.gen,
+                    },
+                    s,
+                )
+            })
+            .filter(|(_, s)| s.dynamic.is_some())
+            .enumerate()
+            .map(|(idx, (id, _))| (id, idx))
+            .collect::<HashMap<_, _>>();
         map.insert(
             "power_wires".to_string(),
-            serde_json::to_value(&self.power_wires)
-                .map_err(|e| js_str!("Serialize error: {}", e))?,
+            serde_json::to_value(
+                &self
+                    .power_wires
+                    .iter()
+                    .filter_map(|w| Some((id_to_index.get(&w.0)?, id_to_index.get(&w.1)?)))
+                    .collect::<Vec<_>>(),
+            )
+            .map_err(|e| js_str!("Serialize error: {}", e))?,
         );
+
         map.insert(
             "items".to_string(),
             serde_json::to_value(
@@ -963,12 +989,23 @@ impl FactorishState {
             })
             .collect::<Result<Vec<StructureEntry>, JsValue>>()?;
 
-        self.power_wires = serde_json::from_value(
+        self.power_wires = serde_json::from_value::<Vec<(u32, u32)>>(
             json.get_mut("power_wires")
                 .ok_or_else(|| js_str!("power_wires not found in saved data"))?
                 .take(),
         )
-        .map_err(|e| js_str!("power_wires deserialization error: {}", e))?;
+        .map_err(|e| js_str!("power_wires deserialization error: {}", e))?
+        .into_iter()
+        .map(|w| {
+            PowerWire(
+                StructureId {
+                    id: w.0 as u32,
+                    gen: 0,
+                },
+                StructureId { id: w.1, gen: 0 },
+            )
+        })
+        .collect();
 
         self.structures = structures;
 
@@ -994,7 +1031,7 @@ impl FactorishState {
                 .unwrap_or(Ok(()))?;
         }
 
-        let s_d_iter = StructureDynIter::new_all(&mut self.structures)?;
+        let s_d_iter = StructureDynIter::new_all(&mut self.structures);
         self.power_networks = build_power_networks(&s_d_iter, &self.power_wires);
 
         self.drop_items = serde_json::from_value(
@@ -1549,11 +1586,11 @@ impl FactorishState {
             let position = *structure.position();
             self.power_wires = std::mem::take(&mut self.power_wires)
                 .into_iter()
-                .filter(|power_wire| power_wire.0 != position && power_wire.1 != position)
+                .filter(|power_wire| power_wire.0.id != i as u32 && power_wire.1.id != i as u32)
                 .collect();
             structure.on_construction_self(
                 StructureId { id: i as u32, gen },
-                &StructureDynIter::new_all(&mut self.structures)?,
+                &StructureDynIter::new_all(&mut self.structures),
                 false,
             )?;
             if let Ok(ref mut data) = self.minimap_buffer.try_borrow_mut() {
@@ -1565,7 +1602,7 @@ impl FactorishState {
             }
 
             self.power_networks = build_power_networks(
-                &StructureDynIter::new_all(&mut self.structures)?,
+                &StructureDynIter::new_all(&mut self.structures),
                 &self.power_wires,
             );
 
@@ -1995,15 +2032,6 @@ impl FactorishState {
         Ok(JsValue::from(js_sys::Array::new()))
     }
 
-    fn add_power_wire(&mut self, power_wire: PowerWire) -> Result<(), JsValue> {
-        if self.power_wires.iter().any(|p| *p == power_wire) {
-            return Ok(());
-        }
-        console_log!("power_wires: {}", self.power_wires.len());
-        self.power_wires.push(power_wire);
-        Ok(())
-    }
-
     pub fn mouse_up(&mut self, pos: &[f64], button: i32) -> Result<JsValue, JsValue> {
         if pos.len() < 2 {
             return Err(JsValue::from_str("position must have 2 elements"));
@@ -2028,21 +2056,6 @@ impl FactorishState {
                                 self.harvest(&Position { x, y }, !new_s.movable())?;
                             }
                         }
-                        let structures = std::mem::take(&mut self.structures);
-                        for structure in structures.iter().filter_map(|s| s.dynamic.as_deref()) {
-                            if (new_s.power_sink() && structure.power_source()
-                                || new_s.power_source() && structure.power_sink())
-                                && new_s.position().distance(structure.position())
-                                    <= new_s.wire_reach().min(structure.wire_reach()) as i32
-                            {
-                                self.add_power_wire(PowerWire(
-                                    *new_s.position(),
-                                    *structure.position(),
-                                ))?;
-                            }
-                        }
-                        self.structures = structures;
-
                         // let connections = new_s.connection(self, &Ref(&self.structures));
                         // console_log!(
                         //     "Connection recalculated for self {:?}: {:?}",
@@ -2056,43 +2069,69 @@ impl FactorishState {
                         // }
 
                         // First, find an empty slot
-                        let (i, gen) = self
+                        let id = self
                             .structures
-                            .iter_mut()
+                            .iter()
                             .enumerate()
                             .find(|(_, s)| s.dynamic.is_none())
-                            .map(|(i, slot)| (i, slot.gen))
-                            .unwrap_or_else(|| (self.structures.len(), 0));
+                            .map(|(i, slot)| StructureId {
+                                id: i as u32,
+                                gen: slot.gen,
+                            })
+                            .unwrap_or_else(|| StructureId {
+                                id: self.structures.len() as u32,
+                                gen: 0,
+                            });
+
+                        for (other_id, structure) in
+                            self.structures.iter().enumerate().filter_map(|(i, s)| {
+                                Some((
+                                    StructureId {
+                                        id: i as u32,
+                                        gen: s.gen,
+                                    },
+                                    s.dynamic.as_deref()?,
+                                ))
+                            })
+                        {
+                            if (new_s.power_sink() && structure.power_source()
+                                || new_s.power_source() && structure.power_sink())
+                                && new_s.position().distance(structure.position())
+                                    <= new_s.wire_reach().min(structure.wire_reach()) as i32
+                            {
+                                let new_power_wire = PowerWire(id, other_id);
+                                if self.power_wires.iter().any(|p| *p == new_power_wire) {
+                                    continue;
+                                }
+                                console_log!("power_wires: {}", self.power_wires.len());
+                                self.power_wires.push(new_power_wire);
+                            }
+                        }
 
                         new_s.on_construction_self(
-                            StructureId { id: i as u32, gen },
-                            &StructureDynIter::new_all(&mut self.structures)?,
+                            id,
+                            &StructureDynIter::new_all(&mut self.structures),
                             true,
                         )?;
 
                         // Notify structures after a slot has been decided
                         for structure in &mut self.structures {
                             if let Some(s) = structure.dynamic.as_deref_mut() {
-                                s.on_construction(
-                                    StructureId { id: i as u32, gen },
-                                    new_s.as_mut(),
-                                    true,
-                                )?;
+                                s.on_construction(id, new_s.as_mut(), true)?;
                             }
                         }
 
-                        if i < self.structures.len() {
-                            self.structures[i].dynamic = Some(new_s);
+                        if id.id < self.structures.len() as u32 {
+                            self.structures[id.id as usize].dynamic = Some(new_s);
 
                             console_log!(
-                                "Inserted to an empty slot: {}/{}, id: {}.{}",
+                                "Inserted to an empty slot: {}/{}, id: {:?}",
                                 self.structures
                                     .iter()
                                     .filter(|s| s.dynamic.is_none())
                                     .count(),
                                 self.structures.len(),
-                                i,
-                                gen
+                                id
                             );
                         } else {
                             self.structures.push(StructureEntry {
@@ -2110,7 +2149,7 @@ impl FactorishState {
                         }
 
                         self.power_networks = build_power_networks(
-                            &StructureDynIter::new_all(&mut self.structures)?,
+                            &StructureDynIter::new_all(&mut self.structures),
                             &self.power_wires,
                         );
 
@@ -2710,65 +2749,56 @@ impl FactorishState {
         const WIRE_ATTACH_X: f64 = 28.;
         const WIRE_ATTACH_Y: f64 = 8.;
 
+        let draw_wires = |wires: &[PowerWire]| {
+            for PowerWire(first, second) in wires {
+                context.begin_path();
+                let first = if let Some(d) = self
+                    .structures
+                    .get(first.id as usize)
+                    .map(|s| s.dynamic.as_ref())
+                    .flatten()
+                {
+                    d.position()
+                } else {
+                    continue;
+                };
+                context.move_to(
+                    first.x as f64 * TILE_SIZE + WIRE_ATTACH_X,
+                    first.y as f64 * TILE_SIZE + WIRE_ATTACH_Y,
+                );
+                let second = if let Some(d) = self
+                    .structures
+                    .get(second.id as usize)
+                    .map(|s| s.dynamic.as_ref())
+                    .flatten()
+                {
+                    d.position()
+                } else {
+                    continue;
+                };
+                context.quadratic_curve_to(
+                    (first.x + second.x) as f64 / 2. * TILE_SIZE + WIRE_ATTACH_X,
+                    (first.y + second.y) as f64 / 1.9 * TILE_SIZE + WIRE_ATTACH_Y,
+                    second.x as f64 * TILE_SIZE + WIRE_ATTACH_X,
+                    second.y as f64 * TILE_SIZE + WIRE_ATTACH_Y,
+                );
+                context.stroke();
+            }
+        };
+
         if self.debug_power_network {
             for (i, nw) in self.power_networks.iter().enumerate() {
                 context.set_stroke_style(&js_str!(
                     ["rgb(255,0,0)", "rgb(0,0,255)", "rgb(0,255,0)"][i % 3]
                 ));
                 context.set_line_width(3.);
-                for (first, second) in &nw.wires {
-                    context.begin_path();
-                    let first = if let Some(d) = self
-                        .structures
-                        .get(first.id as usize)
-                        .map(|s| s.dynamic.as_ref())
-                        .flatten()
-                    {
-                        d.position()
-                    } else {
-                        continue;
-                    };
-                    context.move_to(
-                        first.x as f64 * TILE_SIZE + WIRE_ATTACH_X,
-                        first.y as f64 * TILE_SIZE + WIRE_ATTACH_Y,
-                    );
-                    let second = if let Some(d) = self
-                        .structures
-                        .get(second.id as usize)
-                        .map(|s| s.dynamic.as_ref())
-                        .flatten()
-                    {
-                        d.position()
-                    } else {
-                        continue;
-                    };
-                    context.quadratic_curve_to(
-                        (first.x + second.x) as f64 / 2. * TILE_SIZE + WIRE_ATTACH_X,
-                        (first.y + second.y) as f64 / 1.9 * TILE_SIZE + WIRE_ATTACH_Y,
-                        second.x as f64 * TILE_SIZE + WIRE_ATTACH_X,
-                        second.y as f64 * TILE_SIZE + WIRE_ATTACH_Y,
-                    );
-                    context.stroke();
-                }
+                draw_wires(&nw.wires);
             }
         }
 
         context.set_stroke_style(&js_str!("rgb(191,127,0)"));
         context.set_line_width(1.);
-        for power_wire in &self.power_wires {
-            context.begin_path();
-            context.move_to(
-                power_wire.0.x as f64 * TILE_SIZE + WIRE_ATTACH_X,
-                power_wire.0.y as f64 * TILE_SIZE + WIRE_ATTACH_Y,
-            );
-            context.quadratic_curve_to(
-                (power_wire.0.x + power_wire.1.x) as f64 / 2. * TILE_SIZE + WIRE_ATTACH_X,
-                (power_wire.0.y + power_wire.1.y) as f64 / 1.9 * TILE_SIZE + WIRE_ATTACH_Y,
-                power_wire.1.x as f64 * TILE_SIZE + WIRE_ATTACH_X,
-                power_wire.1.y as f64 * TILE_SIZE + WIRE_ATTACH_Y,
-            );
-            context.stroke();
-        }
+        draw_wires(&self.power_wires);
 
         draw_structures(1)?;
         draw_structures(2)?;

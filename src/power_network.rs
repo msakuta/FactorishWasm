@@ -2,11 +2,11 @@ use super::{
     structure::{StructureDynIter, StructureId},
     PowerWire,
 };
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 
 #[derive(Debug)]
 pub(crate) struct PowerNetwork {
-    pub wires: Vec<(StructureId, StructureId)>,
+    pub wires: Vec<PowerWire>,
     pub sources: HashSet<StructureId>,
     pub sinks: HashSet<StructureId>,
 }
@@ -15,14 +15,7 @@ pub(crate) fn build_power_networks(
     structures: &StructureDynIter,
     power_wires: &[PowerWire],
 ) -> Vec<PowerNetwork> {
-    let structure_positions = structures
-        .dyn_iter_id()
-        .map(|(id, s)| (*s.position(), id))
-        .collect::<HashMap<_, _>>();
-    let mut left_wires = power_wires
-        .iter()
-        .map(|w| (structure_positions[&w.0], structure_positions[&w.1]))
-        .collect::<HashSet<_>>();
+    let mut left_wires = power_wires.iter().collect::<HashSet<_>>();
     let mut ret = vec![];
 
     for (id, s) in structures.dyn_iter_id() {
@@ -57,7 +50,7 @@ pub(crate) fn build_power_networks(
                 while let Some(wire) = left_wires.iter().find(|w| w.0 == id || w.1 == id).copied() {
                     next_expand.insert(if wire.0 == id { wire.1 } else { wire.0 });
                     left_wires.remove(&wire);
-                    wires.push(wire);
+                    wires.push(*wire);
                 }
             }
             expand_list = next_expand;
