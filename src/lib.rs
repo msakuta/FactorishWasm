@@ -53,6 +53,7 @@ mod offshore_pump;
 mod ore_mine;
 mod perlin_noise;
 mod pipe;
+mod power_network;
 mod splitter;
 mod steam_engine;
 mod structure;
@@ -72,6 +73,7 @@ use offshore_pump::OffshorePump;
 use ore_mine::OreMine;
 use perlin_noise::{gen_terms, perlin_noise_pixel, Xor128};
 use pipe::Pipe;
+use power_network::{build_power_networks, PowerNetwork};
 use splitter::Splitter;
 use steam_engine::SteamEngine;
 use structure::{
@@ -536,6 +538,7 @@ pub struct FactorishState {
     drop_items: Vec<DropItem>,
     serial_no: u32,
     tool_belt: [Option<ItemType>; 10],
+    power_networks: Vec<PowerNetwork>,
 
     selected_item: Option<SelectedItem>,
     ore_harvesting: Option<OreHarvesting>,
@@ -710,6 +713,7 @@ impl FactorishState {
             info_elem: None,
             minimap_buffer: RefCell::new(vec![]),
             power_wires: vec![],
+            power_networks: vec![],
             popup_texts: vec![],
             debug_bbox: false,
             debug_fluidbox: false,
@@ -1054,10 +1058,19 @@ impl FactorishState {
 
         for i in 0..self.structures.len() {
             let (s, others) = StructureDynIter::new(&mut self.structures, i)?;
-            let id = StructureId { id: i as u32, gen: s.gen };
-            s.dynamic.as_deref_mut().map(|d| d.on_construction_self(id, &others, true))
+            let id = StructureId {
+                id: i as u32,
+                gen: s.gen,
+            };
+            s.dynamic
+                .as_deref_mut()
+                .map(|d| d.on_construction_self(id, &others, true))
                 .unwrap_or(Ok(()))?;
         }
+
+        let s_d_iter = StructureDynIter::new_all(&mut self.structures)?;
+        self.power_networks = build_power_networks(&s_d_iter, &self.power_wires);
+        console_log!("power_networks: {:?}", self.power_networks);
 
         self.drop_items = serde_json::from_value(
             json.get_mut("items")
@@ -1319,7 +1332,14 @@ impl FactorishState {
             let (center, mut dyn_iter) = StructureDynIter::new(&mut structures, i)?;
             if let Some(dynamic) = center.dynamic.as_deref_mut() {
                 frame_proc_result_to_event(
-                    dynamic.frame_proc(self, &mut dyn_iter), // dynamic.frame_proc(self, &mut Chained(MutRef(front), MutRef(last)))
+                    dynamic.frame_proc(
+                        StructureId {
+                            id: i as u32,
+                            gen: center.gen,
+                        },
+                        self,
+                        &mut dyn_iter,
+                    ), // dynamic.frame_proc(self, &mut Chained(MutRef(front), MutRef(last)))
                 );
             }
         }
@@ -1618,6 +1638,15 @@ impl FactorishState {
                 popup_text += &format!("+{} {}\n", count, &item_to_str(&item_type));
                 self.player.add_item(&item_type, count)
             }
+
+            self.power_networks = build_power_networks(
+                &StructureDynIter::new_all(&mut self.structures)?,
+                &self.power_wires,
+            );
+            console_log!(
+                "harvest structure: power_networks: {:?}",
+                self.power_networks
+            );
 
             self.update_fluid_connections(&position)?;
 
@@ -2116,7 +2145,7 @@ impl FactorishState {
                             true,
                         )?;
 
-                        // Notify structures after slot has been decided
+                        // Notify structures after a slot has been decided
                         for structure in &mut self.structures {
                             if let Some(s) = structure.dynamic.as_deref_mut() {
                                 s.on_construction(
@@ -2154,6 +2183,12 @@ impl FactorishState {
                                 self.structures.len()
                             );
                         }
+
+                        self.power_networks = build_power_networks(
+                            &StructureDynIter::new_all(&mut self.structures)?,
+                            &self.power_wires,
+                        );
+                        console_log!("build structure: power_networks: {:?}", self.power_networks);
 
                         self.update_fluid_connections(&cursor)?;
 

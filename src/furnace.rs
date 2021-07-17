@@ -1,6 +1,6 @@
 use super::{
     items::item_to_str,
-    structure::{Structure, StructureDynIter},
+    structure::{Structure, StructureDynIter, StructureId},
     DropItem, FactorishState, FrameProcResult, Inventory, InventoryTrait, ItemType, Position,
     Recipe, TempEnt, COAL_POWER,
 };
@@ -111,6 +111,7 @@ impl Structure for Furnace {
 
     fn frame_proc(
         &mut self,
+        _me: StructureId,
         state: &mut FactorishState,
         _structures: &mut StructureDynIter,
     ) -> Result<FrameProcResult, ()> {

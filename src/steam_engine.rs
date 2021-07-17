@@ -1,7 +1,7 @@
 use super::{
     pipe::Pipe,
     serialize_impl,
-    structure::{Structure, StructureDynIter},
+    structure::{Structure, StructureDynIter, StructureId},
     water_well::{FluidBox, FluidType},
     FactorishState, FrameProcResult, Position, Recipe,
 };
@@ -128,6 +128,7 @@ impl Structure for SteamEngine {
 
     fn frame_proc(
         &mut self,
+        _me: StructureId,
         _state: &mut FactorishState,
         structures: &mut StructureDynIter,
     ) -> Result<FrameProcResult, ()> {

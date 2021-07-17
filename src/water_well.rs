@@ -174,6 +174,7 @@ impl Structure for WaterWell {
 
     fn frame_proc(
         &mut self,
+        _me: StructureId,
         _state: &mut FactorishState,
         structures: &mut StructureDynIter,
     ) -> Result<FrameProcResult, ()> {
