@@ -1,6 +1,7 @@
 use super::{
-    dyn_iter::DynIterMut, structure::Structure, water_well::FluidBox, FactorishState,
-    FrameProcResult, Position,
+    structure::{Structure, StructureDynIter, StructureId},
+    water_well::FluidBox,
+    FactorishState, FrameProcResult, Position,
 };
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
@@ -16,7 +17,7 @@ impl Pipe {
     pub(crate) fn new(position: &Position) -> Self {
         Pipe {
             position: *position,
-            fluid_box: FluidBox::new(true, true, [false; 4]),
+            fluid_box: FluidBox::new(true, true, [None; 4]),
         }
     }
 
@@ -43,7 +44,8 @@ impl Pipe {
                                 .connect_to
                                 .iter()
                                 .enumerate()
-                                .fold(0, |acc, (i, b)| acc | ((*b as u32) << i)),
+                                .filter(|(_, b)| b.is_some())
+                                .fold(0, |acc, (i, _)| acc | (1 << i)),
                         )
                     })
                     .flatten()
@@ -101,10 +103,11 @@ impl Structure for Pipe {
 
     fn frame_proc(
         &mut self,
-        state: &mut FactorishState,
-        structures: &mut dyn DynIterMut<Item = Box<dyn Structure>>,
+        _me: StructureId,
+        _state: &mut FactorishState,
+        structures: &mut StructureDynIter,
     ) -> Result<FrameProcResult, ()> {
-        self.fluid_box.simulate(&self.position, state, structures);
+        self.fluid_box.simulate(structures);
         Ok(FrameProcResult::None)
     }
 
