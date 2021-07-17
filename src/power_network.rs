@@ -15,14 +15,21 @@ pub(crate) fn build_power_networks(
     structures: &StructureDynIter,
     power_wires: &[PowerWire],
 ) -> Vec<PowerNetwork> {
-    let mut checked = HashMap::<PowerWire, ()>::new();
+    let structure_positions = structures
+        .dyn_iter_id()
+        .map(|(id, s)| (*s.position(), id))
+        .collect::<HashMap<_, _>>();
+    let mut left_wires = power_wires
+        .iter()
+        .map(|w| (structure_positions[&w.0], structure_positions[&w.1]))
+        .collect::<HashSet<_>>();
     let mut ret = vec![];
 
     for (id, s) in structures.dyn_iter_id() {
         if !s.power_sink() && !s.power_source() {
             continue;
         }
-        let mut expand_list = HashMap::<Position, Vec<PowerWire>>::new();
+        let mut expand_list = HashMap::<StructureId, Vec<(StructureId, StructureId)>>::new();
         let mut wires = vec![];
         let mut sources = HashSet::new();
         let mut sinks = HashSet::new();
@@ -33,72 +40,53 @@ pub(crate) fn build_power_networks(
             sinks.insert(id);
         }
 
-        let mut check_struct = |position: &Position| {
-            if let Some((id, s)) = structures
-                .dyn_iter_id()
-                .find(|(_, structure)| *structure.position() == *position)
-            {
+        let mut check_struct = |id: StructureId| {
+            if let Some(s) = structures.get(id) {
                 if s.power_source() {
                     sources.insert(id);
                 }
                 if s.power_sink() {
                     sinks.insert(id);
                 }
-                Some(id)
-            } else {
-                None
             }
         };
 
-        let mut lr = None;
-        for wire in power_wires {
-            if checked.contains_key(wire) {
-                continue;
-            }
-            let left = if wire.0 == *s.position() {
-                expand_list.insert(wire.1, vec![*wire]);
-                checked.insert(*wire, ());
-                check_struct(&wire.1)
-            } else {
-                None
-            };
-            let right = if wire.1 == *s.position() {
-                expand_list.insert(wire.0, vec![*wire]);
-                checked.insert(*wire, ());
-                check_struct(&wire.0)
-            } else {
-                None
-            };
-            if let Some((left, right)) = left.zip(right) {
-                lr = Some((left, right));
-                break;
-            }
-        }
+        console_log!(
+            "before expand_list: {:?} for {:?} ({:?})",
+            left_wires.len(),
+            id,
+            s.name()
+        );
 
-        if let Some(lr) = lr {
-            wires.push(lr);
-        }
+        expand_list.insert(id, vec![]);
+
         // Simple Dijkstra
         while !expand_list.is_empty() {
-            let mut next_expand = HashMap::<Position, Vec<PowerWire>>::new();
-            for check in &expand_list {
-                for wire in power_wires.iter() {
-                    if checked.get(wire).is_some() {
-                        continue;
-                    }
-                    if wire.0 == *check.0 {
-                        next_expand.insert(wire.1, vec![*wire]);
-                        checked.insert(*wire, ());
-                        check_struct(&wire.1);
-                    } else if wire.1 == *check.0 {
-                        next_expand.insert(wire.0, vec![*wire]);
-                        checked.insert(*wire, ());
-                        check_struct(&wire.1);
-                    }
+            let mut next_expand = HashMap::<StructureId, Vec<(StructureId, StructureId)>>::new();
+            for (id, check) in expand_list {
+                check_struct(id);
+                console_log!("checking expand_list: {:?}, {:?}", id, check);
+                while let Some(wire) = left_wires.iter().find(|w| w.0 == id || w.1 == id).copied() {
+                    console_log!("found wire within expand_list: {:?}", wire);
+                    next_expand.insert(if wire.0 == id { wire.1 } else { wire.0 }, vec![wire]);
+                    left_wires.remove(&wire);
+                    console_log!(
+                        "left next_expand: {:?} left_wires: {:?}",
+                        next_expand,
+                        left_wires.len()
+                    );
+                    wires.push(wire);
                 }
             }
             expand_list = next_expand;
         }
+
+        console_log!(
+            "resulting wires: {}, sources: {}, sinks: {}",
+            wires.len(),
+            sources.len(),
+            sinks.len()
+        );
 
         if !sources.is_empty() && !sinks.is_empty() {
             ret.push(PowerNetwork {

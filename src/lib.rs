@@ -557,6 +557,7 @@ pub struct FactorishState {
     popup_texts: Vec<PopupText>,
     debug_bbox: bool,
     debug_fluidbox: bool,
+    debug_power_network: bool,
 
     // on_show_inventory: js_sys::Function,
     image_dirt: Option<ImageBundle>,
@@ -722,6 +723,7 @@ impl FactorishState {
             popup_texts: vec![],
             debug_bbox: false,
             debug_fluidbox: false,
+            debug_power_network: false,
             image_dirt: None,
             image_back_tiles: None,
             image_weeds: None,
@@ -1902,6 +1904,10 @@ impl FactorishState {
         self.debug_fluidbox = value;
     }
 
+    pub fn set_debug_power_network(&mut self, value: bool) {
+        self.debug_power_network = value;
+    }
+
     /// Move inventory items between structure and player
     /// @param to_player whether the movement happen towards player
     /// @param inventory_type a string indicating type of the inventory in the structure
@@ -2822,6 +2828,50 @@ impl FactorishState {
 
         const WIRE_ATTACH_X: f64 = 28.;
         const WIRE_ATTACH_Y: f64 = 8.;
+
+        if self.debug_power_network {
+            for (i, nw) in self.power_networks.iter().enumerate() {
+                context.set_stroke_style(&js_str!(
+                    ["rgb(255,0,0)", "rgb(0,0,255)", "rgb(0,255,0)"][i % 3]
+                ));
+                context.set_line_width(3.);
+                for (first, second) in &nw.wires {
+                    context.begin_path();
+                    let first = if let Some(d) = self
+                        .structures
+                        .get(first.id as usize)
+                        .map(|s| s.dynamic.as_ref())
+                        .flatten()
+                    {
+                        d.position()
+                    } else {
+                        continue;
+                    };
+                    context.move_to(
+                        first.x as f64 * TILE_SIZE + WIRE_ATTACH_X,
+                        first.y as f64 * TILE_SIZE + WIRE_ATTACH_Y,
+                    );
+                    let second = if let Some(d) = self
+                        .structures
+                        .get(second.id as usize)
+                        .map(|s| s.dynamic.as_ref())
+                        .flatten()
+                    {
+                        d.position()
+                    } else {
+                        continue;
+                    };
+                    context.quadratic_curve_to(
+                        (first.x + second.x) as f64 / 2. * TILE_SIZE + WIRE_ATTACH_X,
+                        (first.y + second.y) as f64 / 1.9 * TILE_SIZE + WIRE_ATTACH_Y,
+                        second.x as f64 * TILE_SIZE + WIRE_ATTACH_X,
+                        second.y as f64 * TILE_SIZE + WIRE_ATTACH_Y,
+                    );
+                    context.stroke();
+                }
+            }
+        }
+
         context.set_stroke_style(&js_str!("rgb(191,127,0)"));
         context.set_line_width(1.);
         for power_wire in &self.power_wires {

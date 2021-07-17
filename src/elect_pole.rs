@@ -1,8 +1,4 @@
-use super::{
-    dyn_iter::DynIterMut,
-    structure::{Structure, StructureDynIter, StructureId},
-    FactorishState, FrameProcResult, Position,
-};
+use super::{structure::Structure, FactorishState, Position};
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 use web_sys::CanvasRenderingContext2d;
@@ -20,8 +16,6 @@ impl ElectPole {
             power: 0.,
         }
     }
-
-    const POWER_CAPACITY: f64 = 10.;
 }
 
 impl Structure for ElectPole {

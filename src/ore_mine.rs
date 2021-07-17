@@ -1,6 +1,5 @@
 use super::{
     draw_direction_arrow,
-    dyn_iter::DynIterMut,
     items::ItemType,
     structure::{Structure, StructureDynIter, StructureId},
     DropItem, FactorishState, FrameProcResult, Inventory, InventoryTrait, Position, Recipe,
@@ -22,6 +21,7 @@ pub(crate) struct OreMine {
     max_power: f64,
     recipe: Option<Recipe>,
     input_inventory: Inventory,
+    output_structure: Option<StructureId>,
 }
 
 impl OreMine {
@@ -34,7 +34,27 @@ impl OreMine {
             max_power: 25.,
             recipe: None,
             input_inventory: Inventory::new(),
+            output_structure: None,
         }
+    }
+
+    fn on_construction_common(
+        &mut self,
+        other_id: StructureId,
+        other: &dyn Structure,
+        construct: bool,
+    ) -> Result<(), JsValue> {
+        let output_position = self.position.add(self.rotation.delta());
+        if *other.position() == output_position {
+            self.output_structure = if construct { Some(other_id) } else { None };
+            console_log!(
+                "OreMine{:?}: {} output_structure {:?}",
+                self.position,
+                if construct { "set" } else { "unset" },
+                other_id
+            );
+        }
+        Ok(())
     }
 }
 
@@ -215,8 +235,11 @@ impl Structure for OreMine {
             if 1. <= self.progress + progress {
                 self.progress = 0.;
                 let output_position = self.position.add(self.rotation.delta());
-                let mut str_iter = structures.dyn_iter_mut();
-                if let Some(structure) = str_iter.find(|s| *s.position() == output_position) {
+                if let Some(structure) = self
+                    .output_structure
+                    .map(|id| structures.get_mut(id))
+                    .flatten()
+                {
                     let mut it = recipe.output.iter();
                     if let Some(item) = it.next() {
                         // Check whether we can input first
@@ -294,6 +317,27 @@ impl Structure for OreMine {
     fn can_input(&self, item_type: &ItemType) -> bool {
         *item_type == ItemType::CoalOre
             && self.input_inventory.count_item(&ItemType::CoalOre) < FUEL_CAPACITY
+    }
+
+    fn on_construction(
+        &mut self,
+        other_id: StructureId,
+        other: &dyn Structure,
+        construct: bool,
+    ) -> Result<(), JsValue> {
+        self.on_construction_common(other_id, other, construct)
+    }
+
+    fn on_construction_self(
+        &mut self,
+        _self_id: StructureId,
+        others: &StructureDynIter,
+        construct: bool,
+    ) -> Result<(), JsValue> {
+        for (id, s) in others.dyn_iter_id() {
+            self.on_construction_common(id, s, construct)?;
+        }
+        Ok(())
     }
 
     fn burner_inventory(&self) -> Option<&Inventory> {
