@@ -2836,7 +2836,7 @@ impl FactorishState {
             tool.set_rotation(&self.tool_rotation).ok();
             for depth in 0..3 {
                 tool.dynamic
-                    .draw(&StructureComponents::default(), self, context, depth, true)?;
+                    .draw(&tool.components, self, context, depth, true)?;
             }
         }
         Ok(())
