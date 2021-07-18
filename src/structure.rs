@@ -342,7 +342,12 @@ pub(crate) enum ItemResponse {
 
 pub(crate) type ItemResponseResult = (ItemResponse, Option<FrameProcResult>);
 
-use std::fmt::Debug;
+#[derive(Debug)]
+pub(crate) enum RotateErr {
+    NotFound,
+    NotSupported,
+    Other(JsValue),
+}
 
 pub(crate) trait Structure {
     fn name(&self) -> &str;
@@ -405,8 +410,8 @@ pub(crate) trait Structure {
     fn movable(&self) -> bool {
         false
     }
-    fn rotate(&mut self, _others: &StructureDynIter) -> Result<(), JsValue> {
-        js_err!("rotate not supported")
+    fn rotate(&mut self, _others: &StructureDynIter) -> Result<(), RotateErr> {
+        Err(RotateErr::NotSupported)
     }
     fn set_rotation(&mut self, _rotation: &Rotation) -> Result<(), ()> {
         Err(())

@@ -1,5 +1,7 @@
 use super::{
-    structure::{BoundingBox, ItemResponse, ItemResponseResult, Size, Structure, StructureDynIter},
+    structure::{
+        BoundingBox, ItemResponse, ItemResponseResult, RotateErr, Size, Structure, StructureDynIter,
+    },
     DropItem, FactorishState, Position, Rotation, TILE_SIZE,
 };
 use serde::{Deserialize, Serialize};
@@ -137,7 +139,7 @@ impl Structure for Splitter {
         true
     }
 
-    fn rotate(&mut self, _others: &StructureDynIter) -> Result<(), JsValue> {
+    fn rotate(&mut self, _others: &StructureDynIter) -> Result<(), RotateErr> {
         self.rotation = self.rotation.next();
         Ok(())
     }

@@ -1,7 +1,7 @@
 use super::{
     draw_direction_arrow,
     items::{render_drop_item, ItemType},
-    structure::{Structure, StructureDynIter, StructureId},
+    structure::{RotateErr, Structure, StructureDynIter, StructureId},
     DropItem, FactorishState, FrameProcResult, Inventory, InventoryTrait, Position, Rotation,
 };
 use serde::{Deserialize, Serialize};
@@ -339,10 +339,11 @@ impl Structure for Inserter {
         Ok(())
     }
 
-    fn rotate(&mut self, others: &StructureDynIter) -> Result<(), JsValue> {
+    fn rotate(&mut self, others: &StructureDynIter) -> Result<(), RotateErr> {
         self.rotation = self.rotation.next();
         for (id, s) in others.dyn_iter_id() {
-            self.on_construction_common(id, s, true)?;
+            self.on_construction_common(id, s, true)
+                .map_err(|e| RotateErr::Other(e))?;
         }
         Ok(())
     }

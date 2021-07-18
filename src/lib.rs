@@ -77,8 +77,8 @@ use power_network::{build_power_networks, PowerNetwork};
 use splitter::Splitter;
 use steam_engine::SteamEngine;
 use structure::{
-    FrameProcResult, ItemResponse, Position, Rotation, Structure, StructureBoxed, StructureDynIter,
-    StructureEntry, StructureId,
+    FrameProcResult, ItemResponse, Position, RotateErr, Rotation, Structure, StructureBoxed,
+    StructureDynIter, StructureEntry, StructureId,
 };
 use transport_belt::TransportBelt;
 use water_well::{FluidType, WaterWell};
@@ -599,12 +599,6 @@ enum NewObjectErr {
     BlockedByStructure,
     BlockedByItem,
     OutOfMap,
-}
-
-#[derive(Debug)]
-enum RotateErr {
-    NotFound,
-    NotSupported,
 }
 
 #[wasm_bindgen]
@@ -1532,9 +1526,7 @@ impl FactorishState {
                     s.dynamic
                         .as_deref_mut()
                         .ok_or(RotateErr::NotFound)?
-                        .rotate(&others)
-                        .map_err(|_| RotateErr::NotSupported)
-                        .map(|_| false)?;
+                        .rotate(&others)?;
                 }
             }
             Err(RotateErr::NotFound)
