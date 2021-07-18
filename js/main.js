@@ -184,9 +184,17 @@ let ysize = 64;
     let sim = new FactorishState(xsize, ysize, updateInventory, terrainSeed, waterNoiseThreshold, resourceAmount, noiseScale, noiseThreshold);
 
     const canvas = document.getElementById('canvas');
-    const canvasSize = canvas.getBoundingClientRect();
+    let canvasSize = canvas.getBoundingClientRect();
     let viewPortWidth = canvasSize.width / 32;
     let viewPortHeight = canvasSize.height / 32;
+    const refreshSize = (event) => {
+        canvasSize = canvas.getBoundingClientRect();
+        canvas.width = canvasSize.width;
+        canvas.height = canvasSize.height;
+        sim.reset_viewport(canvas);
+    };
+    document.body.onresize = refreshSize;
+    refreshSize();
     const ctx = canvas.getContext('2d');
     const container = document.getElementById('container2');
     const containerRect = container.getBoundingClientRect();
@@ -238,12 +246,12 @@ let ysize = 64;
     miniMapElem.setAttribute("height", ysize);
     miniMapElem.style.width = miniMapSize + 'px';
     miniMapElem.style.height = miniMapSize + 'px';
-    miniMapElem.style.left = (canvasSize.right - containerRect.left + tableMargin) + 'px';
-    miniMapElem.style.top = (canvasSize.top - containerRect.top) + 'px';
+    miniMapElem.style.right = '8px';
+    miniMapElem.style.top = '8px';
     const mrect = miniMapElem.getBoundingClientRect();
     const miniMapContext = miniMapElem.getContext('2d');
 
-    infoElem.style.left = (canvasSize.right + tableMargin) + 'px';
+    infoElem.style.right = '8px';
     infoElem.style.top = (mrect.bottom - containerRect.top + tableMargin) + 'px';
     infoElem.style.width = miniMapSize + 'px';
     infoElem.style.height = (canvasSize.height - mrect.height - tableMargin) + 'px';
@@ -1085,7 +1093,7 @@ let ysize = 64;
             return;
         for(let event of events){
             if(event[0] === "updateStructureInventory"){
-                console.log(`updateStructureInventory event received ${event}`);
+                // console.log(`updateStructureInventory event received ${event}`);
                 updateStructureInventory([event[1], event[2]]);
             }
             if(event[0] === "updatePlayerInventory"){

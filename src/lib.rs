@@ -2410,6 +2410,11 @@ impl FactorishState {
         data[start..start + 3].copy_from_slice(&color);
     }
 
+    pub fn reset_viewport(&mut self, canvas: HtmlCanvasElement) {
+        self.viewport_width = canvas.width() as f64;
+        self.viewport_height = canvas.height() as f64;
+    }
+
     pub fn render_init(
         &mut self,
         canvas: HtmlCanvasElement,
