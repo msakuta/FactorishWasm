@@ -1109,6 +1109,8 @@ let ysize = 64;
     showDebugBBox.addEventListener("click", () => sim.set_debug_bbox(showDebugBBox.checked));
     const showDebugFluidBox = document.getElementById("showDebugFluidBox");
     showDebugFluidBox.addEventListener("click", () => sim.set_debug_fluidbox(showDebugFluidBox.checked));
+    const showDebugPowerNetwork = document.getElementById("showDebugPowerNetwork");
+    showDebugPowerNetwork.addEventListener("click", () => sim.set_debug_power_network(showDebugPowerNetwork.checked));
 
     window.setInterval(function(){
         if(!paused)

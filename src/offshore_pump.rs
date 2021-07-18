@@ -1,7 +1,6 @@
 use super::{
-    dyn_iter::DynIterMut,
     pipe::Pipe,
-    structure::Structure,
+    structure::{Structure, StructureDynIter, StructureId},
     water_well::{FluidBox, FluidType},
     FactorishState, FrameProcResult, Position,
 };
@@ -19,7 +18,7 @@ impl OffshorePump {
     pub(crate) fn new(position: &Position) -> Self {
         OffshorePump {
             position: *position,
-            output_fluid_box: FluidBox::new(false, true, [false; 4]).set_type(&FluidType::Water),
+            output_fluid_box: FluidBox::new(false, true, [None; 4]).set_type(&FluidType::Water),
         }
     }
 }
@@ -65,13 +64,13 @@ impl Structure for OffshorePump {
 
     fn frame_proc(
         &mut self,
-        state: &mut FactorishState,
-        structures: &mut dyn DynIterMut<Item = Box<dyn Structure>>,
+        _me: StructureId,
+        _state: &mut FactorishState,
+        structures: &mut StructureDynIter,
     ) -> Result<FrameProcResult, ()> {
         self.output_fluid_box.amount =
             (self.output_fluid_box.amount + 1.).min(self.output_fluid_box.max_amount);
-        self.output_fluid_box
-            .simulate(&self.position, state, structures);
+        self.output_fluid_box.simulate(structures);
         Ok(FrameProcResult::None)
     }
 
