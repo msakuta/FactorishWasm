@@ -90,10 +90,8 @@ use power_network::{build_power_networks, PowerNetwork};
 use splitter::Splitter;
 use steam_engine::SteamEngine;
 use structure::{
-    FrameProcResult, ItemResponse, Position, Rotation, Structure, StructureBundle,
-    StructureComponents,
-    RotateErr, StructureBoxed,
-    StructureDynIter, StructureEntry, StructureId,
+    FrameProcResult, ItemResponse, Position, RotateErr, Rotation, Structure, StructureBoxed,
+    StructureBundle, StructureComponents, StructureDynIter, StructureEntry, StructureId,
 };
 use transport_belt::TransportBelt;
 use water_well::{FluidType, WaterWell};
@@ -1100,7 +1098,10 @@ impl FactorishState {
             };
             s.bundle
                 .as_mut()
-                .map(|b| b.dynamic.on_construction_self(id, &mut b.components, &others, true))
+                .map(|b| {
+                    b.dynamic
+                        .on_construction_self(id, &mut b.components, &others, true)
+                })
                 .unwrap_or(Ok(()))?;
         }
 
@@ -1136,11 +1137,7 @@ impl FactorishState {
     #[allow(dead_code)]
     fn proc_structures_mutual(
         &mut self,
-        mut f: impl FnMut(
-            &mut Self,
-            &mut StructureBundle,
-            &StructureDynIter,
-        ) -> Result<(), JsValue>,
+        mut f: impl FnMut(&mut Self, &mut StructureBundle, &StructureDynIter) -> Result<(), JsValue>,
     ) -> Result<(), JsValue> {
         // This is silly way to avoid borrow checker that temporarily move the structures
         // away from self so that they do not claim mutable borrow twice, but it works.
@@ -1267,7 +1264,10 @@ impl FactorishState {
             .find(|s| {
                 s.1.bundle
                     .as_ref()
-                    .map(|a| a.components.position == Some(*position) && !a.components.fluid_boxes.is_empty())
+                    .map(|a| {
+                        a.components.position == Some(*position)
+                            && !a.components.fluid_boxes.is_empty()
+                    })
                     .unwrap_or(false)
             })
             .map(|v| v.0)
@@ -1276,13 +1276,16 @@ impl FactorishState {
                 if i != j {
                     if let (Some(a), Some(b)) = self.get_pair_mut(i, j) {
                         let (aid, bid) = (a.0, b.0);
-                        if let Some(idx) =
-                            try_continue!(a.1.components.position)
-                                .neighbor_index(try_continue!(&b.1.components.position))
+                        if let Some(idx) = try_continue!(a.1.components.position)
+                            .neighbor_index(try_continue!(&b.1.components.position))
                         {
-                            a.1.components.fluid_boxes.iter_mut()
+                            a.1.components
+                                .fluid_boxes
+                                .iter_mut()
                                 .for_each(|fb| fb.connect_to[(idx as usize + 2) % 4] = Some(bid));
-                            b.1.components.fluid_boxes.iter_mut()
+                            b.1.components
+                                .fluid_boxes
+                                .iter_mut()
                                 .for_each(|fb| fb.connect_to[idx as usize] = Some(aid));
                         }
                     }
@@ -1296,7 +1299,9 @@ impl FactorishState {
                     .and_then(|s| s.bundle.as_mut())
                     .and_then(|s| Some((position.neighbor_index(&s.components.position?)?, s)))
                 {
-                    b.components.fluid_boxes.iter_mut()
+                    b.components
+                        .fluid_boxes
+                        .iter_mut()
                         .for_each(|fb| fb.connect_to[idx as usize] = None);
                 }
             }
@@ -1415,7 +1420,8 @@ impl FactorishState {
                 }
                 if let Some(factory) = &mut components.factory {
                     frame_proc_result_to_event(
-                        factory.frame_proc(components.position.as_mut(), components.energy.as_mut()),
+                        factory
+                            .frame_proc(components.position.as_mut(), components.energy.as_mut()),
                     );
                 }
             }
@@ -1526,29 +1532,36 @@ impl FactorishState {
 
     /// Look up a structure at a given tile coordinates
     fn find_structure_tile(&self, tile: &[i32]) -> Option<&StructureBundle> {
-        self.structures.iter().filter_map(|s| s.bundle.as_ref()).find(|s| {
-            s.components.position
-                == Some(Position {
-                    x: tile[0],
-                    y: tile[1],
-                })
-        })
-    }
-
-    /// Mutable variant of find_structure_tile
-    fn find_structure_tile_mut(&mut self, tile: &[i32]) -> Option<&mut StructureBundle> {
-        self.structures.iter_mut().find(|s| {
-            s.bundle.as_ref().map(|bundle| {
-                bundle.components.position
+        self.structures
+            .iter()
+            .filter_map(|s| s.bundle.as_ref())
+            .find(|s| {
+                s.components.position
                     == Some(Position {
                         x: tile[0],
                         y: tile[1],
                     })
-                })
-                .unwrap_or(false)
-        })
-        .map(|entry| entry.bundle.as_mut())
-        .flatten()
+            })
+    }
+
+    /// Mutable variant of find_structure_tile
+    fn find_structure_tile_mut(&mut self, tile: &[i32]) -> Option<&mut StructureBundle> {
+        self.structures
+            .iter_mut()
+            .find(|s| {
+                s.bundle
+                    .as_ref()
+                    .map(|bundle| {
+                        bundle.components.position
+                            == Some(Position {
+                                x: tile[0],
+                                y: tile[1],
+                            })
+                    })
+                    .unwrap_or(false)
+            })
+            .map(|entry| entry.bundle.as_mut())
+            .flatten()
     }
 
     /// Dirty hack to enable modifying a structure in an array.
@@ -1660,14 +1673,14 @@ impl FactorishState {
             Ok(true)
         } else {
             if let Some(ref cursor) = self.cursor {
-                if let Some(idx) = self.find_structure_tile_idx(Position { x: cursor[0], y: cursor[1] } ) {
+                if let Some(idx) = self.find_structure_tile_idx(Position {
+                    x: cursor[0],
+                    y: cursor[1],
+                }) {
                     let (s, others) = StructureDynIter::new(&mut self.structures, idx)
                         .map_err(|_| RotateErr::NotFound)?;
-                    let bundle = s.bundle
-                        .as_mut()
-                        .ok_or(RotateErr::NotFound)?;
-                    bundle.dynamic
-                        .rotate(&mut bundle.components, &others)?;
+                    let bundle = s.bundle.as_mut().ok_or(RotateErr::NotFound)?;
+                    bundle.dynamic.rotate(&mut bundle.components, &others)?;
                 }
             }
             Err(RotateErr::NotFound)
@@ -1739,9 +1752,7 @@ impl FactorishState {
                 .into_iter()
                 .filter(|power_wire| power_wire.0.id != i as u32 && power_wire.1.id != i as u32)
                 .collect();
-            structure
-                .dynamic
-                .on_construction_self(
+            structure.dynamic.on_construction_self(
                 StructureId { id: i as u32, gen },
                 &mut structure.components,
                 &StructureDynIter::new_all(&mut self.structures),
@@ -2389,7 +2400,9 @@ impl FactorishState {
                                 ))
                             })
                         {
-                            let (new_pos, other_pos) = if let Some(pos) = new_s.components.position.zip(structure.components.position) {
+                            let (new_pos, other_pos) = if let Some(pos) =
+                                new_s.components.position.zip(structure.components.position)
+                            {
                                 pos
                             } else {
                                 continue;
@@ -2397,7 +2410,11 @@ impl FactorishState {
                             if (new_s.dynamic.power_sink() && structure.dynamic.power_source()
                                 || new_s.dynamic.power_source() && structure.dynamic.power_sink())
                                 && new_pos.distance(&other_pos)
-                                    <= new_s.dynamic.wire_reach().min(structure.dynamic.wire_reach()) as i32
+                                    <= new_s
+                                        .dynamic
+                                        .wire_reach()
+                                        .min(structure.dynamic.wire_reach())
+                                        as i32
                             {
                                 let new_power_wire = PowerWire(id, other_id);
                                 if self.power_wires.iter().any(|p| *p == new_power_wire) {
@@ -2418,7 +2435,8 @@ impl FactorishState {
                         // Notify structures after a slot has been decided
                         for structure in &mut self.structures {
                             if let Some(s) = structure.bundle.as_mut() {
-                                s.dynamic.on_construction(&mut s.components, id, &new_s, true)?;
+                                s.dynamic
+                                    .on_construction(&mut s.components, id, &new_s, true)?;
                             }
                         }
 
@@ -2667,7 +2685,9 @@ impl FactorishState {
         let color;
         if self.structures.iter().any(|structure| {
             structure
-                .bundle.as_ref().map(|b| b.components.position == Some(*position))
+                .bundle
+                .as_ref()
+                .map(|b| b.components.position == Some(*position))
                 .unwrap_or(false)
         }) {
             color = [0x00, 0xff, 0x7f];

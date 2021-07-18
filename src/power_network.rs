@@ -19,17 +19,17 @@ pub(crate) fn build_power_networks(
     let mut ret = vec![];
 
     for (id, s) in structures.dyn_iter_id() {
-        if !s.power_sink() && !s.power_source() {
+        if !s.dynamic.power_sink() && !s.dynamic.power_source() {
             continue;
         }
         let mut expand_list = HashSet::<StructureId>::new();
         let mut wires = vec![];
         let mut sources = HashSet::new();
         let mut sinks = HashSet::new();
-        if s.power_source() {
+        if s.dynamic.power_source() {
             sources.insert(id);
         }
-        if s.power_sink() {
+        if s.dynamic.power_sink() {
             sinks.insert(id);
         }
 
@@ -40,10 +40,10 @@ pub(crate) fn build_power_networks(
             let mut next_expand = HashSet::<StructureId>::new();
             for id in expand_list {
                 if let Some(s) = structures.get(id) {
-                    if s.power_source() {
+                    if s.dynamic.power_source() {
                         sources.insert(id);
                     }
-                    if s.power_sink() {
+                    if s.dynamic.power_sink() {
                         sinks.insert(id);
                     }
                 }

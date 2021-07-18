@@ -1,7 +1,9 @@
 use super::{
     draw_direction_arrow,
     items::{render_drop_item, ItemType},
-    structure::{RotateErr, Structure, StructureBundle, StructureComponents, StructureDynIter, StructureId},
+    structure::{
+        RotateErr, Structure, StructureBundle, StructureComponents, StructureDynIter, StructureId,
+    },
     DropItem, FactorishState, FrameProcResult, Inventory, InventoryTrait, Position, Rotation,
 };
 use serde::{Deserialize, Serialize};
@@ -54,11 +56,18 @@ impl Inserter {
         other: &StructureBundle,
         construct: bool,
     ) -> Result<(), JsValue> {
-        let position = components.position.ok_or_else(|| js_str!("Inserter without position"))?;
-        let rotation = components.rotation.ok_or_else(|| js_str!("Inserter without rotation"))?;
+        let position = components
+            .position
+            .ok_or_else(|| js_str!("Inserter without position"))?;
+        let rotation = components
+            .rotation
+            .ok_or_else(|| js_str!("Inserter without rotation"))?;
         let input_position = position.add(rotation.delta_inv());
         let output_position = position.add(rotation.delta());
-        let other_position = other.components.position.ok_or_else(|| js_str!("Others do not have position"))?;
+        let other_position = other
+            .components
+            .position
+            .ok_or_else(|| js_str!("Others do not have position"))?;
         if other_position == input_position {
             self.input_structure = if construct { Some(other_id) } else { None };
             console_log!(
@@ -347,7 +356,11 @@ impl Structure for Inserter {
         Ok(())
     }
 
-    fn rotate(&mut self, components: &mut StructureComponents, others: &StructureDynIter) -> Result<(), RotateErr> {
+    fn rotate(
+        &mut self,
+        components: &mut StructureComponents,
+        others: &StructureDynIter,
+    ) -> Result<(), RotateErr> {
         if let Some(ref mut rotation) = components.rotation {
             *rotation = rotation.next();
             for (id, s) in others.dyn_iter_id() {
@@ -360,7 +373,11 @@ impl Structure for Inserter {
         }
     }
 
-    fn set_rotation(&mut self, components: &mut StructureComponents, rotation: &Rotation) -> Result<(), ()> {
+    fn set_rotation(
+        &mut self,
+        components: &mut StructureComponents,
+        rotation: &Rotation,
+    ) -> Result<(), ()> {
         if let Some(ref mut self_rotation) = components.rotation {
             *self_rotation = *rotation;
             Ok(())

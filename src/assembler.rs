@@ -2,9 +2,10 @@ use super::{
     factory::Factory,
     items::get_item_image_url,
     serialize_impl,
-    structure::{Energy, Structure, StructureBundle, StructureComponents, StructureDynIter, StructureId},
-    FactorishState, FrameProcResult, InventoryTrait, ItemType, Position, Recipe,
-    TILE_SIZE,
+    structure::{
+        Energy, Structure, StructureBundle, StructureComponents, StructureDynIter, StructureId,
+    },
+    FactorishState, FrameProcResult, InventoryTrait, ItemType, Position, Recipe, TILE_SIZE,
 };
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
