@@ -1518,6 +1518,9 @@ impl FactorishState {
         if let Some(SelectedItem::ToolBelt(_selected_tool)) = self.selected_item {
             self.tool_rotation = self.tool_rotation.next();
             Ok(true)
+        } else if let Some(SelectedItem::PlayerInventory(item)) = self.selected_item {
+            self.tool_rotation = self.tool_rotation.next();
+            Ok(true)
         } else {
             if let Some(ref cursor) = self.cursor {
                 if let Some(idx) = self.find_structure_tile_idx(cursor) {
@@ -2259,6 +2262,7 @@ impl FactorishState {
     /// Keyboard event handler. Returns true if re-rendering is necessary to update internal state.
     pub fn on_key_down(&mut self, key_code: i32) -> Result<bool, JsValue> {
         match key_code {
+            // 'r'
             82 => match self.rotate() {
                 Ok(b) => Ok(b),
                 // If the target structure is not found or uncapable of rotation, it's not a critical error.
