@@ -22,6 +22,8 @@ pub(crate) struct OreMine {
     recipe: Option<Recipe>,
     input_inventory: Inventory,
     output_structure: Option<StructureId>,
+    #[serde(skip)]
+    digging: bool,
 }
 
 impl OreMine {
@@ -35,6 +37,7 @@ impl OreMine {
             recipe: None,
             input_inventory: Inventory::new(),
             output_structure: None,
+            digging: false,
         }
     }
 
@@ -81,14 +84,7 @@ impl Structure for OreMine {
         match depth {
             0 => match state.image_mine.as_ref() {
                 Some(img) => {
-                    let progress = if let Some(ref recipe) = self.recipe {
-                        (self.power / recipe.power_cost)
-                            .min(1. / recipe.recipe_time)
-                            .min(1. - self.progress)
-                    } else {
-                        0.
-                    };
-                    let sx = if 0. < progress {
+                    let sx = if self.digging {
                         (((state.sim_time * 5.) as isize) % 2 + 1) as f64 * TILE_SIZE
                     } else {
                         0.
@@ -233,7 +229,6 @@ impl Structure for OreMine {
                     .push(TempEnt::new(&mut state.rng, self.position));
             }
             if 1. <= self.progress + progress {
-                self.progress = 0.;
                 let output_position = self.position.add(self.rotation.delta());
                 if let Some(structure) = self
                     .output_structure
@@ -256,11 +251,15 @@ impl Structure for OreMine {
                                 if val == 0 {
                                     self.recipe = None;
                                 }
+                                self.progress = 0.;
                                 return Ok(FrameProcResult::InventoryChanged(output_position));
                             } else {
                                 self.recipe = None;
                                 return Err(());
                             };
+                        } else {
+                            // Output is blocked, wait
+                            self.digging = false;
                         }
                     }
                     if !structure.movable() {
@@ -280,15 +279,20 @@ impl Structure for OreMine {
                             if val == 0 {
                                 self.recipe = None;
                             }
+                            self.progress = 0.;
                         }
                     } else {
                         return Err(());
                     }
+                    self.progress = 0.;
                 }
             } else {
                 self.progress += progress;
                 self.power -= progress * recipe.power_cost;
+                self.digging = 0. < progress;
             }
+        } else {
+            self.digging = false;
         }
         Ok(ret)
     }
