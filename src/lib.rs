@@ -1158,7 +1158,8 @@ impl FactorishState {
     }
 
     fn get_structure(&self, id: StructureId) -> Option<&dyn Structure> {
-        self.structures.iter()
+        self.structures
+            .iter()
             .enumerate()
             .find(|(i, s)| id.id == *i as u32 && id.gen == s.gen)
             .map(|(_, s)| s.dynamic.as_deref())
@@ -1526,12 +1527,14 @@ impl FactorishState {
         } else {
             if let Some(ref cursor) = self.cursor {
                 if let Some(idx) = self.find_structure_tile_idx(cursor) {
-                    if let Some(d) = self.structures[idx].dynamic.as_mut() {
-                        d.as_mut()
-                            .rotate()
-                            .map_err(|()| RotateErr::NotSupported)
-                            .map(|_| false)?;
-                    }
+                    let (s, others) = StructureDynIter::new(&mut self.structures, idx)
+                        .map_err(|_| RotateErr::NotFound)?;
+                    s.dynamic
+                        .as_deref_mut()
+                        .ok_or(RotateErr::NotFound)?
+                        .rotate(&others)
+                        .map_err(|_| RotateErr::NotSupported)
+                        .map(|_| false)?;
                 }
             }
             Err(RotateErr::NotFound)
@@ -2760,9 +2763,7 @@ impl FactorishState {
         let draw_wires = |wires: &[PowerWire]| {
             for PowerWire(first, second) in wires {
                 context.begin_path();
-                let first = if let Some(d) = self
-                    .get_structure(*first)
-                {
+                let first = if let Some(d) = self.get_structure(*first) {
                     d.position()
                 } else {
                     continue;
@@ -2771,9 +2772,7 @@ impl FactorishState {
                     first.x as f64 * TILE_SIZE + WIRE_ATTACH_X,
                     first.y as f64 * TILE_SIZE + WIRE_ATTACH_Y,
                 );
-                let second = if let Some(d) = self
-                    .get_structure(*second)
-                {
+                let second = if let Some(d) = self.get_structure(*second) {
                     d.position()
                 } else {
                     continue;

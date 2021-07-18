@@ -1,5 +1,7 @@
-use super::structure::{ItemResponse, ItemResponseResult, Structure};
-use super::{DropItem, FactorishState, Position, Rotation, TILE_SIZE};
+use super::{
+    structure::{ItemResponse, ItemResponseResult, Structure, StructureDynIter},
+    DropItem, FactorishState, Position, Rotation, TILE_SIZE,
+};
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 use web_sys::CanvasRenderingContext2d;
@@ -71,7 +73,7 @@ impl Structure for TransportBelt {
         true
     }
 
-    fn rotate(&mut self) -> Result<(), ()> {
+    fn rotate(&mut self, _others: &StructureDynIter) -> Result<(), JsValue> {
         self.rotation = self.rotation.next();
         Ok(())
     }

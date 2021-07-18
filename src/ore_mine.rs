@@ -293,8 +293,11 @@ impl Structure for OreMine {
         Ok(ret)
     }
 
-    fn rotate(&mut self) -> Result<(), ()> {
+    fn rotate(&mut self, others: &StructureDynIter) -> Result<(), JsValue> {
         self.rotation = self.rotation.next();
+        for (id, s) in others.dyn_iter_id() {
+            self.on_construction_common(id, s, true)?;
+        }
         Ok(())
     }
 

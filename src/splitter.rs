@@ -1,5 +1,7 @@
-use super::structure::{BoundingBox, ItemResponse, ItemResponseResult, Size, Structure};
-use super::{DropItem, FactorishState, Position, Rotation, TILE_SIZE};
+use super::{
+    structure::{BoundingBox, ItemResponse, ItemResponseResult, Size, Structure, StructureDynIter},
+    DropItem, FactorishState, Position, Rotation, TILE_SIZE,
+};
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 use web_sys::CanvasRenderingContext2d;
@@ -135,7 +137,7 @@ impl Structure for Splitter {
         true
     }
 
-    fn rotate(&mut self) -> Result<(), ()> {
+    fn rotate(&mut self, _others: &StructureDynIter) -> Result<(), JsValue> {
         self.rotation = self.rotation.next();
         Ok(())
     }

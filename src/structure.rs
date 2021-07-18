@@ -405,8 +405,8 @@ pub(crate) trait Structure {
     fn movable(&self) -> bool {
         false
     }
-    fn rotate(&mut self) -> Result<(), ()> {
-        Err(())
+    fn rotate(&mut self, _others: &StructureDynIter) -> Result<(), JsValue> {
+        js_err!("rotate not supported")
     }
     fn set_rotation(&mut self, _rotation: &Rotation) -> Result<(), ()> {
         Err(())
