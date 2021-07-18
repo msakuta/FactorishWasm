@@ -284,9 +284,7 @@ impl Structure for Inserter {
                     ..
                 } = self;
                 let mut try_move = |state: &mut FactorishState| {
-                    if let Ok(()) =
-                        state.new_object(output_position.x, output_position.y, item_type)
-                    {
+                    if let Ok(()) = state.new_object(&output_position, item_type) {
                         *cooldown += INSERTER_TIME;
                         *hold_item = None;
                     }

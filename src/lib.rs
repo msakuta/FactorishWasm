@@ -599,6 +599,7 @@ enum NewObjectErr {
     BlockedByStructure,
     BlockedByItem,
     OutOfMap,
+    OnWater,
 }
 
 #[wasm_bindgen]
@@ -1537,10 +1538,14 @@ impl FactorishState {
     }
 
     /// Insert an object on the board.  It could fail if there's already some object at the position.
-    fn new_object(&mut self, c: i32, r: i32, type_: ItemType) -> Result<(), NewObjectErr> {
-        let obj = DropItem::new(&mut self.serial_no, type_, c, r);
-        if 0 <= c && c < self.width as i32 && 0 <= r && r < self.height as i32 {
-            if let Some(stru) = self.find_structure_tile(&[c, r]) {
+    fn new_object(&mut self, pos: &Position, type_: ItemType) -> Result<(), NewObjectErr> {
+        let cell = self.tile_at(pos).ok_or_else(|| NewObjectErr::OutOfMap)?;
+        if cell.water {
+            return Err(NewObjectErr::OnWater);
+        }
+        let obj = DropItem::new(&mut self.serial_no, type_, pos.x, pos.y);
+        if 0 <= pos.x && pos.x < self.width as i32 && 0 <= pos.y && pos.y < self.height as i32 {
+            if let Some(stru) = self.find_structure_tile(&[pos.x, pos.y]) {
                 if !stru.movable() {
                     return Err(NewObjectErr::BlockedByStructure);
                 }

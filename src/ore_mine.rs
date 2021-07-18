@@ -271,9 +271,7 @@ impl Structure for OreMine {
                     let mut it = recipe.output.iter();
                     if let Some(item) = it.next() {
                         assert!(it.next().is_none());
-                        if let Err(_code) =
-                            state.new_object(output_position.x, output_position.y, *item.0)
-                        {
+                        if let Err(_code) = state.new_object(&output_position, *item.0) {
                             // console_log!("Failed to create object: {:?}", code);
                         } else if let Ok(val) = output(state, *item.0, &self.position) {
                             if val == 0 {
