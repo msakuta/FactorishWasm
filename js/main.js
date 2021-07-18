@@ -5,6 +5,7 @@ import weeds from "../img/weeds.png";
 import iron from "../img/iron.png";
 import coal from "../img/coal.png";
 import copper from "../img/copper.png";
+import stone from "../img/stone.png";
 import transport from "../img/transport.png";
 import splitter from "../img/splitter.png";
 import chest from "../img/chest.png";
@@ -20,6 +21,7 @@ import direction from "../img/direction.png";
 import ore from "../img/ore.png";
 import coalOre from "../img/coal-ore.png";
 import copperOre from "../img/copper-ore.png";
+import stoneOre from "../img/stone-ore.png";
 import ironPlate from "../img/metal.png";
 import steelPlate from "../img/steel-plate.png";
 import copperPlate from "../img/copper-plate.png";
@@ -63,6 +65,7 @@ let ysize = 64;
         ["iron", iron],
         ["coal", coal],
         ["copper", copper],
+        ["stone", stone],
         ["transport", transport],
         ["chest", chest],
         ["mine", mine],
@@ -81,6 +84,7 @@ let ysize = 64;
         ["coalOre", coalOre],
         ["ironPlate", ironPlate],
         ["copperOre", copperOre],
+        ["stoneOre", stoneOre],
         ["copperPlate", copperPlate],
         ["gear", gear],
         ["copperWire", copperWire],
@@ -425,6 +429,8 @@ let ysize = 64;
             return copperPlate;
         case 'Coal Ore':
             return coalOre;
+        case 'Stone Ore':
+            return stoneOre;
         case 'Gear':
             return gear;
         case 'Copper Wire':

@@ -130,7 +130,7 @@ impl Structure for OreMine {
                  <div style='position: absolute; width: {}px; height: 10px; background-color: #ff00ff'></div></div>"#,
                     self.power,
                     if 0. < self.max_power { (self.power) / self.max_power * 100. } else { 0. }),
-                format!("Expected output: {}", if 0 < tile.iron_ore { tile.iron_ore } else if 0 < tile.coal_ore { tile.coal_ore } else { tile.copper_ore }))
+                format!("Expected output: {}", tile.ore.map(|ore| ore.1).unwrap_or(0)))
         // getHTML(generateItemImage("time", true, this.recipe.time), true) + "<br>" +
         // "Outputs: <br>" +
         // getHTML(generateItemImage(this.recipe.output, true, 1), true) + "<br>";
@@ -154,24 +154,10 @@ impl Structure for OreMine {
         let mut ret = FrameProcResult::None;
 
         if self.recipe.is_none() {
-            if 0 < tile.iron_ore {
+            if let Some(item_type) = tile.get_ore_type() {
                 self.recipe = Some(Recipe::new(
                     HashMap::new(),
-                    hash_map!(ItemType::IronOre => 1usize),
-                    8.,
-                    80.,
-                ));
-            } else if 0 < tile.coal_ore {
-                self.recipe = Some(Recipe::new(
-                    HashMap::new(),
-                    hash_map!(ItemType::CoalOre => 1usize),
-                    8.,
-                    80.,
-                ));
-            } else if 0 < tile.copper_ore {
-                self.recipe = Some(Recipe::new(
-                    HashMap::new(),
-                    hash_map!(ItemType::CopperOre => 1usize),
+                    hash_map!(item_type => 1usize),
                     8.,
                     80.,
                 ));
@@ -197,23 +183,17 @@ impl Structure for OreMine {
                 }
             }
 
-            let output = |state: &mut FactorishState, item, position: &Position| {
-                if let Ok(val) = if let Some(tile) = state.tile_at_mut(&position) {
-                    match item {
-                        ItemType::IronOre => Ok(&mut tile.iron_ore),
-                        ItemType::CoalOre => Ok(&mut tile.coal_ore),
-                        ItemType::CopperOre => Ok(&mut tile.copper_ore),
-                        _ => Err(()),
+            let output = |state: &mut FactorishState, _item, position: &Position| {
+                let tile = state.tile_at_mut(&position).ok_or(())?;
+                let ore = tile.ore.as_mut().ok_or(())?;
+                let val = &mut ore.1;
+                if 0 < *val {
+                    *val -= 1;
+                    let ret = *val;
+                    if ret == 0 {
+                        tile.ore = None;
                     }
-                } else {
-                    Err(())
-                } {
-                    if 0 < *val {
-                        *val -= 1;
-                        Ok(*val)
-                    } else {
-                        Err(())
-                    }
+                    Ok(ret)
                 } else {
                     Err(())
                 }
