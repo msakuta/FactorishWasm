@@ -3,7 +3,7 @@ use super::{
     items::ItemType,
     structure::{RotateErr, Structure, StructureDynIter, StructureId},
     DropItem, FactorishState, FrameProcResult, Inventory, InventoryTrait, Position, Recipe,
-    Rotation, TempEnt, COAL_POWER, TILE_SIZE,
+    Rotation, TempEnt, COAL_POWER, TILE_SIZE, TILE_SIZE_I,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -223,11 +223,6 @@ impl Structure for OreMine {
             let progress = (self.power / recipe.power_cost)
                 .min(1. / recipe.recipe_time)
                 .min(1. - self.progress);
-            if state.rng.next() < progress * 5. {
-                state
-                    .temp_ents
-                    .push(TempEnt::new(&mut state.rng, self.position));
-            }
             if 1. <= self.progress + progress {
                 let output_position = self.position.add(self.rotation.delta());
                 if let Some(structure) = self
@@ -257,16 +252,16 @@ impl Structure for OreMine {
                                 self.recipe = None;
                                 return Err(());
                             };
-                        } else {
-                            // Output is blocked, wait
-                            self.digging = false;
                         }
                     }
                     if !structure.movable() {
+                        self.digging = false;
                         return Ok(FrameProcResult::None);
                     }
                 }
-                if !state.hit_check(output_position.x, output_position.y, None) {
+                let drop_x = output_position.x * TILE_SIZE_I + TILE_SIZE_I / 2;
+                let drop_y = output_position.y * TILE_SIZE_I + TILE_SIZE_I / 2;
+                if !state.hit_check(drop_x, drop_y, None) {
                     // let dest_tile = state.board[dx as usize + dy as usize * state.width as usize];
                     let mut it = recipe.output.iter();
                     if let Some(item) = it.next() {
@@ -285,11 +280,22 @@ impl Structure for OreMine {
                         return Err(());
                     }
                     self.progress = 0.;
+                } else {
+                    // Output is blocked
+                    self.digging = false;
+                    return Ok(FrameProcResult::None);
                 }
             } else {
                 self.progress += progress;
                 self.power -= progress * recipe.power_cost;
                 self.digging = 0. < progress;
+            }
+
+            // Show smoke if there was some progress
+            if state.rng.next() < progress * 5. {
+                state
+                    .temp_ents
+                    .push(TempEnt::new(&mut state.rng, self.position));
             }
         } else {
             self.digging = false;
@@ -299,6 +305,7 @@ impl Structure for OreMine {
 
     fn rotate(&mut self, others: &StructureDynIter) -> Result<(), RotateErr> {
         self.rotation = self.rotation.next();
+        self.output_structure = None;
         for (id, s) in others.dyn_iter_id() {
             self.on_construction_common(id, s, true)
                 .map_err(|e| RotateErr::Other(e))?;
