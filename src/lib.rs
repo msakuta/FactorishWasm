@@ -2256,11 +2256,15 @@ impl FactorishState {
         Ok(())
     }
 
+    /// Keyboard event handler. Returns true if re-rendering is necessary to update internal state.
     pub fn on_key_down(&mut self, key_code: i32) -> Result<bool, JsValue> {
         match key_code {
-            82 => self
-                .rotate()
-                .map_err(|err| JsValue::from(format!("Rotate failed: {:?}", err))),
+            82 => match self.rotate() {
+                Ok(b) => Ok(b),
+                // If the target structure is not found or uncapable of rotation, it's not a critical error.
+                Err(RotateErr::NotFound) | Err(RotateErr::NotSupported) => Ok(false),
+                Err(RotateErr::Other(err)) => return js_err!("Rotate failed: {:?}", err),
+            },
             // Detect keys through '0'..'9', that's a shame char literal cannot be used in place of i32
             code @ 48..=58 => {
                 self.select_tool((code - '0' as i32 + 9) % 10);
