@@ -1,8 +1,9 @@
 use super::{
     structure::{
-        ItemResponse, ItemResponseResult, Structure, StructureBundle, StructureComponents,
+        ItemResponse, ItemResponseResult, Structure, StructureBundle, StructureComponents, StructureDynIter
     },
     DropItem, FactorishState, Position, Rotation, TILE_SIZE,
+    RotateErr
 };
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
@@ -75,11 +76,23 @@ impl Structure for TransportBelt {
         true
     }
 
-    fn item_response(
-        &mut self,
-        components: &mut StructureComponents,
-        item: &DropItem,
-    ) -> Result<ItemResponseResult, JsValue> {
+    fn rotate(&mut self, components: &mut StructureComponents, _others: &StructureDynIter) -> Result<(), RotateErr> {
+        if let Some(ref mut rotation) = components.rotation {
+            *rotation = rotation.next();
+            Ok(())
+        } else {
+            Err(RotateErr::NotSupported)
+        }
+    }
+
+    fn set_rotation(&mut self, components: &mut StructureComponents, rotation: &Rotation) -> Result<(), ()> {
+        if let Some(ref mut self_rotation) = components.rotation {
+            *self_rotation = *rotation;
+        }
+        Ok(())
+    }
+
+    fn item_response(&mut self, components: &mut StructureComponents,item: &DropItem) -> Result<ItemResponseResult, JsValue> {
         let rotation = components
             .rotation
             .as_ref()

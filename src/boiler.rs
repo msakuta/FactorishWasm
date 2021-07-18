@@ -1,9 +1,8 @@
 use super::{
     burner::Burner,
-    dyn_iter::DynIterMut,
     pipe::Pipe,
     serialize_impl,
-    structure::{Energy, Structure, StructureBundle, StructureComponents},
+    structure::{Energy, Structure, StructureBundle, StructureComponents, StructureDynIter, StructureId},
     water_well::{FluidBox, FluidType},
     FactorishState, FrameProcResult, Inventory, ItemType, Position, Recipe, TempEnt,
 };
@@ -48,8 +47,8 @@ impl Boiler {
                 }),
                 factory: None,
                 fluid_boxes: vec![
-                    FluidBox::new(true, false, [false; 4]),
-                    FluidBox::new(false, true, [false; 4]),
+                    FluidBox::new(true, false, [None; 4]),
+                    FluidBox::new(false, true, [None; 4]),
                 ],
             },
         }
@@ -163,9 +162,10 @@ impl Structure for Boiler {
 
     fn frame_proc(
         &mut self,
+        _me: StructureId,
         components: &mut StructureComponents,
         state: &mut FactorishState,
-        _structures: &mut dyn DynIterMut<Item = StructureBundle>,
+        structures: &mut StructureDynIter,
     ) -> Result<FrameProcResult, ()> {
         let position = components.position.as_ref().ok_or(())?;
         let energy = components.energy.as_mut().ok_or(())?;

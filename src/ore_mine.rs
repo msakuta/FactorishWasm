@@ -1,11 +1,10 @@
 use super::{
     burner::Burner,
     draw_direction_arrow,
-    dyn_iter::DynIterMut,
     items::ItemType,
-    structure::{Energy, Structure, StructureBundle, StructureComponents},
-    DropItem, FactorishState, FrameProcResult, Inventory, Position, Recipe, Rotation, TempEnt,
-    TILE_SIZE,
+    structure::{Energy, Structure, StructureBundle, StructureComponents, StructureDynIter, StructureId},
+    DropItem, FactorishState, FrameProcResult, Inventory, Position, Recipe, Rotation, TempEnt, RotateErr,
+    TILE_SIZE, TILE_SIZE_I,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -18,6 +17,9 @@ const FUEL_CAPACITY: usize = 10;
 pub(crate) struct OreMine {
     progress: f64,
     recipe: Option<Recipe>,
+    output_structure: Option<StructureId>,
+    #[serde(skip)]
+    digging: bool,
 }
 
 impl OreMine {
@@ -26,6 +28,8 @@ impl OreMine {
             Box::new(OreMine {
                 progress: 0.,
                 recipe: None,
+                output_structure: None,
+                digging: false,
             }),
             Some(Position { x, y }),
             Some(rotation),
@@ -40,6 +44,29 @@ impl OreMine {
             None,
             vec![],
         )
+    }
+
+    fn on_construction_common(
+        &mut self,
+        components: &StructureComponents,
+        other_id: StructureId,
+        other: &StructureBundle,
+        construct: bool,
+    ) -> Result<(), JsValue> {
+        let position = components.position.ok_or_else(|| js_str!("OreMine without Position"))?;
+        let rotation = components.rotation.ok_or_else(|| js_str!("OreMine without Rotation"))?;
+        let output_position = position.add(rotation.delta());
+        let other_position = other.components.position.ok_or_else(|| js_str!("Other without Position"))?;
+        if other_position == output_position {
+            self.output_structure = if construct { Some(other_id) } else { None };
+            console_log!(
+                "OreMine{:?}: {} output_structure {:?}",
+                position,
+                if construct { "set" } else { "unset" },
+                other_id
+            );
+        }
+        Ok(())
     }
 }
 
@@ -64,14 +91,7 @@ impl Structure for OreMine {
         match depth {
             0 => match state.image_mine.as_ref() {
                 Some(img) => {
-                    let progress = if let Some(ref recipe) = self.recipe {
-                        (0f64/*self.power / recipe.power_cost*/)
-                            .min(1. / recipe.recipe_time)
-                            .min(1. - self.progress)
-                    } else {
-                        0.
-                    };
-                    let sx = if 0. < progress {
+                    let sx = if self.digging {
                         (((state.sim_time * 5.) as isize) % 2 + 1) as f64 * TILE_SIZE
                     } else {
                         0.
@@ -135,9 +155,10 @@ impl Structure for OreMine {
 
     fn frame_proc(
         &mut self,
+        _me: StructureId,
         components: &mut StructureComponents,
         state: &mut FactorishState,
-        structures: &mut dyn DynIterMut<Item = StructureBundle>,
+        structures: &mut StructureDynIter,
     ) -> Result<FrameProcResult, ()> {
         let position = components.position.as_ref().ok_or(())?;
         let rotation = components.rotation.as_ref().ok_or(())?;
@@ -213,17 +234,12 @@ impl Structure for OreMine {
             let progress = (energy.value / recipe.power_cost)
                 .min(1. / recipe.recipe_time)
                 .min(1. - self.progress);
-            if state.rng.next() < progress * 5. {
-                state
-                    .temp_ents
-                    .push(TempEnt::new(&mut state.rng, *position));
-            }
             if 1. <= self.progress + progress {
-                self.progress = 0.;
                 let output_position = position.add(rotation.delta());
-                let mut str_iter = structures.dyn_iter_mut();
-                if let Some(structure) =
-                    str_iter.find(|s| s.components.position == Some(output_position))
+                if let Some(structure) = self
+                    .output_structure
+                    .map(|id| structures.get_mut(id))
+                    .flatten()
                 {
                     let mut it = recipe.output.iter();
                     if let Some(item) = it.next() {
@@ -241,6 +257,7 @@ impl Structure for OreMine {
                                 if val == 0 {
                                     self.recipe = None;
                                 }
+                                self.progress = 0.;
                                 return Ok(FrameProcResult::InventoryChanged(output_position));
                             } else {
                                 self.recipe = None;
@@ -249,33 +266,99 @@ impl Structure for OreMine {
                         }
                     }
                     if !structure.dynamic.movable() {
+                        self.digging = false;
                         return Ok(FrameProcResult::None);
                     }
                 }
-                if !state.hit_check(output_position.x, output_position.y, None) {
+                let drop_x = output_position.x * TILE_SIZE_I + TILE_SIZE_I / 2;
+                let drop_y = output_position.y * TILE_SIZE_I + TILE_SIZE_I / 2;
+                if !state.hit_check(drop_x, drop_y, None)
+                    && state
+                        .tile_at(&output_position)
+                        .map(|cell| !cell.water)
+                        .unwrap_or(false)
+                {
                     // let dest_tile = state.board[dx as usize + dy as usize * state.width as usize];
                     let mut it = recipe.output.iter();
                     if let Some(item) = it.next() {
                         assert!(it.next().is_none());
-                        if let Err(_code) =
-                            state.new_object(output_position.x, output_position.y, *item.0)
-                        {
+                        if let Err(_code) = state.new_object(&output_position, *item.0) {
                             // console_log!("Failed to create object: {:?}", code);
                         } else if let Ok(val) = output(state, *item.0, position) {
                             if val == 0 {
                                 self.recipe = None;
                             }
+                            self.progress = 0.;
                         }
                     } else {
                         return Err(());
                     }
+                    self.progress = 0.;
+                } else {
+                    // Output is blocked
+                    self.digging = false;
+                    return Ok(FrameProcResult::None);
                 }
             } else {
                 self.progress += progress;
                 energy.value -= progress * recipe.power_cost;
+                self.digging = 0. < progress;
             }
+
+            // Show smoke if there was some progress
+            if state.rng.next() < progress * 5. {
+                state
+                    .temp_ents
+                    .push(TempEnt::new(&mut state.rng, *position));
+            }
+        } else {
+            self.digging = false;
         }
         Ok(ret)
+    }
+
+    fn rotate(&mut self, components: &mut StructureComponents, others: &StructureDynIter) -> Result<(), RotateErr> {
+        if let Some(ref mut rotation) = components.rotation {
+            *rotation = rotation.next();
+            self.output_structure = None;
+            for (id, s) in others.dyn_iter_id() {
+                self.on_construction_common(components, id, s, true)
+                    .map_err(|e| RotateErr::Other(e))?;
+            }
+        }
+        Ok(())
+    }
+
+    fn set_rotation(&mut self, components: &mut StructureComponents, rotation: &Rotation) -> Result<(), ()> {
+        if let Some(ref mut self_rotation) = components.rotation {
+            *self_rotation = *rotation;
+            Ok(())
+        } else {
+            Err(())
+        }
+    }
+
+    fn on_construction(
+        &mut self,
+        components: &mut StructureComponents,
+        other_id: StructureId,
+        other: &StructureBundle,
+        construct: bool,
+    ) -> Result<(), JsValue> {
+        self.on_construction_common(components, other_id, other, construct)
+    }
+
+    fn on_construction_self(
+        &mut self,
+        _self_id: StructureId,
+        components: &mut StructureComponents,
+        others: &StructureDynIter,
+        construct: bool,
+    ) -> Result<(), JsValue> {
+        for (id, s) in others.dyn_iter_id() {
+            self.on_construction_common(components, id, s, construct)?;
+        }
+        Ok(())
     }
 
     crate::serialize_impl!();

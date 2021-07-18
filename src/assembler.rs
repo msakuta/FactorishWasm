@@ -1,14 +1,12 @@
 use super::{
-    dyn_iter::DynIterMut,
     factory::Factory,
     items::get_item_image_url,
     serialize_impl,
-    structure::{Energy, Structure, StructureBundle, StructureComponents},
-    FactorishState, FrameProcResult, InventoryTrait, ItemType, Position, PowerWire, Recipe,
+    structure::{Energy, Structure, StructureBundle, StructureComponents, StructureDynIter, StructureId},
+    FactorishState, FrameProcResult, InventoryTrait, ItemType, Position, Recipe,
     TILE_SIZE,
 };
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use wasm_bindgen::prelude::*;
 use web_sys::CanvasRenderingContext2d;
 
@@ -59,59 +57,6 @@ impl Assembler {
             Some(Factory::new()),
             vec![],
         )
-    }
-
-    /// Find all power sources that are connected to this structure through wires.
-    fn find_power_sources(
-        &self,
-        position: &Position,
-        state: &mut FactorishState,
-        structures: &mut dyn DynIterMut<Item = StructureBundle>,
-    ) -> Vec<Position> {
-        let mut checked = HashMap::<PowerWire, ()>::new();
-        let mut expand_list = HashMap::<Position, Vec<PowerWire>>::new();
-        let mut ret = vec![];
-        let mut check_struct = |position: &Position| {
-            if structures.dyn_iter().any(|structure| {
-                structure.dynamic.power_source() && structure.components.position == Some(*position)
-            }) {
-                ret.push(*position);
-            }
-        };
-        for wire in &state.power_wires {
-            if wire.0 == *position {
-                expand_list.insert(wire.1, vec![*wire]);
-                checked.insert(*wire, ());
-                check_struct(&wire.1);
-            } else if wire.1 == *position {
-                expand_list.insert(wire.0, vec![*wire]);
-                checked.insert(*wire, ());
-                check_struct(&wire.0);
-            }
-        }
-        // Simple Dijkstra
-        while !expand_list.is_empty() {
-            let mut next_expand = HashMap::<Position, Vec<PowerWire>>::new();
-            for check in &expand_list {
-                for wire in &state.power_wires {
-                    if checked.get(wire).is_some() {
-                        continue;
-                    }
-                    if wire.0 == *check.0 {
-                        next_expand.insert(wire.1, vec![*wire]);
-                        checked.insert(*wire, ());
-                        check_struct(&wire.1);
-                    } else if wire.1 == *check.0 {
-                        next_expand.insert(wire.0, vec![*wire]);
-                        checked.insert(*wire, ());
-                        check_struct(&wire.1);
-                    }
-                }
-            }
-            expand_list = next_expand;
-        }
-        // console_log!("Assember power sources: {:?}", ret);
-        ret
     }
 }
 
@@ -220,9 +165,10 @@ impl Structure for Assembler {
 
     fn frame_proc(
         &mut self,
+        me: StructureId,
         components: &mut StructureComponents,
-        _state: &mut FactorishState,
-        structures: &mut dyn DynIterMut<Item = StructureBundle>,
+        state: &mut FactorishState,
+        structures: &mut StructureDynIter,
     ) -> Result<FrameProcResult, ()> {
         if let StructureComponents {
             position: Some(position),
@@ -240,15 +186,18 @@ impl Structure for Assembler {
             // Refill the energy from the fuel
             if energy.value < recipe.power_cost {
                 let mut accumulated = 0.;
-                for position in self.find_power_sources(position, _state, structures) {
-                    if let Some(structure) = structures
-                        .dyn_iter_mut()
-                        .find(|structure| structure.components.position == Some(position))
-                    {
-                        let demand = energy.max - energy.value - accumulated;
-                        if let Some(energy) = structure.dynamic.power_outlet(demand) {
-                            accumulated += energy;
-                            // console_log!("draining {:?}kJ of energy with {:?} demand, from {:?}, accumulated {:?}", energy, demand, structure.name(), accumulated);
+                for network in &state
+                    .power_networks
+                    .iter()
+                    .find(|network| network.sinks.contains(&me))
+                {
+                    for id in network.sources.iter() {
+                        if let Some(source) = structures.get_mut(*id) {
+                            let demand = energy.max - energy.value - accumulated;
+                            if let Some(energy) = source.dynamic.power_outlet(demand) {
+                                accumulated += energy;
+                                // console_log!("draining {:?}kJ of energy with {:?} demand, from {:?}, accumulated {:?}", energy, demand, structure.name(), accumulated);
+                            }
                         }
                     }
                 }
@@ -324,10 +273,10 @@ impl Structure for Assembler {
                 20.,
             ),
             Recipe::new(
-                hash_map!(ItemType::IronPlate => 2, ItemType::CopperPlate => 3),
-                hash_map!(ItemType::WaterWell => 1),
-                100.,
-                100.,
+                hash_map!(ItemType::IronPlate => 5, ItemType::Gear => 5),
+                hash_map!(ItemType::OffshorePump => 1),
+                150.,
+                150.,
             ),
             Recipe::new(
                 hash_map!(ItemType::IronPlate => 5, ItemType::CopperPlate => 5),

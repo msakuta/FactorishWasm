@@ -1,7 +1,6 @@
 use super::{
-    dyn_iter::DynIterMut,
     pipe::Pipe,
-    structure::{Structure, StructureBundle, StructureComponents},
+    structure::{Structure, StructureDynIter, StructureBundle, StructureId, StructureComponents},
     FactorishState, FrameProcResult, Position,
 };
 use serde::{Deserialize, Serialize};
@@ -23,12 +22,17 @@ pub(crate) struct FluidBox {
     pub max_amount: f64,
     pub input_enable: bool,
     pub output_enable: bool,
-    pub connect_to: [bool; 4],
+    #[serde(skip)]
+    pub connect_to: [Option<StructureId>; 4],
     pub filter: Option<FluidType>, // permits undefined
 }
 
 impl FluidBox {
-    pub(crate) fn new(input_enable: bool, output_enable: bool, connect_to: [bool; 4]) -> Self {
+    pub(crate) fn new(
+        input_enable: bool,
+        output_enable: bool,
+        connect_to: [Option<StructureId>; 4],
+    ) -> Self {
         Self {
             type_: None,
             amount: 0.,
@@ -40,7 +44,7 @@ impl FluidBox {
         }
     }
 
-    fn set_type(mut self, type_: &FluidType) -> Self {
+    pub(crate) fn set_type(mut self, type_: &FluidType) -> Self {
         self.type_ = Some(*type_);
         self
     }
@@ -48,11 +52,12 @@ impl FluidBox {
     pub(crate) fn desc(&self) -> String {
         let amount_ratio = self.amount / self.max_amount * 100.;
         // Progress bar
-        format!("{}{}{}",
+        format!("{}{}{}{:?}",
             format!("{}: {:.0}%<br>", self.type_.map(|v| format!("{:?}", v)).unwrap_or_else(|| "None".to_string()), amount_ratio),
             "<div style='position: relative; width: 100px; height: 10px; background-color: #001f1f; margin: 2px; border: 1px solid #3f3f3f'>",
             format!("<div style='position: absolute; width: {}px; height: 10px; background-color: #ff00ff'></div></div>",
                 amount_ratio),
+            self.connect_to,
             )
     }
 
@@ -60,7 +65,7 @@ impl FluidBox {
         &mut self,
         position: &Position,
         state: &mut FactorishState,
-        structures: &mut dyn DynIterMut<Item = StructureBundle>,
+        structures: &mut StructureDynIter,
     ) {
         let mut _biggest_flow_idx = -1;
         let mut biggest_flow_amount = 1e-3; // At least this amount of flow is required for displaying flow direction
@@ -68,68 +73,50 @@ impl FluidBox {
         if self.amount == 0. || !self.input_enable && !self.output_enable {
             return;
         }
-        let rel_dir = [[-1, 0], [0, -1], [1, 0], [0, 1]];
         let connect_list = self
             .connect_to
             .iter()
             .enumerate()
-            .filter(|(_, c)| **c)
-            .map(|(i, _)| i)
-            .collect::<Vec<_>>();
-        for i in connect_list {
-            let dir_idx = i % 4;
-            let pos = Position {
-                x: position.x + rel_dir[dir_idx][0],
-                y: position.y + rel_dir[dir_idx][1],
-            };
-            if pos.x < 0 || state.width <= pos.x as u32 || pos.y < 0 || state.height <= pos.y as u32
-            {
-                continue;
-            }
-            if let Some(structure) = structures
-                .dyn_iter_mut()
-                .find(|s| s.components.position == Some(pos))
-            {
-                let mut process_fluid_box = |self_box: &mut FluidBox, fluid_box: &mut FluidBox| {
+            .filter_map(|(i, c)| Some((i, (*c)?)));
+        for (i, id) in connect_list {
+            if let Some(bundle) = structures.get_mut(id) {
+                for fluid_box in &mut bundle.components.fluid_boxes {
                     // Different types of fluids won't mix
                     if 0. < fluid_box.amount
-                        && 0. < self_box.amount
-                        && fluid_box.type_ != self_box.type_
+                        && 0. < self.amount
+                        && fluid_box.type_ != self.type_
                         && fluid_box.type_.is_some()
                     {
-                        return;
+                        continue;
                     }
-                    let pressure = fluid_box.amount - self_box.amount;
+                    let pressure = fluid_box.amount - self.amount;
                     if 0. < pressure {
-                        return;
+                        continue;
                     }
                     let flow = pressure * 0.1;
                     // Check input/output valve state
                     if if flow < 0. {
-                        !self_box.output_enable
+                        !self.output_enable
                             || !fluid_box.input_enable
-                            || fluid_box.filter.is_some() && fluid_box.filter != self_box.type_
+                            || fluid_box.filter.is_some() && fluid_box.filter != self.type_
                     } else {
-                        !self_box.input_enable
+                        !self.input_enable
                             || !fluid_box.output_enable
-                            || self_box.filter.is_some() && self_box.filter != fluid_box.type_
+                            || self.filter.is_some() && self.filter != fluid_box.type_
                     } {
-                        return;
+                        continue;
                     }
                     fluid_box.amount -= flow;
-                    self_box.amount += flow;
+                    self.amount += flow;
                     if flow < 0. {
-                        fluid_box.type_ = self_box.type_;
+                        fluid_box.type_ = self.type_;
                     } else {
-                        self_box.type_ = fluid_box.type_;
+                        self.type_ = fluid_box.type_;
                     }
                     if biggest_flow_amount < flow.abs() {
                         biggest_flow_amount = flow;
                         _biggest_flow_idx = i as isize;
                     }
-                };
-                for fluid_box in &mut structure.components.fluid_boxes {
-                    process_fluid_box(self, fluid_box);
                 }
             }
         }
@@ -148,7 +135,7 @@ impl WaterWell {
             None,
             None,
             None,
-            vec![FluidBox::new(false, true, [false; 4]).set_type(&FluidType::Water)],
+            vec![FluidBox::new(false, true, [None; 4]).set_type(&FluidType::Water)],
         )
     }
 }
@@ -199,9 +186,10 @@ impl Structure for WaterWell {
 
     fn frame_proc(
         &mut self,
+        _me: StructureId,
         components: &mut StructureComponents,
-        _state: &mut FactorishState,
-        _structures: &mut dyn DynIterMut<Item = StructureBundle>,
+        state: &mut FactorishState,
+        structures: &mut StructureDynIter,
     ) -> Result<FrameProcResult, ()> {
         assert!(components.fluid_boxes.len() > 0);
         let output_fluid_box = &mut components.fluid_boxes[0];

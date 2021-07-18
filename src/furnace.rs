@@ -3,8 +3,10 @@ use super::{
     factory::Factory,
     items::item_to_str,
     serialize_impl,
-    structure::{Energy, Structure, StructureBundle, StructureComponents},
+    structure::{Energy, Structure, StructureBundle, StructureComponents, StructureDynIter, StructureId},
     DropItem, FactorishState, Inventory, InventoryTrait, ItemType, Position, Recipe,
+    FrameProcResult,
+    TempEnt, COAL_POWER,
 };
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;

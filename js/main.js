@@ -1,5 +1,7 @@
 import time from "../img/time.png";
 import dirt from "../img/dirt.png";
+import backTiles from "../img/back32.png";
+import weeds from "../img/weeds.png";
 import iron from "../img/iron.png";
 import coal from "../img/coal.png";
 import copper from "../img/copper.png";
@@ -10,6 +12,7 @@ import mine from "../img/mine.png";
 import assembler from "../img/assembler.png";
 import furnace from "../img/furnace.png";
 import waterWell from "../img/waterwell.png";
+import offshorePump from "../img/offshore-pump.png";
 import boiler from "../img/boiler.png";
 import pipe from "../img/pipe.png";
 import inserter from "../img/inserter-base.png";
@@ -55,6 +58,8 @@ let ysize = 64;
     // we should have bitmaps ready.
     let loadImages = [
         ["dirt", dirt],
+        ["backTiles", backTiles],
+        ["weeds", weeds],
         ["iron", iron],
         ["coal", coal],
         ["copper", copper],
@@ -68,6 +73,7 @@ let ysize = 64;
         ["electPole", electPole],
         ["splitter", splitter],
         ["waterWell", waterWell],
+        ["offshorePump", offshorePump],
         ["pipe", pipe],
         ["inserter", inserter],
         ["direction", direction],
@@ -88,9 +94,90 @@ let ysize = 64;
         return [name, src, await createImageBitmap(await res.blob())];
     });
 
+    function sliderInit(sliderId, labelId, writer, logarithmic=false){
+        const slider = document.getElementById(sliderId);
+        const label = document.getElementById(labelId);
+        label.innerHTML = slider.value;
+    
+        const sliderStats = () => {
+          const [minp, maxp] = ["min", "max"].map(attr => parseFloat(slider.getAttribute(attr)));
+          if(minp <= 0){
+            throw "Minimum value for logarithmic slider must not be 0";
+          }
+          const [minv, maxv] = [minp, maxp].map(Math.log);
+          // calculate adjustment factor
+          const scale = (maxv-minv) / (maxp-minp);
+          return {minp, maxp, minv, maxv, scale};
+        };
+    
+        const updateFromInput = (_event) => {
+          let value;
+          if(logarithmic){
+            const {minp, minv, scale} = sliderStats();
+            value = Math.exp(minv + scale*(parseFloat(slider.value) - minp));
+            label.innerHTML = value.toFixed(8);
+          }
+          else{
+            value = parseFloat(slider.value);
+            label.innerHTML = value;
+          }
+          writer(value);
+        }
+        const updateFromValue = (value) => {
+          if(logarithmic){
+            const {minp, scale, minv} = sliderStats();
+    
+            // Inverse of updateFromInput
+            slider.value = (Math.log(value) - minv) / scale + minp;
+            label.innerHTML = value.toFixed(8);
+          }
+          else{
+            slider.value = value;
+            label.innerHTML = value;
+          }
+          writer(value);
+        };
+        if(logarithmic){
+          // Update the UI according to logarithmic scale even before the user touches the slider
+          updateFromValue(parseFloat(slider.value));
+        }
+        slider.addEventListener("input", updateFromInput);
+        return {elem: slider, update: updateFromValue};
+    }
+
+    let terrainSeed = 8913095;
+    const seedElem = document.getElementById("seed");
+    if(seedElem){
+        seedElem.value = terrainSeed;
+        seedElem.addEventListener("input", _ => {
+            terrainSeed = parseInt(seedElem.value)
+        });
+    }
+
+    let waterNoiseThreshold = 0.35;
+    sliderInit("waterNoiseThreshold", "waterNoiseThresholdLabel", value => waterNoiseThreshold = value);
+    let resourceAmount = 1000.;
+    sliderInit("resourceAmount", "resourceAmountLabel", value => resourceAmount = value);
+    let noiseScale = 5.;
+    sliderInit("noiseScale", "noiseScaleLabel", value => noiseScale = value);
+    let noiseThreshold = 0.45;
+    sliderInit("noiseThreshold", "noiseThresholdLabel", value => noiseThreshold = value);
+
+    function initPane(buttonId, containerId){
+        const button = document.getElementById(buttonId);
+        const container = document.getElementById(containerId);
+        if(button){
+            button.addEventListener("click", (event) => {
+                container.style.display = container.style.display === "none" ? "block" : "none";
+            });
+        }
+    }
+    initPane("paramsButton", "paramsContainer");
+    initPane("viewButton", "viewContainer");
+
     let paused = false;
 
-    let sim = new FactorishState(xsize, ysize, updateInventory);
+    let sim = new FactorishState(xsize, ysize, updateInventory, terrainSeed, waterNoiseThreshold, resourceAmount, noiseScale, noiseThreshold);
 
     const canvas = document.getElementById('canvas');
     const canvasSize = canvas.getBoundingClientRect();
@@ -364,6 +451,8 @@ let ysize = 64;
             return [assembler, 4];
         case 'Water Well':
             return waterWell;
+        case 'Offshore Pump':
+            return offshorePump;
         case 'Boiler':
             return [boiler, 3];
         case 'Pipe':
@@ -1013,7 +1102,7 @@ let ysize = 64;
     const generateBoard = document.getElementById("generateBoard");
     generateBoard.addEventListener("click", () => {
         xsize = ysize = parseInt(document.getElementById("sizeSelect").value);
-        sim = new FactorishState(xsize, ysize, updateInventory);
+        sim = new FactorishState(xsize, ysize, updateInventory, terrainSeed, waterNoiseThreshold, resourceAmount, noiseScale, noiseThreshold);
         try{
             sim.render_init(canvas, infoElem, loadedImages);
         } catch(e) {
@@ -1025,6 +1114,8 @@ let ysize = 64;
     showDebugBBox.addEventListener("click", () => sim.set_debug_bbox(showDebugBBox.checked));
     const showDebugFluidBox = document.getElementById("showDebugFluidBox");
     showDebugFluidBox.addEventListener("click", () => sim.set_debug_fluidbox(showDebugFluidBox.checked));
+    const showDebugPowerNetwork = document.getElementById("showDebugPowerNetwork");
+    showDebugPowerNetwork.addEventListener("click", () => sim.set_debug_power_network(showDebugPowerNetwork.checked));
 
     window.setInterval(function(){
         if(!paused)

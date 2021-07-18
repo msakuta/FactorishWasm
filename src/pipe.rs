@@ -1,5 +1,4 @@
 use super::{
-    dyn_iter::Ref,
     structure::{Position, Structure, StructureBundle, StructureComponents},
     water_well::FluidBox,
     FactorishState,
@@ -20,7 +19,7 @@ impl Pipe {
             None,
             None,
             None,
-            vec![FluidBox::new(true, true, [false; 4])],
+            vec![FluidBox::new(true, true, [None; 4])],
         )
     }
 
@@ -42,21 +41,18 @@ impl Pipe {
         };
         match state.image_pipe.as_ref() {
             Some(img) => {
-                // let (front, mid) = state.structures.split_at_mut(i);
-                // let (center, last) = mid
-                //     .split_first_mut()
-                //     .ok_or(JsValue::from_str("Structures split fail"))?;
-
-                // We could split and chain like above, but we don't have to, as long as we deal with immutable
-                // references.
-                let structures_slice: &[StructureBundle] = state.structures.as_slice();
-
-                let connection_list =
-                    structure.connection(components, state, &Ref(structures_slice));
-                let connections = connection_list
-                    .iter()
-                    .enumerate()
-                    .fold(0, |acc, (i, b)| acc | ((*b as u32) << i));
+                let connections = components
+                    .fluid_boxes
+                    .first()
+                    .map(|fluid_box| {
+                        fluid_box
+                            .connect_to
+                            .iter()
+                            .enumerate()
+                            .filter(|(_, b)| b.is_some())
+                            .fold(0, |acc, (i, _)| acc | (1 << i))
+                    })
+                    .unwrap_or(0);
                 // Skip drawing center dot? if there are no connections
                 if !draw_center && connections == 0 {
                     return Ok(());
