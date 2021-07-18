@@ -261,7 +261,12 @@ impl Structure for OreMine {
                 }
                 let drop_x = output_position.x * TILE_SIZE_I + TILE_SIZE_I / 2;
                 let drop_y = output_position.y * TILE_SIZE_I + TILE_SIZE_I / 2;
-                if !state.hit_check(drop_x, drop_y, None) {
+                if !state.hit_check(drop_x, drop_y, None)
+                    && state
+                        .tile_at(&output_position)
+                        .map(|cell| !cell.water)
+                        .unwrap_or(false)
+                {
                     // let dest_tile = state.board[dx as usize + dy as usize * state.width as usize];
                     let mut it = recipe.output.iter();
                     if let Some(item) = it.next() {
