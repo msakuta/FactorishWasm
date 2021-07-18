@@ -303,6 +303,12 @@ impl Structure for Assembler {
                 50.,
             ),
             Recipe::new(
+                hash_map!(ItemType::StoneOre => 5usize),
+                hash_map!(ItemType::Furnace => 1usize),
+                20.,
+                20.,
+            ),
+            Recipe::new(
                 hash_map!(ItemType::CopperPlate => 1usize),
                 hash_map!(ItemType::CopperWire => 2usize),
                 20.,
