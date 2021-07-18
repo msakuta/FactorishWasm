@@ -1,7 +1,9 @@
 use super::{
     pipe::Pipe,
     serialize_impl,
-    structure::{Position, Structure, StructureBundle, StructureComponents, StructureDynIter, StructureId},
+    structure::{
+        Position, Structure, StructureBundle, StructureComponents, StructureDynIter, StructureId,
+    },
     water_well::{FluidBox, FluidType},
     FactorishState, FrameProcResult, Recipe,
 };

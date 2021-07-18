@@ -2,9 +2,11 @@ use super::{
     burner::Burner,
     draw_direction_arrow,
     items::ItemType,
-    structure::{Energy, Structure, StructureBundle, StructureComponents, StructureDynIter, StructureId},
-    DropItem, FactorishState, FrameProcResult, Inventory, Position, Recipe, Rotation, TempEnt, RotateErr,
-    TILE_SIZE, TILE_SIZE_I,
+    structure::{
+        Energy, Structure, StructureBundle, StructureComponents, StructureDynIter, StructureId,
+    },
+    DropItem, FactorishState, FrameProcResult, Inventory, Position, Recipe, RotateErr, Rotation,
+    TempEnt, TILE_SIZE, TILE_SIZE_I,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -53,10 +55,17 @@ impl OreMine {
         other: &StructureBundle,
         construct: bool,
     ) -> Result<(), JsValue> {
-        let position = components.position.ok_or_else(|| js_str!("OreMine without Position"))?;
-        let rotation = components.rotation.ok_or_else(|| js_str!("OreMine without Rotation"))?;
+        let position = components
+            .position
+            .ok_or_else(|| js_str!("OreMine without Position"))?;
+        let rotation = components
+            .rotation
+            .ok_or_else(|| js_str!("OreMine without Rotation"))?;
         let output_position = position.add(rotation.delta());
-        let other_position = other.components.position.ok_or_else(|| js_str!("Other without Position"))?;
+        let other_position = other
+            .components
+            .position
+            .ok_or_else(|| js_str!("Other without Position"))?;
         if other_position == output_position {
             self.output_structure = if construct { Some(other_id) } else { None };
             console_log!(
@@ -317,7 +326,11 @@ impl Structure for OreMine {
         Ok(ret)
     }
 
-    fn rotate(&mut self, components: &mut StructureComponents, others: &StructureDynIter) -> Result<(), RotateErr> {
+    fn rotate(
+        &mut self,
+        components: &mut StructureComponents,
+        others: &StructureDynIter,
+    ) -> Result<(), RotateErr> {
         if let Some(ref mut rotation) = components.rotation {
             *rotation = rotation.next();
             self.output_structure = None;
@@ -329,7 +342,11 @@ impl Structure for OreMine {
         Ok(())
     }
 
-    fn set_rotation(&mut self, components: &mut StructureComponents, rotation: &Rotation) -> Result<(), ()> {
+    fn set_rotation(
+        &mut self,
+        components: &mut StructureComponents,
+        rotation: &Rotation,
+    ) -> Result<(), ()> {
         if let Some(ref mut self_rotation) = components.rotation {
             *self_rotation = *rotation;
             Ok(())

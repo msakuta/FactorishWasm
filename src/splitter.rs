@@ -1,7 +1,7 @@
 use super::{
     structure::{
-        BoundingBox, ItemResponse, ItemResponseResult, Size, Structure, StructureDynIter,
-        StructureBundle,StructureComponents, RotateErr
+        BoundingBox, ItemResponse, ItemResponseResult, RotateErr, Size, Structure, StructureBundle,
+        StructureComponents, StructureDynIter,
     },
     DropItem, FactorishState, Position, Rotation, TILE_SIZE,
 };
@@ -147,15 +147,29 @@ impl Structure for Splitter {
         true
     }
 
-    fn rotate(&mut self, components: &mut StructureComponents, _others: &StructureDynIter) -> Result<(), RotateErr> {
-        let rotation = components.rotation.as_mut().ok_or(RotateErr::NotSupported)?;
-        let position = components.position.as_mut().ok_or(RotateErr::NotSupported)?;
+    fn rotate(
+        &mut self,
+        components: &mut StructureComponents,
+        _others: &StructureDynIter,
+    ) -> Result<(), RotateErr> {
+        let rotation = components
+            .rotation
+            .as_mut()
+            .ok_or(RotateErr::NotSupported)?;
+        let position = components
+            .position
+            .as_mut()
+            .ok_or(RotateErr::NotSupported)?;
         *position = position.add(rotation.next().delta());
         *rotation = rotation.next().next();
         Ok(())
     }
 
-    fn set_rotation(&mut self, components: &mut StructureComponents, rotation: &Rotation) -> Result<(), ()> {
+    fn set_rotation(
+        &mut self,
+        components: &mut StructureComponents,
+        rotation: &Rotation,
+    ) -> Result<(), ()> {
         *components.rotation.as_mut().ok_or(())? = *rotation;
         Ok(())
     }

@@ -64,8 +64,7 @@ impl Structure for OffshorePump {
         _structures: &mut StructureDynIter,
     ) -> Result<FrameProcResult, ()> {
         let output_fluid_box = components.fluid_boxes.get_mut(0).ok_or_else(|| ())?;
-        output_fluid_box.amount =
-            (output_fluid_box.amount + 1.).min(output_fluid_box.max_amount);
+        output_fluid_box.amount = (output_fluid_box.amount + 1.).min(output_fluid_box.max_amount);
         Ok(FrameProcResult::None)
     }
 

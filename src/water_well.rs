@@ -1,6 +1,6 @@
 use super::{
     pipe::Pipe,
-    structure::{Structure, StructureDynIter, StructureBundle, StructureId, StructureComponents},
+    structure::{Structure, StructureBundle, StructureComponents, StructureDynIter, StructureId},
     FactorishState, FrameProcResult, Position,
 };
 use serde::{Deserialize, Serialize};
@@ -63,8 +63,8 @@ impl FluidBox {
 
     pub(crate) fn simulate(
         &mut self,
-        position: &Position,
-        state: &mut FactorishState,
+        _position: &Position,
+        _state: &mut FactorishState,
         structures: &mut StructureDynIter,
     ) {
         let mut _biggest_flow_idx = -1;
@@ -188,8 +188,8 @@ impl Structure for WaterWell {
         &mut self,
         _me: StructureId,
         components: &mut StructureComponents,
-        state: &mut FactorishState,
-        structures: &mut StructureDynIter,
+        _state: &mut FactorishState,
+        _structures: &mut StructureDynIter,
     ) -> Result<FrameProcResult, ()> {
         assert!(components.fluid_boxes.len() > 0);
         let output_fluid_box = &mut components.fluid_boxes[0];

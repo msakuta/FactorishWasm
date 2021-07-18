@@ -24,7 +24,7 @@ impl Pipe {
     }
 
     pub(crate) fn draw_int(
-        structure: &dyn Structure,
+        _structure: &dyn Structure,
         components: &StructureComponents,
         state: &FactorishState,
         context: &CanvasRenderingContext2d,

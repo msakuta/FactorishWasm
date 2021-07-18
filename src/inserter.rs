@@ -12,7 +12,6 @@ use web_sys::CanvasRenderingContext2d;
 
 #[derive(Serialize, Deserialize)]
 pub(crate) struct Inserter {
-    rotation: Rotation,
     cooldown: f64,
     hold_item: Option<ItemType>,
     #[serde(skip)]
@@ -27,7 +26,6 @@ impl Inserter {
     pub(crate) fn new(position: Position, rotation: Rotation) -> StructureBundle {
         StructureBundle {
             dynamic: Box::new(Inserter {
-                rotation,
                 cooldown: 0.,
                 hold_item: None,
                 input_structure: None,
@@ -37,15 +35,16 @@ impl Inserter {
         }
     }
 
-    fn get_arm_angles(&self) -> (f64, f64) {
+    fn get_arm_angles(&self, components: &StructureComponents) -> (f64, f64) {
         let phase = if self.hold_item.is_some() {
             self.cooldown / INSERTER_TIME
         } else {
             (INSERTER_TIME - self.cooldown) / INSERTER_TIME
         };
+        let rotation = components.rotation.unwrap_or(Rotation::Left);
         (
-            self.rotation.angle_rad() + (phase * 0.8 + 0.5) * std::f64::consts::PI,
-            self.rotation.angle_rad() + ((1. - phase) * 0.8 + 0.2 - 0.5) * std::f64::consts::PI,
+            rotation.angle_rad() + (phase * 0.8 + 0.5) * std::f64::consts::PI,
+            rotation.angle_rad() + ((1. - phase) * 0.8 + 0.2 - 0.5) * std::f64::consts::PI,
         )
     }
 
@@ -128,7 +127,7 @@ impl Structure for Inserter {
             },
             1 => match state.image_inserter.as_ref() {
                 Some(img) => {
-                    let angles = self.get_arm_angles();
+                    let angles = self.get_arm_angles(components);
                     context.save();
                     context.translate(x + 16., y + 16.)?;
                     context.rotate(angles.0)?;
@@ -170,7 +169,15 @@ impl Structure for Inserter {
                 }
                 None => return Err(JsValue::from_str("inserter-arm image not available")),
             },
-            2 => draw_direction_arrow((x, y), &self.rotation, state, context)?,
+            2 => draw_direction_arrow(
+                (x, y),
+                components
+                    .rotation
+                    .as_ref()
+                    .ok_or_else(|| js_str!("Inserter without rotation"))?,
+                state,
+                context,
+            )?,
             _ => panic!(),
         }
 
@@ -185,8 +192,9 @@ impl Structure for Inserter {
         structures: &mut StructureDynIter,
     ) -> Result<FrameProcResult, ()> {
         let position = components.position.as_ref().ok_or(())?;
-        let input_position = position.add(self.rotation.delta_inv());
-        let output_position = position.add(self.rotation.delta());
+        let rotation = components.rotation.as_ref().ok_or(())?;
+        let input_position = position.add(rotation.delta_inv());
+        let output_position = position.add(rotation.delta());
 
         if self.hold_item.is_none() {
             if self.cooldown <= 1. {

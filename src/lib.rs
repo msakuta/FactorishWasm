@@ -77,7 +77,6 @@ use assembler::Assembler;
 use boiler::Boiler;
 use burner::Burner;
 use chest::Chest;
-use dyn_iter::{Chained, DynIterMut, MutRef};
 use elect_pole::ElectPole;
 use furnace::Furnace;
 use inserter::Inserter;
@@ -90,8 +89,8 @@ use power_network::{build_power_networks, PowerNetwork};
 use splitter::Splitter;
 use steam_engine::SteamEngine;
 use structure::{
-    FrameProcResult, ItemResponse, Position, RotateErr, Rotation, Structure, StructureBoxed,
-    StructureBundle, StructureComponents, StructureDynIter, StructureEntry, StructureId,
+    FrameProcResult, ItemResponse, Position, RotateErr, Rotation, Structure, StructureBundle,
+    StructureComponents, StructureDynIter, StructureEntry, StructureId,
 };
 use transport_belt::TransportBelt;
 use water_well::{FluidType, WaterWell};
@@ -103,8 +102,6 @@ use wasm_bindgen::{Clamped, JsCast};
 use web_sys::{
     CanvasRenderingContext2d, HtmlCanvasElement, HtmlDivElement, ImageBitmap, ImageData,
 };
-
-use crate::dyn_iter::DynIter;
 
 #[wasm_bindgen]
 extern "C" {
@@ -1668,7 +1665,7 @@ impl FactorishState {
         if let Some(SelectedItem::ToolBelt(_selected_tool)) = self.selected_item {
             self.tool_rotation = self.tool_rotation.next();
             Ok(true)
-        } else if let Some(SelectedItem::PlayerInventory(item)) = self.selected_item {
+        } else if let Some(SelectedItem::PlayerInventory(_item)) = self.selected_item {
             self.tool_rotation = self.tool_rotation.next();
             Ok(true)
         } else {
@@ -1680,7 +1677,7 @@ impl FactorishState {
                     let (s, others) = StructureDynIter::new(&mut self.structures, idx)
                         .map_err(|_| RotateErr::NotFound)?;
                     let bundle = s.bundle.as_mut().ok_or(RotateErr::NotFound)?;
-                    bundle.dynamic.rotate(&mut bundle.components, &others)?;
+                    bundle.rotate(&others)?;
                 }
             }
             Err(RotateErr::NotFound)
@@ -2151,6 +2148,7 @@ impl FactorishState {
             }
             ItemType::Boiler => return Ok(Boiler::new(cursor)),
             ItemType::WaterWell => return Ok(WaterWell::new(*cursor)),
+            ItemType::OffshorePump => return Ok(OffshorePump::new(cursor)),
             ItemType::Pipe => return Ok(Pipe::new(*cursor)),
             ItemType::SteamEngine => return Ok(SteamEngine::new(*cursor)),
             ItemType::ElectPole => Box::new(ElectPole::new()),

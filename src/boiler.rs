@@ -167,7 +167,7 @@ impl Structure for Boiler {
         _me: StructureId,
         components: &mut StructureComponents,
         state: &mut FactorishState,
-        structures: &mut StructureDynIter,
+        _structures: &mut StructureDynIter,
     ) -> Result<FrameProcResult, ()> {
         let position = components.position.as_ref().ok_or(())?;
         let energy = components.energy.as_mut().ok_or(())?;

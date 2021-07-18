@@ -401,10 +401,18 @@ pub(crate) trait Structure {
     fn movable(&self) -> bool {
         false
     }
-    fn rotate(&mut self, _components: &mut StructureComponents, _others: &StructureDynIter) -> Result<(), RotateErr> {
+    fn rotate(
+        &mut self,
+        _components: &mut StructureComponents,
+        _others: &StructureDynIter,
+    ) -> Result<(), RotateErr> {
         Err(RotateErr::NotSupported)
     }
-    fn set_rotation(&mut self, _components: &mut StructureComponents, _rotation: &Rotation) -> Result<(), ()> {
+    fn set_rotation(
+        &mut self,
+        _components: &mut StructureComponents,
+        _rotation: &Rotation,
+    ) -> Result<(), ()> {
         Err(())
     }
     /// Called every frame for each item that is on this structure.
@@ -564,8 +572,10 @@ impl Default for StructureComponents {
     }
 }
 
+pub(crate) type StructureBoxed = Box<dyn Structure>;
+
 pub(crate) struct StructureBundle {
-    pub dynamic: Box<dyn Structure>,
+    pub dynamic: StructureBoxed,
     pub components: StructureComponents,
 }
 
@@ -673,14 +683,17 @@ impl StructureBundle {
         }
     }
 
-    pub(crate) fn rotate(&mut self, others: &StructureDynIter) -> Result<(), ()> {
-        if self.dynamic.rotate(&mut self.components, others).is_ok() {
+    pub(crate) fn rotate(&mut self, others: &StructureDynIter) -> Result<(), RotateErr> {
+        let result = self.dynamic.rotate(&mut self.components, others);
+        if result.is_ok() {
             return Ok(());
         }
         if let Some(ref mut rotation) = self.components.rotation {
             *rotation = rotation.next();
+            Ok(())
+        } else {
+            result
         }
-        Ok(())
     }
 
     pub(crate) fn set_rotation(&mut self, rotation: &Rotation) -> Result<(), ()> {
@@ -688,8 +701,6 @@ impl StructureBundle {
         Ok(())
     }
 }
-
-pub(crate) type StructureBoxed = Box<dyn Structure>;
 
 pub(crate) struct StructureEntry {
     pub gen: u32,
