@@ -1794,9 +1794,14 @@ impl FactorishState {
                 }
             }
         }
-        Err(JsValue::from_str(
-            "structure is not found or doesn't have inventory",
-        ))
+
+        // We do not make getting inventory of nonexist structure or inventory an error, instead return an empty one.
+        // Because JavaScript side cannot track the object lifecycle, it is very easy to happen and it's annoying to
+        // make it a hard error.
+        Ok(js_sys::Array::new())
+        // Err(JsValue::from_str(
+        //     "structure is not found or doesn't have inventory",
+        // ))
     }
 
     pub fn get_structure_burner_energy(&self, c: i32, r: i32) -> Option<js_sys::Array> {
@@ -2303,7 +2308,7 @@ impl FactorishState {
             },
             // Detect keys through '0'..'9', that's a shame char literal cannot be used in place of i32
             code @ 48..=58 => {
-                self.select_tool((code - '0' as i32 + 9) % 10);
+                self.select_tool((code - '0' as i32 + 9) % 10)?;
                 Ok(JsValue::from_bool(true))
             }
             37 => {
