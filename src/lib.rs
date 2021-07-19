@@ -2287,39 +2287,44 @@ impl FactorishState {
     }
 
     /// Keyboard event handler. Returns true if re-rendering is necessary to update internal state.
-    pub fn on_key_down(&mut self, key_code: i32) -> Result<bool, JsValue> {
+    pub fn on_key_down(&mut self, key_code: i32) -> Result<JsValue, JsValue> {
         match key_code {
             // 'r'
             82 => match self.rotate() {
-                Ok(b) => Ok(b),
+                Ok(b) => Ok(JsValue::from_bool(b)),
                 // If the target structure is not found or uncapable of rotation, it's not a critical error.
-                Err(RotateErr::NotFound) | Err(RotateErr::NotSupported) => Ok(false),
+                Err(RotateErr::NotFound) | Err(RotateErr::NotSupported) => Ok(JsValue::from_bool(false)),
                 Err(RotateErr::Other(err)) => return js_err!("Rotate failed: {:?}", err),
             },
             // Detect keys through '0'..'9', that's a shame char literal cannot be used in place of i32
             code @ 48..=58 => {
                 self.select_tool((code - '0' as i32 + 9) % 10);
-                Ok(true)
+                Ok(JsValue::from_bool(true))
             }
             37 => {
                 // Left
                 self.viewport_x = (self.viewport_x + 1.).min(0.);
-                Ok(true)
+                Ok(JsValue::from_bool(true))
             }
             38 => {
                 // Up
                 self.viewport_y = (self.viewport_y + 1.).min(0.);
-                Ok(true)
+                Ok(JsValue::from_bool(true))
             }
             39 => {
                 // Right
                 self.viewport_x = (self.viewport_x - 1.).max(-(self.width as f64));
-                Ok(true)
+                Ok(JsValue::from_bool(true))
             }
             40 => {
                 // Down
                 self.viewport_y = (self.viewport_y - 1.).max(-(self.height as f64));
-                Ok(true)
+                Ok(JsValue::from_bool(true))
+            }
+            69 => { //'e'
+                Ok(js_sys::Array::of1(
+                    &JsValue::from_str("showInventory"),
+                ).into())
             }
             81 => {
                 // 'q'
@@ -2338,11 +2343,11 @@ impl FactorishState {
                         console_log!("q: selected_tool is {:?}", self.selected_item);
                     }
                 }
-                Ok(true)
+                Ok(JsValue::from_bool(true))
             }
             _ => {
                 console_log!("unrecognized key: {}", key_code);
-                Ok(false)
+                Ok(JsValue::from_bool(false))
             }
         }
     }

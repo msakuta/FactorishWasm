@@ -644,6 +644,7 @@ let ysize = 64;
         }
     }
 
+    const inventory2ClientElem = document.getElementById('inventory2Client');
     const inputInventoryTitleElem = document.getElementById('inputInventoryTitle');
     const inventoryContentElem = document.getElementById('inputInventoryContent');
     inventoryContentElem.onclick = () => onInventoryClick(false, true);
@@ -745,7 +746,7 @@ let ysize = 64;
     }
 
     let burnerItemElem = null;
-    function showBurnerStatus(c, r){
+    function showBurnerStatus([c, r]){
         const [burnerInventory, _] = sim.get_structure_inventory(c, r, "Burner");
         if(burnerInventory){
             burnerContainer.style.display = "block";
@@ -796,26 +797,33 @@ let ysize = 64;
         }
     }
 
-    function showInventory(c, r){
+    function showInventory(pos){
         if(inventoryElem.style.display !== "none"){
             inventoryElem.style.display = "none";
             return;
         }
         // else if(tile.structure && tile.structure.inventory){
-        else{
+        else if(pos){
             inventoryElem.style.display = "block";
+            inventoryElem.classList = "inventoryWide";
+            inventory2ClientElem.style.display = "block";
+            playerElem.style.left = '370px';
             placeCenter(inventoryElem);
             bringToTop(inventoryElem);
             // var recipeSelectButtonElem = document.getElementById('recipeSelectButton');
             // recipeSelectButtonElem.style.display = !inventoryTarget.recipes ? "none" : "block";
             // toolTip.style.display = "none"; // Hide the tool tip for "Click to oepn inventory"
-            updateInventoryInt(inventoryContentElem, sim, false, sim.get_structure_inventory(c, r, "Input"), inputInventoryTitleElem);
-            updateInventoryInt(outputInventoryContentElem, sim, false, sim.get_structure_inventory(c, r, "Output"), outputInventoryTitleElem);
-            showBurnerStatus(c, r);
+            updateInventoryInt(inventoryContentElem, sim, false, sim.get_structure_inventory(pos[0], pos[1], "Input"), inputInventoryTitleElem);
+            updateInventoryInt(outputInventoryContentElem, sim, false, sim.get_structure_inventory(pos[0], pos[1], "Output"), outputInventoryTitleElem);
+            showBurnerStatus(pos);
         }
-        // else{
-        //     inventoryContent.innerHTML = "";
-        // }
+        else{
+            inventoryElem.style.display = "block";
+            inventoryElem.classList = "inventoryNarrow";
+            inventory2ClientElem.style.display = "none";
+            recipeSelectButtonElem.style.display = "none";
+            playerElem.style.left = "40px";
+        }
     }
 
     let recipeTarget = null;
@@ -928,12 +936,11 @@ let ysize = 64;
 
     const playerElem = document.createElement('div');
     playerElem.style.position = 'absolute';
-    playerElem.style.left = '470px';
+    playerElem.style.left = '370px';
     playerElem.style.top = '20px';
     playerElem.style.width = (320) + 'px';
     playerElem.style.height = (160) + 'px';
     inventoryElem.appendChild(playerElem);
-    playerElem.style.marginLeft = (-(playerElem.getBoundingClientRect().width + miniMapSize + tableMargin) / 2) + 'px';
 
     const playerInventoryTitleElem = document.createElement('div');
     playerInventoryTitleElem.innerHTML = "Player inventory";
@@ -1036,7 +1043,11 @@ let ysize = 64;
     });
 
     function onKeyDown(event){
-        if(sim.on_key_down(event.keyCode)){
+        const result = sim.on_key_down(event.keyCode);
+        if(result){
+            if(result[0] === "showInventory"){
+                showInventory();
+            }
             updateToolBarImage();
             updateToolCursor();
             event.preventDefault();
@@ -1139,7 +1150,7 @@ let ysize = 64;
             }
             else if(event[0] === "showInventory"){
                 const [_command, x, y] = event;
-                showInventory(x, y);
+                showInventory([x, y]);
             }
         }
     }
@@ -1169,7 +1180,7 @@ let ysize = 64;
 
         const selPos = sim.get_selected_inventory();
         if(selPos){
-            showBurnerStatus(selPos[0], selPos[1]);
+            showBurnerStatus(selPos);
         }
 
         sim.render_minimap(miniMapContext);
