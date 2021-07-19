@@ -220,6 +220,7 @@ let ysize = 64;
     if(headerButton){
         headerButton.addEventListener("click", () => {
             headerContainer.style.display = headerContainer.style.display === "none" ? "block" : "none";
+            headerButton.classList = "headerButton " + (headerContainer.style.display === "none" ? "" : "open");
         });
     }
 
