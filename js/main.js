@@ -380,7 +380,11 @@ let ysize = 64;
         toolElem.style.textAlign = 'center';
         toolElem.onmousedown = function(e){
             var currentTool = toolElems.indexOf(this);
-            if(sim.select_tool(currentTool)){
+            const result = sim.select_tool(currentTool);
+            if(result === "ShowInventory"){
+                showInventory();
+            }
+            else if(result){
                 updateToolBarImage();
                 updateToolBar();
                 renderToolTip(this, currentTool);
@@ -1045,7 +1049,7 @@ let ysize = 64;
     function onKeyDown(event){
         const result = sim.on_key_down(event.keyCode);
         if(result){
-            if(result[0] === "showInventory"){
+            if(result[0] === "ShowInventory"){
                 showInventory();
             }
             updateToolBarImage();
@@ -1139,17 +1143,17 @@ let ysize = 64;
         if(!events)
             return;
         for(let event of events){
-            if(event[0] === "updateStructureInventory"){
+            if(event.UpdateStructureInventory && event.UpdateStructureInventory instanceof Array){
                 // console.log(`updateStructureInventory event received ${event}`);
-                updateStructureInventory([event[1], event[2]]);
+                updateStructureInventory(event.UpdateStructureInventory);
             }
-            if(event[0] === "updatePlayerInventory"){
-                console.log("updatePlayerInventory event received");
+            if(event === "UpdatePlayerInventory"){
+                console.log("UpdatePlayerInventory event received");
                 updateInventory(sim.get_player_inventory());
                 updateToolBar();
             }
-            else if(event[0] === "showInventory"){
-                const [_command, x, y] = event;
+            else if(event.ShowInventoryAt && event.ShowInventoryAt instanceof Array){
+                const [x, y] = event.ShowInventoryAt;
                 showInventory([x, y]);
             }
         }

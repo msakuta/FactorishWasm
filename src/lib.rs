@@ -146,6 +146,16 @@ const SAVE_VERSION: i64 = 4;
 const ORE_HARVEST_TIME: i32 = 20;
 const POPUP_TEXT_LIFE: i32 = 30;
 
+/// Event types that can be communicated to the JavaScript code.
+/// It is serialized into a JavaScript Object through serde.
+#[derive(Serialize)]
+enum JSEvent {
+    UpdatePlayerInventory,
+    ShowInventory,
+    ShowInventoryAt(i32, i32),
+    UpdateStructureInventory(i32, i32),
+}
+
 #[derive(Copy, Clone, Serialize, Deserialize, PartialEq, Debug)]
 enum Ore {
     Iron,
@@ -1245,11 +1255,9 @@ impl FactorishState {
 
         let mut frame_proc_result_to_event = |result: Result<FrameProcResult, ()>| {
             if let Ok(FrameProcResult::InventoryChanged(pos)) = result {
-                events.push(js_sys::Array::of3(
-                    &JsValue::from_str("updateStructureInventory"),
-                    &JsValue::from(pos.x),
-                    &JsValue::from(pos.y),
-                ))
+                events.push(
+                    JsValue::from_serde(&JSEvent::UpdateStructureInventory(pos.x, pos.y)).unwrap(),
+                )
             }
         };
 
@@ -2197,9 +2205,7 @@ impl FactorishState {
                         self.on_player_update
                             .call1(&window(), &JsValue::from(self.get_player_inventory()?))
                             .unwrap_or_else(|_| JsValue::from(true));
-                        events.push(js_sys::Array::of1(&JsValue::from_str(
-                            "updatePlayerInventory",
-                        )));
+                        events.push(JsValue::from_serde(&JSEvent::UpdatePlayerInventory).unwrap());
                     }
                 }
             } else if let Some(structure) = self.find_structure_tile(&[cursor.x, cursor.y]) {
@@ -2211,11 +2217,10 @@ impl FactorishState {
                     console_log!("opening inventory at {:?}", cursor);
                     if self.open_structure_inventory(cursor.x, cursor.y).is_ok() {
                         // self.on_show_inventory.call0(&window()).unwrap();
-                        events.push(js_sys::Array::of3(
-                            &JsValue::from_str("showInventory"),
-                            &JsValue::from(cursor.x),
-                            &JsValue::from(cursor.y),
-                        ));
+                        events.push(
+                            JsValue::from_serde(&JSEvent::ShowInventoryAt(cursor.x, cursor.y))
+                                .unwrap(),
+                        );
                         // let inventory_elem: web_sys::HtmlElement = document().get_element_by_id("inventory2").unwrap().dyn_into().unwrap();
                         // inventory_elem.style().set_property("display", "block").unwrap();
                     }
@@ -2227,9 +2232,7 @@ impl FactorishState {
             } else {
                 // Right click means explicit cleanup, so we pick up items no matter what.
                 self.harvest(&cursor, true)?;
-                events.push(js_sys::Array::of1(&JsValue::from_str(
-                    "updatePlayerInventory",
-                )));
+                events.push(JsValue::from_serde(&JSEvent::UpdatePlayerInventory).unwrap());
             }
         }
 
@@ -2293,7 +2296,9 @@ impl FactorishState {
             82 => match self.rotate() {
                 Ok(b) => Ok(JsValue::from_bool(b)),
                 // If the target structure is not found or uncapable of rotation, it's not a critical error.
-                Err(RotateErr::NotFound) | Err(RotateErr::NotSupported) => Ok(JsValue::from_bool(false)),
+                Err(RotateErr::NotFound) | Err(RotateErr::NotSupported) => {
+                    Ok(JsValue::from_bool(false))
+                }
                 Err(RotateErr::Other(err)) => return js_err!("Rotate failed: {:?}", err),
             },
             // Detect keys through '0'..'9', that's a shame char literal cannot be used in place of i32
@@ -2321,10 +2326,12 @@ impl FactorishState {
                 self.viewport_y = (self.viewport_y - 1.).max(-(self.height as f64));
                 Ok(JsValue::from_bool(true))
             }
-            69 => { //'e'
-                Ok(js_sys::Array::of1(
-                    &JsValue::from_str("showInventory"),
-                ).into())
+            69 => {
+                //'e'
+                Ok(
+                    js_sys::Array::of1(&JsValue::from_serde(&JSEvent::ShowInventory).unwrap())
+                        .into(),
+                )
             }
             81 => {
                 // 'q'
@@ -2617,7 +2624,7 @@ impl FactorishState {
     ///
     /// @param tool the index of the tool item, [0,9]
     /// @returns whether the tool bar item should be re-rendered
-    pub fn select_tool(&mut self, tool: i32) -> bool {
+    pub fn select_tool(&mut self, tool: i32) -> Result<JsValue, JsValue> {
         if let Some(SelectedItem::PlayerInventory(item)) = self.selected_item {
             // We allow only items in tool_defs to present on the tool belt
             // This behavior is different from Factorio, maybe we can allow it
@@ -2625,13 +2632,13 @@ impl FactorishState {
                 self.tool_belt[tool as usize] = Some(item);
                 // Deselect the item for the player to let him select from tool belt.
                 self.selected_item = None;
-                return true;
+                return Ok(JsValue::from_bool(true));
             } else {
                 console_log!(
                     "select_tool could not find tool_def with item type: {:?}",
                     item
                 );
-                return false;
+                return Ok(JsValue::from_bool(false));
             }
         }
         self.selected_item =
@@ -2640,7 +2647,12 @@ impl FactorishState {
             } else {
                 None
             };
-        self.selected_item.is_some()
+        if let Some(SelectedItem::ToolBelt(sel)) = self.selected_item {
+            if self.tool_belt[sel].is_none() {
+                return Ok(JsValue::from_serde(&JSEvent::ShowInventory).unwrap());
+            }
+        }
+        Ok(JsValue::from_bool(self.selected_item.is_some()))
     }
 
     pub fn rotate_tool(&mut self) -> i32 {
