@@ -9,11 +9,53 @@
 				color: #000000;
 				font-family:Monospace;
 				font-size:15px;
-				text-align:center;
 
 				background-color: #f0f0f0;
 				margin: 0px;
 				width: content;
+				min-height: 100vh;
+				overflow: hidden;
+			}
+
+			.center {
+				text-align:center;
+			}
+
+			.header {
+				position: absolute;
+				left: 50%;
+				width: 33em;
+				margin-left: -16.5em;
+				z-index: 100;
+				background-color: rgba(191, 191, 191, 0.8);
+				padding: 0.5em;
+			}
+
+			.headerButton {
+				position: relative;
+				left: 50%;
+				margin-left: -2.5em;
+				margin-top: 0.5em;
+				width: 5em;
+				height: 0.5em;
+				background-color: #3f3f3f;
+				border: #070707 solid 1px;
+			}
+
+			.headerButton:hover {
+				background-color: yellow;
+			}
+
+			.footer {
+				position: absolute;
+				bottom: 0px;
+				left: 50%;
+				width: 370px;
+				height: 48px;
+				margin-left: -15em;
+				z-index: 100;
+				background-color: rgba(191, 191, 191, 0.75);
+				padding: 0.5em;
 			}
 
 			.params {
@@ -28,22 +70,22 @@
 			}
 
 			#container, #container2{
-				position: relative;
-				width: 100%;
-				height: 700px;
+				/* position: fixed; */
+				width: 30em;
+				bottom: 0;
 				line-height: 80%;
 			}
 
 			#canvas{
-				/* position: absolute;
-				left: 0; */
+				position: absolute;
 				width: 100%;
 				height: 100%;
+				text-align: justify;
 			}
 
 			#inventory, #inventory2{
 				position: absolute;
-				width: 355px;
+				width: 700px;
 				height: 212px;
 				left: 50%;
 				top: 50%;
@@ -117,6 +159,7 @@
 				text-align: left;
 				font-family: sans-serif;
 				line-height: 120%;
+				z-index: 200;
 			}
 
 			div.closeButton{
@@ -193,60 +236,73 @@
 		</style>
 	</head>
 	<body>
-		<h1>FactorishWasm</h1>
-		<p style="font-size: 80%; font-style: italic">- Factorio-style base building game with WebAssembly -</p>
-		<button id="paramsButton">New Game Settings</button>
-		<button id="viewButton">View Options</button>
-		<div style="position: relative;">
-			<div id="paramsContainer" class="params" style="display: none;">
-				<div style="font-size: 120%; font-weight: 700;">New game settings</div>
-				<div>
-					Size:
-					<select id="sizeSelect">
-						<option>16</option>
-						<option>24</option>
-						<option>32</option>
-						<option>48</option>
-						<option selected>64</option>
-						<option>128</option>
-						<option>256</option>
-					</select>
+		<canvas id="canvas"></canvas>
+		<div class="center">
+		<div class="header">
+			<div id="headerContainer">
+				<h1>FactorishWasm</h1>
+				<p style="font-size: 80%; font-style: italic">- Factorio-style base building game with WebAssembly -</p>
+				<button id="paramsButton">New Game Settings</button>
+				<button id="viewButton">View Options</button>
+				<div style="position: relative;">
+					<div id="paramsContainer" class="params" style="display: none;">
+						<div style="font-size: 120%; font-weight: 700;">New game settings</div>
+						<div>
+							Size:
+							<select id="sizeSelect">
+								<option>16</option>
+								<option>24</option>
+								<option>32</option>
+								<option>48</option>
+								<option selected>64</option>
+								<option>128</option>
+								<option>256</option>
+							</select>
+						</div>
+						<div>
+							Terrain Seed=<span id="seedLabel"></span>
+							<input id="seed" type="number">
+						</div>
+						<div>
+							Water Noise Threshold=<span id="waterNoiseThresholdLabel"></span>
+							<input id="waterNoiseThreshold" type="range" max="1" min="0" step="1e-3" value="0.35">
+						</div>
+						<div>
+							Resource Amount=<span id="resourceAmountLabel"></span>
+							<input id="resourceAmount" type="range" max="10000" min="100" step="100" value="1000">
+						</div>
+						<div>
+							Resource Noise Scale=<span id="noiseScaleLabel"></span>
+							<input id="noiseScale" type="range" max="20" min="2" step="1" value="5">
+						</div>
+						<div>
+							Resource Noise threshold=<span id="noiseThresholdLabel"></span>
+							<input id="noiseThreshold" type="range" max="1" min="0" step="1e-3" value="0.45">
+						</div>
+						<div style="text-align: center;">
+							<button type="button" id="generateBoard">Start a new game!</button>
+						</div>
+					</div>
+					<div id="viewContainer" class="params" style="display: none;">
+						<div style="font-size: 120%; font-weight: 700">View settings</div>
+						<div><label><input type="checkbox" id="showDebugBBox">Show Debug Bounding Box</label></div>
+						<div><label><input type="checkbox" id="showDebugFluidBox">Show Debug Fluid Box</label></div>
+						<div><label><input type="checkbox" id="showDebugPowerNetwork">Show Debug Power Network</label></div>
+					</div>
 				</div>
-				<div>
-					Terrain Seed=<span id="seedLabel"></span>
-					<input id="seed" type="number">
-				</div>
-				<div>
-					Water Noise Threshold=<span id="waterNoiseThresholdLabel"></span>
-					<input id="waterNoiseThreshold" type="range" max="1" min="0" step="1e-3" value="0.35">
-				</div>
-				<div>
-					Resource Amount=<span id="resourceAmountLabel"></span>
-					<input id="resourceAmount" type="range" max="10000" min="100" step="100" value="1000">
-				</div>
-				<div>
-					Resource Noise Scale=<span id="noiseScaleLabel"></span>
-					<input id="noiseScale" type="range" max="20" min="2" step="1" value="5">
-				</div>
-				<div>
-					Resource Noise threshold=<span id="noiseThresholdLabel"></span>
-					<input id="noiseThreshold" type="range" max="1" min="0" step="1e-3" value="0.45">
-				</div>
-				<div style="text-align: center;">
-					<button type="button" id="generateBoard">Start a new game!</button>
-				</div>
+				<hr>
+				<button id="copyButton">Copy save data to clipboard</button>
+				<button id="saveButton">Download save data</button>
+				<input style="display: none" type="file" id="loadFile">
+				<button id="loadButton">Load saved game</button>
+				<input id="saveText" type="text" value="" style="display: none">
+				<hr>
+				<div>Source on <a href="https://github.com/msakuta/FactorishWasm">GitHub</a>.</div>
 			</div>
-			<div id="viewContainer" class="params" style="display: none;">
-				<div style="font-size: 120%; font-weight: 700">View settings</div>
-				<div><label><input type="checkbox" id="showDebugBBox">Show Debug Bounding Box</label></div>
-				<div><label><input type="checkbox" id="showDebugFluidBox">Show Debug Fluid Box</label></div>
-				<div><label><input type="checkbox" id="showDebugPowerNetwork">Show Debug Power Network</label></div>
-			</div>
+			<div class="headerButton" id="headerButton"></div>
 		</div>
-		<hr>
-		<div style="position: relative">
+		<div>
 			<div id="container2">
-				<canvas id="canvas"></canvas>
 				<div id="inventory2" class="noselect">
 					<div id="inventory2Title">Inventory</div>
 					<div class="closeButton" id="inventory2CloseButton"></div>
@@ -266,7 +322,6 @@
 						<div id="outputInventoryContent"></div>
 					</div>
 				</div>
-				<div id="toolBar"></div>
 			</div>
 			<div id="recipeSelector" style="display: none;">
 				<div id="recipeSelectorTitle">Select a recipe</div>
@@ -274,16 +329,11 @@
 				<div class="closeButton" id="recipeSelectorCloseButton"></div>
 			</div>
 		</div>
-		<div id="points"></div>
-		<hr>
-		<button id="copyButton">Copy save data to clipboard</button>
-		<button id="saveButton">Download save data</button>
-		<input style="display: none" type="file" id="loadFile">
-		<button id="loadButton">Load saved game</button>
-		<input id="saveText" type="text" value="" style="display: none">
 		<div id="mousecaptor" style="display: none; position: fixed; top: 0px; left: 0px; width: 100%; height: 100%; background-color: rgba(0,0,0,0)"></div>
 		<div id="mouseIcon" class="noselect" style="pointer-events: none; z-index: 2000; display: none; position: fixed; top: 0px; left: 0px; width: 32px; height: 32px"></div>
-		<hr>
-		<p>Source on <a href="https://github.com/msakuta/FactorishWasm">GitHub</a>.</p>
+		<div class="footer">
+			<div id="toolBar"></div>
+		</div>
+		</div>
 	</body>
 </html>

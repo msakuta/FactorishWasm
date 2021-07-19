@@ -191,10 +191,10 @@ let ysize = 64;
         canvasSize = canvas.getBoundingClientRect();
         canvas.width = canvasSize.width;
         canvas.height = canvasSize.height;
+        infoElem.style.height = (canvasSize.height - mrect.height - tableMargin * 3) + 'px';
         sim.reset_viewport(canvas);
     };
     document.body.onresize = refreshSize;
-    refreshSize();
     const ctx = canvas.getContext('2d');
     const container = document.getElementById('container2');
     const containerRect = container.getBoundingClientRect();
@@ -211,9 +211,17 @@ let ysize = 64;
 
     const infoElem = document.createElement('div');
     infoElem.style.position = 'absolute';
-    infoElem.style.backgroundColor = '#ffff7f';
+    infoElem.style.backgroundColor = 'rgba(255, 255, 191, 0.75)';
     infoElem.style.border = '1px solid #00f';
     container.appendChild(infoElem);
+
+    const headerButton = document.getElementById("headerButton");
+    const headerContainer = document.getElementById("headerContainer");
+    if(headerButton){
+        headerButton.addEventListener("click", () => {
+            headerContainer.style.display = headerContainer.style.display === "none" ? "block" : "none";
+        });
+    }
 
     let selectedInventory = null;
     let selectedInventoryItem = null;
@@ -254,8 +262,10 @@ let ysize = 64;
     infoElem.style.right = '8px';
     infoElem.style.top = (mrect.bottom - containerRect.top + tableMargin) + 'px';
     infoElem.style.width = miniMapSize + 'px';
-    infoElem.style.height = (canvasSize.height - mrect.height - tableMargin) + 'px';
+
     infoElem.style.textAlign = 'left';
+
+    refreshSize();
 
     const toolBeltSize = 10;
     var toolElems = [];
@@ -296,8 +306,6 @@ let ysize = 64;
         var tool = sim.get_tool_desc(idx);
         var r = elem.getBoundingClientRect();
         var cr = container.getBoundingClientRect();
-        toolTip.style.left = (r.left - cr.left) + 'px';
-        toolTip.style.top = (r.bottom - cr.top) + 'px';
         toolTip.style.display = 'block';
         if(!tool){
             toolTip.innerHTML = "<b>Empty slot</b><br>"
@@ -310,6 +318,9 @@ let ysize = 64;
             toolTip.innerHTML = '<b>' + tool[0] + '</b>'
                 + `<br><i>Shortcut: '${(idx + 1) % 10}'</i>` + desc;
         }
+        const toolTipRect = toolTip.getBoundingClientRect();
+        toolTip.style.left = (r.left - cr.left) + 'px';
+        toolTip.style.top = (r.top - cr.top - toolTipRect.height) + 'px';
     }
 
     function deselectPlayerInventory(){
@@ -325,8 +336,8 @@ let ysize = 64;
     toolBarElem.style.borderColor = 'red';
     toolBarElem.style.position = 'absolute';
     toolBarElem.margin = '3px';
-    toolBarElem.style.top = '480px';
-    toolBarElem.style.left = '50%';
+    // toolBarElem.style.top = '480px';
+    // toolBarElem.style.left = '50%';
     toolBarElem.style.width = ((toolBeltSize + 1) * tilesize + 8) + 'px';
     toolBarElem.style.height = (tilesize + 8) + 'px';
     var toolBarCanvases = [];
@@ -392,7 +403,7 @@ let ysize = 64;
     }
     toolBarElem.appendChild(rotateButton);
     // Set the margin after contents are initialized
-    toolBarElem.style.marginLeft = (-(toolBarElem.getBoundingClientRect().width + miniMapSize + tableMargin) / 2) + 'px';
+    // toolBarElem.style.marginLeft = (-(toolBarElem.getBoundingClientRect().width + miniMapSize + tableMargin) / 2) + 'px';
 
     let loadedImages;
     try{
@@ -782,6 +793,7 @@ let ysize = 64;
         // else if(tile.structure && tile.structure.inventory){
         else{
             inventoryElem.style.display = "block";
+            placeCenter(inventoryElem);
             bringToTop(inventoryElem);
             // var recipeSelectButtonElem = document.getElementById('recipeSelectButton');
             // recipeSelectButtonElem.style.display = !inventoryTarget.recipes ? "none" : "block";
@@ -879,10 +891,10 @@ let ysize = 64;
 
     // Place a window element at the center of the container, assumes the windows have margin set in the middle.
     function placeCenter(elem){
-        var containerElem = document.getElementById('container2');
-        var cr = containerElem.getBoundingClientRect();
-        elem.style.left = ((cr.left + cr.right) / 2) + 'px';
-        elem.style.top = ((cr.top + cr.bottom) / 2) + 'px';
+        var elemRect = elem.getBoundingClientRect();
+        var bodyRect = document.body.getBoundingClientRect();
+        elem.style.left = ((bodyRect.width - elemRect.width) / 2) + 'px';
+        elem.style.top = ((bodyRect.height - elemRect.height) / 2) + 'px';
     }
 
     placeCenter(inventoryElem);
@@ -911,11 +923,11 @@ let ysize = 64;
     playerElem.style.backgroundColor = '#ffff7f';
     playerElem.style.position = 'absolute';
     playerElem.style.margin = '3px';
-    playerElem.style.left = '50%';
-    playerElem.style.top = '520px';
+    playerElem.style.left = '470px';
+    playerElem.style.top = '20px';
     playerElem.style.width = (320) + 'px';
     playerElem.style.height = (160) + 'px';
-    container.appendChild(playerElem);
+    inventoryElem.appendChild(playerElem);
     playerElem.style.marginLeft = (-(playerElem.getBoundingClientRect().width + miniMapSize + tableMargin) / 2) + 'px';
 
     const playerInventoryElem = document.createElement('div');
