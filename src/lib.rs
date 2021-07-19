@@ -152,7 +152,10 @@ const POPUP_TEXT_LIFE: i32 = 30;
 enum JSEvent {
     UpdatePlayerInventory,
     ShowInventory,
-    ShowInventoryAt(i32, i32),
+    ShowInventoryAt {
+        pos: (i32, i32),
+        recipe_enable: bool,
+    },
     UpdateStructureInventory(i32, i32),
 }
 
@@ -1736,11 +1739,12 @@ impl FactorishState {
         Ok(())
     }
 
-    pub fn open_structure_inventory(&mut self, c: i32, r: i32) -> Result<(), JsValue> {
+    pub fn open_structure_inventory(&mut self, c: i32, r: i32) -> Result<bool, JsValue> {
         let pos = Position { x: c, y: r };
-        if self.find_structure_tile(&[pos.x, pos.y]).is_some() {
+        if let Some(s) = self.find_structure_tile(&[pos.x, pos.y]) {
+            let recipe_enable = !s.get_recipes().is_empty();
             self.selected_structure_inventory = Some(pos);
-            Ok(())
+            Ok(recipe_enable)
         } else {
             Err(JsValue::from_str("structure not found"))
         }
@@ -2220,11 +2224,14 @@ impl FactorishState {
                 {
                     // Select clicked structure
                     console_log!("opening inventory at {:?}", cursor);
-                    if self.open_structure_inventory(cursor.x, cursor.y).is_ok() {
+                    if let Ok(recipe_enable) = self.open_structure_inventory(cursor.x, cursor.y) {
                         // self.on_show_inventory.call0(&window()).unwrap();
                         events.push(
-                            JsValue::from_serde(&JSEvent::ShowInventoryAt(cursor.x, cursor.y))
-                                .unwrap(),
+                            JsValue::from_serde(&JSEvent::ShowInventoryAt {
+                                pos: (cursor.x, cursor.y),
+                                recipe_enable,
+                            })
+                            .unwrap(),
                         );
                         // let inventory_elem: web_sys::HtmlElement = document().get_element_by_id("inventory2").unwrap().dyn_into().unwrap();
                         // inventory_elem.style().set_property("display", "block").unwrap();

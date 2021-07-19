@@ -801,13 +801,13 @@ let ysize = 64;
         }
     }
 
-    function showInventory(pos){
+    function showInventory(event){
         if(inventoryElem.style.display !== "none"){
             inventoryElem.style.display = "none";
             return;
         }
         // else if(tile.structure && tile.structure.inventory){
-        else if(pos){
+        else if(event){
             inventoryElem.style.display = "block";
             inventoryElem.classList = "inventoryWide";
             inventory2ClientElem.style.display = "block";
@@ -815,8 +815,9 @@ let ysize = 64;
             placeCenter(inventoryElem);
             bringToTop(inventoryElem);
             // var recipeSelectButtonElem = document.getElementById('recipeSelectButton');
-            // recipeSelectButtonElem.style.display = !inventoryTarget.recipes ? "none" : "block";
+            recipeSelectButtonElem.style.display = !event.recipe_enable ? "none" : "block";
             // toolTip.style.display = "none"; // Hide the tool tip for "Click to oepn inventory"
+            const pos = event.pos;
             updateInventoryInt(inventoryContentElem, sim, false, sim.get_structure_inventory(pos[0], pos[1], "Input"), inputInventoryTitleElem);
             updateInventoryInt(outputInventoryContentElem, sim, false, sim.get_structure_inventory(pos[0], pos[1], "Output"), outputInventoryTitleElem);
             showBurnerStatus(pos);
@@ -1152,9 +1153,8 @@ let ysize = 64;
                 updateInventory(sim.get_player_inventory());
                 updateToolBar();
             }
-            else if(event.ShowInventoryAt && event.ShowInventoryAt instanceof Array){
-                const [x, y] = event.ShowInventoryAt;
-                showInventory([x, y]);
+            else if(event.ShowInventoryAt && event.ShowInventoryAt instanceof Object){
+                showInventory(event.ShowInventoryAt);
             }
         }
     }
