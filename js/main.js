@@ -217,11 +217,21 @@ let ysize = 64;
 
     const headerButton = document.getElementById("headerButton");
     const headerContainer = document.getElementById("headerContainer");
+
+    function setHeaderVisible(v = "toggle"){
+        if(v === "toggle"){
+            v = headerContainer.style.display === "none";
+        }
+        headerContainer.style.display = v ? "block" : "none";
+        headerButton.classList = "headerButton " + (v ? "open" : "");
+    }
+
     if(headerButton){
-        headerButton.addEventListener("click", () => {
-            headerContainer.style.display = headerContainer.style.display === "none" ? "block" : "none";
-            headerButton.classList = "headerButton " + (headerContainer.style.display === "none" ? "" : "open");
-        });
+        headerButton.addEventListener("click", () => setHeaderVisible());
+        const viewSettings = JSON.parse(localStorage.getItem("FactorishWasmViewSettings"));
+        // Default visible
+        if(!viewSettings.headerVisible)
+            setHeaderVisible(false);
     }
 
     let selectedInventory = null;
@@ -1037,7 +1047,12 @@ let ysize = 64;
 
     updateToolBarImage();
 
-    window.addEventListener( "beforeunload", () => sim.save_game());
+    window.addEventListener( "beforeunload", () => {
+        sim.save_game();
+        localStorage.setItem("FactorishWasmViewSettings", JSON.stringify({
+            "headerVisible": headerContainer.style.display !== "none",
+        }));
+    });
 
     const copyButton = document.getElementById("copyButton");
     copyButton.onclick = () => {
