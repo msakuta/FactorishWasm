@@ -230,7 +230,7 @@ let ysize = 64;
         headerButton.addEventListener("click", () => setHeaderVisible());
         const viewSettings = JSON.parse(localStorage.getItem("FactorishWasmViewSettings"));
         // Default visible
-        if(!viewSettings.headerVisible)
+        if(viewSettings && !viewSettings.headerVisible)
             setHeaderVisible(false);
     }
 
