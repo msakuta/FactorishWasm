@@ -89,7 +89,7 @@
 			#inventory, #inventory2{
 				position: absolute;
 				width: 700px;
-				height: 212px;
+				height: 220px;
 				left: 50%;
 				top: 50%;
 				margin-left: -175px;
@@ -108,23 +108,34 @@
 			.inventoryTitle {
 				background-color: #6f6fcf;
 				width: 316px;
-				margin-left: 37px;
+				margin-top: 2px;
+				/* margin-left: 37px; */
 				margin-right: 33px;
 			}
 
-			#inventoryClient, #inventory2Client{
+			.inventoryButtons {
 				position: relative;
-				width: 100%;
+				left: 0;
+				top: 0;
+				width: 40px;
+				height: 100%;
+			}
+
+			#inventoryClient, #inventory2Client{
+				position: absolute;
+				top: 20px;
+				left: 40px;
+				width: 340px;
 				height: 140px;
 			}
 
 			#inventoryContent, #inputInventoryContent, #outputInventoryContent{
-				right: 0;
+				right: 40px;
 				top: 20px;
 				width: 314px;
 				height: 50%;
 				border: solid 1px black;
-				margin: 2px 2px 2px 37px;
+				margin: 2px 2px 2px 2px;
 				background-color: #ffff7f;
 			}
 
@@ -309,10 +320,12 @@
 				<div id="inventory2" class="noselect">
 					<div id="inventory2Title">Inventory</div>
 					<div class="closeButton" id="inventory2CloseButton"></div>
-					<div id="inventory2Client">
+					<div id="inventoryButtons" class="inventoryButtons">
 						<img id="inventory2List" draggable="false" src="../img/list.png" style="position: absolute">
 						<img id="inventory2Icons" draggable="false" src="../img/icons.png" style="position: absolute; left: 0px; top: 32px">
 						<img id="recipeSelectButton" draggable="false" src="../img/recipe-select.png" alt="Recipe select" style="position: absolute; left: 0px; top: 80px; border: 1px solid #7f7f7f">
+					</div>
+					<div id="inventory2Client">
 						<div id="burnerContainer" class="burnerContainer">
 							<div id="inputFuel" class="fuelBackground"></div>
 							<div class="burnerEnergyBack">

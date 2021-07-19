@@ -927,13 +927,7 @@ let ysize = 64;
     }
 
     const playerElem = document.createElement('div');
-    playerElem.style.overflow = 'visible';
-    playerElem.style.borderStyle = 'solid';
-    playerElem.style.borderWidth = '1px';
-    playerElem.style.border = '1px solid #00f';
-    playerElem.style.backgroundColor = '#ffff7f';
     playerElem.style.position = 'absolute';
-    playerElem.style.margin = '3px';
     playerElem.style.left = '470px';
     playerElem.style.top = '20px';
     playerElem.style.width = (320) + 'px';
@@ -941,8 +935,22 @@ let ysize = 64;
     inventoryElem.appendChild(playerElem);
     playerElem.style.marginLeft = (-(playerElem.getBoundingClientRect().width + miniMapSize + tableMargin) / 2) + 'px';
 
+    const playerInventoryTitleElem = document.createElement('div');
+    playerInventoryTitleElem.innerHTML = "Player inventory";
+    playerInventoryTitleElem.classList = "inventoryTitle";
+    playerElem.appendChild(playerInventoryTitleElem);
+
+    const playerInventoryContainerElem = document.createElement('div');
+    playerInventoryContainerElem.style.overflow = 'hidden';
+    playerInventoryContainerElem.style.borderStyle = 'solid';
+    playerInventoryContainerElem.style.borderWidth = '1px';
+    playerInventoryContainerElem.style.border = '1px solid #00f';
+    playerInventoryContainerElem.style.backgroundColor = '#ffff7f';
+    playerInventoryContainerElem.style.height = (160) + 'px';
+    playerInventoryContainerElem.style.margin = '3px';
+    playerElem.appendChild(playerInventoryContainerElem);
+
     const playerInventoryElem = document.createElement('div');
-    playerInventoryElem.style.position = 'relative';
     playerInventoryElem.style.overflowY = 'scroll';
     playerInventoryElem.style.width = '100%';
     playerInventoryElem.style.height = '100%';
@@ -972,7 +980,7 @@ let ysize = 64;
         }
     }
     playerInventoryElem.onclick = function(){onInventoryClick(true, true)};
-    playerElem.appendChild(playerInventoryElem);
+    playerInventoryContainerElem.appendChild(playerInventoryElem);
 
     function onInventoryClick(isPlayer, isInput){
         // Update only if the selected inventory is the other one from destination.
