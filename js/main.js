@@ -52,8 +52,8 @@ function isIE(){
 }
 
 const tooltipZIndex = 10000;
-let xsize = 64;
-let ysize = 64;
+let xsize = 128;
+let ysize = 128;
 
 (async function(){
     // We could fetch and await in Rust code, but it's far easier to do in JavaScript runtime.
