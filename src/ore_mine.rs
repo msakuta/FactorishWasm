@@ -117,8 +117,11 @@ impl Structure for OreMine {
     }
 
     fn desc(&self, state: &FactorishState) -> String {
-        let tile = &state.board
-            [self.position.x as usize + self.position.y as usize * state.width as usize];
+        let tile = if let Some(tile) = state.tile_at(&self.position) {
+            tile
+        } else {
+            return "Cell not found".to_string();
+        };
         if let Some(_recipe) = &self.recipe {
             // Progress bar
             format!("{}{}{}{}{}",

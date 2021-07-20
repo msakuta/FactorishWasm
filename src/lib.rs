@@ -84,6 +84,7 @@ use transport_belt::TransportBelt;
 use water_well::{FluidType, WaterWell};
 
 use serde::{Deserialize, Serialize};
+use std::hash::Hash;
 use std::{cell::RefCell, collections::HashMap, convert::TryFrom};
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::{Clamped, JsCast};
@@ -142,7 +143,7 @@ const DROP_ITEM_SIZE: f64 = 8.;
 const DROP_ITEM_SIZE_I: i32 = DROP_ITEM_SIZE as i32;
 
 const COAL_POWER: f64 = 100.; // kilojoules
-const SAVE_VERSION: i64 = 4;
+const SAVE_VERSION: i64 = 5;
 const ORE_HARVEST_TIME: i32 = 20;
 const POPUP_TEXT_LIFE: i32 = 30;
 
@@ -201,6 +202,71 @@ impl Cell {
             _ => None,
         }
     }
+}
+
+const CHUNK_SIZE: usize = 16;
+const CHUNK_SIZE2: usize = CHUNK_SIZE * CHUNK_SIZE;
+
+type Chunk = Vec<Cell>;
+type Chunks = HashMap<Position, Chunk>;
+
+fn gen_chunk(
+    position: Position,
+    terrain_seed: u32,
+    noise_threshold: f64,
+    water_noise_threshold: f64,
+    resource_amount: f64,
+) -> Chunk {
+    let noise_scale = 3.75213;
+    let mut ret = vec![Cell::default(); CHUNK_SIZE2];
+    let bits = 1;
+    let mut rng = Xor128::new(terrain_seed);
+    let ocean_terms = gen_terms(&mut rng, bits);
+    let iron_terms = gen_terms(&mut rng, bits);
+    let copper_terms = gen_terms(&mut rng, bits);
+    let coal_terms = gen_terms(&mut rng, bits);
+    let stone_terms = gen_terms(&mut rng, bits);
+    for y in 0..CHUNK_SIZE {
+        for x in 0..CHUNK_SIZE {
+            let [fx, fy] = [
+                (x as f64 + position.x as f64 * CHUNK_SIZE as f64) / noise_scale,
+                (y as f64 + position.y as f64 * CHUNK_SIZE as f64) / noise_scale,
+            ];
+            let cell = &mut ret[(x + y * CHUNK_SIZE) as usize];
+            cell.water = water_noise_threshold < perlin_noise_pixel(fx, fy, bits, &ocean_terms);
+            if cell.water {
+                continue; // No ores in water
+            }
+            let iron = (perlin_noise_pixel(fx, fy, bits, &iron_terms) - noise_threshold)
+                * 4.
+                * resource_amount;
+            let copper = (perlin_noise_pixel(fx, fy, bits, &copper_terms) - noise_threshold)
+                * 4.
+                * resource_amount;
+            let coal = (perlin_noise_pixel(fx, fy, bits, &coal_terms) - noise_threshold)
+                * 4.
+                * resource_amount;
+            let stone = (perlin_noise_pixel(fx, fy, bits, &stone_terms) - noise_threshold)
+                * 4.
+                * resource_amount;
+
+            match [
+                (Ore::Iron, iron),
+                (Ore::Copper, copper),
+                (Ore::Coal, coal),
+                (Ore::Stone, stone),
+            ]
+            .iter()
+            .map(|(ore, v)| (ore, v.max(0.) as u32))
+            .max_by_key(|v| v.1)
+            {
+                Some((ore, v)) if 0 < v => cell.ore = Some(OreValue(*ore, v)),
+                _ => (),
+            }
+        }
+    }
+    calculate_back_image(&mut ret, CHUNK_SIZE, CHUNK_SIZE);
+    ret
 }
 
 type Inventory = HashMap<ItemType, usize>;
@@ -484,7 +550,7 @@ struct OreHarvesting {
     timer: i32,
 }
 
-fn calculate_back_image(ret: &mut [Cell], width: u32, height: u32) {
+fn calculate_back_image(ret: &mut [Cell], width: usize, height: usize) {
     let mut rng = Xor128::new(23424321);
     // Some number with fractional part is desirable, but we don't care too precisely since it is just a visual aid.
     let noise_scale = 3.75213;
@@ -502,7 +568,7 @@ fn calculate_back_image(ret: &mut [Cell], width: u32, height: u32) {
                 if x < 0 || width as i32 <= x || y < 0 || height as i32 <= y {
                     false
                 } else {
-                    ret[(x as u32 + y as u32 * width) as usize].water
+                    ret[(x as usize + y as usize * width) as usize].water
                 }
             };
             let l = get_at(x - 1, y) as u8;
@@ -550,7 +616,7 @@ pub struct FactorishState {
     viewport_x: f64,
     viewport_y: f64,
     view_scale: f64,
-    board: Vec<Cell>,
+    board: Chunks,
     structures: Vec<StructureEntry>,
     selected_structure_inventory: Option<Position>,
     drop_items: Vec<DropItem>,
@@ -724,57 +790,23 @@ impl FactorishState {
             image_fuel_alarm: None,
             image_electricity_alarm: None,
             board: {
-                let mut ret = vec![Cell::default(); (width * height) as usize];
-                let bits = 1;
-                let mut rng = Xor128::new(terrain_seed);
-                let ocean_terms = gen_terms(&mut rng, bits);
-                let iron_terms = gen_terms(&mut rng, bits);
-                let copper_terms = gen_terms(&mut rng, bits);
-                let coal_terms = gen_terms(&mut rng, bits);
-                let stone_terms = gen_terms(&mut rng, bits);
-                for y in 0..height {
-                    for x in 0..width {
-                        let [fx, fy] = [x as f64 / noise_scale, y as f64 / noise_scale];
-                        let cell = &mut ret[(x + y * width) as usize];
-                        cell.water =
-                            water_noise_threshold < perlin_noise_pixel(fx, fy, bits, &ocean_terms);
-                        if cell.water {
-                            continue; // No ores in water
-                        }
-                        let iron = (perlin_noise_pixel(fx, fy, bits, &iron_terms)
-                            - noise_threshold)
-                            * 4.
-                            * resource_amount;
-                        let copper = (perlin_noise_pixel(fx, fy, bits, &copper_terms)
-                            - noise_threshold)
-                            * 4.
-                            * resource_amount;
-                        let coal = (perlin_noise_pixel(fx, fy, bits, &coal_terms)
-                            - noise_threshold)
-                            * 4.
-                            * resource_amount;
-                        let stone = (perlin_noise_pixel(fx, fy, bits, &stone_terms)
-                            - noise_threshold)
-                            * 4.
-                            * resource_amount;
-
-                        match [
-                            (Ore::Iron, iron),
-                            (Ore::Copper, copper),
-                            (Ore::Coal, coal),
-                            (Ore::Stone, stone),
-                        ]
-                        .iter()
-                        .map(|(ore, v)| (ore, v.max(0.) as u32))
-                        .max_by_key(|v| v.1)
-                        {
-                            Some((ore, v)) if 0 < v => cell.ore = Some(OreValue(*ore, v)),
-                            _ => (),
-                        }
+                let mut board = HashMap::new();
+                for y in 0..height as usize / CHUNK_SIZE {
+                    for x in 0..width as usize / CHUNK_SIZE {
+                        let pos = Position::new(x as i32, y as i32);
+                        board.insert(
+                            pos,
+                            gen_chunk(
+                                pos,
+                                terrain_seed,
+                                noise_threshold,
+                                water_noise_threshold,
+                                resource_amount,
+                            ),
+                        );
                     }
                 }
-                calculate_back_image(&mut ret, width, height);
-                ret
+                board
             },
             structures: vec![
                 wrap_structure(Box::new(TransportBelt::new(10, 3, Rotation::Left))),
@@ -895,17 +927,29 @@ impl FactorishState {
             serde_json::to_value(
                 self.board
                     .iter()
-                    .enumerate()
-                    .filter(|(_, cell)| cell.ore.is_some() || cell.water)
-                    .map(|(idx, cell)| {
-                        let mut map = serde_json::Map::new();
-                        let x = idx % self.width as usize;
-                        let y = idx / self.height as usize;
-                        map.insert("position".to_string(), serde_json::to_value((x, y))?);
-                        map.insert("cell".to_string(), serde_json::to_value(cell)?);
-                        serde_json::to_value(map)
+                    .map(|chunk| {
+                        Ok((
+                            serde_json::to_value(chunk.0)?,
+                            chunk
+                                .1
+                                .iter()
+                                .enumerate()
+                                .filter(|(_, cell)| cell.ore.is_some() || cell.water)
+                                .map(|(idx, cell)| {
+                                    let mut map = serde_json::Map::new();
+                                    let x = idx % self.width as usize;
+                                    let y = idx / self.height as usize;
+                                    map.insert(
+                                        "position".to_string(),
+                                        serde_json::to_value((x, y))?,
+                                    );
+                                    map.insert("cell".to_string(), serde_json::to_value(cell)?);
+                                    serde_json::to_value(map)
+                                })
+                                .collect::<serde_json::Result<Vec<serde_json::Value>>>()?,
+                        ))
                     })
-                    .collect::<serde_json::Result<Vec<serde_json::Value>>>()
+                    .collect::<serde_json::Result<Vec<_>>>()
                     .map_err(|e| js_str!("Serialize error on board: {}", e))?,
             )
             .map_err(|e| js_str!("Serialize error on board: {}", e))?,
@@ -924,6 +968,8 @@ impl FactorishState {
 
     pub fn deserialize_game(&mut self, data: &str) -> Result<(), JsValue> {
         use serde_json::Value;
+
+        console_log!("deserialize");
 
         let mut json: Value =
             serde_json::from_str(&data).map_err(|_| js_str!("Deserialize error"))?;
@@ -982,20 +1028,37 @@ impl FactorishState {
         self.width = json_as_u64(json_get(&json, "width")?)? as u32;
         self.height = json_as_u64(json_get(&json, "height")?)? as u32;
 
-        let tiles = json
+        let chunks = json
             .get_mut("board")
             .ok_or_else(|| js_str!("board not found in saved data"))?
             .as_array_mut()
             .ok_or_else(|| js_str!("board in saved data is not an array"))?;
-        self.board = vec![Cell::default(); (self.width * self.height) as usize];
-        for tile in tiles {
-            let position = json_get(tile, "position")?;
-            let x: usize = json_as_u64(json_get(&position, 0)?)? as usize;
-            let y: usize = json_as_u64(json_get(&position, 1)?)? as usize;
-            self.board[x + y * self.width as usize] = from_value(json_take(tile, "cell")?)?;
+        self.board = HashMap::new();
+        for chunk in chunks {
+            let chunk_pair = chunk
+                .as_array_mut()
+                .ok_or_else(|| js_str!("board in saved data is not an array"))?;
+            let chunk_pos = chunk_pair
+                .first_mut()
+                .map(|i| std::mem::take(i))
+                .ok_or_else(|| js_str!("Chunk does not have position"))?;
+            let chunk_pos = from_value(chunk_pos)?;
+            let chunk_data = chunk_pair
+                .get_mut(1)
+                .ok_or_else(|| js_str!("Chunk does not have data"))?
+                .as_array_mut()
+                .ok_or_else(|| js_str!("Chunk data is not an array"))?;
+            let mut new_chunk = vec![Cell::default(); CHUNK_SIZE2];
+            console_log!("new chunk {:?}", chunk_pos);
+            for tile in chunk_data {
+                let position = json_get(tile, "position")?;
+                let x: usize = json_as_u64(json_get(&position, 0)?)? as usize;
+                let y: usize = json_as_u64(json_get(&position, 1)?)? as usize;
+                new_chunk[x + y * CHUNK_SIZE] = from_value(json_take(tile, "cell")?)?;
+            }
+            calculate_back_image(&mut new_chunk, CHUNK_SIZE, CHUNK_SIZE);
+            self.board.insert(chunk_pos, new_chunk);
         }
-
-        calculate_back_image(&mut self.board, self.width, self.height);
 
         let structures = json
             .get_mut("structures")
@@ -1420,16 +1483,20 @@ impl FactorishState {
     }
 
     fn tile_at(&self, tile: &Position) -> Option<Cell> {
-        if 0 <= tile.x && tile.x < self.width as i32 && 0 <= tile.y && tile.y < self.height as i32 {
-            Some(self.board[tile.x as usize + tile.y as usize * self.width as usize])
+        let (chunk_pos, mp) = tile.div_mod(CHUNK_SIZE as i32);
+        let chunk = self.board.get(&chunk_pos)?;
+        if 0 <= mp.x && mp.x < CHUNK_SIZE as i32 && 0 <= mp.y && mp.y < CHUNK_SIZE as i32 {
+            Some(chunk[mp.x as usize + mp.y as usize * CHUNK_SIZE])
         } else {
             None
         }
     }
 
     fn tile_at_mut(&mut self, tile: &Position) -> Option<&mut Cell> {
-        if 0 <= tile.x && tile.x < self.width as i32 && 0 <= tile.y && tile.y < self.height as i32 {
-            Some(&mut self.board[tile.x as usize + tile.y as usize * self.width as usize])
+        let (chunk_pos, mp) = tile.div_mod(CHUNK_SIZE as i32);
+        let chunk = self.board.get_mut(&chunk_pos)?;
+        if 0 <= mp.x && mp.x < CHUNK_SIZE as i32 && 0 <= mp.y && mp.y < CHUNK_SIZE as i32 {
+            Some(&mut chunk[mp.x as usize + mp.y as usize * CHUNK_SIZE])
         } else {
             None
         }
@@ -1513,17 +1580,22 @@ impl FactorishState {
                         &if let Some(structure) = self.find_structure_tile(&cursor) {
                             format!(r#"Type: {}<br>{}"#, structure.name(), structure.desc(&self))
                         } else {
-                            let cell = self.board
-                                [cursor[0] as usize + cursor[1] as usize * self.width as usize];
-                            format!(
-                                r#"Empty tile<br>
-                                {}<br>"#,
-                                if let Some(ore) = cell.ore.as_ref() {
-                                    format!("{:?}: {}", ore.0, ore.1)
-                                } else {
-                                    "No ore".to_string()
-                                }
-                            )
+                            let (chunk_pos, mp) =
+                                Position::new(cursor[0], cursor[1]).div_mod(CHUNK_SIZE as i32);
+                            if let Some(chunk) = self.board.get(&chunk_pos) {
+                                let cell = &chunk[mp.x as usize + mp.y as usize * CHUNK_SIZE];
+                                format!(
+                                    r#"Empty tile<br>
+                                    {}<br>"#,
+                                    if let Some(ore) = cell.ore.as_ref() {
+                                        format!("{:?}: {}", ore.0, ore.1)
+                                    } else {
+                                        "No ore".to_string()
+                                    }
+                                )
+                            } else {
+                                format!("Empty tile")
+                            }
                         },
                     );
                 } else {
@@ -2761,7 +2833,15 @@ impl FactorishState {
                 .min(self.height);
             for y in top..bottom {
                 for x in left..right {
-                    let cell = &self.board[(x + y * self.width) as usize];
+                    let chunk_pos = Position::new(x as i32 / CHUNK_SIZE as i32, y as i32 / CHUNK_SIZE as i32);
+                    let chunk = self.board.get(&chunk_pos);
+                    let chunk = if let Some(chunk) = chunk {
+                        chunk
+                    } else {
+                        continue;
+                    };
+                    let (mx, my) = (x as usize % CHUNK_SIZE, y as usize % CHUNK_SIZE);
+                    let cell = &chunk[(mx + my * CHUNK_SIZE) as usize];
                     let (dx, dy) = (x as f64 * 32., y as f64 * 32.);
                     if cell.water || cell.image != 0 {
                         let srcx = cell.image % 4;
