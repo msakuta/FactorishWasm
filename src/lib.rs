@@ -146,6 +146,19 @@ const SAVE_VERSION: i64 = 4;
 const ORE_HARVEST_TIME: i32 = 20;
 const POPUP_TEXT_LIFE: i32 = 30;
 
+/// Event types that can be communicated to the JavaScript code.
+/// It is serialized into a JavaScript Object through serde.
+#[derive(Serialize)]
+enum JSEvent {
+    UpdatePlayerInventory,
+    ShowInventory,
+    ShowInventoryAt {
+        pos: (i32, i32),
+        recipe_enable: bool,
+    },
+    UpdateStructureInventory(i32, i32),
+}
+
 #[derive(Copy, Clone, Serialize, Deserialize, PartialEq, Debug)]
 enum Ore {
     Iron,
@@ -1245,11 +1258,9 @@ impl FactorishState {
 
         let mut frame_proc_result_to_event = |result: Result<FrameProcResult, ()>| {
             if let Ok(FrameProcResult::InventoryChanged(pos)) = result {
-                events.push(js_sys::Array::of3(
-                    &JsValue::from_str("updateStructureInventory"),
-                    &JsValue::from(pos.x),
-                    &JsValue::from(pos.y),
-                ))
+                events.push(
+                    JsValue::from_serde(&JSEvent::UpdateStructureInventory(pos.x, pos.y)).unwrap(),
+                )
             }
         };
 
@@ -1728,11 +1739,12 @@ impl FactorishState {
         Ok(())
     }
 
-    pub fn open_structure_inventory(&mut self, c: i32, r: i32) -> Result<(), JsValue> {
+    pub fn open_structure_inventory(&mut self, c: i32, r: i32) -> Result<bool, JsValue> {
         let pos = Position { x: c, y: r };
-        if self.find_structure_tile(&[pos.x, pos.y]).is_some() {
+        if let Some(s) = self.find_structure_tile(&[pos.x, pos.y]) {
+            let recipe_enable = !s.get_recipes().is_empty();
             self.selected_structure_inventory = Some(pos);
-            Ok(())
+            Ok(recipe_enable)
         } else {
             Err(JsValue::from_str("structure not found"))
         }
@@ -1786,9 +1798,14 @@ impl FactorishState {
                 }
             }
         }
-        Err(JsValue::from_str(
-            "structure is not found or doesn't have inventory",
-        ))
+
+        // We do not make getting inventory of nonexist structure or inventory an error, instead return an empty one.
+        // Because JavaScript side cannot track the object lifecycle, it is very easy to happen and it's annoying to
+        // make it a hard error.
+        Ok(js_sys::Array::new())
+        // Err(JsValue::from_str(
+        //     "structure is not found or doesn't have inventory",
+        // ))
     }
 
     pub fn get_structure_burner_energy(&self, c: i32, r: i32) -> Option<js_sys::Array> {
@@ -2197,9 +2214,7 @@ impl FactorishState {
                         self.on_player_update
                             .call1(&window(), &JsValue::from(self.get_player_inventory()?))
                             .unwrap_or_else(|_| JsValue::from(true));
-                        events.push(js_sys::Array::of1(&JsValue::from_str(
-                            "updatePlayerInventory",
-                        )));
+                        events.push(JsValue::from_serde(&JSEvent::UpdatePlayerInventory).unwrap());
                     }
                 }
             } else if let Some(structure) = self.find_structure_tile(&[cursor.x, cursor.y]) {
@@ -2209,13 +2224,15 @@ impl FactorishState {
                 {
                     // Select clicked structure
                     console_log!("opening inventory at {:?}", cursor);
-                    if self.open_structure_inventory(cursor.x, cursor.y).is_ok() {
+                    if let Ok(recipe_enable) = self.open_structure_inventory(cursor.x, cursor.y) {
                         // self.on_show_inventory.call0(&window()).unwrap();
-                        events.push(js_sys::Array::of3(
-                            &JsValue::from_str("showInventory"),
-                            &JsValue::from(cursor.x),
-                            &JsValue::from(cursor.y),
-                        ));
+                        events.push(
+                            JsValue::from_serde(&JSEvent::ShowInventoryAt {
+                                pos: (cursor.x, cursor.y),
+                                recipe_enable,
+                            })
+                            .unwrap(),
+                        );
                         // let inventory_elem: web_sys::HtmlElement = document().get_element_by_id("inventory2").unwrap().dyn_into().unwrap();
                         // inventory_elem.style().set_property("display", "block").unwrap();
                     }
@@ -2227,9 +2244,7 @@ impl FactorishState {
             } else {
                 // Right click means explicit cleanup, so we pick up items no matter what.
                 self.harvest(&cursor, true)?;
-                events.push(js_sys::Array::of1(&JsValue::from_str(
-                    "updatePlayerInventory",
-                )));
+                events.push(JsValue::from_serde(&JSEvent::UpdatePlayerInventory).unwrap());
             }
         }
 
@@ -2287,39 +2302,48 @@ impl FactorishState {
     }
 
     /// Keyboard event handler. Returns true if re-rendering is necessary to update internal state.
-    pub fn on_key_down(&mut self, key_code: i32) -> Result<bool, JsValue> {
+    pub fn on_key_down(&mut self, key_code: i32) -> Result<JsValue, JsValue> {
         match key_code {
             // 'r'
             82 => match self.rotate() {
-                Ok(b) => Ok(b),
+                Ok(b) => Ok(JsValue::from_bool(b)),
                 // If the target structure is not found or uncapable of rotation, it's not a critical error.
-                Err(RotateErr::NotFound) | Err(RotateErr::NotSupported) => Ok(false),
+                Err(RotateErr::NotFound) | Err(RotateErr::NotSupported) => {
+                    Ok(JsValue::from_bool(false))
+                }
                 Err(RotateErr::Other(err)) => return js_err!("Rotate failed: {:?}", err),
             },
             // Detect keys through '0'..'9', that's a shame char literal cannot be used in place of i32
             code @ 48..=58 => {
-                self.select_tool((code - '0' as i32 + 9) % 10);
-                Ok(true)
+                self.select_tool((code - '0' as i32 + 9) % 10)?;
+                Ok(JsValue::from_bool(true))
             }
             37 => {
                 // Left
                 self.viewport_x = (self.viewport_x + 1.).min(0.);
-                Ok(true)
+                Ok(JsValue::from_bool(true))
             }
             38 => {
                 // Up
                 self.viewport_y = (self.viewport_y + 1.).min(0.);
-                Ok(true)
+                Ok(JsValue::from_bool(true))
             }
             39 => {
                 // Right
                 self.viewport_x = (self.viewport_x - 1.).max(-(self.width as f64));
-                Ok(true)
+                Ok(JsValue::from_bool(true))
             }
             40 => {
                 // Down
                 self.viewport_y = (self.viewport_y - 1.).max(-(self.height as f64));
-                Ok(true)
+                Ok(JsValue::from_bool(true))
+            }
+            69 => {
+                //'e'
+                Ok(
+                    js_sys::Array::of1(&JsValue::from_serde(&JSEvent::ShowInventory).unwrap())
+                        .into(),
+                )
             }
             81 => {
                 // 'q'
@@ -2338,11 +2362,11 @@ impl FactorishState {
                         console_log!("q: selected_tool is {:?}", self.selected_item);
                     }
                 }
-                Ok(true)
+                Ok(JsValue::from_bool(true))
             }
             _ => {
                 console_log!("unrecognized key: {}", key_code);
-                Ok(false)
+                Ok(JsValue::from_bool(false))
             }
         }
     }
@@ -2408,6 +2432,11 @@ impl FactorishState {
         }
         let start = ((x + y * self.width as i32) * 4) as usize;
         data[start..start + 3].copy_from_slice(&color);
+    }
+
+    pub fn reset_viewport(&mut self, canvas: HtmlCanvasElement) {
+        self.viewport_width = canvas.width() as f64;
+        self.viewport_height = canvas.height() as f64;
     }
 
     pub fn render_init(
@@ -2607,7 +2636,7 @@ impl FactorishState {
     ///
     /// @param tool the index of the tool item, [0,9]
     /// @returns whether the tool bar item should be re-rendered
-    pub fn select_tool(&mut self, tool: i32) -> bool {
+    pub fn select_tool(&mut self, tool: i32) -> Result<JsValue, JsValue> {
         if let Some(SelectedItem::PlayerInventory(item)) = self.selected_item {
             // We allow only items in tool_defs to present on the tool belt
             // This behavior is different from Factorio, maybe we can allow it
@@ -2615,13 +2644,13 @@ impl FactorishState {
                 self.tool_belt[tool as usize] = Some(item);
                 // Deselect the item for the player to let him select from tool belt.
                 self.selected_item = None;
-                return true;
+                return Ok(JsValue::from_bool(true));
             } else {
                 console_log!(
                     "select_tool could not find tool_def with item type: {:?}",
                     item
                 );
-                return false;
+                return Ok(JsValue::from_bool(false));
             }
         }
         self.selected_item =
@@ -2630,7 +2659,12 @@ impl FactorishState {
             } else {
                 None
             };
-        self.selected_item.is_some()
+        if let Some(SelectedItem::ToolBelt(sel)) = self.selected_item {
+            if self.tool_belt[sel].is_none() {
+                return Ok(JsValue::from_serde(&JSEvent::ShowInventory).unwrap());
+            }
+        }
+        Ok(JsValue::from_bool(self.selected_item.is_some()))
     }
 
     pub fn rotate_tool(&mut self) -> i32 {

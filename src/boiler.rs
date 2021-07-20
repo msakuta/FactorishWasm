@@ -42,8 +42,8 @@ impl Boiler {
                 power_cost: 100.,
                 recipe_time: 30.,
             }),
-            input_fluid_box: FluidBox::new(true, false, [None; 4]),
-            output_fluid_box: FluidBox::new(false, true, [None; 4]),
+            input_fluid_box: FluidBox::new_with_filter(true, false, Some(FluidType::Water)),
+            output_fluid_box: FluidBox::new(false, true),
         }
     }
 

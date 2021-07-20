@@ -17,7 +17,7 @@ impl Pipe {
     pub(crate) fn new(position: &Position) -> Self {
         Pipe {
             position: *position,
-            fluid_box: FluidBox::new(true, true, [None; 4]),
+            fluid_box: FluidBox::new(true, true),
         }
     }
 

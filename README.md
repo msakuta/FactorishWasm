@@ -65,20 +65,26 @@ Left-clicking will place the building.
 Some buildings have directions. It can affect behavior of certain buildings. For example, transport belts carry items towards the direction, an ore miner outputs mined ores to this direction, an inserter picks up item from opposite side of the direction and puts on the indicated side, etc.
 You can rotate current direction by hitting R key or clicking the button below.
 
-![building-left](readme-img/rotate-button.png)
+![rotate-button](readme-img/rotate-button.png)
 
 You can see the current direction on the tool belt.
 
 ![building-left](readme-img/building-left.png)
 ![building-up](readme-img/building-up.png)
 
+* Open inventory
+
+Clicking a button below or hitting E key will show the inventory window.
+
+![inventory-button](readme-img/inventory-button.png)
+
+Inventory window looks like below.
+
+![player-inventory-window](readme-img/player-inventory-window.png)
+
 * Getting/putting items from/to buildings
 
-Some buildings show a tooltip like below. 
-
-![building-inventory-tooltip](readme-img/building-inventory-tooltip.png)
-
-You can left-click to open the inventrory window of the building.
+You can left-click to open the inventory window of some types of buildings.
 
 ![building-inventory-window](readme-img/building-inventory-window.png)
 
@@ -91,7 +97,7 @@ An assembler needs electricity to operate. You need to set up water well, boiler
 generate electricity.
 They can be connected with pipes to transport water and steam.
 
-Water well: ![water-well](readme-img/water-well.png)
+Offshore pump: ![offshore-pump](readme-img/offshore-pump.png)
 
 Boiler: ![boiler](readme-img/boiler.png)
 
