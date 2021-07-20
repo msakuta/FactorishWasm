@@ -1,7 +1,6 @@
 use super::{
     burner::Burner,
     draw_direction_arrow,
-    items::ItemType,
     structure::{
         Energy, Structure, StructureBundle, StructureComponents, StructureDynIter, StructureId,
     },

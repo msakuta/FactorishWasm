@@ -1910,7 +1910,7 @@ impl FactorishState {
     pub fn open_structure_inventory(&mut self, c: i32, r: i32) -> Result<bool, JsValue> {
         let pos = Position { x: c, y: r };
         if let Some(s) = self.find_structure_tile(&[pos.x, pos.y]) {
-            let recipe_enable = !s.get_recipes().is_empty();
+            let recipe_enable = !s.dynamic.get_recipes().is_empty();
             self.selected_structure_inventory = Some(pos);
             Ok(recipe_enable)
         } else {
