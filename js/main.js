@@ -38,6 +38,7 @@ import rotateImage from "../img/rotate.png";
 import closeImage from "../img/close.png";
 import rightarrow from "../img/rightarrow.png";
 import fuelBack from "../img/fuel-back.png";
+import inventory from "../img/inventory.png";
 
 
 import { FactorishState } from "../pkg/index.js";
@@ -313,26 +314,31 @@ let ysize = 64;
             mouseIcon.style.display = "none";
     }
 
-    function renderToolTip(elem, idx){
-        var tool = sim.get_tool_desc(idx);
+    function setToolTip(elem, text){
         var r = elem.getBoundingClientRect();
         var cr = container.getBoundingClientRect();
         toolTip.style.display = 'block';
+        toolTip.innerHTML = text;
+        const toolTipRect = toolTip.getBoundingClientRect();
+        toolTip.style.left = (r.left - cr.left) + 'px';
+        toolTip.style.top = (r.top - cr.top - toolTipRect.height) + 'px';
+    }
+    const renderToolTip = (elem, idx) => {
+        const tool = sim.get_tool_desc(idx);
+        let text = "";
         if(!tool){
-            toolTip.innerHTML = "<b>Empty slot</b><br>"
+            text = "<b>Empty slot</b><br>"
                 + "Select an item in the inventory and click here to put the item into this slot.";
         }
         else{
             var desc = tool[1];
             if(0 < desc.length)
                 desc = '<br>' + desc;
-            toolTip.innerHTML = '<b>' + tool[0] + '</b>'
+            text = '<b>' + tool[0] + '</b>'
                 + `<br><i>Shortcut: '${(idx + 1) % 10}'</i>` + desc;
         }
-        const toolTipRect = toolTip.getBoundingClientRect();
-        toolTip.style.left = (r.left - cr.left) + 'px';
-        toolTip.style.top = (r.top - cr.top - toolTipRect.height) + 'px';
-    }
+        setToolTip(elem, text);
+    };
 
     function deselectPlayerInventory(){
         selectedInventory = null;
@@ -349,7 +355,7 @@ let ysize = 64;
     toolBarElem.margin = '3px';
     // toolBarElem.style.top = '480px';
     // toolBarElem.style.left = '50%';
-    toolBarElem.style.width = ((toolBeltSize + 1) * tilesize + 8) + 'px';
+    toolBarElem.style.width = ((toolBeltSize + 2) * tilesize + 8) + 'px';
     toolBarElem.style.height = (tilesize + 8) + 'px';
     var toolBarCanvases = [];
     for(var i = 0; i < toolBeltSize; i++){
@@ -410,15 +416,28 @@ let ysize = 64;
     rotateButton.style.height = '31px';
     rotateButton.style.position = 'relative';
     rotateButton.style.top = '4px';
-    rotateButton.style.left = (32.0 * i + 4) + 'px';
+    rotateButton.style.left = (32.0 * i++ + 4) + 'px';
     rotateButton.style.border = '1px blue solid';
     rotateButton.style.backgroundImage = `url(${rotateImage}`;
-    rotateButton.onmousedown = function(e){
-        rotate();
-    }
+    rotateButton.onmousedown = () => rotate();
+    rotateButton.onmouseenter = (e) => setToolTip(e.target, "<b>Rotate</b><br><i>Shortcut: (R)</i>");
+    rotateButton.onmouseleave = (_e) => toolTip.style.display = 'none';
     toolBarElem.appendChild(rotateButton);
     // Set the margin after contents are initialized
     // toolBarElem.style.marginLeft = (-(toolBarElem.getBoundingClientRect().width + miniMapSize + tableMargin) / 2) + 'px';
+
+    const inventoryButton = document.createElement('div');
+    inventoryButton.style.width = '31px';
+    inventoryButton.style.height = '31px';
+    inventoryButton.style.position = 'absolute';
+    inventoryButton.style.top = '4px';
+    inventoryButton.style.left = (32.0 * i + 4) + 'px';
+    inventoryButton.style.border = '1px blue solid';
+    inventoryButton.style.backgroundImage = `url(${inventory})`;
+    inventoryButton.onmousedown = () => showInventory();
+    inventoryButton.onmouseenter = (e) => setToolTip(e.target, "<b>Inventory</b><br><i>Shortcut: (E)</i>");
+    inventoryButton.onmouseleave = () => toolTip.style.display = 'none';
+    toolBarElem.appendChild(inventoryButton);
 
     let loadedImages;
     try{
