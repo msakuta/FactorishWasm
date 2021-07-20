@@ -49,8 +49,8 @@ impl Boiler {
                 }),
                 factory: None,
                 fluid_boxes: vec![
-                    FluidBox::new(true, false, [None; 4]),
-                    FluidBox::new(false, true, [None; 4]),
+                    FluidBox::new_with_filter(true, false, Some(FluidType::Water)),
+                    FluidBox::new(false, true),
                 ],
             },
         }

@@ -5,6 +5,7 @@ import weeds from "../img/weeds.png";
 import iron from "../img/iron.png";
 import coal from "../img/coal.png";
 import copper from "../img/copper.png";
+import stone from "../img/stone.png";
 import transport from "../img/transport.png";
 import splitter from "../img/splitter.png";
 import chest from "../img/chest.png";
@@ -20,6 +21,7 @@ import direction from "../img/direction.png";
 import ore from "../img/ore.png";
 import coalOre from "../img/coal-ore.png";
 import copperOre from "../img/copper-ore.png";
+import stoneOre from "../img/stone-ore.png";
 import ironPlate from "../img/metal.png";
 import steelPlate from "../img/steel-plate.png";
 import copperPlate from "../img/copper-plate.png";
@@ -36,6 +38,7 @@ import rotateImage from "../img/rotate.png";
 import closeImage from "../img/close.png";
 import rightarrow from "../img/rightarrow.png";
 import fuelBack from "../img/fuel-back.png";
+import inventory from "../img/inventory.png";
 
 
 import { FactorishState } from "../pkg/index.js";
@@ -63,6 +66,7 @@ let ysize = 64;
         ["iron", iron],
         ["coal", coal],
         ["copper", copper],
+        ["stone", stone],
         ["transport", transport],
         ["chest", chest],
         ["mine", mine],
@@ -81,6 +85,7 @@ let ysize = 64;
         ["coalOre", coalOre],
         ["ironPlate", ironPlate],
         ["copperOre", copperOre],
+        ["stoneOre", stoneOre],
         ["copperPlate", copperPlate],
         ["gear", gear],
         ["copperWire", copperWire],
@@ -180,9 +185,17 @@ let ysize = 64;
     let sim = new FactorishState(xsize, ysize, updateInventory, terrainSeed, waterNoiseThreshold, resourceAmount, noiseScale, noiseThreshold);
 
     const canvas = document.getElementById('canvas');
-    const canvasSize = canvas.getBoundingClientRect();
+    let canvasSize = canvas.getBoundingClientRect();
     let viewPortWidth = canvasSize.width / 32;
     let viewPortHeight = canvasSize.height / 32;
+    const refreshSize = (event) => {
+        canvasSize = canvas.getBoundingClientRect();
+        canvas.width = canvasSize.width;
+        canvas.height = canvasSize.height;
+        infoElem.style.height = (canvasSize.height - mrect.height - tableMargin * 3) + 'px';
+        sim.reset_viewport(canvas);
+    };
+    document.body.onresize = refreshSize;
     const ctx = canvas.getContext('2d');
     const container = document.getElementById('container2');
     const containerRect = container.getBoundingClientRect();
@@ -199,9 +212,28 @@ let ysize = 64;
 
     const infoElem = document.createElement('div');
     infoElem.style.position = 'absolute';
-    infoElem.style.backgroundColor = '#ffff7f';
+    infoElem.style.backgroundColor = 'rgba(255, 255, 191, 0.75)';
     infoElem.style.border = '1px solid #00f';
     container.appendChild(infoElem);
+
+    const headerButton = document.getElementById("headerButton");
+    const headerContainer = document.getElementById("headerContainer");
+
+    function setHeaderVisible(v = "toggle"){
+        if(v === "toggle"){
+            v = headerContainer.style.display === "none";
+        }
+        headerContainer.style.display = v ? "block" : "none";
+        headerButton.classList = "headerButton " + (v ? "open" : "");
+    }
+
+    if(headerButton){
+        headerButton.addEventListener("click", () => setHeaderVisible());
+        const viewSettings = JSON.parse(localStorage.getItem("FactorishWasmViewSettings"));
+        // Default visible
+        if(viewSettings && !viewSettings.headerVisible)
+            setHeaderVisible(false);
+    }
 
     let selectedInventory = null;
     let selectedInventoryItem = null;
@@ -234,16 +266,18 @@ let ysize = 64;
     miniMapElem.setAttribute("height", ysize);
     miniMapElem.style.width = miniMapSize + 'px';
     miniMapElem.style.height = miniMapSize + 'px';
-    miniMapElem.style.left = (canvasSize.right - containerRect.left + tableMargin) + 'px';
-    miniMapElem.style.top = (canvasSize.top - containerRect.top) + 'px';
+    miniMapElem.style.right = '8px';
+    miniMapElem.style.top = '8px';
     const mrect = miniMapElem.getBoundingClientRect();
     const miniMapContext = miniMapElem.getContext('2d');
 
-    infoElem.style.left = (canvasSize.right + tableMargin) + 'px';
+    infoElem.style.right = '8px';
     infoElem.style.top = (mrect.bottom - containerRect.top + tableMargin) + 'px';
     infoElem.style.width = miniMapSize + 'px';
-    infoElem.style.height = (canvasSize.height - mrect.height - tableMargin) + 'px';
+
     infoElem.style.textAlign = 'left';
+
+    refreshSize();
 
     const toolBeltSize = 10;
     var toolElems = [];
@@ -280,25 +314,31 @@ let ysize = 64;
             mouseIcon.style.display = "none";
     }
 
-    function renderToolTip(elem, idx){
-        var tool = sim.get_tool_desc(idx);
+    function setToolTip(elem, text){
         var r = elem.getBoundingClientRect();
         var cr = container.getBoundingClientRect();
-        toolTip.style.left = (r.left - cr.left) + 'px';
-        toolTip.style.top = (r.bottom - cr.top) + 'px';
         toolTip.style.display = 'block';
+        toolTip.innerHTML = text;
+        const toolTipRect = toolTip.getBoundingClientRect();
+        toolTip.style.left = (r.left - cr.left) + 'px';
+        toolTip.style.top = (r.top - cr.top - toolTipRect.height) + 'px';
+    }
+    const renderToolTip = (elem, idx) => {
+        const tool = sim.get_tool_desc(idx);
+        let text = "";
         if(!tool){
-            toolTip.innerHTML = "<b>Empty slot</b><br>"
+            text = "<b>Empty slot</b><br>"
                 + "Select an item in the inventory and click here to put the item into this slot.";
         }
         else{
             var desc = tool[1];
             if(0 < desc.length)
                 desc = '<br>' + desc;
-            toolTip.innerHTML = '<b>' + tool[0] + '</b>'
+            text = '<b>' + tool[0] + '</b>'
                 + `<br><i>Shortcut: '${(idx + 1) % 10}'</i>` + desc;
         }
-    }
+        setToolTip(elem, text);
+    };
 
     function deselectPlayerInventory(){
         selectedInventory = null;
@@ -313,9 +353,9 @@ let ysize = 64;
     toolBarElem.style.borderColor = 'red';
     toolBarElem.style.position = 'absolute';
     toolBarElem.margin = '3px';
-    toolBarElem.style.top = '480px';
-    toolBarElem.style.left = '50%';
-    toolBarElem.style.width = ((toolBeltSize + 1) * tilesize + 8) + 'px';
+    // toolBarElem.style.top = '480px';
+    // toolBarElem.style.left = '50%';
+    toolBarElem.style.width = ((toolBeltSize + 2) * tilesize + 8) + 'px';
     toolBarElem.style.height = (tilesize + 8) + 'px';
     var toolBarCanvases = [];
     for(var i = 0; i < toolBeltSize; i++){
@@ -346,7 +386,11 @@ let ysize = 64;
         toolElem.style.textAlign = 'center';
         toolElem.onmousedown = function(e){
             var currentTool = toolElems.indexOf(this);
-            if(sim.select_tool(currentTool)){
+            const result = sim.select_tool(currentTool);
+            if(result === "ShowInventory"){
+                showInventory();
+            }
+            else if(result){
                 updateToolBarImage();
                 updateToolBar();
                 renderToolTip(this, currentTool);
@@ -372,15 +416,28 @@ let ysize = 64;
     rotateButton.style.height = '31px';
     rotateButton.style.position = 'relative';
     rotateButton.style.top = '4px';
-    rotateButton.style.left = (32.0 * i + 4) + 'px';
+    rotateButton.style.left = (32.0 * i++ + 4) + 'px';
     rotateButton.style.border = '1px blue solid';
     rotateButton.style.backgroundImage = `url(${rotateImage}`;
-    rotateButton.onmousedown = function(e){
-        rotate();
-    }
+    rotateButton.onmousedown = () => rotate();
+    rotateButton.onmouseenter = (e) => setToolTip(e.target, "<b>Rotate</b><br><i>Shortcut: (R)</i>");
+    rotateButton.onmouseleave = (_e) => toolTip.style.display = 'none';
     toolBarElem.appendChild(rotateButton);
     // Set the margin after contents are initialized
-    toolBarElem.style.marginLeft = (-(toolBarElem.getBoundingClientRect().width + miniMapSize + tableMargin) / 2) + 'px';
+    // toolBarElem.style.marginLeft = (-(toolBarElem.getBoundingClientRect().width + miniMapSize + tableMargin) / 2) + 'px';
+
+    const inventoryButton = document.createElement('div');
+    inventoryButton.style.width = '31px';
+    inventoryButton.style.height = '31px';
+    inventoryButton.style.position = 'absolute';
+    inventoryButton.style.top = '4px';
+    inventoryButton.style.left = (32.0 * i + 4) + 'px';
+    inventoryButton.style.border = '1px blue solid';
+    inventoryButton.style.backgroundImage = `url(${inventory})`;
+    inventoryButton.onmousedown = () => showInventory();
+    inventoryButton.onmouseenter = (e) => setToolTip(e.target, "<b>Inventory</b><br><i>Shortcut: (E)</i>");
+    inventoryButton.onmouseleave = () => toolTip.style.display = 'none';
+    toolBarElem.appendChild(inventoryButton);
 
     let loadedImages;
     try{
@@ -429,6 +486,8 @@ let ysize = 64;
             return copperPlate;
         case 'Coal Ore':
             return coalOre;
+        case 'Stone Ore':
+            return stoneOre;
         case 'Gear':
             return gear;
         case 'Copper Wire':
@@ -612,6 +671,7 @@ let ysize = 64;
         }
     }
 
+    const inventory2ClientElem = document.getElementById('inventory2Client');
     const inputInventoryTitleElem = document.getElementById('inputInventoryTitle');
     const inventoryContentElem = document.getElementById('inputInventoryContent');
     inventoryContentElem.onclick = () => onInventoryClick(false, true);
@@ -713,7 +773,7 @@ let ysize = 64;
     }
 
     let burnerItemElem = null;
-    function showBurnerStatus(c, r){
+    function showBurnerStatus([c, r]){
         const [burnerInventory, _] = sim.get_structure_inventory(c, r, "Burner");
         if(burnerInventory){
             burnerContainer.style.display = "block";
@@ -765,25 +825,34 @@ let ysize = 64;
         }
     }
 
-    function showInventory(c, r){
+    function showInventory(event){
         if(inventoryElem.style.display !== "none"){
             inventoryElem.style.display = "none";
             return;
         }
         // else if(tile.structure && tile.structure.inventory){
-        else{
+        else if(event){
             inventoryElem.style.display = "block";
+            inventoryElem.classList = "inventoryWide";
+            inventory2ClientElem.style.display = "block";
+            playerElem.style.left = '370px';
+            placeCenter(inventoryElem);
             bringToTop(inventoryElem);
             // var recipeSelectButtonElem = document.getElementById('recipeSelectButton');
-            // recipeSelectButtonElem.style.display = !inventoryTarget.recipes ? "none" : "block";
+            recipeSelectButtonElem.style.display = !event.recipe_enable ? "none" : "block";
             // toolTip.style.display = "none"; // Hide the tool tip for "Click to oepn inventory"
-            updateInventoryInt(inventoryContentElem, sim, false, sim.get_structure_inventory(c, r, "Input"), inputInventoryTitleElem);
-            updateInventoryInt(outputInventoryContentElem, sim, false, sim.get_structure_inventory(c, r, "Output"), outputInventoryTitleElem);
-            showBurnerStatus(c, r);
+            const pos = event.pos;
+            updateInventoryInt(inventoryContentElem, sim, false, sim.get_structure_inventory(pos[0], pos[1], "Input"), inputInventoryTitleElem);
+            updateInventoryInt(outputInventoryContentElem, sim, false, sim.get_structure_inventory(pos[0], pos[1], "Output"), outputInventoryTitleElem);
+            showBurnerStatus(pos);
         }
-        // else{
-        //     inventoryContent.innerHTML = "";
-        // }
+        else{
+            inventoryElem.style.display = "block";
+            inventoryElem.classList = "inventoryNarrow";
+            inventory2ClientElem.style.display = "none";
+            recipeSelectButtonElem.style.display = "none";
+            playerElem.style.left = "40px";
+        }
     }
 
     let recipeTarget = null;
@@ -870,10 +939,10 @@ let ysize = 64;
 
     // Place a window element at the center of the container, assumes the windows have margin set in the middle.
     function placeCenter(elem){
-        var containerElem = document.getElementById('container2');
-        var cr = containerElem.getBoundingClientRect();
-        elem.style.left = ((cr.left + cr.right) / 2) + 'px';
-        elem.style.top = ((cr.top + cr.bottom) / 2) + 'px';
+        var elemRect = elem.getBoundingClientRect();
+        var bodyRect = document.body.getBoundingClientRect();
+        elem.style.left = ((bodyRect.width - elemRect.width) / 2) + 'px';
+        elem.style.top = ((bodyRect.height - elemRect.height) / 2) + 'px';
     }
 
     placeCenter(inventoryElem);
@@ -895,22 +964,29 @@ let ysize = 64;
     }
 
     const playerElem = document.createElement('div');
-    playerElem.style.overflow = 'visible';
-    playerElem.style.borderStyle = 'solid';
-    playerElem.style.borderWidth = '1px';
-    playerElem.style.border = '1px solid #00f';
-    playerElem.style.backgroundColor = '#ffff7f';
     playerElem.style.position = 'absolute';
-    playerElem.style.margin = '3px';
-    playerElem.style.left = '50%';
-    playerElem.style.top = '520px';
+    playerElem.style.left = '370px';
+    playerElem.style.top = '20px';
     playerElem.style.width = (320) + 'px';
     playerElem.style.height = (160) + 'px';
-    container.appendChild(playerElem);
-    playerElem.style.marginLeft = (-(playerElem.getBoundingClientRect().width + miniMapSize + tableMargin) / 2) + 'px';
+    inventoryElem.appendChild(playerElem);
+
+    const playerInventoryTitleElem = document.createElement('div');
+    playerInventoryTitleElem.innerHTML = "Player inventory";
+    playerInventoryTitleElem.classList = "inventoryTitle";
+    playerElem.appendChild(playerInventoryTitleElem);
+
+    const playerInventoryContainerElem = document.createElement('div');
+    playerInventoryContainerElem.style.overflow = 'hidden';
+    playerInventoryContainerElem.style.borderStyle = 'solid';
+    playerInventoryContainerElem.style.borderWidth = '1px';
+    playerInventoryContainerElem.style.border = '1px solid #00f';
+    playerInventoryContainerElem.style.backgroundColor = '#ffff7f';
+    playerInventoryContainerElem.style.height = (160) + 'px';
+    playerInventoryContainerElem.style.margin = '3px';
+    playerElem.appendChild(playerInventoryContainerElem);
 
     const playerInventoryElem = document.createElement('div');
-    playerInventoryElem.style.position = 'relative';
     playerInventoryElem.style.overflowY = 'scroll';
     playerInventoryElem.style.width = '100%';
     playerInventoryElem.style.height = '100%';
@@ -940,7 +1016,7 @@ let ysize = 64;
         }
     }
     playerInventoryElem.onclick = function(){onInventoryClick(true, true)};
-    playerElem.appendChild(playerInventoryElem);
+    playerInventoryContainerElem.appendChild(playerInventoryElem);
 
     function onInventoryClick(isPlayer, isInput){
         // Update only if the selected inventory is the other one from destination.
@@ -996,7 +1072,11 @@ let ysize = 64;
     });
 
     function onKeyDown(event){
-        if(sim.on_key_down(event.keyCode)){
+        const result = sim.on_key_down(event.keyCode);
+        if(result){
+            if(result[0] === "ShowInventory"){
+                showInventory();
+            }
             updateToolBarImage();
             updateToolCursor();
             event.preventDefault();
@@ -1015,7 +1095,12 @@ let ysize = 64;
 
     updateToolBarImage();
 
-    window.addEventListener( "beforeunload", () => sim.save_game());
+    window.addEventListener( "beforeunload", () => {
+        sim.save_game();
+        localStorage.setItem("FactorishWasmViewSettings", JSON.stringify({
+            "headerVisible": headerContainer.style.display !== "none",
+        }));
+    });
 
     const copyButton = document.getElementById("copyButton");
     copyButton.onclick = () => {
@@ -1083,18 +1168,17 @@ let ysize = 64;
         if(!events)
             return;
         for(let event of events){
-            if(event[0] === "updateStructureInventory"){
-                console.log(`updateStructureInventory event received ${event}`);
-                updateStructureInventory([event[1], event[2]]);
+            if(event.UpdateStructureInventory && event.UpdateStructureInventory instanceof Array){
+                // console.log(`updateStructureInventory event received ${event}`);
+                updateStructureInventory(event.UpdateStructureInventory);
             }
-            if(event[0] === "updatePlayerInventory"){
-                console.log("updatePlayerInventory event received");
+            if(event === "UpdatePlayerInventory"){
+                console.log("UpdatePlayerInventory event received");
                 updateInventory(sim.get_player_inventory());
                 updateToolBar();
             }
-            else if(event[0] === "showInventory"){
-                const [_command, x, y] = event;
-                showInventory(x, y);
+            else if(event.ShowInventoryAt && event.ShowInventoryAt instanceof Object){
+                showInventory(event.ShowInventoryAt);
             }
         }
     }
@@ -1129,7 +1213,7 @@ let ysize = 64;
 
         const selPos = sim.get_selected_inventory();
         if(selPos){
-            showBurnerStatus(selPos[0], selPos[1]);
+            showBurnerStatus(selPos);
         }
 
         sim.render_minimap(miniMapContext);

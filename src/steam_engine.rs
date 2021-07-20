@@ -43,7 +43,7 @@ impl SteamEngine {
             None,
             None,
             None,
-            vec![FluidBox::new(true, false, [None; 4])],
+            vec![FluidBox::new(true, false)],
         )
     }
 

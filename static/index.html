@@ -4,254 +4,85 @@
 		<title>FactorishWasm</title>
 		<meta charset="utf-8">
 		<meta name="viewport" content="width=device-width, initial-scale=1.0">
-		<style>
-			body {
-				color: #000000;
-				font-family:Monospace;
-				font-size:15px;
-				text-align:center;
-
-				background-color: #f0f0f0;
-				margin: 0px;
-				width: fit-content;
-			}
-
-			.params {
-				border: #7f007f solid 2px;
-				position: relative;
-				left: 50%;
-				margin-left: -15em;
-				margin-top: 0.5em;
-				width: 30em;
-				text-align: justify;
-				padding: 0.5em;
-			}
-
-			#container, #container2{
-				position: relative;
-				width: 900px;
-				height: 700px;
-				line-height: 80%;
-			}
-
-			#canvas{
-				position: absolute;
-				left: 0;
-			}
-
-			#inventory, #inventory2{
-				position: absolute;
-				width: 355px;
-				height: 212px;
-				left: 50%;
-				top: 50%;
-				margin-left: -175px;
-				margin-top: -80px;
-				border: 2px solid #000000;
-				background-color: #f0f0f0;
-				text-align: left;
-			}
-
-			#inventoryTitle, #inventory2Title, .inventoryTitle{
-				width: 100%;
-				height: 20px;
-				background-color: #7f7fff;
-			}
-
-			.inventoryTitle {
-				background-color: #6f6fcf;
-				width: 316px;
-				margin-left: 37px;
-				margin-right: 33px;
-			}
-
-			#inventoryClient, #inventory2Client{
-				position: relative;
-				width: 100%;
-				height: 140px;
-			}
-
-			#inventoryContent, #inputInventoryContent, #outputInventoryContent{
-				right: 0;
-				top: 20px;
-				width: 314px;
-				height: 50%;
-				border: solid 1px black;
-				margin: 2px 2px 2px 37px;
-				background-color: #ffff7f;
-			}
-
-			#recipeSelector{
-				position: absolute;
-				width: 300px;
-				height: 400px;
-				left: 50%;
-				top: 50%;
-				margin-left: -125px;
-				margin-top: -150px;
-				border: 2px solid #000000;
-				background-color: #ffffaf;
-				text-align: left;
-			}
-
-			#recipeSelectorTitle{
-				width: 100%;
-				height: 20px;
-				background-color: #7f7fff;
-			}
-
-			#recipeSelectorContent{
-				height: 376px;
-				padding: 2px;
-				overflow-y: scroll;
-			}
-
-			#tooltip{
-				position: absolute;
-				border: 3px solid #0000ff;
-				padding: 5px;
-				background-color: #ffffaf;
-				pointer-events: none;
-				text-align: left;
-				font-family: sans-serif;
-				line-height: 120%;
-			}
-
-			div.closeButton{
-				position: absolute;
-				width: 16px;
-				height: 16px;
-				right: 2px;
-				top: 2px;
-				border: 1px solid #7f7f7f;
-			}
-
-			.recipe-box{
-				border: 1px solid #0000ff; margin: 4px; background-color: #afafff;
-			}
-
-			.overlay{
-				position: absolute;
-				left: 0px;
-				bottom: 0px;
-				width: 100%;
-				height: auto;
-				color: rgb(0,0,0);
-				font-weight: bold;
-				text-shadow: 1px 1px #fff, -1px -1px 0 #fff, 1px -1px 0 #fff, -1px 1px 0 #fff;
-				text-align: right;
-				pointer-events:none;
-				z-index: 100;
-			}
-
-			.burnerContainer {
-				position: relative;
-				left: 40px;
-			}
-
-			.fuelBackground {
-				left: 0px;
-				width: 32px;
-				height: 32px;
-			}
-
-			.burnerEnergyBack {
-				position: absolute;
-				top: 10px;
-				left: 40px;
-				width: 80px;
-				height: 10px;
-				background-color: #0f0f0f;
-			}
-
-			.burnerEnergy {
-				position: relative;
-				left: 0px;
-				height: 10px;
-				background-color: #ff0fff;
-			}
-
-			#points{
-				font-size: 25px;
-			}
-
-			/* Class that prevents text selection by mouse dragging.
-			  The style is not defined by standard, so we'd write down browser-dependent styles for major browsers.
-			  Support by IE11 is somewhat incomplete since Ctrl+A selects the text in elements even with this style. */
-			.noselect{
-				-webkit-touch-callout: none; /* iOS Safari */
-				-webkit-user-select: none;   /* Chrome/Safari/Opera */
-				-khtml-user-select: none;    /* Konqueror */
-				-moz-user-select: none;      /* Firefox */
-				-ms-user-select: none;       /* IE/Edge */
-				user-select: none;           /* non-prefixed version, currently
-											  not supported by any browser */
-			}
-
-		</style>
+		<link rel="stylesheet" href="main.css"></link rel="stylesheet">
 	</head>
 	<body>
-		<h1>FactorishWasm</h1>
-		<p style="font-size: 80%; font-style: italic">- Factorio-style base building game with WebAssembly -</p>
-		<button id="paramsButton">New Game Settings</button>
-		<button id="viewButton">View Options</button>
-		<div style="position: relative;">
-			<div id="paramsContainer" class="params" style="display: none;">
-				<div style="font-size: 120%; font-weight: 700;">New game settings</div>
-				<div>
-					Size:
-					<select id="sizeSelect">
-						<option>16</option>
-						<option>24</option>
-						<option>32</option>
-						<option>48</option>
-						<option selected>64</option>
-						<option>128</option>
-						<option>256</option>
-					</select>
+		<canvas id="canvas"></canvas>
+		<div class="center">
+		<div class="header">
+			<div id="headerContainer">
+				<h1>FactorishWasm</h1>
+				<p style="font-size: 80%; font-style: italic">- Factorio-style base building game with WebAssembly -</p>
+				<button id="paramsButton">New Game Settings</button>
+				<button id="viewButton">View Options</button>
+				<div style="position: relative;">
+					<div id="paramsContainer" class="params" style="display: none;">
+						<div style="font-size: 120%; font-weight: 700;">New game settings</div>
+						<div>
+							Size:
+							<select id="sizeSelect">
+								<option>16</option>
+								<option>24</option>
+								<option>32</option>
+								<option>48</option>
+								<option>64</option>
+								<option selected>128</option>
+								<option>256</option>
+							</select>
+						</div>
+						<div>
+							Terrain Seed=<span id="seedLabel"></span>
+							<input id="seed" type="number">
+						</div>
+						<div>
+							Water Noise Threshold=<span id="waterNoiseThresholdLabel"></span>
+							<input id="waterNoiseThreshold" type="range" max="1" min="0" step="1e-3" value="0.35">
+						</div>
+						<div>
+							Resource Amount=<span id="resourceAmountLabel"></span>
+							<input id="resourceAmount" type="range" max="10000" min="100" step="100" value="1000">
+						</div>
+						<div>
+							Resource Noise Scale=<span id="noiseScaleLabel"></span>
+							<input id="noiseScale" type="range" max="20" min="2" step="1" value="5">
+						</div>
+						<div>
+							Resource Noise threshold=<span id="noiseThresholdLabel"></span>
+							<input id="noiseThreshold" type="range" max="1" min="0" step="1e-3" value="0.45">
+						</div>
+						<div style="text-align: center;">
+							<button type="button" id="generateBoard">Start a new game!</button>
+						</div>
+					</div>
+					<div id="viewContainer" class="params" style="display: none;">
+						<div style="font-size: 120%; font-weight: 700">View settings</div>
+						<div><label><input type="checkbox" id="showDebugBBox">Show Debug Bounding Box</label></div>
+						<div><label><input type="checkbox" id="showDebugFluidBox">Show Debug Fluid Box</label></div>
+						<div><label><input type="checkbox" id="showDebugPowerNetwork">Show Debug Power Network</label></div>
+					</div>
 				</div>
-				<div>
-					Terrain Seed=<span id="seedLabel"></span>
-					<input id="seed" type="number">
-				</div>
-				<div>
-					Water Noise Threshold=<span id="waterNoiseThresholdLabel"></span>
-					<input id="waterNoiseThreshold" type="range" max="1" min="0" step="1e-3" value="0.35">
-				</div>
-				<div>
-					Resource Amount=<span id="resourceAmountLabel"></span>
-					<input id="resourceAmount" type="range" max="10000" min="100" step="100" value="1000">
-				</div>
-				<div>
-					Resource Noise Scale=<span id="noiseScaleLabel"></span>
-					<input id="noiseScale" type="range" max="20" min="2" step="1" value="5">
-				</div>
-				<div>
-					Resource Noise threshold=<span id="noiseThresholdLabel"></span>
-					<input id="noiseThreshold" type="range" max="1" min="0" step="1e-3" value="0.45">
-				</div>
-				<div style="text-align: center;">
-					<button type="button" id="generateBoard">Start a new game!</button>
-				</div>
+				<hr>
+				<button id="copyButton">Copy save data to clipboard</button>
+				<button id="saveButton">Download save data</button>
+				<input style="display: none" type="file" id="loadFile">
+				<button id="loadButton">Load saved game</button>
+				<input id="saveText" type="text" value="" style="display: none">
+				<hr>
+				<div>Source on <a href="https://github.com/msakuta/FactorishWasm">GitHub</a>.</div>
 			</div>
-			<div id="viewContainer" class="params" style="display: none;">
-				<div style="font-size: 120%; font-weight: 700">View settings</div>
-				<div><label><input type="checkbox" id="showDebugBBox">Show Debug Bounding Box</label></div>
-				<div><label><input type="checkbox" id="showDebugFluidBox">Show Debug Fluid Box</label></div>
-				<div><label><input type="checkbox" id="showDebugPowerNetwork">Show Debug Power Network</label></div>
-			</div>
+			<div class="headerButton open" id="headerButton"></div>
 		</div>
-		<hr>
-		<div style="position: relative">
+		<div>
 			<div id="container2">
-				<canvas id="canvas" width="640" height="480"></canvas>
 				<div id="inventory2" class="noselect">
 					<div id="inventory2Title">Inventory</div>
 					<div class="closeButton" id="inventory2CloseButton"></div>
-					<div id="inventory2Client">
+					<div id="inventoryButtons" class="inventoryButtons">
 						<img id="inventory2List" draggable="false" src="../img/list.png" style="position: absolute">
 						<img id="inventory2Icons" draggable="false" src="../img/icons.png" style="position: absolute; left: 0px; top: 32px">
 						<img id="recipeSelectButton" draggable="false" src="../img/recipe-select.png" alt="Recipe select" style="position: absolute; left: 0px; top: 80px; border: 1px solid #7f7f7f">
+					</div>
+					<div id="inventory2Client">
 						<div id="burnerContainer" class="burnerContainer">
 							<div id="inputFuel" class="fuelBackground"></div>
 							<div class="burnerEnergyBack">
@@ -264,7 +95,6 @@
 						<div id="outputInventoryContent"></div>
 					</div>
 				</div>
-				<div id="toolBar"></div>
 			</div>
 			<div id="recipeSelector" style="display: none;">
 				<div id="recipeSelectorTitle">Select a recipe</div>
@@ -272,16 +102,11 @@
 				<div class="closeButton" id="recipeSelectorCloseButton"></div>
 			</div>
 		</div>
-		<div id="points"></div>
-		<hr>
-		<button id="copyButton">Copy save data to clipboard</button>
-		<button id="saveButton">Download save data</button>
-		<input style="display: none" type="file" id="loadFile">
-		<button id="loadButton">Load saved game</button>
-		<input id="saveText" type="text" value="" style="display: none">
 		<div id="mousecaptor" style="display: none; position: fixed; top: 0px; left: 0px; width: 100%; height: 100%; background-color: rgba(0,0,0,0)"></div>
 		<div id="mouseIcon" class="noselect" style="pointer-events: none; z-index: 2000; display: none; position: fixed; top: 0px; left: 0px; width: 32px; height: 32px"></div>
-		<hr>
-		<p>Source on <a href="https://github.com/msakuta/FactorishWasm">GitHub</a>.</p>
+		<div class="footer">
+			<div id="toolBar"></div>
+		</div>
+		</div>
 	</body>
 </html>

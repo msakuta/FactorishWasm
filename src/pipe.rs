@@ -19,7 +19,7 @@ impl Pipe {
             None,
             None,
             None,
-            vec![FluidBox::new(true, true, [None; 4])],
+            vec![FluidBox::new(true, true)],
         )
     }
 

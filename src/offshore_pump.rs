@@ -20,7 +20,7 @@ impl OffshorePump {
             None,
             None,
             None,
-            vec![FluidBox::new(false, true, [None; 4]).set_type(&FluidType::Water)],
+            vec![FluidBox::new(false, true).set_type(&FluidType::Water)],
         )
     }
 }
