@@ -28,10 +28,22 @@ pub(crate) struct FluidBox {
 }
 
 impl FluidBox {
-    pub(crate) fn new(
+    pub(crate) fn new(input_enable: bool, output_enable: bool) -> Self {
+        Self {
+            type_: None,
+            amount: 0.,
+            max_amount: 100.,
+            input_enable,
+            output_enable,
+            connect_to: [None; 4],
+            filter: None,
+        }
+    }
+
+    pub(crate) fn new_with_filter(
         input_enable: bool,
         output_enable: bool,
-        connect_to: [Option<StructureId>; 4],
+        filter: Option<FluidType>,
     ) -> Self {
         Self {
             type_: None,
@@ -39,8 +51,8 @@ impl FluidBox {
             max_amount: 100.,
             input_enable,
             output_enable,
-            connect_to,
-            filter: None,
+            connect_to: [None; 4],
+            filter,
         }
     }
 
@@ -128,7 +140,7 @@ impl WaterWell {
     pub(crate) fn new(position: &Position) -> Self {
         WaterWell {
             position: *position,
-            output_fluid_box: FluidBox::new(false, true, [None; 4]).set_type(&FluidType::Water),
+            output_fluid_box: FluidBox::new(false, true).set_type(&FluidType::Water),
         }
     }
 }
