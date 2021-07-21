@@ -77,8 +77,8 @@ use power_network::{build_power_networks, PowerNetwork};
 use splitter::Splitter;
 use steam_engine::SteamEngine;
 use structure::{
-    FrameProcResult, ItemResponse, Position, Rotation, Structure, StructureBoxed, StructureDynIter,
-    StructureEntry, StructureId,
+    FrameProcResult, ItemResponse, Position, RotateErr, Rotation, Structure, StructureBoxed,
+    StructureDynIter, StructureEntry, StructureId,
 };
 use transport_belt::TransportBelt;
 use water_well::{FluidType, WaterWell};
@@ -142,16 +142,38 @@ const DROP_ITEM_SIZE: f64 = 8.;
 const DROP_ITEM_SIZE_I: i32 = DROP_ITEM_SIZE as i32;
 
 const COAL_POWER: f64 = 100.; // kilojoules
-const SAVE_VERSION: i64 = 3;
+const SAVE_VERSION: i64 = 4;
 const ORE_HARVEST_TIME: i32 = 20;
 const POPUP_TEXT_LIFE: i32 = 30;
+
+/// Event types that can be communicated to the JavaScript code.
+/// It is serialized into a JavaScript Object through serde.
+#[derive(Serialize)]
+enum JSEvent {
+    UpdatePlayerInventory,
+    ShowInventory,
+    ShowInventoryAt {
+        pos: (i32, i32),
+        recipe_enable: bool,
+    },
+    UpdateStructureInventory(i32, i32),
+}
+
+#[derive(Copy, Clone, Serialize, Deserialize, PartialEq, Debug)]
+enum Ore {
+    Iron,
+    Coal,
+    Copper,
+    Stone,
+}
+
+#[derive(Copy, Clone, Serialize, Deserialize)]
+struct OreValue(Ore, u32);
 
 #[derive(Copy, Clone, Serialize, Deserialize)]
 struct Cell {
     water: bool,
-    iron_ore: u32,
-    coal_ore: u32,
-    copper_ore: u32,
+    ore: Option<OreValue>,
     #[serde(skip)]
     image: u8,
     #[serde(skip)]
@@ -162,9 +184,7 @@ impl Default for Cell {
     fn default() -> Self {
         Cell {
             water: false,
-            iron_ore: 0,
-            coal_ore: 0,
-            copper_ore: 0,
+            ore: None,
             image: 0,
             grass_image: 0,
         }
@@ -173,14 +193,12 @@ impl Default for Cell {
 
 impl Cell {
     fn get_ore_type(&self) -> Option<ItemType> {
-        if 0 < self.iron_ore {
-            Some(ItemType::IronOre)
-        } else if 0 < self.copper_ore {
-            Some(ItemType::CopperOre)
-        } else if 0 < self.coal_ore {
-            Some(ItemType::CoalOre)
-        } else {
-            None
+        match self.ore {
+            Some(OreValue(Ore::Iron, _)) => Some(ItemType::IronOre),
+            Some(OreValue(Ore::Copper, _)) => Some(ItemType::CopperOre),
+            Some(OreValue(Ore::Coal, _)) => Some(ItemType::CoalOre),
+            Some(OreValue(Ore::Stone, _)) => Some(ItemType::StoneOre),
+            _ => None,
         }
     }
 }
@@ -566,6 +584,7 @@ pub struct FactorishState {
     image_ore: Option<ImageBundle>,
     image_coal: Option<ImageBundle>,
     image_copper: Option<ImageBundle>,
+    image_stone: Option<ImageBundle>,
     image_belt: Option<ImageBundle>,
     image_chest: Option<ImageBundle>,
     image_mine: Option<ImageBundle>,
@@ -583,6 +602,7 @@ pub struct FactorishState {
     image_iron_ore: Option<ImageBundle>,
     image_coal_ore: Option<ImageBundle>,
     image_copper_ore: Option<ImageBundle>,
+    image_stone_ore: Option<ImageBundle>,
     image_iron_plate: Option<ImageBundle>,
     image_copper_plate: Option<ImageBundle>,
     image_gear: Option<ImageBundle>,
@@ -599,12 +619,7 @@ enum NewObjectErr {
     BlockedByStructure,
     BlockedByItem,
     OutOfMap,
-}
-
-#[derive(Debug)]
-enum RotateErr {
-    NotFound,
-    NotSupported,
+    OnWater,
 }
 
 #[wasm_bindgen]
@@ -729,6 +744,7 @@ impl FactorishState {
             image_weeds: None,
             image_ore: None,
             image_coal: None,
+            image_stone: None,
             image_copper: None,
             image_belt: None,
             image_chest: None,
@@ -747,6 +763,7 @@ impl FactorishState {
             image_iron_ore: None,
             image_coal_ore: None,
             image_copper_ore: None,
+            image_stone_ore: None,
             image_iron_plate: None,
             image_copper_plate: None,
             image_gear: None,
@@ -764,6 +781,7 @@ impl FactorishState {
                 let iron_terms = gen_terms(&mut rng, bits);
                 let copper_terms = gen_terms(&mut rng, bits);
                 let coal_terms = gen_terms(&mut rng, bits);
+                let stone_terms = gen_terms(&mut rng, bits);
                 for y in 0..height {
                     for x in 0..width {
                         let [fx, fy] = [x as f64 / noise_scale, y as f64 / noise_scale];
@@ -785,16 +803,22 @@ impl FactorishState {
                             - noise_threshold)
                             * 4.
                             * resource_amount;
+                        let stone = (perlin_noise_pixel(fx, fy, bits, &stone_terms)
+                            - noise_threshold)
+                            * 4.
+                            * resource_amount;
 
-                        match [iron, copper, coal]
-                            .iter()
-                            .map(|v| v.max(0.) as u32)
-                            .enumerate()
-                            .max_by_key(|v| v.1)
+                        match [
+                            (Ore::Iron, iron),
+                            (Ore::Copper, copper),
+                            (Ore::Coal, coal),
+                            (Ore::Stone, stone),
+                        ]
+                        .iter()
+                        .map(|(ore, v)| (ore, v.max(0.) as u32))
+                        .max_by_key(|v| v.1)
                         {
-                            Some((0, v)) => cell.iron_ore = v,
-                            Some((1, v)) => cell.copper_ore = v,
-                            Some((2, v)) => cell.coal_ore = v,
+                            Some((ore, v)) if 0 < v => cell.ore = Some(OreValue(*ore, v)),
                             _ => (),
                         }
                     }
@@ -971,9 +995,7 @@ impl FactorishState {
                 self.board
                     .iter()
                     .enumerate()
-                    .filter(|(_, cell)| {
-                        0 < cell.coal_ore || 0 < cell.iron_ore || 0 < cell.copper_ore || cell.water
-                    })
+                    .filter(|(_, cell)| cell.ore.is_some() || cell.water)
                     .map(|(idx, cell)| {
                         let mut map = serde_json::Map::new();
                         let x = idx % self.width as usize;
@@ -1257,7 +1279,8 @@ impl FactorishState {
     }
 
     fn get_structure(&self, id: StructureId) -> Option<&dyn Structure> {
-        self.structures.iter()
+        self.structures
+            .iter()
             .enumerate()
             .find(|(i, s)| id.id == *i as u32 && id.gen == s.gen)
             .map(|(_, s)| s.dynamic.as_deref())
@@ -1334,40 +1357,46 @@ impl FactorishState {
 
         let mut frame_proc_result_to_event = |result: Result<FrameProcResult, ()>| {
             if let Ok(FrameProcResult::InventoryChanged(pos)) = result {
-                events.push(js_sys::Array::of3(
-                    &JsValue::from_str("updateStructureInventory"),
-                    &JsValue::from(pos.x),
-                    &JsValue::from(pos.y),
-                ))
+                events.push(
+                    JsValue::from_serde(&JSEvent::UpdateStructureInventory(pos.x, pos.y)).unwrap(),
+                )
             }
         };
 
-        self.ore_harvesting = if let Some(mut ore_harvesting) = self.ore_harvesting {
+        self.ore_harvesting = (|| {
+            let mut ore_harvesting = self.ore_harvesting?;
             let mut ret = true;
             if (ore_harvesting.timer + 1) % ORE_HARVEST_TIME < ore_harvesting.timer {
                 console_log!("harvesting {:?}...", ore_harvesting.ore_type);
-                if let Some(tile) = self.tile_at_mut(&ore_harvesting.pos) {
-                    if let Some(ore) = match ore_harvesting.ore_type {
-                        ItemType::IronOre => Some(&mut tile.iron_ore),
-                        ItemType::CopperOre => Some(&mut tile.copper_ore),
-                        ItemType::CoalOre => Some(&mut tile.coal_ore),
-                        _ => None,
-                    } {
-                        if 0 < *ore {
-                            *ore -= 1;
-                            self.player.add_item(&ore_harvesting.ore_type, 1);
-                            self.on_player_update
-                                .call1(&window(), &JsValue::from(self.get_player_inventory()?))
-                                .unwrap_or_else(|_| JsValue::from(true));
-                            self.new_popup_text(
-                                format!("+1 {:?}", ore_harvesting.ore_type),
-                                ore_harvesting.pos.x as f64 * TILE_SIZE,
-                                ore_harvesting.pos.y as f64 * TILE_SIZE,
-                            );
-                        } else {
-                            ret = false;
-                        }
+                let tile = self.tile_at_mut(&ore_harvesting.pos)?;
+                let ore = tile.ore.as_mut()?;
+                let expected_ore = match ore_harvesting.ore_type {
+                    ItemType::IronOre => Ore::Iron,
+                    ItemType::CopperOre => Ore::Copper,
+                    ItemType::CoalOre => Ore::Coal,
+                    ItemType::StoneOre => Ore::Stone,
+                    _ => return None,
+                };
+                if expected_ore != ore.0 {
+                    return None;
+                }
+                if 0 < ore.1 {
+                    ore.1 -= 1;
+                    if ore.1 == 0 {
+                        tile.ore = None;
+                        ret = false;
                     }
+                    self.player.add_item(&ore_harvesting.ore_type, 1);
+                    self.on_player_update
+                        .call1(&window(), &JsValue::from(self.get_player_inventory().ok()?))
+                        .unwrap_or_else(|_| JsValue::from(true));
+                    self.new_popup_text(
+                        format!("+1 {:?}", ore_harvesting.ore_type),
+                        ore_harvesting.pos.x as f64 * TILE_SIZE,
+                        ore_harvesting.pos.y as f64 * TILE_SIZE,
+                    );
+                } else {
+                    ret = false;
                 }
             }
             ore_harvesting.timer = (ore_harvesting.timer + 1) % ORE_HARVEST_TIME;
@@ -1376,9 +1405,7 @@ impl FactorishState {
             } else {
                 None
             }
-        } else {
-            None
-        };
+        })();
 
         let mut delete_me = vec![];
         for (i, item) in self.popup_texts.iter_mut().enumerate() {
@@ -1589,10 +1616,12 @@ impl FactorishState {
                                 [cursor[0] as usize + cursor[1] as usize * self.width as usize];
                             format!(
                                 r#"Empty tile<br>
-                                Iron Ore: {}<br>
-                                Coal Ore: {}<br>
-                                Copper Ore: {}"#,
-                                cell.iron_ore, cell.coal_ore, cell.copper_ore
+                                {}<br>"#,
+                                if let Some(ore) = cell.ore.as_ref() {
+                                    format!("{:?}: {}", ore.0, ore.1)
+                                } else {
+                                    "No ore".to_string()
+                                }
                             )
                         },
                     );
@@ -1622,15 +1651,18 @@ impl FactorishState {
         if let Some(SelectedItem::ToolBelt(_selected_tool)) = self.selected_item {
             self.tool_rotation = self.tool_rotation.next();
             Ok(true)
+        } else if let Some(SelectedItem::PlayerInventory(_item)) = self.selected_item {
+            self.tool_rotation = self.tool_rotation.next();
+            Ok(true)
         } else {
             if let Some(ref cursor) = self.cursor {
                 if let Some(idx) = self.find_structure_tile_idx(cursor) {
-                    if let Some(d) = self.structures[idx].dynamic.as_mut() {
-                        d.as_mut()
-                            .rotate()
-                            .map_err(|()| RotateErr::NotSupported)
-                            .map(|_| false)?;
-                    }
+                    let (s, others) = StructureDynIter::new(&mut self.structures, idx)
+                        .map_err(|_| RotateErr::NotFound)?;
+                    s.dynamic
+                        .as_deref_mut()
+                        .ok_or(RotateErr::NotFound)?
+                        .rotate(&others)?;
                 }
             }
             Err(RotateErr::NotFound)
@@ -1638,10 +1670,14 @@ impl FactorishState {
     }
 
     /// Insert an object on the board.  It could fail if there's already some object at the position.
-    fn new_object(&mut self, c: i32, r: i32, type_: ItemType) -> Result<(), NewObjectErr> {
-        let obj = DropItem::new(&mut self.serial_no, type_, c, r);
-        if 0 <= c && c < self.width as i32 && 0 <= r && r < self.height as i32 {
-            if let Some(stru) = self.find_structure_tile(&[c, r]) {
+    fn new_object(&mut self, pos: &Position, type_: ItemType) -> Result<(), NewObjectErr> {
+        let cell = self.tile_at(pos).ok_or_else(|| NewObjectErr::OutOfMap)?;
+        if cell.water {
+            return Err(NewObjectErr::OnWater);
+        }
+        let obj = DropItem::new(&mut self.serial_no, type_, pos.x, pos.y);
+        if 0 <= pos.x && pos.x < self.width as i32 && 0 <= pos.y && pos.y < self.height as i32 {
+            if let Some(stru) = self.find_structure_tile(&[pos.x, pos.y]) {
                 if !stru.movable() {
                     return Err(NewObjectErr::BlockedByStructure);
                 }
@@ -1802,11 +1838,12 @@ impl FactorishState {
         Ok(())
     }
 
-    pub fn open_structure_inventory(&mut self, c: i32, r: i32) -> Result<(), JsValue> {
+    pub fn open_structure_inventory(&mut self, c: i32, r: i32) -> Result<bool, JsValue> {
         let pos = Position { x: c, y: r };
-        if self.find_structure_tile(&[pos.x, pos.y]).is_some() {
+        if let Some(s) = self.find_structure_tile(&[pos.x, pos.y]) {
+            let recipe_enable = !s.get_recipes().is_empty();
             self.selected_structure_inventory = Some(pos);
-            Ok(())
+            Ok(recipe_enable)
         } else {
             Err(JsValue::from_str("structure not found"))
         }
@@ -1860,9 +1897,14 @@ impl FactorishState {
                 }
             }
         }
-        Err(JsValue::from_str(
-            "structure is not found or doesn't have inventory",
-        ))
+
+        // We do not make getting inventory of nonexist structure or inventory an error, instead return an empty one.
+        // Because JavaScript side cannot track the object lifecycle, it is very easy to happen and it's annoying to
+        // make it a hard error.
+        Ok(js_sys::Array::new())
+        // Err(JsValue::from_str(
+        //     "structure is not found or doesn't have inventory",
+        // ))
     }
 
     pub fn get_structure_burner_energy(&self, c: i32, r: i32) -> Option<js_sys::Array> {
@@ -2271,9 +2313,7 @@ impl FactorishState {
                         self.on_player_update
                             .call1(&window(), &JsValue::from(self.get_player_inventory()?))
                             .unwrap_or_else(|_| JsValue::from(true));
-                        events.push(js_sys::Array::of1(&JsValue::from_str(
-                            "updatePlayerInventory",
-                        )));
+                        events.push(JsValue::from_serde(&JSEvent::UpdatePlayerInventory).unwrap());
                     }
                 }
             } else if let Some(structure) = self.find_structure_tile(&[cursor.x, cursor.y]) {
@@ -2283,13 +2323,15 @@ impl FactorishState {
                 {
                     // Select clicked structure
                     console_log!("opening inventory at {:?}", cursor);
-                    if self.open_structure_inventory(cursor.x, cursor.y).is_ok() {
+                    if let Ok(recipe_enable) = self.open_structure_inventory(cursor.x, cursor.y) {
                         // self.on_show_inventory.call0(&window()).unwrap();
-                        events.push(js_sys::Array::of3(
-                            &JsValue::from_str("showInventory"),
-                            &JsValue::from(cursor.x),
-                            &JsValue::from(cursor.y),
-                        ));
+                        events.push(
+                            JsValue::from_serde(&JSEvent::ShowInventoryAt {
+                                pos: (cursor.x, cursor.y),
+                                recipe_enable,
+                            })
+                            .unwrap(),
+                        );
                         // let inventory_elem: web_sys::HtmlElement = document().get_element_by_id("inventory2").unwrap().dyn_into().unwrap();
                         // inventory_elem.style().set_property("display", "block").unwrap();
                     }
@@ -2301,9 +2343,7 @@ impl FactorishState {
             } else {
                 // Right click means explicit cleanup, so we pick up items no matter what.
                 self.harvest(&cursor, true)?;
-                events.push(js_sys::Array::of1(&JsValue::from_str(
-                    "updatePlayerInventory",
-                )));
+                events.push(JsValue::from_serde(&JSEvent::UpdatePlayerInventory).unwrap());
             }
         }
 
@@ -2360,35 +2400,49 @@ impl FactorishState {
         Ok(())
     }
 
-    pub fn on_key_down(&mut self, key_code: i32) -> Result<bool, JsValue> {
+    /// Keyboard event handler. Returns true if re-rendering is necessary to update internal state.
+    pub fn on_key_down(&mut self, key_code: i32) -> Result<JsValue, JsValue> {
         match key_code {
-            82 => self
-                .rotate()
-                .map_err(|err| JsValue::from(format!("Rotate failed: {:?}", err))),
+            // 'r'
+            82 => match self.rotate() {
+                Ok(b) => Ok(JsValue::from_bool(b)),
+                // If the target structure is not found or uncapable of rotation, it's not a critical error.
+                Err(RotateErr::NotFound) | Err(RotateErr::NotSupported) => {
+                    Ok(JsValue::from_bool(false))
+                }
+                Err(RotateErr::Other(err)) => return js_err!("Rotate failed: {:?}", err),
+            },
             // Detect keys through '0'..'9', that's a shame char literal cannot be used in place of i32
             code @ 48..=58 => {
-                self.select_tool((code - '0' as i32 + 9) % 10);
-                Ok(true)
+                self.select_tool((code - '0' as i32 + 9) % 10)?;
+                Ok(JsValue::from_bool(true))
             }
             37 => {
                 // Left
                 self.viewport_x = (self.viewport_x + 1.).min(0.);
-                Ok(true)
+                Ok(JsValue::from_bool(true))
             }
             38 => {
                 // Up
                 self.viewport_y = (self.viewport_y + 1.).min(0.);
-                Ok(true)
+                Ok(JsValue::from_bool(true))
             }
             39 => {
                 // Right
                 self.viewport_x = (self.viewport_x - 1.).max(-(self.width as f64));
-                Ok(true)
+                Ok(JsValue::from_bool(true))
             }
             40 => {
                 // Down
                 self.viewport_y = (self.viewport_y - 1.).max(-(self.height as f64));
-                Ok(true)
+                Ok(JsValue::from_bool(true))
+            }
+            69 => {
+                //'e'
+                Ok(
+                    js_sys::Array::of1(&JsValue::from_serde(&JSEvent::ShowInventory).unwrap())
+                        .into(),
+                )
             }
             81 => {
                 // 'q'
@@ -2407,11 +2461,11 @@ impl FactorishState {
                         console_log!("q: selected_tool is {:?}", self.selected_item);
                     }
                 }
-                Ok(true)
+                Ok(JsValue::from_bool(true))
             }
             _ => {
                 console_log!("unrecognized key: {}", key_code);
-                Ok(false)
+                Ok(JsValue::from_bool(false))
             }
         }
     }
@@ -2419,14 +2473,14 @@ impl FactorishState {
     fn color_of_cell(cell: &Cell) -> [u8; 3] {
         if cell.water {
             [0x00, 0x00, 0xff]
-        } else if 0 < cell.iron_ore {
-            [0x3f, 0xaf, 0xff]
-        } else if 0 < cell.coal_ore {
-            [0x1f, 0x1f, 0x1f]
-        } else if 0 < cell.copper_ore {
-            [0x7f, 0x3f, 0x00]
         } else {
-            [0x7f, 0x7f, 0x7f]
+            match cell.ore {
+                Some(OreValue(Ore::Iron, _)) => [0x3f, 0xaf, 0xff],
+                Some(OreValue(Ore::Coal, _)) => [0x1f, 0x1f, 0x1f],
+                Some(OreValue(Ore::Copper, _)) => [0x7f, 0x3f, 0x00],
+                Some(OreValue(Ore::Stone, _)) => [0x5f, 0x5f, 0x5f],
+                _ => [0xaf, 0x7f, 0x3f],
+            }
         }
     }
 
@@ -2477,6 +2531,11 @@ impl FactorishState {
         }
         let start = ((x + y * self.width as i32) * 4) as usize;
         data[start..start + 3].copy_from_slice(&color);
+    }
+
+    pub fn reset_viewport(&mut self, canvas: HtmlCanvasElement) {
+        self.viewport_width = canvas.width() as f64;
+        self.viewport_height = canvas.height() as f64;
     }
 
     pub fn render_init(
@@ -2530,6 +2589,7 @@ impl FactorishState {
         self.image_ore = Some(load_image("iron")?);
         self.image_coal = Some(load_image("coal")?);
         self.image_copper = Some(load_image("copper")?);
+        self.image_stone = Some(load_image("stone")?);
         self.image_belt = Some(load_image("transport")?);
         self.image_chest = Some(load_image("chest")?);
         self.image_mine = Some(load_image("mine")?);
@@ -2547,6 +2607,7 @@ impl FactorishState {
         self.image_iron_ore = Some(load_image("ore")?);
         self.image_coal_ore = Some(load_image("coalOre")?);
         self.image_copper_ore = Some(load_image("copperOre")?);
+        self.image_stone_ore = Some(load_image("stoneOre")?);
         self.image_iron_plate = Some(load_image("ironPlate")?);
         self.image_copper_plate = Some(load_image("copperPlate")?);
         self.image_gear = Some(load_image("gear")?);
@@ -2674,7 +2735,7 @@ impl FactorishState {
     ///
     /// @param tool the index of the tool item, [0,9]
     /// @returns whether the tool bar item should be re-rendered
-    pub fn select_tool(&mut self, tool: i32) -> bool {
+    pub fn select_tool(&mut self, tool: i32) -> Result<JsValue, JsValue> {
         if let Some(SelectedItem::PlayerInventory(item)) = self.selected_item {
             // We allow only items in tool_defs to present on the tool belt
             // This behavior is different from Factorio, maybe we can allow it
@@ -2682,13 +2743,13 @@ impl FactorishState {
                 self.tool_belt[tool as usize] = Some(item);
                 // Deselect the item for the player to let him select from tool belt.
                 self.selected_item = None;
-                return true;
+                return Ok(JsValue::from_bool(true));
             } else {
                 console_log!(
                     "select_tool could not find tool_def with item type: {:?}",
                     item
                 );
-                return false;
+                return Ok(JsValue::from_bool(false));
             }
         }
         self.selected_item =
@@ -2697,7 +2758,12 @@ impl FactorishState {
             } else {
                 None
             };
-        self.selected_item.is_some()
+        if let Some(SelectedItem::ToolBelt(sel)) = self.selected_item {
+            if self.tool_belt[sel].is_none() {
+                return Ok(JsValue::from_serde(&JSEvent::ShowInventory).unwrap());
+            }
+        }
+        Ok(JsValue::from_bool(self.selected_item.is_some()))
     }
 
     pub fn rotate_tool(&mut self) -> i32 {
@@ -2773,72 +2839,74 @@ impl FactorishState {
         context.scale(self.view_scale, self.view_scale)?;
         context.translate(self.viewport_x * 32., self.viewport_y * 32.)?;
 
-        match self
-            .image_dirt
-            .as_ref()
-            .zip(self.image_back_tiles.as_ref())
-            .zip(self.image_ore.as_ref())
-            .zip(self.image_coal.as_ref())
-            .zip(self.image_copper.as_ref())
-        {
-            Some(((((img, back_tiles), img_ore), img_coal), img_copper)) => {
-                // let mut cell_draws = 0;
-                let left = (-self.viewport_x).max(0.) as u32;
-                let top = (-self.viewport_y).max(0.) as u32;
-                let right = (((self.viewport_width / 32. / self.view_scale - self.viewport_x) + 1.)
-                    as u32)
-                    .min(self.width);
-                let bottom = (((self.viewport_height / 32. / self.view_scale - self.viewport_y)
-                    + 1.) as u32)
-                    .min(self.height);
-                for y in top..bottom {
-                    for x in left..right {
-                        let cell = &self.board[(x + y * self.width) as usize];
-                        let (dx, dy) = (x as f64 * 32., y as f64 * 32.);
-                        if cell.water || cell.image != 0 {
-                            let srcx = cell.image % 4;
-                            let srcy = cell.image / 4;
-                            context.draw_image_with_image_bitmap_and_sw_and_sh_and_dx_and_dy_and_dw_and_dh(
-                                &back_tiles.bitmap, (srcx * 32) as f64, (srcy * 32) as f64, 32., 32., dx, dy, 32., 32.)?;
-                        } else {
-                            context.draw_image_with_image_bitmap(&img.bitmap, dx, dy)?;
-                            if let Some(weeds) = &self.image_weeds {
-                                if 0 < cell.grass_image {
-                                    context.draw_image_with_image_bitmap_and_sw_and_sh_and_dx_and_dy_and_dw_and_dh(
-                                        &weeds.bitmap,
-                                        (cell.grass_image * 32) as f64, 0., 32., 32., dx, dy, 32., 32.)?;
-                                }
-                            } else {
-                                console_log!("Weed image not found");
-                            }
-                        }
-                        let draw_ore = |ore: u32, img: &ImageBitmap| -> Result<(), JsValue> {
-                            if 0 < ore {
-                                let idx = (ore / 10).min(3);
-                                // console_log!("x: {}, y: {}, idx: {}, ore: {}", x, y, idx, ore);
+        (|| {
+            fn unwrap_img(img: &Option<ImageBundle>) -> Result<&ImageBundle, JsValue> {
+                img.as_ref().ok_or_else(|| js_str!("Image not available"))
+            }
+            let img = unwrap_img(&self.image_dirt)?;
+            let back_tiles = unwrap_img(&self.image_back_tiles)?;
+            let img_ore = unwrap_img(&self.image_ore)?;
+            let img_coal = unwrap_img(&self.image_coal)?;
+            let img_copper = unwrap_img(&self.image_copper)?;
+            let img_stone = unwrap_img(&self.image_stone)?;
+            // let mut cell_draws = 0;
+            let left = (-self.viewport_x).max(0.) as u32;
+            let top = (-self.viewport_y).max(0.) as u32;
+            let right = (((self.viewport_width / 32. / self.view_scale - self.viewport_x) + 1.)
+                as u32)
+                .min(self.width);
+            let bottom = (((self.viewport_height / 32. / self.view_scale - self.viewport_y)
+                + 1.) as u32)
+                .min(self.height);
+            for y in top..bottom {
+                for x in left..right {
+                    let cell = &self.board[(x + y * self.width) as usize];
+                    let (dx, dy) = (x as f64 * 32., y as f64 * 32.);
+                    if cell.water || cell.image != 0 {
+                        let srcx = cell.image % 4;
+                        let srcy = cell.image / 4;
+                        context.draw_image_with_image_bitmap_and_sw_and_sh_and_dx_and_dy_and_dw_and_dh(
+                            &back_tiles.bitmap, (srcx * 32) as f64, (srcy * 32) as f64, 32., 32., dx, dy, 32., 32.)?;
+                    } else {
+                        context.draw_image_with_image_bitmap(&img.bitmap, dx, dy)?;
+                        if let Some(weeds) = &self.image_weeds {
+                            if 0 < cell.grass_image {
                                 context.draw_image_with_image_bitmap_and_sw_and_sh_and_dx_and_dy_and_dw_and_dh(
-                                    img, (idx * 32) as f64, 0., 32., 32., x as f64 * 32., y as f64 * 32., 32., 32.)?;
+                                    &weeds.bitmap,
+                                    (cell.grass_image * 32) as f64, 0., 32., 32., dx, dy, 32., 32.)?;
                             }
-                            Ok(())
-                        };
-                        draw_ore(cell.iron_ore, &img_ore.bitmap)?;
-                        draw_ore(cell.coal_ore, &img_coal.bitmap)?;
-                        draw_ore(cell.copper_ore, &img_copper.bitmap)?;
-                        // cell_draws += 1;
+                        } else {
+                            console_log!("Weed image not found");
+                        }
                     }
+                    let draw_ore = |ore: u32, img: &ImageBitmap| -> Result<(), JsValue> {
+                        if 0 < ore {
+                            let idx = (ore / 10).min(3);
+                            // console_log!("x: {}, y: {}, idx: {}, ore: {}", x, y, idx, ore);
+                            context.draw_image_with_image_bitmap_and_sw_and_sh_and_dx_and_dy_and_dw_and_dh(
+                                img, (idx * 32) as f64, 0., 32., 32., x as f64 * 32., y as f64 * 32., 32., 32.)?;
+                        }
+                        Ok(())
+                    };
+                    match cell.ore {
+                        Some(OreValue(Ore::Iron, v)) => draw_ore(v, &img_ore.bitmap)?,
+                        Some(OreValue(Ore::Coal, v)) => draw_ore(v, &img_coal.bitmap)?,
+                        Some(OreValue(Ore::Copper, v)) => draw_ore(v, &img_copper.bitmap)?,
+                        Some(OreValue(Ore::Stone, v)) => draw_ore(v, &img_stone.bitmap)?,
+                        _ => (),
+                    }
+                    // cell_draws += 1;
                 }
-                // console_log!(
-                //     "size: {:?}, scale: {:?}, cell_draws: {} []: {:?}",
-                //     self.get_viewport(),
-                //     self.view_scale,
-                //     cell_draws,
-                //     [left, top, right, bottom] // self.board.iter().fold(0, |accum, val| accum + val.iron_ore)
-                // );
             }
-            _ => {
-                return Err(JsValue::from_str("image not available"));
-            }
-        }
+            // console_log!(
+            //     "size: {:?}, scale: {:?}, cell_draws: {} []: {:?}",
+            //     self.get_viewport(),
+            //     self.view_scale,
+            //     cell_draws,
+            //     [left, top, right, bottom] // self.board.iter().fold(0, |accum, val| accum + val.iron_ore)
+            // );
+            Ok(())
+        })().map_err(|e: JsValue| js_str!("image not available: {:?}", e))?;
 
         let draw_structures = |depth| -> Result<(), JsValue> {
             for structure in self.structure_iter() {
@@ -2859,9 +2927,7 @@ impl FactorishState {
         let draw_wires = |wires: &[PowerWire]| {
             for PowerWire(first, second) in wires {
                 context.begin_path();
-                let first = if let Some(d) = self
-                    .get_structure(*first)
-                {
+                let first = if let Some(d) = self.get_structure(*first) {
                     d.position()
                 } else {
                     continue;
@@ -2870,9 +2936,7 @@ impl FactorishState {
                     first.x as f64 * TILE_SIZE + WIRE_ATTACH_X,
                     first.y as f64 * TILE_SIZE + WIRE_ATTACH_Y,
                 );
-                let second = if let Some(d) = self
-                    .get_structure(*second)
-                {
+                let second = if let Some(d) = self.get_structure(*second) {
                     d.position()
                 } else {
                     continue;

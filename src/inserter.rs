@@ -1,7 +1,7 @@
 use super::{
     draw_direction_arrow,
     items::{render_drop_item, ItemType},
-    structure::{Structure, StructureDynIter, StructureId},
+    structure::{RotateErr, Structure, StructureDynIter, StructureId},
     DropItem, FactorishState, FrameProcResult, Inventory, InventoryTrait, Position, Rotation,
 };
 use serde::{Deserialize, Serialize};
@@ -284,9 +284,7 @@ impl Structure for Inserter {
                     ..
                 } = self;
                 let mut try_move = |state: &mut FactorishState| {
-                    if let Ok(()) =
-                        state.new_object(output_position.x, output_position.y, item_type)
-                    {
+                    if let Ok(()) = state.new_object(&output_position, item_type) {
                         *cooldown += INSERTER_TIME;
                         *hold_item = None;
                     }
@@ -339,8 +337,12 @@ impl Structure for Inserter {
         Ok(())
     }
 
-    fn rotate(&mut self) -> Result<(), ()> {
+    fn rotate(&mut self, others: &StructureDynIter) -> Result<(), RotateErr> {
         self.rotation = self.rotation.next();
+        for (id, s) in others.dyn_iter_id() {
+            self.on_construction_common(id, s, true)
+                .map_err(|e| RotateErr::Other(e))?;
+        }
         Ok(())
     }
 

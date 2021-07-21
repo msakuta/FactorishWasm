@@ -1,9 +1,9 @@
 use super::{
     draw_direction_arrow,
     items::ItemType,
-    structure::{Structure, StructureDynIter, StructureId},
+    structure::{RotateErr, Structure, StructureDynIter, StructureId},
     DropItem, FactorishState, FrameProcResult, Inventory, InventoryTrait, Position, Recipe,
-    Rotation, TempEnt, COAL_POWER, TILE_SIZE,
+    Rotation, TempEnt, COAL_POWER, TILE_SIZE, TILE_SIZE_I,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -22,6 +22,8 @@ pub(crate) struct OreMine {
     recipe: Option<Recipe>,
     input_inventory: Inventory,
     output_structure: Option<StructureId>,
+    #[serde(skip)]
+    digging: bool,
 }
 
 impl OreMine {
@@ -35,6 +37,7 @@ impl OreMine {
             recipe: None,
             input_inventory: Inventory::new(),
             output_structure: None,
+            digging: false,
         }
     }
 
@@ -81,14 +84,7 @@ impl Structure for OreMine {
         match depth {
             0 => match state.image_mine.as_ref() {
                 Some(img) => {
-                    let progress = if let Some(ref recipe) = self.recipe {
-                        (self.power / recipe.power_cost)
-                            .min(1. / recipe.recipe_time)
-                            .min(1. - self.progress)
-                    } else {
-                        0.
-                    };
-                    let sx = if 0. < progress {
+                    let sx = if self.digging {
                         (((state.sim_time * 5.) as isize) % 2 + 1) as f64 * TILE_SIZE
                     } else {
                         0.
@@ -134,7 +130,7 @@ impl Structure for OreMine {
                  <div style='position: absolute; width: {}px; height: 10px; background-color: #ff00ff'></div></div>"#,
                     self.power,
                     if 0. < self.max_power { (self.power) / self.max_power * 100. } else { 0. }),
-                format!("Expected output: {}", if 0 < tile.iron_ore { tile.iron_ore } else if 0 < tile.coal_ore { tile.coal_ore } else { tile.copper_ore }))
+                format!("Expected output: {}", tile.ore.map(|ore| ore.1).unwrap_or(0)))
         // getHTML(generateItemImage("time", true, this.recipe.time), true) + "<br>" +
         // "Outputs: <br>" +
         // getHTML(generateItemImage(this.recipe.output, true, 1), true) + "<br>";
@@ -158,24 +154,10 @@ impl Structure for OreMine {
         let mut ret = FrameProcResult::None;
 
         if self.recipe.is_none() {
-            if 0 < tile.iron_ore {
+            if let Some(item_type) = tile.get_ore_type() {
                 self.recipe = Some(Recipe::new(
                     HashMap::new(),
-                    hash_map!(ItemType::IronOre => 1usize),
-                    8.,
-                    80.,
-                ));
-            } else if 0 < tile.coal_ore {
-                self.recipe = Some(Recipe::new(
-                    HashMap::new(),
-                    hash_map!(ItemType::CoalOre => 1usize),
-                    8.,
-                    80.,
-                ));
-            } else if 0 < tile.copper_ore {
-                self.recipe = Some(Recipe::new(
-                    HashMap::new(),
-                    hash_map!(ItemType::CopperOre => 1usize),
+                    hash_map!(item_type => 1usize),
                     8.,
                     80.,
                 ));
@@ -201,23 +183,17 @@ impl Structure for OreMine {
                 }
             }
 
-            let output = |state: &mut FactorishState, item, position: &Position| {
-                if let Ok(val) = if let Some(tile) = state.tile_at_mut(&position) {
-                    match item {
-                        ItemType::IronOre => Ok(&mut tile.iron_ore),
-                        ItemType::CoalOre => Ok(&mut tile.coal_ore),
-                        ItemType::CopperOre => Ok(&mut tile.copper_ore),
-                        _ => Err(()),
+            let output = |state: &mut FactorishState, _item, position: &Position| {
+                let tile = state.tile_at_mut(&position).ok_or(())?;
+                let ore = tile.ore.as_mut().ok_or(())?;
+                let val = &mut ore.1;
+                if 0 < *val {
+                    *val -= 1;
+                    let ret = *val;
+                    if ret == 0 {
+                        tile.ore = None;
                     }
-                } else {
-                    Err(())
-                } {
-                    if 0 < *val {
-                        *val -= 1;
-                        Ok(*val)
-                    } else {
-                        Err(())
-                    }
+                    Ok(ret)
                 } else {
                     Err(())
                 }
@@ -227,13 +203,7 @@ impl Structure for OreMine {
             let progress = (self.power / recipe.power_cost)
                 .min(1. / recipe.recipe_time)
                 .min(1. - self.progress);
-            if state.rng.next() < progress * 5. {
-                state
-                    .temp_ents
-                    .push(TempEnt::new(&mut state.rng, self.position));
-            }
             if 1. <= self.progress + progress {
-                self.progress = 0.;
                 let output_position = self.position.add(self.rotation.delta());
                 if let Some(structure) = self
                     .output_structure
@@ -256,6 +226,7 @@ impl Structure for OreMine {
                                 if val == 0 {
                                     self.recipe = None;
                                 }
+                                self.progress = 0.;
                                 return Ok(FrameProcResult::InventoryChanged(output_position));
                             } else {
                                 self.recipe = None;
@@ -264,37 +235,64 @@ impl Structure for OreMine {
                         }
                     }
                     if !structure.movable() {
+                        self.digging = false;
                         return Ok(FrameProcResult::None);
                     }
                 }
-                if !state.hit_check(output_position.x, output_position.y, None) {
+                let drop_x = output_position.x * TILE_SIZE_I + TILE_SIZE_I / 2;
+                let drop_y = output_position.y * TILE_SIZE_I + TILE_SIZE_I / 2;
+                if !state.hit_check(drop_x, drop_y, None)
+                    && state
+                        .tile_at(&output_position)
+                        .map(|cell| !cell.water)
+                        .unwrap_or(false)
+                {
                     // let dest_tile = state.board[dx as usize + dy as usize * state.width as usize];
                     let mut it = recipe.output.iter();
                     if let Some(item) = it.next() {
                         assert!(it.next().is_none());
-                        if let Err(_code) =
-                            state.new_object(output_position.x, output_position.y, *item.0)
-                        {
+                        if let Err(_code) = state.new_object(&output_position, *item.0) {
                             // console_log!("Failed to create object: {:?}", code);
                         } else if let Ok(val) = output(state, *item.0, &self.position) {
                             if val == 0 {
                                 self.recipe = None;
                             }
+                            self.progress = 0.;
                         }
                     } else {
                         return Err(());
                     }
+                    self.progress = 0.;
+                } else {
+                    // Output is blocked
+                    self.digging = false;
+                    return Ok(FrameProcResult::None);
                 }
             } else {
                 self.progress += progress;
                 self.power -= progress * recipe.power_cost;
+                self.digging = 0. < progress;
             }
+
+            // Show smoke if there was some progress
+            if state.rng.next() < progress * 5. {
+                state
+                    .temp_ents
+                    .push(TempEnt::new(&mut state.rng, self.position));
+            }
+        } else {
+            self.digging = false;
         }
         Ok(ret)
     }
 
-    fn rotate(&mut self) -> Result<(), ()> {
+    fn rotate(&mut self, others: &StructureDynIter) -> Result<(), RotateErr> {
         self.rotation = self.rotation.next();
+        self.output_structure = None;
+        for (id, s) in others.dyn_iter_id() {
+            self.on_construction_common(id, s, true)
+                .map_err(|e| RotateErr::Other(e))?;
+        }
         Ok(())
     }
 
