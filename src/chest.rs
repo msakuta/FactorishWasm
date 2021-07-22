@@ -1,5 +1,5 @@
 use super::items::{DropItem, ItemType};
-use super::structure::{ItemResponse, ItemResponseResult, Structure};
+use super::structure::{ItemResponse, ItemResponseResult, Structure, StructureDynIter};
 use super::{FactorishState, FrameProcResult, Inventory, InventoryTrait, Position};
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
@@ -84,7 +84,7 @@ impl Structure for Chest {
         self.inventory.len() < CHEST_CAPACITY
     }
 
-    fn can_output(&self) -> Inventory {
+    fn can_output(&self, _structures: &StructureDynIter) -> Inventory {
         self.inventory.clone()
     }
 

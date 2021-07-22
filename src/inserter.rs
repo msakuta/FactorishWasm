@@ -195,7 +195,7 @@ impl Structure for Inserter {
                     }
                 };
 
-                let mut lets_try_hold = None;
+                let mut lets_try_hold: Option<Inventory> = None;
                 if let Some(&DropItem { type_, id, .. }) = state.find_item(&input_position) {
                     if try_hold(structures, type_) {
                         state.remove_item(id);
@@ -207,7 +207,7 @@ impl Structure for Inserter {
                     .map(|id| structures.get_mut(id))
                     .flatten()
                 {
-                    lets_try_hold = Some(structure.can_output());
+                    // lets_try_hold = Some(structure.can_output(structures));
                     // console_log!("outputting from a structure at {:?}", structure.position());
                     // if let Ok((item, callback)) = structure.output(state, &output_position) {
                     //     lets_try_hold = Some((item, callback));

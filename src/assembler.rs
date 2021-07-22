@@ -236,7 +236,7 @@ impl Structure for Assembler {
         Err(JsValue::from_str("Recipe is not initialized"))
     }
 
-    fn can_output(&self) -> Inventory {
+    fn can_output(&self, _structures: &StructureDynIter) -> Inventory {
         self.output_inventory.clone()
     }
 
