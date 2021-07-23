@@ -20,7 +20,7 @@ fn wrap_structure(s: StructureBoxed) -> StructureEntry {
     }
 }
 
-pub(crate) fn default_scenario() -> Vec<StructureEntry> {
+fn default_scenario() -> Vec<StructureEntry> {
     vec![
         wrap_structure(Box::new(TransportBelt::new(10, 3, Rotation::Left))),
         wrap_structure(Box::new(TransportBelt::new(11, 3, Rotation::Left))),
@@ -34,7 +34,7 @@ pub(crate) fn default_scenario() -> Vec<StructureEntry> {
     ]
 }
 
-pub(crate) fn electric_bench() -> Vec<StructureEntry> {
+fn electric_bench() -> Vec<StructureEntry> {
     let mut structures = default_scenario();
 
     structures.extend((10..=100).filter_map(|x| {
@@ -71,8 +71,16 @@ pub(crate) fn electric_bench() -> Vec<StructureEntry> {
     structures
 }
 
+pub(crate) fn select_scenario(name: &str) -> Result<Vec<StructureEntry>, JsValue> {
+    match name {
+        "default" => Ok(default_scenario()),
+        "electric_bench" => Ok(electric_bench()),
+        _ => js_err!("Scenario name not valid: {}", name),
+    }
+}
+
 impl FactorishState {
-    pub(crate) fn update_cache(&mut self) -> Result<(), JsValue> {
+    pub(super) fn update_cache(&mut self) -> Result<(), JsValue> {
         let positions = self
             .structures
             .iter()

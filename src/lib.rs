@@ -62,7 +62,7 @@ mod transport_belt;
 mod utils;
 mod water_well;
 
-use crate::scenarios::electric_bench;
+use crate::scenarios::select_scenario;
 use assembler::Assembler;
 use boiler::Boiler;
 use chest::Chest;
@@ -637,6 +637,7 @@ impl FactorishState {
         resource_amount: f64,
         noise_scale: f64,
         noise_threshold: f64,
+        scenario: &str,
     ) -> Result<FactorishState, JsValue> {
         console_log!("FactorishState constructor");
 
@@ -772,7 +773,7 @@ impl FactorishState {
                 calculate_back_image(&mut ret, width, height);
                 ret
             },
-            structures: electric_bench(),
+            structures: select_scenario(scenario)?,
             selected_structure_inventory: None,
             ore_harvesting: None,
             drop_items: vec![],
