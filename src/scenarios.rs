@@ -37,18 +37,18 @@ fn default_scenario() -> Vec<StructureEntry> {
 fn transport_bench() -> Vec<StructureEntry> {
     let mut structures = default_scenario();
 
-    structures.extend((11..=100).map(|x| {
-        wrap_structure(Box::new(TransportBelt::new(x, 10, Rotation::Left)))
-    }));
-    structures.extend((10..=99).map(|x| {
-        wrap_structure(Box::new(TransportBelt::new(x, 100, Rotation::Right)))
-    }));
-    structures.extend((10..=99).map(|x| {
-        wrap_structure(Box::new(TransportBelt::new(10, x, Rotation::Bottom)))
-    }));
-    structures.extend((11..=100).map(|x| {
-        wrap_structure(Box::new(TransportBelt::new(100, x, Rotation::Top)))
-    }));
+    structures.extend(
+        (11..=100).map(|x| wrap_structure(Box::new(TransportBelt::new(x, 10, Rotation::Left)))),
+    );
+    structures.extend(
+        (10..=99).map(|x| wrap_structure(Box::new(TransportBelt::new(x, 100, Rotation::Right)))),
+    );
+    structures.extend(
+        (10..=99).map(|x| wrap_structure(Box::new(TransportBelt::new(10, x, Rotation::Bottom)))),
+    );
+    structures.extend(
+        (11..=100).map(|x| wrap_structure(Box::new(TransportBelt::new(100, x, Rotation::Top)))),
+    );
 
     structures
 }
