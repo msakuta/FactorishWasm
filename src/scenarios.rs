@@ -5,13 +5,14 @@ use super::{
     furnace::Furnace,
     items::ItemType,
     ore_mine::OreMine,
+    pipe::Pipe,
     power_network::build_power_networks,
     steam_engine::SteamEngine,
     structure::{Structure, StructureBoxed, StructureDynIter, StructureEntry, StructureId},
     terrain::{calculate_back_image, gen_terrain, TerrainParameters},
     transport_belt::TransportBelt,
     water_well::WaterWell,
-    Cell, DropItem, FactorishState, Position, PowerWire, Rotation, TILE_SIZE_I,
+    Cell, DropItem, FactorishState, Position, PowerWire, Rotation,
 };
 use wasm_bindgen::prelude::*;
 
@@ -58,6 +59,25 @@ fn default_scenario(
         gen_terrain(terrain_params),
         vec![],
     )
+}
+
+fn pipe_bench(
+    terrain_params: &TerrainParameters,
+) -> (Vec<StructureEntry>, Vec<Cell>, Vec<DropItem>) {
+    let (mut structures, mut terrain, items) = default_scenario(terrain_params);
+
+    structures
+        .extend((11..=100).map(|x| wrap_structure(Box::new(Pipe::new(&Position::new(x, 10))))));
+    structures
+        .extend((10..=99).map(|x| wrap_structure(Box::new(Pipe::new(&Position::new(x, 100))))));
+    structures
+        .extend((10..=99).map(|x| wrap_structure(Box::new(Pipe::new(&Position::new(10, x))))));
+    structures
+        .extend((11..=100).map(|x| wrap_structure(Box::new(Pipe::new(&Position::new(100, x))))));
+
+    update_water(&structures, &mut terrain, &terrain_params);
+
+    (structures, terrain, items)
 }
 
 fn transport_bench(
@@ -136,6 +156,7 @@ pub(crate) fn select_scenario(
 ) -> Result<(Vec<StructureEntry>, Vec<Cell>, Vec<DropItem>), JsValue> {
     match name {
         "default" => Ok(default_scenario(terrain_params)),
+        "pipe_bench" => Ok(pipe_bench(terrain_params)),
         "transport_bench" => Ok(transport_bench(terrain_params, serial_no)),
         "electric_bench" => Ok(electric_bench(terrain_params)),
         _ => js_err!("Scenario name not valid: {}", name),
