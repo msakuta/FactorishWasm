@@ -76,7 +76,7 @@ impl<'a> StructureDynIter<'a> {
 
     /// Mutable accessor without generation checking.
     #[allow(dead_code)]
-    pub(crate) fn get_at_mut<'b>(&'b mut self, idx: usize) -> Option<&'b mut StructureEntry>
+    pub(crate) fn get_at_mut<'b>(&'b mut self, idx: usize) -> Option<&'a mut StructureEntry>
     where
         'a: 'b,
     {
