@@ -65,7 +65,7 @@ mod water_well;
 
 use crate::{
     scenarios::select_scenario,
-    terrain::{calculate_back_image, gen_terrain},
+    terrain::{calculate_back_image, gen_terrain, TerrainParameters},
 };
 use assembler::Assembler;
 use boiler::Boiler;
@@ -578,18 +578,14 @@ enum NewObjectErr {
 impl FactorishState {
     #[wasm_bindgen(constructor)]
     pub fn new(
-        width: u32,
-        height: u32,
+        terrain_params: JsValue,
         on_player_update: js_sys::Function,
         // on_show_inventory: js_sys::Function,
-        terrain_seed: u32,
-        water_noise_threshold: f64,
-        resource_amount: f64,
-        noise_scale: f64,
-        noise_threshold: f64,
         scenario: &str,
     ) -> Result<FactorishState, JsValue> {
         console_log!("FactorishState constructor");
+
+        let terrain_params: TerrainParameters = serde_wasm_bindgen::from_value(terrain_params)?;
 
         let mut tool_belt = [None; 10];
         tool_belt[0] = Some(ItemType::OreMine);
@@ -600,8 +596,8 @@ impl FactorishState {
         let mut ret = FactorishState {
             delta_time: 0.1,
             sim_time: 0.0,
-            width,
-            height,
+            width: terrain_params.width,
+            height: terrain_params.height,
             viewport_height: 0.,
             viewport_width: 0.,
             viewport_x: 0.,
@@ -670,15 +666,7 @@ impl FactorishState {
             image_smoke: None,
             image_fuel_alarm: None,
             image_electricity_alarm: None,
-            board: gen_terrain(
-                width,
-                height,
-                terrain_seed,
-                water_noise_threshold,
-                resource_amount,
-                noise_scale,
-                noise_threshold,
-            )?,
+            board: gen_terrain(terrain_params)?,
             structures: select_scenario(scenario)?,
             selected_structure_inventory: None,
             ore_harvesting: None,

@@ -3,16 +3,32 @@ use super::{
     Cell, Ore, OreValue,
 };
 use wasm_bindgen::prelude::*;
+use serde::Deserialize;
+
+#[wasm_bindgen]
+#[derive(Deserialize)]
+pub(crate) struct TerrainParameters {
+    pub width: u32,
+    pub height: u32,
+    pub terrain_seed: u32,
+    pub water_noise_threshold: f64,
+    pub resource_amount: f64,
+    pub noise_scale: f64,
+    pub noise_threshold: f64,
+}
 
 pub(crate) fn gen_terrain(
-    width: u32,
-    height: u32,
-    terrain_seed: u32,
-    water_noise_threshold: f64,
-    resource_amount: f64,
-    noise_scale: f64,
-    noise_threshold: f64,
+    params: TerrainParameters
 ) -> Result<Vec<Cell>, JsValue> {
+    let TerrainParameters {
+        width,
+        height,
+        terrain_seed,
+        water_noise_threshold,
+        resource_amount,
+        noise_scale,
+        noise_threshold,
+    } = params;
     let mut ret = vec![Cell::default(); (width * height) as usize];
     let bits = 1;
     let mut rng = Xor128::new(terrain_seed);
