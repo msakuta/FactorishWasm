@@ -65,7 +65,7 @@ mod water_well;
 
 use crate::{
     scenarios::select_scenario,
-    terrain::{calculate_back_image, gen_terrain, TerrainParameters},
+    terrain::{calculate_back_image, TerrainParameters},
 };
 use assembler::Assembler;
 use boiler::Boiler;
@@ -593,6 +593,8 @@ impl FactorishState {
         tool_belt[2] = Some(ItemType::TransportBelt);
         tool_belt[3] = Some(ItemType::Furnace);
 
+        let (structures, board) = select_scenario(scenario, &terrain_params)?;
+
         let mut ret = FactorishState {
             delta_time: 0.1,
             sim_time: 0.0,
@@ -666,8 +668,8 @@ impl FactorishState {
             image_smoke: None,
             image_fuel_alarm: None,
             image_electricity_alarm: None,
-            board: gen_terrain(terrain_params)?,
-            structures: select_scenario(scenario)?,
+            board,
+            structures,
             selected_structure_inventory: None,
             ore_harvesting: None,
             drop_items: vec![],

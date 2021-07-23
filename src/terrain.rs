@@ -2,8 +2,8 @@ use super::{
     perlin_noise::{gen_terms, perlin_noise_pixel, Xor128},
     Cell, Ore, OreValue,
 };
-use wasm_bindgen::prelude::*;
 use serde::Deserialize;
+use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen]
 #[derive(Deserialize)]
@@ -17,9 +17,7 @@ pub(crate) struct TerrainParameters {
     pub noise_threshold: f64,
 }
 
-pub(crate) fn gen_terrain(
-    params: TerrainParameters
-) -> Result<Vec<Cell>, JsValue> {
+pub(crate) fn gen_terrain(params: &TerrainParameters) -> Vec<Cell> {
     let TerrainParameters {
         width,
         height,
@@ -28,7 +26,7 @@ pub(crate) fn gen_terrain(
         resource_amount,
         noise_scale,
         noise_threshold,
-    } = params;
+    } = *params;
     let mut ret = vec![Cell::default(); (width * height) as usize];
     let bits = 1;
     let mut rng = Xor128::new(terrain_seed);
@@ -74,7 +72,7 @@ pub(crate) fn gen_terrain(
         }
     }
     calculate_back_image(&mut ret, width, height);
-    Ok(ret)
+    ret
 }
 
 pub(crate) fn calculate_back_image(ret: &mut [Cell], width: u32, height: u32) {

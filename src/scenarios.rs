@@ -7,9 +7,10 @@ use super::{
     power_network::build_power_networks,
     steam_engine::SteamEngine,
     structure::{Structure, StructureBoxed, StructureDynIter, StructureEntry, StructureId},
+    terrain::{calculate_back_image, gen_terrain, TerrainParameters},
     transport_belt::TransportBelt,
     water_well::WaterWell,
-    FactorishState, Position, PowerWire, Rotation,
+    Cell, FactorishState, Position, PowerWire, Rotation,
 };
 use wasm_bindgen::prelude::*;
 
@@ -20,22 +21,43 @@ fn wrap_structure(s: StructureBoxed) -> StructureEntry {
     }
 }
 
-fn default_scenario() -> Vec<StructureEntry> {
-    vec![
-        wrap_structure(Box::new(TransportBelt::new(10, 3, Rotation::Left))),
-        wrap_structure(Box::new(TransportBelt::new(11, 3, Rotation::Left))),
-        wrap_structure(Box::new(TransportBelt::new(12, 3, Rotation::Left))),
-        wrap_structure(Box::new(OreMine::new(12, 2, Rotation::Bottom))),
-        wrap_structure(Box::new(Furnace::new(&Position::new(8, 3)))),
-        wrap_structure(Box::new(Assembler::new(&Position::new(6, 3)))),
-        wrap_structure(Box::new(WaterWell::new(&Position::new(14, 5)))),
-        wrap_structure(Box::new(Boiler::new(&Position::new(13, 5)))),
-        wrap_structure(Box::new(SteamEngine::new(&Position::new(12, 5)))),
-    ]
+/// Avoid having water beneath a structure by filling water cells
+fn update_water(
+    structures: &[StructureEntry],
+    terrain: &mut [Cell],
+    terrain_params: &TerrainParameters,
+) {
+    for structure in structures {
+        if let Some(dynamic) = structure.dynamic.as_deref() {
+            let Position { x, y } = dynamic.position();
+            terrain
+                .get_mut((x + y * terrain_params.width as i32) as usize)
+                .map(|cell| cell.water = false);
+        }
+    }
+
+    calculate_back_image(terrain, terrain_params.width, terrain_params.height);
 }
 
-fn transport_bench() -> Vec<StructureEntry> {
-    let mut structures = default_scenario();
+fn default_scenario(terrain_params: &TerrainParameters) -> (Vec<StructureEntry>, Vec<Cell>) {
+    (
+        vec![
+            wrap_structure(Box::new(TransportBelt::new(10, 3, Rotation::Left))),
+            wrap_structure(Box::new(TransportBelt::new(11, 3, Rotation::Left))),
+            wrap_structure(Box::new(TransportBelt::new(12, 3, Rotation::Left))),
+            wrap_structure(Box::new(OreMine::new(12, 2, Rotation::Bottom))),
+            wrap_structure(Box::new(Furnace::new(&Position::new(8, 3)))),
+            wrap_structure(Box::new(Assembler::new(&Position::new(6, 3)))),
+            wrap_structure(Box::new(WaterWell::new(&Position::new(14, 5)))),
+            wrap_structure(Box::new(Boiler::new(&Position::new(13, 5)))),
+            wrap_structure(Box::new(SteamEngine::new(&Position::new(12, 5)))),
+        ],
+        gen_terrain(terrain_params),
+    )
+}
+
+fn transport_bench(terrain_params: &TerrainParameters) -> (Vec<StructureEntry>, Vec<Cell>) {
+    let (mut structures, mut terrain) = default_scenario(terrain_params);
 
     structures.extend(
         (11..=100).map(|x| wrap_structure(Box::new(TransportBelt::new(x, 10, Rotation::Left)))),
@@ -50,11 +72,13 @@ fn transport_bench() -> Vec<StructureEntry> {
         (11..=100).map(|x| wrap_structure(Box::new(TransportBelt::new(100, x, Rotation::Top)))),
     );
 
-    structures
+    update_water(&structures, &mut terrain, &terrain_params);
+
+    (structures, terrain)
 }
 
-fn electric_bench() -> Vec<StructureEntry> {
-    let mut structures = default_scenario();
+fn electric_bench(terrain_params: &TerrainParameters) -> (Vec<StructureEntry>, Vec<Cell>) {
+    let (mut structures, mut terrain) = default_scenario(terrain_params);
 
     structures.extend((10..=100).filter_map(|x| {
         if x % 2 == 0 {
@@ -87,14 +111,19 @@ fn electric_bench() -> Vec<StructureEntry> {
         })
     }));
 
-    structures
+    update_water(&structures, &mut terrain, &terrain_params);
+
+    (structures, terrain)
 }
 
-pub(crate) fn select_scenario(name: &str) -> Result<Vec<StructureEntry>, JsValue> {
+pub(crate) fn select_scenario(
+    name: &str,
+    terrain_params: &TerrainParameters,
+) -> Result<(Vec<StructureEntry>, Vec<Cell>), JsValue> {
     match name {
-        "default" => Ok(default_scenario()),
-        "transport_bench" => Ok(transport_bench()),
-        "electric_bench" => Ok(electric_bench()),
+        "default" => Ok(default_scenario(terrain_params)),
+        "transport_bench" => Ok(transport_bench(terrain_params)),
+        "electric_bench" => Ok(electric_bench(terrain_params)),
         _ => js_err!("Scenario name not valid: {}", name),
     }
 }
