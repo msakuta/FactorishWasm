@@ -180,9 +180,22 @@ let ysize = 128;
     initPane("paramsButton", "paramsContainer");
     initPane("viewButton", "viewContainer");
 
+    const scenarioSelectElem = document.getElementById("scenarioSelect");
+
     let paused = false;
 
-    let sim = new FactorishState(xsize, ysize, updateInventory, terrainSeed, waterNoiseThreshold, resourceAmount, noiseScale, noiseThreshold);
+    let sim = new FactorishState(
+        {
+            width: xsize,
+            height: ysize,
+            terrain_seed: terrainSeed,
+            water_noise_threshold: waterNoiseThreshold,
+            resource_amount: resourceAmount,
+            noise_scale: noiseScale,
+            noise_threshold: noiseThreshold,
+        },
+        updateInventory,
+        scenarioSelectElem.value);
 
     const canvas = document.getElementById('canvas');
     let canvasSize = canvas.getBoundingClientRect();
@@ -1181,7 +1194,18 @@ let ysize = 128;
     const generateBoard = document.getElementById("generateBoard");
     generateBoard.addEventListener("click", () => {
         xsize = ysize = parseInt(document.getElementById("sizeSelect").value);
-        sim = new FactorishState(xsize, ysize, updateInventory, terrainSeed, waterNoiseThreshold, resourceAmount, noiseScale, noiseThreshold);
+        sim = new FactorishState(
+            {
+                width: xsize,
+                height: ysize,
+                terrain_seed: terrainSeed,
+                water_noise_threshold: waterNoiseThreshold,
+                resource_amount: resourceAmount,
+                noise_scale: noiseScale,
+                noise_threshold: noiseThreshold,
+            },
+            updateInventory,
+            scenarioSelectElem.value);
         try{
             sim.render_init(canvas, infoElem, loadedImages);
         } catch(e) {

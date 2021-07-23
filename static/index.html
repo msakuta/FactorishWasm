@@ -19,7 +19,7 @@
 					<div id="paramsContainer" class="params" style="display: none;">
 						<div style="font-size: 120%; font-weight: 700;">New game settings</div>
 						<div>
-							Size:
+							<label for="sizeSelect">Size:</label>
 							<select id="sizeSelect">
 								<option>16</option>
 								<option>24</option>
@@ -28,6 +28,16 @@
 								<option>64</option>
 								<option selected>128</option>
 								<option>256</option>
+							</select>
+						</div>
+						<div>
+							<label for="scenarioSelect">Scenario:</label>
+							<select id="scenarioSelect">
+								<option value="default" selected>Default</option>
+								<option value="pipe_bench">Pipe benchmark</option>
+								<option value="inserter_bench">Inserter benchmark</option>
+								<option value="transport_bench">Transport belt benchmark</option>
+								<option value="electric_bench">Electric network benchmark</option>
 							</select>
 						</div>
 						<div>
