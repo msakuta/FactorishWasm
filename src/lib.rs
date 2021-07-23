@@ -593,7 +593,10 @@ impl FactorishState {
         tool_belt[2] = Some(ItemType::TransportBelt);
         tool_belt[3] = Some(ItemType::Furnace);
 
-        let (structures, board) = select_scenario(scenario, &terrain_params)?;
+        let mut serial_no = 0;
+
+        let (structures, board, drop_items) =
+            select_scenario(scenario, &terrain_params, &mut serial_no)?;
 
         let mut ret = FactorishState {
             delta_time: 0.1,
@@ -672,8 +675,8 @@ impl FactorishState {
             structures,
             selected_structure_inventory: None,
             ore_harvesting: None,
-            drop_items: vec![],
-            serial_no: 0,
+            drop_items,
+            serial_no,
             on_player_update,
             temp_ents: vec![],
             rng: Xor128::new(3142125),

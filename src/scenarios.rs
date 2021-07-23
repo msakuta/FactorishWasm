@@ -3,6 +3,7 @@ use super::{
     boiler::Boiler,
     elect_pole::ElectPole,
     furnace::Furnace,
+    items::ItemType,
     ore_mine::OreMine,
     power_network::build_power_networks,
     steam_engine::SteamEngine,
@@ -10,7 +11,7 @@ use super::{
     terrain::{calculate_back_image, gen_terrain, TerrainParameters},
     transport_belt::TransportBelt,
     water_well::WaterWell,
-    Cell, FactorishState, Position, PowerWire, Rotation,
+    Cell, DropItem, FactorishState, Position, PowerWire, Rotation, TILE_SIZE_I,
 };
 use wasm_bindgen::prelude::*;
 
@@ -39,7 +40,9 @@ fn update_water(
     calculate_back_image(terrain, terrain_params.width, terrain_params.height);
 }
 
-fn default_scenario(terrain_params: &TerrainParameters) -> (Vec<StructureEntry>, Vec<Cell>) {
+fn default_scenario(
+    terrain_params: &TerrainParameters,
+) -> (Vec<StructureEntry>, Vec<Cell>, Vec<DropItem>) {
     (
         vec![
             wrap_structure(Box::new(TransportBelt::new(10, 3, Rotation::Left))),
@@ -53,32 +56,42 @@ fn default_scenario(terrain_params: &TerrainParameters) -> (Vec<StructureEntry>,
             wrap_structure(Box::new(SteamEngine::new(&Position::new(12, 5)))),
         ],
         gen_terrain(terrain_params),
+        vec![],
     )
 }
 
-fn transport_bench(terrain_params: &TerrainParameters) -> (Vec<StructureEntry>, Vec<Cell>) {
-    let (mut structures, mut terrain) = default_scenario(terrain_params);
+fn transport_bench(
+    terrain_params: &TerrainParameters,
+    serial_no: &mut u32,
+) -> (Vec<StructureEntry>, Vec<Cell>, Vec<DropItem>) {
+    let (mut structures, mut terrain, mut items) = default_scenario(terrain_params);
 
     structures.extend(
         (11..=100).map(|x| wrap_structure(Box::new(TransportBelt::new(x, 10, Rotation::Left)))),
     );
+    items.extend((11..=100).map(|x| DropItem::new(serial_no, ItemType::CoalOre, x, 10)));
     structures.extend(
         (10..=99).map(|x| wrap_structure(Box::new(TransportBelt::new(x, 100, Rotation::Right)))),
     );
+    items.extend((10..=99).map(|x| DropItem::new(serial_no, ItemType::IronOre, x, 100)));
     structures.extend(
         (10..=99).map(|x| wrap_structure(Box::new(TransportBelt::new(10, x, Rotation::Bottom)))),
     );
+    items.extend((10..=99).map(|x| DropItem::new(serial_no, ItemType::CopperOre, 10, x)));
     structures.extend(
         (11..=100).map(|x| wrap_structure(Box::new(TransportBelt::new(100, x, Rotation::Top)))),
     );
+    items.extend((11..=100).map(|x| DropItem::new(serial_no, ItemType::StoneOre, 100, x)));
 
     update_water(&structures, &mut terrain, &terrain_params);
 
-    (structures, terrain)
+    (structures, terrain, items)
 }
 
-fn electric_bench(terrain_params: &TerrainParameters) -> (Vec<StructureEntry>, Vec<Cell>) {
-    let (mut structures, mut terrain) = default_scenario(terrain_params);
+fn electric_bench(
+    terrain_params: &TerrainParameters,
+) -> (Vec<StructureEntry>, Vec<Cell>, Vec<DropItem>) {
+    let (mut structures, mut terrain, items) = default_scenario(terrain_params);
 
     structures.extend((10..=100).filter_map(|x| {
         if x % 2 == 0 {
@@ -113,16 +126,17 @@ fn electric_bench(terrain_params: &TerrainParameters) -> (Vec<StructureEntry>, V
 
     update_water(&structures, &mut terrain, &terrain_params);
 
-    (structures, terrain)
+    (structures, terrain, items)
 }
 
 pub(crate) fn select_scenario(
     name: &str,
     terrain_params: &TerrainParameters,
-) -> Result<(Vec<StructureEntry>, Vec<Cell>), JsValue> {
+    serial_no: &mut u32,
+) -> Result<(Vec<StructureEntry>, Vec<Cell>, Vec<DropItem>), JsValue> {
     match name {
         "default" => Ok(default_scenario(terrain_params)),
-        "transport_bench" => Ok(transport_bench(terrain_params)),
+        "transport_bench" => Ok(transport_bench(terrain_params, serial_no)),
         "electric_bench" => Ok(electric_bench(terrain_params)),
         _ => js_err!("Scenario name not valid: {}", name),
     }
