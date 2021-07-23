@@ -1,8 +1,10 @@
 use super::{
     assembler::Assembler,
     boiler::Boiler,
+    chest::Chest,
     elect_pole::ElectPole,
     furnace::Furnace,
+    inserter::Inserter,
     items::ItemType,
     ore_mine::OreMine,
     pipe::Pipe,
@@ -12,7 +14,7 @@ use super::{
     terrain::{calculate_back_image, gen_terrain, TerrainParameters},
     transport_belt::TransportBelt,
     water_well::WaterWell,
-    Cell, DropItem, FactorishState, Position, PowerWire, Rotation,
+    Cell, DropItem, FactorishState, InventoryTrait, Position, PowerWire, Rotation,
 };
 use wasm_bindgen::prelude::*;
 
@@ -74,6 +76,57 @@ fn pipe_bench(
         .extend((10..=99).map(|x| wrap_structure(Box::new(Pipe::new(&Position::new(10, x))))));
     structures
         .extend((11..=100).map(|x| wrap_structure(Box::new(Pipe::new(&Position::new(100, x))))));
+
+    update_water(&structures, &mut terrain, &terrain_params);
+
+    (structures, terrain, items)
+}
+
+fn inserter_bench(
+    terrain_params: &TerrainParameters,
+) -> (Vec<StructureEntry>, Vec<Cell>, Vec<DropItem>) {
+    let (mut structures, mut terrain, items) = default_scenario(terrain_params);
+
+    structures.extend((10..=100).map(|x| {
+        if x % 2 == 0 {
+            wrap_structure(Box::new({
+                let mut chest = Chest::new(&Position::new(x, 10));
+                chest
+                    .inventory_mut(true)
+                    .map(|inv| inv.add_item(&ItemType::IronOre));
+                chest
+            }))
+        } else {
+            wrap_structure(Box::new(Inserter::new(x, 10, Rotation::Right)))
+        }
+    }));
+    structures.extend((10..=100).map(|x| {
+        wrap_structure(if x % 2 == 0 {
+            Box::new({
+                let mut chest = Chest::new(&Position::new(x, 100));
+                chest
+                    .inventory_mut(true)
+                    .map(|inv| inv.add_item(&ItemType::CoalOre));
+                chest
+            })
+        } else {
+            Box::new(Inserter::new(x, 100, Rotation::Left)) as Box<dyn Structure>
+        })
+    }));
+    structures.extend((11..=99).map(|x| {
+        if x % 2 == 0 {
+            wrap_structure(Box::new(Chest::new(&Position::new(10, x))) as Box<dyn Structure>)
+        } else {
+            wrap_structure(Box::new(Inserter::new(10, x, Rotation::Top)) as Box<dyn Structure>)
+        }
+    }));
+    structures.extend((11..=99).map(|x| {
+        wrap_structure(if x % 2 == 0 {
+            Box::new(Chest::new(&Position::new(100, x))) as Box<dyn Structure>
+        } else {
+            Box::new(Inserter::new(100, x, Rotation::Bottom)) as Box<dyn Structure>
+        })
+    }));
 
     update_water(&structures, &mut terrain, &terrain_params);
 
@@ -157,6 +210,7 @@ pub(crate) fn select_scenario(
     match name {
         "default" => Ok(default_scenario(terrain_params)),
         "pipe_bench" => Ok(pipe_bench(terrain_params)),
+        "inserter_bench" => Ok(inserter_bench(terrain_params)),
         "transport_bench" => Ok(transport_bench(terrain_params, serial_no)),
         "electric_bench" => Ok(electric_bench(terrain_params)),
         _ => js_err!("Scenario name not valid: {}", name),
