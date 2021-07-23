@@ -538,6 +538,23 @@ fn calculate_back_image(ret: &mut [Cell], width: u32, height: u32) {
     }
 }
 
+#[derive(Serialize, Deserialize)]
+struct Viewport {
+    x: f64,
+    y: f64,
+    scale: f64,
+}
+
+impl Default for Viewport {
+    fn default() -> Self {
+        Self {
+            x: 0.,
+            y: 0.,
+            scale: 1.,
+        }
+    }
+}
+
 #[wasm_bindgen]
 pub struct FactorishState {
     #[allow(dead_code)]
@@ -547,9 +564,7 @@ pub struct FactorishState {
     height: u32,
     viewport_width: f64,
     viewport_height: f64,
-    viewport_x: f64,
-    viewport_y: f64,
-    view_scale: f64,
+    viewport: Viewport,
     board: Vec<Cell>,
     structures: Vec<StructureEntry>,
     selected_structure_inventory: Option<Position>,
@@ -657,9 +672,11 @@ impl FactorishState {
             height,
             viewport_height: 0.,
             viewport_width: 0.,
-            viewport_x: 0.,
-            viewport_y: 0.,
-            view_scale: 1.,
+            viewport: Viewport {
+                x: 0.,
+                y: 0.,
+                scale: 1.,
+            },
             cursor: None,
             tool_belt,
             selected_item: None,
@@ -800,24 +817,25 @@ impl FactorishState {
     pub fn serialize_game(&self) -> Result<String, JsValue> {
         use serde_json::Value as SValue;
         console_log!("Serializing...");
+
         fn map_err(
             result: Result<SValue, serde_json::Error>,
             name: &str,
         ) -> Result<SValue, JsValue> {
             result.map_err(|e| js_str!("serialize failed for {}: {}", name, e))
         }
+
+        fn to_value<T: Serialize>(value: T, name: &str) -> Result<SValue, JsValue> {
+            map_err(serde_json::to_value(value), name)
+        }
+
         let mut map = serde_json::Map::new();
+        map.insert("version".to_string(), to_value(&SAVE_VERSION, "version")?);
+        map.insert("sim_time".to_string(), SValue::from(self.sim_time));
+        map.insert("player".to_string(), to_value(&self.player, "player")?);
         map.insert(
-            "version".to_string(),
-            map_err(serde_json::to_value(&SAVE_VERSION), "version")?,
-        );
-        map.insert(
-            "sim_time".to_string(),
-            serde_json::Value::from(self.sim_time),
-        );
-        map.insert(
-            "player".to_string(),
-            map_err(serde_json::to_value(&self.player), "player")?,
+            "viewport".to_string(),
+            to_value(&self.viewport, "viewport")?,
         );
         map.insert("width".to_string(), serde_json::Value::from(self.width));
         map.insert("height".to_string(), serde_json::Value::from(self.height));
@@ -978,6 +996,10 @@ impl FactorishState {
             .ok_or_else(|| js_str!("sim_time is not float"))?;
 
         self.player = from_value(json_take(&mut json, "player")?)?;
+
+        self.viewport = json_take(&mut json, "viewport")
+            .and_then(from_value)
+            .unwrap_or_default();
 
         self.width = json_as_u64(json_get(&json, "width")?)? as u32;
         self.height = json_as_u64(json_get(&json, "height")?)? as u32;
@@ -2055,8 +2077,8 @@ impl FactorishState {
             return Err(JsValue::from_str("position must have 2 elements"));
         }
         let cursor = Position {
-            x: (pos[0] / self.view_scale / 32. - self.viewport_x) as i32,
-            y: (pos[1] / self.view_scale / 32. - self.viewport_y) as i32,
+            x: (pos[0] / self.viewport.scale / 32. - self.viewport.x) as i32,
+            y: (pos[1] / self.viewport.scale / 32. - self.viewport.y) as i32,
         };
 
         console_log!("mouse_down: {}, {}, button: {}", cursor.x, cursor.y, button);
@@ -2087,8 +2109,8 @@ impl FactorishState {
             return Err(JsValue::from_str("position must have 2 elements"));
         }
         let cursor = Position {
-            x: (pos[0] / self.view_scale / 32. - self.viewport_x) as i32,
-            y: (pos[1] / self.view_scale / 32. - self.viewport_y) as i32,
+            x: (pos[0] / self.viewport.scale / 32. - self.viewport.x) as i32,
+            y: (pos[1] / self.viewport.scale / 32. - self.viewport.y) as i32,
         };
         let mut events = vec![];
 
@@ -2258,8 +2280,8 @@ impl FactorishState {
             return Err(JsValue::from_str("position must have 2 elements"));
         }
         let cursor = [
-            (pos[0] / self.view_scale / 32. - self.viewport_x) as i32,
-            (pos[1] / self.view_scale / 32. - self.viewport_y) as i32,
+            (pos[0] / self.viewport.scale / 32. - self.viewport.x) as i32,
+            (pos[1] / self.viewport.scale / 32. - self.viewport.y) as i32,
         ];
         if cursor[0] < 0
             || self.width as i32 <= cursor[0]
@@ -2291,13 +2313,15 @@ impl FactorishState {
     pub fn mouse_wheel(&mut self, delta: i32, x: f64, y: f64) -> Result<(), JsValue> {
         let base = (2_f64).powf(1. / 5.);
         let new_scale = if delta < 0 {
-            (self.view_scale * base).min(8.)
+            (self.viewport.scale * base).min(8.)
         } else {
-            (self.view_scale / base).max(0.5)
+            (self.viewport.scale / base).max(0.5)
         };
-        self.viewport_x += (x as f64 / self.view_scale / 32.) * (1. - new_scale / self.view_scale);
-        self.viewport_y += (y as f64 / self.view_scale / 32.) * (1. - new_scale / self.view_scale);
-        self.view_scale = new_scale;
+        self.viewport.x +=
+            (x as f64 / self.viewport.scale / 32.) * (1. - new_scale / self.viewport.scale);
+        self.viewport.y +=
+            (y as f64 / self.viewport.scale / 32.) * (1. - new_scale / self.viewport.scale);
+        self.viewport.scale = new_scale;
         Ok(())
     }
 
@@ -2320,22 +2344,22 @@ impl FactorishState {
             }
             37 => {
                 // Left
-                self.viewport_x = (self.viewport_x + 1.).min(0.);
+                self.viewport.x = (self.viewport.x + 1.).min(0.);
                 Ok(JsValue::from_bool(true))
             }
             38 => {
                 // Up
-                self.viewport_y = (self.viewport_y + 1.).min(0.);
+                self.viewport.y = (self.viewport.y + 1.).min(0.);
                 Ok(JsValue::from_bool(true))
             }
             39 => {
                 // Right
-                self.viewport_x = (self.viewport_x - 1.).max(-(self.width as f64));
+                self.viewport.x = (self.viewport.x - 1.).max(-(self.width as f64));
                 Ok(JsValue::from_bool(true))
             }
             40 => {
                 // Down
-                self.viewport_y = (self.viewport_y - 1.).max(-(self.height as f64));
+                self.viewport.y = (self.viewport.y - 1.).max(-(self.height as f64));
                 Ok(JsValue::from_bool(true))
             }
             69 => {
@@ -2688,17 +2712,17 @@ impl FactorishState {
 
     fn get_viewport(&self) -> (f64, f64) {
         (
-            self.viewport_width / self.view_scale,
-            self.viewport_height / self.view_scale,
+            self.viewport_width / self.viewport.scale,
+            self.viewport_height / self.viewport.scale,
         )
     }
 
     pub fn set_viewport_pos(&mut self, x: f64, y: f64) -> Result<js_sys::Array, JsValue> {
         let viewport = self.get_viewport();
-        self.viewport_x = -(x - viewport.0 / 32. / 2.)
+        self.viewport.x = -(x - viewport.0 / 32. / 2.)
             .max(0.)
             .min(self.width as f64 - viewport.0 / 32. - 1.);
-        self.viewport_y = -(y - viewport.1 / 32. / 2.)
+        self.viewport.y = -(y - viewport.1 / 32. / 2.)
             .max(0.)
             .min(self.height as f64 - viewport.1 / 32. - 1.);
         Ok(js_sys::Array::of2(
@@ -2708,8 +2732,8 @@ impl FactorishState {
     }
 
     pub fn delta_viewport_pos(&mut self, x: f64, y: f64) -> Result<(), JsValue> {
-        self.viewport_x += x / self.view_scale / 32.;
-        self.viewport_y += y / self.view_scale / 32.;
+        self.viewport.x += x / self.viewport.scale / 32.;
+        self.viewport.y += y / self.viewport.scale / 32.;
         Ok(())
     }
 
@@ -2719,8 +2743,8 @@ impl FactorishState {
     fn new_popup_text(&mut self, text: String, x: f64, y: f64) {
         let pop = PopupText {
             text: text.to_string(),
-            x: (x + self.viewport_x * TILE_SIZE) * self.view_scale,
-            y: (y + self.viewport_y * TILE_SIZE) * self.view_scale,
+            x: (x + self.viewport.x * TILE_SIZE) * self.viewport.scale,
+            y: (y + self.viewport.y * TILE_SIZE) * self.viewport.scale,
             life: POPUP_TEXT_LIFE,
         };
         self.popup_texts.push(pop);
@@ -2737,8 +2761,8 @@ impl FactorishState {
         context.clear_rect(0., 0., self.viewport_width, self.viewport_height);
 
         context.save();
-        context.scale(self.view_scale, self.view_scale)?;
-        context.translate(self.viewport_x * 32., self.viewport_y * 32.)?;
+        context.scale(self.viewport.scale, self.viewport.scale)?;
+        context.translate(self.viewport.x * 32., self.viewport.y * 32.)?;
 
         (|| {
             fn unwrap_img(img: &Option<ImageBundle>) -> Result<&ImageBundle, JsValue> {
@@ -2751,12 +2775,12 @@ impl FactorishState {
             let img_copper = unwrap_img(&self.image_copper)?;
             let img_stone = unwrap_img(&self.image_stone)?;
             // let mut cell_draws = 0;
-            let left = (-self.viewport_x).max(0.) as u32;
-            let top = (-self.viewport_y).max(0.) as u32;
-            let right = (((self.viewport_width / 32. / self.view_scale - self.viewport_x) + 1.)
+            let left = (-self.viewport.x).max(0.) as u32;
+            let top = (-self.viewport.y).max(0.) as u32;
+            let right = (((self.viewport_width / 32. / self.viewport.scale - self.viewport.x) + 1.)
                 as u32)
                 .min(self.width);
-            let bottom = (((self.viewport_height / 32. / self.view_scale - self.viewport_y)
+            let bottom = (((self.viewport_height / 32. / self.viewport.scale - self.viewport.y)
                 + 1.) as u32)
                 .min(self.height);
             for y in top..bottom {
@@ -3021,8 +3045,8 @@ impl FactorishState {
         context.set_line_width(1.);
         let viewport = self.get_viewport();
         context.stroke_rect(
-            -self.viewport_x,
-            -self.viewport_y,
+            -self.viewport.x,
+            -self.viewport.y,
             viewport.0 / 32.,
             viewport.1 / 32.,
         );
