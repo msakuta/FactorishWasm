@@ -54,6 +54,7 @@ mod ore_mine;
 mod perlin_noise;
 mod pipe;
 mod power_network;
+mod scenarios;
 mod splitter;
 mod steam_engine;
 mod structure;
@@ -61,6 +62,7 @@ mod transport_belt;
 mod utils;
 mod water_well;
 
+use crate::scenarios::electric_bench;
 use assembler::Assembler;
 use boiler::Boiler;
 use chest::Chest;
@@ -638,67 +640,11 @@ impl FactorishState {
     ) -> Result<FactorishState, JsValue> {
         console_log!("FactorishState constructor");
 
-        fn wrap_structure(s: StructureBoxed) -> StructureEntry {
-            StructureEntry {
-                gen: 0,
-                dynamic: Some(s),
-            }
-        }
-
         let mut tool_belt = [None; 10];
         tool_belt[0] = Some(ItemType::OreMine);
         tool_belt[1] = Some(ItemType::Inserter);
         tool_belt[2] = Some(ItemType::TransportBelt);
         tool_belt[3] = Some(ItemType::Furnace);
-
-        let mut structures: Vec<StructureEntry> = vec![
-            wrap_structure(Box::new(TransportBelt::new(10, 3, Rotation::Left))),
-            wrap_structure(Box::new(TransportBelt::new(11, 3, Rotation::Left))),
-            wrap_structure(Box::new(TransportBelt::new(12, 3, Rotation::Left))),
-            wrap_structure(Box::new(OreMine::new(12, 2, Rotation::Bottom))),
-            wrap_structure(Box::new(Furnace::new(&Position::new(8, 3)))),
-            wrap_structure(Box::new(Assembler::new(&Position::new(6, 3)))),
-            wrap_structure(Box::new(WaterWell::new(&Position::new(14, 5)))),
-            wrap_structure(Box::new(Boiler::new(&Position::new(13, 5)))),
-            wrap_structure(Box::new(SteamEngine::new(&Position::new(12, 5)))),
-        ];
-        use std::iter::Iterator;
-        structures.extend((10..=100).filter_map(|x| {
-            if x % 2 == 0 {
-                let p = Box::new(Assembler::new(&Position::new(x, 10)));
-                Some(wrap_structure(p as Box<dyn Structure>))
-            } else {
-                let p = Box::new(ElectPole::new(&Position::new(x, 10)));
-                Some(wrap_structure(p as Box<dyn Structure>))
-            }
-        }));
-        structures.extend((10..=100).map(|x| {
-            wrap_structure(if x % 2 == 0 {
-                Box::new(Assembler::new(&Position::new(x, 100))) as Box<dyn Structure>
-            } else {
-                Box::new(ElectPole::new(&Position::new(x, 100))) as Box<dyn Structure>
-            })
-        }));
-        structures.extend(
-            (11..=99).map(|x| {
-                if x % 2 == 0 {
-                    wrap_structure(
-                        Box::new(Assembler::new(&Position::new(10, x))) as Box<dyn Structure>
-                    )
-                } else {
-                    wrap_structure(
-                        Box::new(ElectPole::new(&Position::new(10, x))) as Box<dyn Structure>
-                    )
-                }
-            }),
-        );
-        structures.extend((11..=99).map(|x| {
-            wrap_structure(if x % 2 == 0 {
-                Box::new(Assembler::new(&Position::new(100, x))) as Box<dyn Structure>
-            } else {
-                Box::new(ElectPole::new(&Position::new(100, x))) as Box<dyn Structure>
-            })
-        }));
 
         let mut ret = FactorishState {
             delta_time: 0.1,
@@ -826,7 +772,7 @@ impl FactorishState {
                 calculate_back_image(&mut ret, width, height);
                 ret
             },
-            structures,
+            structures: electric_bench(),
             selected_structure_inventory: None,
             ore_harvesting: None,
             drop_items: vec![],
@@ -837,61 +783,7 @@ impl FactorishState {
             // on_show_inventory,
         };
 
-        let positions = ret
-            .structures
-            .iter()
-            .map(|s| s.dynamic.as_deref().map(|d| *d.position()))
-            .flatten()
-            .collect::<Vec<_>>();
-        for position in positions {
-            ret.update_fluid_connections(&position).unwrap();
-        }
-
-        for s in ret
-            .structures
-            .iter_mut()
-            .filter_map(|s| s.dynamic.as_deref_mut())
-        {
-            s.select_recipe(0).ok();
-        }
-
-        let structures = std::mem::take(&mut ret.structures);
-        for i in 0..structures.len()
-        {
-            for j in i+1..structures.len()
-            {
-                let structure1 = structures[i].dynamic.as_deref().unwrap();
-                let structure2 = structures[j].dynamic.as_deref().unwrap();
-                if (structure1.power_sink() && structure2.power_source()
-                    || structure1.power_source() && structure2.power_sink())
-                    && structure1.position().distance(structure2.position())
-                        <= structure1.wire_reach().min(structure2.wire_reach()) as i32
-                {
-                    let add = PowerWire(StructureId{ id: i as u32, gen: 0 }, StructureId{ id: j as u32, gen: 0 });
-                    if ret.power_wires.iter().find(|p| **p == add).is_none() {
-                        ret.power_wires.push(add);
-                    }
-                }
-            }
-        }
-        ret.structures = structures;
-
-        ret.power_networks = build_power_networks(&StructureDynIter::new_all(&mut ret.structures), &ret.power_wires);
-        console_log!("power: {:?}", ret.power_networks.iter().map(|nw| format!("wires {} sources {} sinks {}", nw.wires.len(), nw.sources.len(), nw.sinks.len())).collect::<Vec<_>>());
-        console_log!("Assemblers: {}", ret.structure_iter().filter(|s| s.name() == "Assembler").count());
-        console_log!("ElectPole: {}", ret.structure_iter().filter(|s| s.name() == "Electric Pole").count());
-
-        for i in 0..ret.structures.len() {
-            let (s, others) = StructureDynIter::new(&mut ret.structures, i)?;
-            let id = StructureId {
-                id: i as u32,
-                gen: s.gen,
-            };
-            s.dynamic
-                .as_deref_mut()
-                .map(|d| d.on_construction_self(id, &others, true))
-                .unwrap_or(Ok(()))?;
-        }
+        ret.update_cache()?;
 
         Ok(ret)
     }
