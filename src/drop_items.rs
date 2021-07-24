@@ -98,12 +98,14 @@ pub(crate) struct GenEntry<T> {
     pub item: Option<T>,
 }
 
+pub(crate) type DropItemIndex = HashMap<(i32, i32), Vec<GenId>>;
+
 pub(crate) const INDEX_CHUNK_SIZE: usize = 16;
 const INDEX_GRID_SIZE: usize = INDEX_CHUNK_SIZE * TILE_SIZE_I as usize;
 const INDEX_GRID_SIZE_I: i32 = INDEX_GRID_SIZE as i32;
 
-pub(crate) fn build_index(items: &[DropItemEntry]) -> HashMap<(i32, i32), Vec<GenId>> {
-    let mut ret = HashMap::<(i32, i32), Vec<GenId>>::new();
+pub(crate) fn build_index(items: &[DropItemEntry]) -> DropItemIndex {
+    let mut ret = DropItemIndex::new();
     for (id, item) in items
         .iter()
         .enumerate()
@@ -139,6 +141,27 @@ pub(crate) fn hit_check(
     false
 }
 
+pub(crate) fn update_index(
+    index: &mut DropItemIndex,
+    id: GenId,
+    old_x: i32,
+    old_y: i32,
+    x: i32,
+    y: i32,
+) {
+    let old_chunk = (old_x / INDEX_GRID_SIZE_I, old_y / INDEX_GRID_SIZE_I);
+    let new_chunk = (x / INDEX_GRID_SIZE_I, y / INDEX_GRID_SIZE_I);
+    if old_chunk == new_chunk {
+        return;
+    }
+    index.get_mut(&old_chunk).map(|chunk| {
+        if let Some((remove_idx, _)) = chunk.iter().enumerate().find(|(_, item)| **item == id) {
+            chunk.swap_remove(remove_idx);
+        }
+    });
+    index.entry(new_chunk).or_default().push(id);
+}
+
 fn intersecting_chunks(x: i32, y: i32) -> [i32; 4] {
     let left = (x - DROP_ITEM_SIZE_I).div_euclid(INDEX_GRID_SIZE_I);
     let top = (y - DROP_ITEM_SIZE_I).div_euclid(INDEX_GRID_SIZE_I);
@@ -150,7 +173,7 @@ fn intersecting_chunks(x: i32, y: i32) -> [i32; 4] {
 /// Check whether given coordinates hits some object
 pub(crate) fn hit_check_with_index(
     items: &[DropItemEntry],
-    index: &HashMap<(i32, i32), Vec<DropItemId>>,
+    index: &DropItemIndex,
     x: i32,
     y: i32,
     ignore: Option<DropItemId>,

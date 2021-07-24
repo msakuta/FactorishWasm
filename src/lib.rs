@@ -29,8 +29,8 @@ mod utils;
 mod water_well;
 
 use crate::drop_items::{
-    build_index, drop_item_id_iter, drop_item_iter, hit_check, hit_check_with_index, DropItem,
-    DropItemEntry, DropItemId, DROP_ITEM_SIZE, INDEX_CHUNK_SIZE,
+    build_index, drop_item_id_iter, drop_item_iter, hit_check, hit_check_with_index, update_index,
+    DropItem, DropItemEntry, DropItemId, DROP_ITEM_SIZE, INDEX_CHUNK_SIZE,
 };
 use crate::{
     scenarios::select_scenario,
@@ -110,6 +110,12 @@ fn document() -> web_sys::Document {
 #[allow(dead_code)]
 fn body() -> web_sys::HtmlElement {
     document().body().expect("document should have a body")
+}
+
+fn performance() -> web_sys::Performance {
+    window()
+        .performance()
+        .expect("performance should be available")
 }
 
 const TILE_SIZE: f64 = 32.;
@@ -402,6 +408,35 @@ impl Default for Viewport {
     }
 }
 
+struct PerfStats {
+    value: f64,
+    count: usize,
+}
+
+impl Default for PerfStats {
+    fn default() -> Self {
+        Self {
+            value: 0.,
+            count: 0,
+        }
+    }
+}
+
+impl PerfStats {
+    fn add(&mut self, sample: f64) {
+        self.value += sample;
+        self.count += 1;
+    }
+
+    fn average(&self) -> f64 {
+        if self.count == 0 {
+            0.
+        } else {
+            self.value / self.count as f64
+        }
+    }
+}
+
 #[wasm_bindgen]
 pub struct FactorishState {
     #[allow(dead_code)]
@@ -437,6 +472,10 @@ pub struct FactorishState {
     debug_bbox: bool,
     debug_fluidbox: bool,
     debug_power_network: bool,
+
+    // Performance measurements
+    perf_build_index: PerfStats,
+    perf_drop_items: PerfStats,
 
     // on_show_inventory: js_sys::Function,
     image_dirt: Option<ImageBundle>,
@@ -545,6 +584,8 @@ impl FactorishState {
             debug_bbox: false,
             debug_fluidbox: false,
             debug_power_network: false,
+            perf_build_index: PerfStats::default(),
+            perf_drop_items: PerfStats::default(),
             image_dirt: None,
             image_back_tiles: None,
             image_weeds: None,
@@ -1151,7 +1192,10 @@ impl FactorishState {
             }
         }
 
-        let index = build_index(&self.drop_items);
+        let start_index = performance().now();
+        let mut index = build_index(&self.drop_items);
+        self.perf_build_index.add(performance().now() - start_index);
+        console_log!("build_index: {}", self.perf_build_index.average());
         for i in 0..self.drop_items.len() {
             // (id, item) in drop_item_id_iter_mut(&mut self.drop_items) {
             let entry = &self.drop_items[i];
@@ -1203,6 +1247,7 @@ impl FactorishState {
                             } else {
                                 continue;
                             }
+                            update_index(&mut index, id, item.x, item.y, moved_x, moved_y);
                             let item = self.drop_items[i].item.as_mut().unwrap();
                             item.x = moved_x;
                             item.y = moved_y;
@@ -1217,6 +1262,8 @@ impl FactorishState {
                 }
             }
         }
+        self.perf_drop_items.add(performance().now() - start_index);
+        console_log!("drop_items: {}", self.perf_drop_items.average());
 
         self.structures = structures;
 

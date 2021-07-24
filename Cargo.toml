@@ -58,6 +58,7 @@ features = [
     'ImageData',
     'Window',
     'Storage',
+    'Performance', 'PerformanceTiming'
 ]
 
 [package.metadata.wasm-pack.profile.release]
