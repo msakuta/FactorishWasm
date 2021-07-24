@@ -43,7 +43,7 @@ impl FactorishState {
         let get_max = |vd: &VecDeque<f64>| vd.iter().fold(1.0f64, |a, b| a.max(*b));
         let get_avg = |vd: &VecDeque<f64>| vd.iter().sum::<f64>() / vd.len() as f64;
 
-        let max = get_max(&self.perf_build_index.values)
+        let max = get_max(&self.perf_structures.values)
             .max(get_max(&self.perf_drop_items.values))
             .max(get_max(&self.perf_simulate.values))
             .max(get_max(&self.perf_render.values));
@@ -61,7 +61,7 @@ impl FactorishState {
         };
 
         context.set_stroke_style(&JsValue::from_str("#00007f"));
-        plot_series(&self.perf_build_index.values);
+        plot_series(&self.perf_structures.values);
 
         context.set_stroke_style(&JsValue::from_str("#7f0000"));
         plot_series(&self.perf_drop_items.values);
@@ -76,7 +76,7 @@ impl FactorishState {
         plot_series(&self.perf_render.values);
 
         context.set_stroke_style(&JsValue::from_str("#7f7fff"));
-        plot_series(&self.perf_build_index.ma_values);
+        plot_series(&self.perf_structures.ma_values);
 
         context.set_stroke_style(&JsValue::from_str("#ff3f3f"));
         plot_series(&self.perf_drop_items.ma_values);
@@ -97,8 +97,8 @@ impl FactorishState {
                 get_avg(&self.perf_drop_items.values)
             ),
             &js_str!(
-                "Build index Avg: {:.3} ms",
-                get_avg(&self.perf_build_index.values)
+                "Structures Avg: {:.3} ms",
+                get_avg(&self.perf_structures.values)
             ),
             &js_str!(
                 "Simulate Avg: {:.3} ms",

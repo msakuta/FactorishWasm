@@ -449,7 +449,7 @@ pub struct FactorishState {
     debug_power_network: bool,
 
     // Performance measurements
-    perf_build_index: PerfStats,
+    perf_structures: PerfStats,
     perf_drop_items: PerfStats,
     perf_simulate: PerfStats,
     perf_minimap: PerfStats,
@@ -562,7 +562,7 @@ impl FactorishState {
             debug_bbox: false,
             debug_fluidbox: false,
             debug_power_network: false,
-            perf_build_index: PerfStats::default(),
+            perf_structures: PerfStats::default(),
             perf_drop_items: PerfStats::default(),
             perf_simulate: PerfStats::default(),
             perf_minimap: PerfStats::default(),
@@ -1158,6 +1158,7 @@ impl FactorishState {
             self.popup_texts.remove(*i);
         }
 
+        let start_structures = performance().now();
         // This is silly way to avoid borrow checker that temporarily move the structures
         // away from self so that they do not claim mutable borrow twice, but it works.
         let mut structures = std::mem::take(&mut self.structures);
@@ -1176,10 +1177,11 @@ impl FactorishState {
                 );
             }
         }
+        self.perf_structures
+            .add(performance().now() - start_structures);
 
         let start_index = performance().now();
         let index = &mut self.drop_items_index; //build_index(&self.drop_items);
-        self.perf_build_index.add(performance().now() - start_index);
         for i in 0..self.drop_items.len() {
             // (id, item) in drop_item_id_iter_mut(&mut self.drop_items) {
             let entry = &self.drop_items[i];
