@@ -29,8 +29,8 @@ mod utils;
 mod water_well;
 
 use crate::drop_items::{
-    drop_item_id_iter, drop_item_iter, hit_check, DropItem, DropItemEntry, DropItemId, SplitSlice,
-    DROP_ITEM_SIZE,
+    build_index, drop_item_id_iter, drop_item_iter, hit_check, hit_check_with_index, DropItem,
+    DropItemEntry, DropItemId, SplitSlice, DROP_ITEM_SIZE,
 };
 use crate::{
     scenarios::select_scenario,
@@ -1151,6 +1151,8 @@ impl FactorishState {
             }
         }
 
+        let index = drop_items::build_index(&self.drop_items);
+        console_log!("Index: {}", index.len());
         for i in 0..self.drop_items.len() {
             // (id, item) in drop_item_id_iter_mut(&mut self.drop_items) {
             let entry = &self.drop_items[i];
@@ -1178,7 +1180,13 @@ impl FactorishState {
                 {
                     match item_response_result.0 {
                         ItemResponse::Move(moved_x, moved_y) => {
-                            if hit_check(&self.drop_items, moved_x, moved_y, Some(id)) {
+                            if hit_check_with_index(
+                                &self.drop_items,
+                                &index,
+                                moved_x,
+                                moved_y,
+                                Some(id),
+                            ) {
                                 continue;
                             }
                             let position = Position {

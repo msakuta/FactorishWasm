@@ -1,5 +1,8 @@
+use crate::TILE_SIZE;
+
 use super::{dyn_iter::DynIter, items::ItemType, Position, TILE_SIZE_I};
 use serde::{Deserialize, Serialize};
+use std::cmp::Ordering;
 use wasm_bindgen::prelude::*;
 
 pub(crate) const DROP_ITEM_SIZE: f64 = 8.;
@@ -80,7 +83,7 @@ pub(crate) fn drop_item_iter(drop_items: &[DropItemEntry]) -> impl Iterator<Item
         .filter_map(|item| Some(item.item.as_ref()?))
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Clone, Copy)]
+#[derive(Serialize, Deserialize, PartialEq, Clone, Copy, Debug)]
 pub(crate) struct GenId {
     pub id: u32,
     pub gen: u32,
@@ -235,6 +238,16 @@ impl<'a, T> DynIter for SplitSlice<'a, T> {
     }
 }
 
+pub(crate) fn build_index(items: &[DropItemEntry]) -> Vec<GenId> {
+    let mut sorted = items
+        .iter()
+        .enumerate()
+        .filter_map(|(i, item)| Some((GenId::new(i as u32, item.gen), item.item.as_ref()?)))
+        .collect::<Vec<_>>();
+    sorted.sort_by_key(|(_, item)| item.x);
+    sorted.iter().map(|(id, item)| *id).collect()
+}
+
 /// Check whether given coordinates hits some object
 pub(crate) fn hit_check(
     items: &[DropItemEntry],
@@ -256,4 +269,125 @@ pub(crate) fn hit_check(
         }
     }
     false
+}
+
+/// Check whether given coordinates hits some object
+pub(crate) fn hit_check_with_index(
+    items: &[DropItemEntry],
+    index: &[DropItemId],
+    x: i32,
+    y: i32,
+    ignore: Option<DropItemId>,
+) -> bool {
+    let start = index.binary_search_by(|id| {
+        if id.gen != items[id.id as usize].gen {
+            return Ordering::Less;
+        }
+        items
+            .get(id.id as usize)
+            .and_then(|item| item.item.as_ref())
+            .map(|item| {
+                if item.x < x {
+                    Ordering::Less
+                } else if x < item.x {
+                    Ordering::Greater
+                } else {
+                    Ordering::Equal
+                }
+            })
+            .unwrap_or(Ordering::Less)
+    });
+
+    println!("x: {}, start: {:?}", x, start);
+    if let Ok(start) | Err(start) = start {
+        for num in 0.. {
+            if start < num {
+                break;
+            }
+            let left = index
+                .get((start - num) as usize)
+                .and_then(|id| Some((id, items.get(id.id as usize)?)))
+                .and_then(|(id, entry)| Some((id, entry.item.as_ref()?)));
+            println!("  start - num: {:?}, {:?}", start - num, left.is_some());
+            let left_lim = if let Some((id, item)) = left {
+                println!("  x, y: ({:?} {:?}), ({:?}, {:?})", item.x, item.y, x, y);
+                if Some(*id) != ignore && (x - item.x).abs() < DROP_ITEM_SIZE_I && (y - item.y).abs() < DROP_ITEM_SIZE_I {
+                    return true;
+                } 
+                DROP_ITEM_SIZE_I < (x - item.x).abs()
+            } else {
+                false
+            };
+
+            if items.len() < start + num {
+                break;
+            }
+            let right = index
+                .get((start + num) as usize)
+                .and_then(|id| Some((id, items.get(id.id as usize)?)))
+                .and_then(|(id, entry)| Some((id, entry.item.as_ref()?)));
+            println!("  start + num: {:?}, {:?}", start + num, right.is_some());
+            let right_lim = if let Some((id, item)) = right {
+                println!("  x, y: ({:?} {:?}), ({:?}, {:?})", item.x, item.y, x, y);
+                if Some(*id) != ignore && (x - item.x).abs() < DROP_ITEM_SIZE_I && (y - item.y).abs() < DROP_ITEM_SIZE_I {
+                    return true;
+                }
+                DROP_ITEM_SIZE_I < (x - item.x).abs()
+            } else {
+                false
+            };
+
+            if left_lim && right_lim {
+                break;
+            }
+        }
+    }
+    false
+}
+
+#[test]
+fn test_hit_check() {
+    fn tr(x: i32) -> i32 {
+        x * 4
+    }
+ 
+    let items = vec![
+        (4, 1),
+        (6, 1),
+        (3, 1),
+        (1, 1),
+        (7, 1),
+        (5, 1),
+        (2, 1),
+        (8, 1),
+        (3, 10),
+    ].into_iter().map(|(x, y)| {
+        DropItemEntry {
+            gen: 0,
+            item: Some(DropItem {
+                type_: ItemType::CoalOre,
+                x: tr(x),
+                y: tr(y),
+            })
+        }
+    }).collect::<Vec<_>>();
+
+    let index = build_index(&items);
+
+    assert_eq!(
+        index
+            .iter()
+            .map(|i| items.get(i.id as usize).and_then(|entry| entry.item.as_ref()).map(|item| item.x).unwrap())
+            .collect::<Vec<_>>(),
+        vec![1,2, 3, 3, 4,  5, 6, 7, 8].into_iter().map(tr).collect::<Vec<_>>()
+    );
+
+    println!("index: {:?}, {:?}", index,         index
+    .iter()
+    .map(|i| items.get(i.id as usize).and_then(|entry| entry.item.as_ref()).map(|item| item.x).unwrap())
+    .collect::<Vec<_>>());
+
+    assert_eq!(hit_check_with_index(&items, &index, tr(3), tr(1), None), true);
+    assert_eq!(hit_check_with_index(&items, &index, tr(3), tr(10), None), true);
+    assert_eq!(hit_check_with_index(&items, &index, tr(3), tr(5), None), true);
 }
