@@ -1,5 +1,6 @@
 use super::{
     draw_direction_arrow,
+    drop_items::{drop_item_id_iter, hit_check},
     inventory::{Inventory, InventoryTrait},
     items::ItemType,
     structure::{RotateErr, Structure, StructureDynIter, StructureId},
@@ -218,7 +219,6 @@ impl Structure for OreMine {
                             if let Ok(val) = output(state, *item.0, &self.position) {
                                 structure
                                     .input(&DropItem {
-                                        id: 0,
                                         type_: *item.0,
                                         x: output_position.x,
                                         y: output_position.y,
@@ -242,7 +242,7 @@ impl Structure for OreMine {
                 }
                 let drop_x = output_position.x * TILE_SIZE_I + TILE_SIZE_I / 2;
                 let drop_y = output_position.y * TILE_SIZE_I + TILE_SIZE_I / 2;
-                if !state.hit_check(drop_x, drop_y, None)
+                if !hit_check(drop_item_id_iter(&state.drop_items), drop_x, drop_y, None)
                     && state
                         .tile_at(&output_position)
                         .map(|cell| !cell.water)
