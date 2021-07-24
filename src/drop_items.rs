@@ -236,20 +236,23 @@ impl<'a, T> DynIter for SplitSlice<'a, T> {
 }
 
 /// Check whether given coordinates hits some object
-pub(crate) fn hit_check<'a>(
-    iter: impl Iterator<Item = (DropItemId, &'a DropItem)>,
+pub(crate) fn hit_check(
+    items: &[DropItemEntry],
     x: i32,
     y: i32,
     ignore: Option<DropItemId>,
 ) -> bool {
-    for (id, item) in iter {
-        if let Some(ignore_id) = ignore {
-            if ignore_id == id {
-                continue;
+    for (id, entry) in items.iter().enumerate() {
+        if let Some(item) = entry.item.as_ref() {
+            if let Some(ignore_id) = ignore {
+                let id = DropItemId::new(id as u32, entry.gen);
+                if ignore_id == id {
+                    continue;
+                }
             }
-        }
-        if (x - item.x).abs() < DROP_ITEM_SIZE_I && (y - item.y).abs() < DROP_ITEM_SIZE_I {
-            return true;
+            if (x - item.x).abs() < DROP_ITEM_SIZE_I && (y - item.y).abs() < DROP_ITEM_SIZE_I {
+                return true;
+            }
         }
     }
     false

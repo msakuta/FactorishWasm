@@ -1154,8 +1154,8 @@ impl FactorishState {
         let mut to_remove = vec![];
         for i in 0..self.drop_items.len() {
             // (id, item) in drop_item_id_iter_mut(&mut self.drop_items) {
-            let (entry, others) = SplitSlice::new(&mut self.drop_items, i)?;
-            let item = if let Some(item) = entry.item.as_mut() {
+            let entry = &self.drop_items[i];
+            let item = if let Some(item) = entry.item.as_ref() {
                 item
             } else {
                 continue;
@@ -1179,7 +1179,7 @@ impl FactorishState {
                 {
                     match item_response_result.0 {
                         ItemResponse::Move(moved_x, moved_y) => {
-                            if hit_check(others.dyn_iter_id(), moved_x, moved_y, Some(id)) {
+                            if hit_check(&self.drop_items, moved_x, moved_y, Some(id)) {
                                 continue;
                             }
                             let position = Position {
@@ -1197,6 +1197,7 @@ impl FactorishState {
                             } else {
                                 continue;
                             }
+                            let item = self.drop_items[i].item.as_mut().unwrap();
                             item.x = moved_x;
                             item.y = moved_y;
                         }
@@ -1381,7 +1382,7 @@ impl FactorishState {
             }
             let item = DropItem::new(type_, pos.x, pos.y);
             // return board[c + r * ysize].structure.input(obj);
-            if hit_check(drop_item_id_iter(&self.drop_items), item.x, item.y, None) {
+            if hit_check(&self.drop_items, item.x, item.y, None) {
                 return Err(NewObjectErr::BlockedByItem);
             }
             // obj.addElem();

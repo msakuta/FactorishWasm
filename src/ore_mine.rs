@@ -242,7 +242,7 @@ impl Structure for OreMine {
                 }
                 let drop_x = output_position.x * TILE_SIZE_I + TILE_SIZE_I / 2;
                 let drop_y = output_position.y * TILE_SIZE_I + TILE_SIZE_I / 2;
-                if !hit_check(drop_item_id_iter(&state.drop_items), drop_x, drop_y, None)
+                if !hit_check(&state.drop_items, drop_x, drop_y, None)
                     && state
                         .tile_at(&output_position)
                         .map(|cell| !cell.water)
