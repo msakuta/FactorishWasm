@@ -4,27 +4,28 @@ use web_sys::CanvasRenderingContext2d;
 
 use super::FactorishState;
 
+const MOVING_AVERAGE: usize = 10;
+const PERF_HISTORY: usize = 200;
+
+#[derive(Default)]
 pub(crate) struct PerfStats {
     values: VecDeque<f64>,
+    ma_values: VecDeque<f64>,
     total: f64,
     count: usize,
-}
-
-impl Default for PerfStats {
-    fn default() -> Self {
-        Self {
-            values: VecDeque::new(),
-            total: 0.,
-            count: 0,
-        }
-    }
 }
 
 impl PerfStats {
     pub(crate) fn add(&mut self, sample: f64) {
         self.values.push_back(sample);
-        while self.values.len() > 200 {
+        while self.values.len() > PERF_HISTORY {
             self.values.pop_front();
+        }
+        let sum: f64 = self.values.iter().rev().take(MOVING_AVERAGE).sum();
+        let len = self.values.iter().rev().take(MOVING_AVERAGE).len();
+        self.ma_values.push_back(sum / len as f64);
+        while self.ma_values.len() > PERF_HISTORY {
+            self.ma_values.pop_front();
         }
         self.total += sample;
         self.count += 1;
@@ -58,14 +59,23 @@ impl FactorishState {
             context.stroke();
         };
 
-        context.set_stroke_style(&JsValue::from_str("#7f7fff"));
+        context.set_stroke_style(&JsValue::from_str("#00007f"));
         plot_series(&self.perf_build_index.values);
 
-        context.set_stroke_style(&JsValue::from_str("#ff3f3f"));
+        context.set_stroke_style(&JsValue::from_str("#7f0000"));
         plot_series(&self.perf_drop_items.values);
 
-        context.set_stroke_style(&JsValue::from_str("#00ff00"));
+        context.set_stroke_style(&JsValue::from_str("#007f00"));
         plot_series(&self.perf_simulate.values);
+
+        context.set_stroke_style(&JsValue::from_str("#7f7fff"));
+        plot_series(&self.perf_build_index.ma_values);
+
+        context.set_stroke_style(&JsValue::from_str("#ff3f3f"));
+        plot_series(&self.perf_drop_items.ma_values);
+
+        context.set_stroke_style(&JsValue::from_str("#00ff00"));
+        plot_series(&self.perf_simulate.ma_values);
 
         js_sys::Array::of4(
             &js_str!("Max: {:.3} ms", max),
