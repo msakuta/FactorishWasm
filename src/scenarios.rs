@@ -2,7 +2,7 @@ use super::{
     assembler::Assembler,
     boiler::Boiler,
     chest::Chest,
-    drop_items::DropItemEntry,
+    drop_items::{build_index, DropItemEntry},
     elect_pole::ElectPole,
     furnace::Furnace,
     inserter::Inserter,
@@ -305,6 +305,8 @@ impl FactorishState {
                 .map(|d| d.on_construction_self(id, &others, true))
                 .unwrap_or(Ok(()))?;
         }
+
+        self.drop_items_index = build_index(&self.drop_items);
 
         Ok(())
     }

@@ -141,6 +141,11 @@ pub(crate) fn hit_check(
     false
 }
 
+pub(crate) fn add_index(index: &mut DropItemIndex, id: GenId, x: i32, y: i32) {
+    let new_chunk = (x / INDEX_GRID_SIZE_I, y / INDEX_GRID_SIZE_I);
+    index.entry(new_chunk).or_default().push(id);
+}
+
 pub(crate) fn update_index(
     index: &mut DropItemIndex,
     id: GenId,
@@ -154,12 +159,17 @@ pub(crate) fn update_index(
     if old_chunk == new_chunk {
         return;
     }
-    index.get_mut(&old_chunk).map(|chunk| {
+    remove_index(index, id, old_x, old_y);
+    index.entry(new_chunk).or_default().push(id);
+}
+
+pub(crate) fn remove_index(index: &mut DropItemIndex, id: GenId, old_x: i32, old_y: i32) {
+    let old_chunk = (old_x / INDEX_GRID_SIZE_I, old_y / INDEX_GRID_SIZE_I);
+    if let Some(chunk) = index.get_mut(&old_chunk) {
         if let Some((remove_idx, _)) = chunk.iter().enumerate().find(|(_, item)| **item == id) {
             chunk.swap_remove(remove_idx);
         }
-    });
-    index.entry(new_chunk).or_default().push(id);
+    }
 }
 
 fn intersecting_chunks(x: i32, y: i32) -> [i32; 4] {
@@ -186,10 +196,13 @@ pub(crate) fn hit_check_with_index(
                     if Some(*id) == ignore {
                         continue;
                     }
-                    if let Some(item) = items
-                        .get(id.id as usize)
-                        .and_then(|entry| entry.item.as_ref())
-                    {
+                    if let Some(item) = items.get(id.id as usize).and_then(|entry| {
+                        if entry.gen != id.gen {
+                            None
+                        } else {
+                            entry.item.as_ref()
+                        }
+                    }) {
                         if (x - item.x).abs() < DROP_ITEM_SIZE_I
                             && (y - item.y).abs() < DROP_ITEM_SIZE_I
                         {

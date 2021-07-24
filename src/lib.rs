@@ -31,8 +31,9 @@ mod water_well;
 
 use crate::{
     drop_items::{
-        build_index, drop_item_id_iter, drop_item_iter, hit_check, hit_check_with_index,
-        update_index, DropItem, DropItemEntry, DropItemId, DROP_ITEM_SIZE, INDEX_CHUNK_SIZE,
+        add_index, build_index, drop_item_id_iter, drop_item_iter, hit_check, hit_check_with_index,
+        remove_index, update_index, DropItem, DropItemEntry, DropItemId, DropItemIndex,
+        DROP_ITEM_SIZE, INDEX_CHUNK_SIZE,
     },
     perf::PerfStats,
     scenarios::select_scenario,
@@ -424,6 +425,7 @@ pub struct FactorishState {
     structures: Vec<StructureEntry>,
     selected_structure_inventory: Option<Position>,
     drop_items: Vec<DropItemEntry>,
+    drop_items_index: DropItemIndex,
     tool_belt: [Option<ItemType>; 10],
     power_networks: Vec<PowerNetwork>,
 
@@ -604,6 +606,7 @@ impl FactorishState {
             selected_structure_inventory: None,
             ore_harvesting: None,
             drop_items,
+            drop_items_index: DropItemIndex::default(),
             on_player_update,
             temp_ents: vec![],
             rng: Xor128::new(3142125),
@@ -893,6 +896,8 @@ impl FactorishState {
             })
             .collect::<Result<Vec<DropItemEntry>, JsValue>>()?;
 
+        self.drop_items_index = build_index(&self.drop_items);
+
         self.tool_belt = from_value(json_take(&mut json, "tool_belt")?)?;
 
         // Redraw minimap
@@ -1173,7 +1178,7 @@ impl FactorishState {
         }
 
         let start_index = performance().now();
-        let mut index = build_index(&self.drop_items);
+        let index = &mut self.drop_items_index; //build_index(&self.drop_items);
         self.perf_build_index.add(performance().now() - start_index);
         for i in 0..self.drop_items.len() {
             // (id, item) in drop_item_id_iter_mut(&mut self.drop_items) {
@@ -1226,12 +1231,13 @@ impl FactorishState {
                             } else {
                                 continue;
                             }
-                            update_index(&mut index, id, item.x, item.y, moved_x, moved_y);
+                            update_index(index, id, item.x, item.y, moved_x, moved_y);
                             let item = self.drop_items[i].item.as_mut().unwrap();
                             item.x = moved_x;
                             item.y = moved_y;
                         }
                         ItemResponse::Consume => {
+                            remove_index(index, id, item.x, item.y);
                             self.drop_items[i].item = None;
                         }
                     }
@@ -1326,7 +1332,6 @@ impl FactorishState {
 
     fn remove_item(&mut self, id: DropItemId) -> Option<DropItem> {
         if let Some(entry) = self.drop_items.get_mut(id.id as usize) {
-            entry.gen += 1;
             entry.item.take()
         } else {
             None
@@ -1414,17 +1419,29 @@ impl FactorishState {
             if hit_check(&self.drop_items, item.x, item.y, None) {
                 return Err(NewObjectErr::BlockedByItem);
             }
-            // obj.addElem();
+            let (x, y) = (item.x, item.y);
             let entry = self
                 .drop_items
                 .iter_mut()
-                .find(|entry| entry.item.is_none());
-            if let Some(entry) = entry {
+                .enumerate()
+                .find(|(_, entry)| entry.item.is_none());
+            let id = if let Some((i, entry)) = entry {
                 entry.item = Some(item);
+                entry.gen += 1;
+                DropItemId {
+                    id: i as u32,
+                    gen: entry.gen,
+                }
             } else {
                 let obj = DropItemEntry::from_value(item);
+                let i = self.drop_items.len();
                 self.drop_items.push(obj);
-            }
+                DropItemId {
+                    id: i as u32,
+                    gen: 0,
+                }
+            };
+            add_index(&mut self.drop_items_index, id, x, y);
             return Ok(());
         }
         Err(NewObjectErr::OutOfMap)
