@@ -309,6 +309,7 @@ let ysize = 128;
     const perfLabel = document.createElement('div');
     perfLabel.style.position = 'absolute';
     perfLabel.style.pointerEvents = "none";
+    perfLabel.style.textAlign = "justify";
     perfLabel.style.left = '8px';
     perfLabel.style.bottom = '216px';
     perfLabel.style.padding = "4px";
@@ -1267,8 +1268,14 @@ let ysize = 128;
         sim.render_minimap(miniMapContext);
 
         if(showPerfGraph.checked){
-            const maxVal = sim.render_perf(perfContext);
-            perfLabel.innerHTML = maxVal;
+            const colors = ["#000", "#ff0000", "#0000ff"];
+            while(perfLabel.firstChild) perfLabel.removeChild(perfLabel.firstChild);
+            sim.render_perf(perfContext).forEach((text, idx) => {
+                const elem = document.createElement("div");
+                elem.innerHTML = text;
+                elem.style.color = colors[idx % colors.length];
+                perfLabel.appendChild(elem);
+            });
         }
         // console.log(result);
     }, 50);
