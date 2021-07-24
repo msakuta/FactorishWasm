@@ -1151,7 +1151,6 @@ impl FactorishState {
             }
         }
 
-        let mut to_remove = vec![];
         for i in 0..self.drop_items.len() {
             // (id, item) in drop_item_id_iter_mut(&mut self.drop_items) {
             let entry = &self.drop_items[i];
@@ -1202,7 +1201,7 @@ impl FactorishState {
                             item.y = moved_y;
                         }
                         ItemResponse::Consume => {
-                            to_remove.push(id);
+                            self.drop_items[i].item = None;
                         }
                     }
                     if let Some(result) = item_response_result.1 {
@@ -1210,10 +1209,6 @@ impl FactorishState {
                     }
                 }
             }
-        }
-
-        for id in to_remove {
-            self.remove_item(id);
         }
 
         self.structures = structures;
