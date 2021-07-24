@@ -68,6 +68,9 @@ impl FactorishState {
         context.set_stroke_style(&JsValue::from_str("#007f00"));
         plot_series(&self.perf_simulate.values);
 
+        context.set_stroke_style(&JsValue::from_str("#7f007f"));
+        plot_series(&self.perf_minimap.values);
+
         context.set_stroke_style(&JsValue::from_str("#7f7fff"));
         plot_series(&self.perf_build_index.ma_values);
 
@@ -77,7 +80,10 @@ impl FactorishState {
         context.set_stroke_style(&JsValue::from_str("#00ff00"));
         plot_series(&self.perf_simulate.ma_values);
 
-        js_sys::Array::of4(
+        context.set_stroke_style(&JsValue::from_str("#ff00ff"));
+        plot_series(&self.perf_minimap.ma_values);
+
+        js_sys::Array::of5(
             &js_str!("Max: {:.3} ms", max),
             &js_str!(
                 "Drop Items Avg: {:.3} ms",
@@ -91,6 +97,7 @@ impl FactorishState {
                 "Simulate Avg: {:.3} ms",
                 get_avg(&self.perf_simulate.values)
             ),
+            &js_str!("Minimap Avg: {:.3} ms", get_avg(&self.perf_minimap.values)),
         )
     }
 }

@@ -450,6 +450,7 @@ pub struct FactorishState {
     perf_build_index: PerfStats,
     perf_drop_items: PerfStats,
     perf_simulate: PerfStats,
+    perf_minimap: PerfStats,
 
     // on_show_inventory: js_sys::Function,
     image_dirt: Option<ImageBundle>,
@@ -561,6 +562,7 @@ impl FactorishState {
             perf_build_index: PerfStats::default(),
             perf_drop_items: PerfStats::default(),
             perf_simulate: PerfStats::default(),
+            perf_minimap: PerfStats::default(),
             image_dirt: None,
             image_back_tiles: None,
             image_weeds: None,
@@ -2852,7 +2854,8 @@ impl FactorishState {
         Ok(())
     }
 
-    pub fn render_minimap(&self, context: CanvasRenderingContext2d) -> Result<(), JsValue> {
+    pub fn render_minimap(&mut self, context: CanvasRenderingContext2d) -> Result<(), JsValue> {
+        let start_render = performance().now();
         let width = self.width as f64;
         let height = self.height as f64;
         context.save();
@@ -2880,6 +2883,7 @@ impl FactorishState {
             viewport.1 / 32.,
         );
         context.restore();
+        self.perf_minimap.add(performance().now() - start_render);
         Ok(())
     }
 }

@@ -1268,7 +1268,7 @@ let ysize = 128;
         sim.render_minimap(miniMapContext);
 
         if(showPerfGraph.checked){
-            const colors = ["#fff", "#ff3f3f", "#7f7fff", "#00ff00"];
+            const colors = ["#fff", "#ff3f3f", "#7f7fff", "#00ff00", "#ff00ff"];
             while(perfLabel.firstChild) perfLabel.removeChild(perfLabel.firstChild);
             sim.render_perf(perfContext).forEach((text, idx) => {
                 const elem = document.createElement("div");
