@@ -451,6 +451,7 @@ pub struct FactorishState {
     perf_drop_items: PerfStats,
     perf_simulate: PerfStats,
     perf_minimap: PerfStats,
+    perf_render: PerfStats,
 
     // on_show_inventory: js_sys::Function,
     image_dirt: Option<ImageBundle>,
@@ -563,6 +564,7 @@ impl FactorishState {
             perf_drop_items: PerfStats::default(),
             perf_simulate: PerfStats::default(),
             perf_minimap: PerfStats::default(),
+            perf_render: PerfStats::default(),
             image_dirt: None,
             image_back_tiles: None,
             image_weeds: None,
@@ -2575,8 +2577,10 @@ impl FactorishState {
         self.structures.iter().filter_map(|s| s.dynamic.as_deref())
     }
 
-    pub fn render(&self, context: CanvasRenderingContext2d) -> Result<(), JsValue> {
+    pub fn render(&mut self, context: CanvasRenderingContext2d) -> Result<(), JsValue> {
         use std::f64;
+
+        let start_render = performance().now();
 
         context.clear_rect(0., 0., self.viewport_width, self.viewport_height);
 
@@ -2851,6 +2855,7 @@ impl FactorishState {
             context.fill_text(&item.text, item.x, item.y)?;
         }
 
+        self.perf_render.add(performance().now() - start_render);
         Ok(())
     }
 
