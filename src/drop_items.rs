@@ -244,7 +244,7 @@ pub(crate) fn build_index(items: &[DropItemEntry]) -> Vec<GenId> {
         .enumerate()
         .filter_map(|(i, item)| Some((GenId::new(i as u32, item.gen), item.item.as_ref()?)))
         .collect::<Vec<_>>();
-    sorted.sort_by_key(|(_, item)| item.x);
+    sorted.sort_by_key(|(_, item)| item.x + item.y);
     sorted.iter().map(|(id, item)| *id).collect()
 }
 
@@ -287,9 +287,9 @@ pub(crate) fn hit_check_with_index(
             .get(id.id as usize)
             .and_then(|item| item.item.as_ref())
             .map(|item| {
-                if item.x < x {
+                if item.x + item.y < x + y {
                     Ordering::Less
-                } else if x < item.x {
+                } else if x + y < item.x + item.y {
                     Ordering::Greater
                 } else {
                     Ordering::Equal
@@ -311,10 +311,13 @@ pub(crate) fn hit_check_with_index(
             println!("  start - num: {:?}, {:?}", start - num, left.is_some());
             let left_lim = if let Some((id, item)) = left {
                 println!("  x, y: ({:?} {:?}), ({:?}, {:?})", item.x, item.y, x, y);
-                if Some(*id) != ignore && (x - item.x).abs() < DROP_ITEM_SIZE_I && (y - item.y).abs() < DROP_ITEM_SIZE_I {
+                if Some(*id) != ignore
+                    && (x - item.x).abs() < DROP_ITEM_SIZE_I
+                    && (y - item.y).abs() < DROP_ITEM_SIZE_I
+                {
                     return true;
-                } 
-                DROP_ITEM_SIZE_I < (x - item.x).abs()
+                }
+                2 * DROP_ITEM_SIZE_I < (x - item.x).abs()
             } else {
                 false
             };
@@ -329,10 +332,13 @@ pub(crate) fn hit_check_with_index(
             println!("  start + num: {:?}, {:?}", start + num, right.is_some());
             let right_lim = if let Some((id, item)) = right {
                 println!("  x, y: ({:?} {:?}), ({:?}, {:?})", item.x, item.y, x, y);
-                if Some(*id) != ignore && (x - item.x).abs() < DROP_ITEM_SIZE_I && (y - item.y).abs() < DROP_ITEM_SIZE_I {
+                if Some(*id) != ignore
+                    && (x - item.x).abs() < DROP_ITEM_SIZE_I
+                    && (y - item.y).abs() < DROP_ITEM_SIZE_I
+                {
                     return true;
                 }
-                DROP_ITEM_SIZE_I < (x - item.x).abs()
+                2 * DROP_ITEM_SIZE_I < (x - item.x).abs()
             } else {
                 false
             };
@@ -350,7 +356,7 @@ fn test_hit_check() {
     fn tr(x: i32) -> i32 {
         x * 4
     }
- 
+
     let items = vec![
         (4, 1),
         (6, 1),
@@ -361,33 +367,68 @@ fn test_hit_check() {
         (2, 1),
         (8, 1),
         (3, 10),
-    ].into_iter().map(|(x, y)| {
-        DropItemEntry {
-            gen: 0,
-            item: Some(DropItem {
-                type_: ItemType::CoalOre,
-                x: tr(x),
-                y: tr(y),
-            })
-        }
-    }).collect::<Vec<_>>();
+    ]
+    .into_iter()
+    .map(|(x, y)| DropItemEntry {
+        gen: 0,
+        item: Some(DropItem {
+            type_: ItemType::CoalOre,
+            x: tr(x),
+            y: tr(y),
+        }),
+    })
+    .collect::<Vec<_>>();
 
     let index = build_index(&items);
 
     assert_eq!(
         index
             .iter()
-            .map(|i| items.get(i.id as usize).and_then(|entry| entry.item.as_ref()).map(|item| item.x).unwrap())
+            .map(|i| items
+                .get(i.id as usize)
+                .and_then(|entry| entry.item.as_ref())
+                .map(|item| (item.x, item.y))
+                .unwrap())
             .collect::<Vec<_>>(),
-        vec![1,2, 3, 3, 4,  5, 6, 7, 8].into_iter().map(tr).collect::<Vec<_>>()
+        vec![
+            (1, 1),
+            (2, 1),
+            (3, 1),
+            (4, 1),
+            (5, 1),
+            (6, 1),
+            (7, 1),
+            (8, 1),
+            (3, 10)
+        ]
+        .into_iter()
+        .map(|(x, y)| (tr(x), tr(y)))
+        .collect::<Vec<_>>()
     );
 
-    println!("index: {:?}, {:?}", index,         index
-    .iter()
-    .map(|i| items.get(i.id as usize).and_then(|entry| entry.item.as_ref()).map(|item| item.x).unwrap())
-    .collect::<Vec<_>>());
+    println!(
+        "index: {:?}, {:?}",
+        index,
+        index
+            .iter()
+            .map(|i| items
+                .get(i.id as usize)
+                .and_then(|entry| entry.item.as_ref())
+                .map(|item| item.x)
+                .unwrap())
+            .collect::<Vec<_>>()
+    );
 
-    assert_eq!(hit_check_with_index(&items, &index, tr(3), tr(1), None), true);
-    assert_eq!(hit_check_with_index(&items, &index, tr(3), tr(10), None), true);
-    assert_eq!(hit_check_with_index(&items, &index, tr(3), tr(5), None), true);
+    assert_eq!(
+        hit_check_with_index(&items, &index, tr(3), tr(1), None),
+        true
+    );
+    assert_eq!(
+        hit_check_with_index(&items, &index, tr(3), tr(10), None),
+        true
+    );
+    assert_eq!(
+        hit_check_with_index(&items, &index, tr(3), tr(5), None),
+        false
+    );
 }
