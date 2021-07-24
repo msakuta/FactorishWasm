@@ -60,7 +60,11 @@ use transport_belt::TransportBelt;
 use water_well::{FluidType, WaterWell};
 
 use serde::{Deserialize, Serialize};
-use std::{cell::RefCell, collections::HashMap, convert::TryFrom};
+use std::{
+    cell::RefCell,
+    collections::{HashMap, VecDeque},
+    convert::TryFrom,
+};
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::{Clamped, JsCast};
 use web_sys::{
@@ -409,14 +413,16 @@ impl Default for Viewport {
 }
 
 struct PerfStats {
-    value: f64,
+    values: VecDeque<f64>,
+    total: f64,
     count: usize,
 }
 
 impl Default for PerfStats {
     fn default() -> Self {
         Self {
-            value: 0.,
+            values: VecDeque::new(),
+            total: 0.,
             count: 0,
         }
     }
@@ -424,7 +430,11 @@ impl Default for PerfStats {
 
 impl PerfStats {
     fn add(&mut self, sample: f64) {
-        self.value += sample;
+        self.values.push_back(sample);
+        while self.values.len() > 200 {
+            self.values.pop_front();
+        }
+        self.total += sample;
         self.count += 1;
     }
 
@@ -432,7 +442,7 @@ impl PerfStats {
         if self.count == 0 {
             0.
         } else {
-            self.value / self.count as f64
+            self.total / self.count as f64
         }
     }
 }
@@ -2905,5 +2915,41 @@ impl FactorishState {
         );
         context.restore();
         Ok(())
+    }
+
+    pub fn render_perf(&self, context: CanvasRenderingContext2d) -> String {
+        let canvas = context.canvas().unwrap();
+        let (width, height) = (canvas.width(), canvas.height());
+        context.clear_rect(0., 0., width as f64, height as f64);
+        context.set_line_width(1.);
+
+        let get_max = |vd: &VecDeque<f64>| vd.iter().fold(1.0f64, |a, b| a.max(*b));
+
+        let max = get_max(&self.perf_build_index.values).max(get_max(&self.perf_drop_items.values));
+        let sum: f64 = self.perf_drop_items.values.iter().sum();
+
+        let plot_series = |vd: &VecDeque<f64>| {
+            let mut series = vd.iter();
+            context.begin_path();
+            series
+                .next()
+                .map(|p| context.move_to(0., (1. - *p / max) * height as f64));
+            for (i, p) in series.enumerate() {
+                context.line_to((i + 1) as f64, (1. - *p / max) * height as f64);
+            }
+            context.stroke();
+        };
+
+        context.set_stroke_style(&JsValue::from_str("blue"));
+        plot_series(&self.perf_build_index.values);
+
+        context.set_stroke_style(&JsValue::from_str("red"));
+        plot_series(&self.perf_drop_items.values);
+
+        format!(
+            "Max: {:.3} Avg: {:.3}",
+            max,
+            sum / self.perf_drop_items.values.len() as f64
+        )
     }
 }
