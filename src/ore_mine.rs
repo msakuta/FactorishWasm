@@ -1,9 +1,10 @@
 use super::{
     draw_direction_arrow,
+    inventory::{Inventory, InventoryTrait},
     items::ItemType,
     structure::{RotateErr, Structure, StructureDynIter, StructureId},
-    DropItem, FactorishState, FrameProcResult, Inventory, InventoryTrait, Position, Recipe,
-    Rotation, TempEnt, COAL_POWER, TILE_SIZE, TILE_SIZE_I,
+    DropItem, FactorishState, FrameProcResult, Position, Recipe, Rotation, TempEnt, COAL_POWER,
+    TILE_SIZE, TILE_SIZE_I,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;

@@ -1,9 +1,9 @@
 use super::{
+    inventory::{Inventory, InventoryTrait},
     items::get_item_image_url,
     serialize_impl,
     structure::{Structure, StructureDynIter, StructureId},
-    DropItem, FactorishState, FrameProcResult, Inventory, InventoryTrait, ItemType, Position,
-    Recipe, TILE_SIZE,
+    DropItem, FactorishState, FrameProcResult, ItemType, Position, Recipe, TILE_SIZE,
 };
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
