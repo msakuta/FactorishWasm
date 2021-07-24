@@ -1,10 +1,11 @@
 use super::{
     burner::Burner,
+    drop_items::DropItem,
     dyn_iter::{DynIter, DynIterMut},
     factory::Factory,
     items::ItemType,
     water_well::FluidBox,
-    DropItem, FactorishState, Inventory, InventoryTrait, Recipe,
+    FactorishState, Inventory, InventoryTrait, Recipe,
 };
 use rotate_enum::RotateEnum;
 use serde::{Deserialize, Serialize};
@@ -547,6 +548,17 @@ pub(crate) struct StructureComponents {
 }
 
 impl StructureComponents {
+    pub fn new_with_position(position: Position) -> Self {
+        Self {
+            position: Some(position),
+            rotation: None,
+            burner: None,
+            energy: None,
+            factory: None,
+            fluid_boxes: vec![],
+        }
+    }
+
     pub fn new_with_position_and_rotation(position: Position, rotation: Rotation) -> Self {
         Self {
             position: Some(position),

@@ -1,11 +1,14 @@
 use super::{
     burner::Burner,
     draw_direction_arrow,
+    drop_items::hit_check,
+    inventory::Inventory,
     structure::{
-        Energy, Structure, StructureBundle, StructureComponents, StructureDynIter, StructureId,
+        Energy, RotateErr, Structure, StructureBundle, StructureComponents, StructureDynIter,
+        StructureId,
     },
-    DropItem, FactorishState, FrameProcResult, Inventory, Position, Recipe, RotateErr, Rotation,
-    TempEnt, TILE_SIZE, TILE_SIZE_I,
+    DropItem, FactorishState, FrameProcResult, Position, Recipe, Rotation, TempEnt, TILE_SIZE,
+    TILE_SIZE_I,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -236,7 +239,6 @@ impl Structure for OreMine {
                             if let Ok(val) = output(state, *item.0, position) {
                                 structure
                                     .input(&DropItem {
-                                        id: 0,
                                         type_: *item.0,
                                         x: output_position.x,
                                         y: output_position.y,
@@ -260,7 +262,7 @@ impl Structure for OreMine {
                 }
                 let drop_x = output_position.x * TILE_SIZE_I + TILE_SIZE_I / 2;
                 let drop_y = output_position.y * TILE_SIZE_I + TILE_SIZE_I / 2;
-                if !state.hit_check(drop_x, drop_y, None)
+                if !hit_check(&state.drop_items, drop_x, drop_y, None)
                     && state
                         .tile_at(&output_position)
                         .map(|cell| !cell.water)

@@ -1,7 +1,10 @@
 use super::{
-    items::{DropItem, ItemType},
-    structure::{ItemResponse, ItemResponseResult, Structure, StructureComponents},
-    FactorishState, FrameProcResult, Inventory, InventoryTrait,
+    drop_items::DropItem,
+    items::ItemType,
+    structure::{
+        ItemResponse, ItemResponseResult, Structure, StructureBundle, StructureComponents,
+    },
+    FactorishState, FrameProcResult, Inventory, InventoryTrait, Position,
 };
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
@@ -15,9 +18,12 @@ pub(crate) struct Chest {
 }
 
 impl Chest {
-    pub(crate) fn new() -> Self {
-        Chest {
-            inventory: Inventory::new(),
+    pub(crate) fn new(position: Position) -> StructureBundle {
+        StructureBundle {
+            dynamic: Box::new(Chest {
+                inventory: Inventory::new(),
+            }),
+            components: StructureComponents::new_with_position(position),
         }
     }
 }

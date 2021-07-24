@@ -1,7 +1,6 @@
 use super::{
     burner::Burner,
     pipe::Pipe,
-    serialize_impl,
     structure::{
         Energy, Structure, StructureBundle, StructureComponents, StructureDynIter, StructureId,
     },
@@ -213,5 +212,5 @@ impl Structure for Boiler {
         self.recipe.as_ref()
     }
 
-    serialize_impl!();
+    crate::serialize_impl!();
 }

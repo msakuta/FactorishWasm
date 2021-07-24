@@ -1,5 +1,6 @@
 use super::{
-    items::{DropItem, ItemType},
+    drop_items::DropItem,
+    items::ItemType,
     structure::{Energy, Structure},
     FactorishState, FrameProcResult, Inventory, InventoryTrait, Position, COAL_POWER,
 };

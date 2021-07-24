@@ -1,6 +1,6 @@
 use super::{
-    structure::{Structure, StructureComponents},
-    FactorishState,
+    structure::{Structure, StructureBundle, StructureComponents},
+    FactorishState, Position,
 };
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
@@ -12,8 +12,11 @@ pub(crate) struct ElectPole {
 }
 
 impl ElectPole {
-    pub(crate) fn new() -> Self {
-        ElectPole { power: 0. }
+    pub(crate) fn new(position: Position) -> StructureBundle {
+        StructureBundle {
+            dynamic: Box::new(ElectPole { power: 0. }),
+            components: StructureComponents::new_with_position(position),
+        }
     }
 }
 

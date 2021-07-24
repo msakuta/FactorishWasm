@@ -1,9 +1,10 @@
 use super::{
+    drop_items::DropItem,
     structure::{
         ItemResponse, ItemResponseResult, Structure, StructureBundle, StructureComponents,
         StructureDynIter,
     },
-    DropItem, FactorishState, Position, RotateErr, Rotation, TILE_SIZE,
+    FactorishState, Position, RotateErr, Rotation, TILE_SIZE,
 };
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
