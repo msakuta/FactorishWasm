@@ -290,6 +290,32 @@ let ysize = 128;
 
     infoElem.style.textAlign = 'left';
 
+    const perfWidth = 200;
+    const perfHeight = 200;
+    const perfElem = document.createElement('canvas');
+    perfElem.style.position = 'absolute';
+    perfElem.style.pointerEvents = "none";
+    perfElem.style.border = '1px solid #000';
+    perfElem.setAttribute("width", perfWidth);
+    perfElem.setAttribute("height", perfHeight);
+    perfElem.style.width = perfWidth + 'px';
+    perfElem.style.height = perfHeight + 'px';
+    perfElem.style.left = '8px';
+    perfElem.style.bottom = '8px';
+    perfElem.style.backgroundColor = "rgba(0, 0, 0, 0.5)";
+    container.appendChild(perfElem);
+    const perfContext = perfElem.getContext('2d');
+
+    const perfLabel = document.createElement('div');
+    perfLabel.style.position = 'absolute';
+    perfLabel.style.pointerEvents = "none";
+    perfLabel.style.textAlign = "justify";
+    perfLabel.style.left = '8px';
+    perfLabel.style.bottom = '216px';
+    perfLabel.style.padding = "4px";
+    perfLabel.style.backgroundColor = "rgba(0, 0, 0, 0.75)";
+    container.appendChild(perfLabel);
+
     refreshSize();
 
     const toolBeltSize = 10;
@@ -1219,6 +1245,15 @@ let ysize = 128;
     showDebugFluidBox.addEventListener("click", () => sim.set_debug_fluidbox(showDebugFluidBox.checked));
     const showDebugPowerNetwork = document.getElementById("showDebugPowerNetwork");
     showDebugPowerNetwork.addEventListener("click", () => sim.set_debug_power_network(showDebugPowerNetwork.checked));
+    const showPerfGraph = document.getElementById("showPerfGraph");
+    showPerfGraph.addEventListener("click", updatePerfVisibility);
+
+    function updatePerfVisibility() {
+        perfElem.style.display = showPerfGraph.checked ? "block" : "none";
+        perfLabel.style.display = showPerfGraph.checked ? "block" : "none";
+    }
+
+    updatePerfVisibility();
 
     window.setInterval(function(){
         if(!paused)
@@ -1231,6 +1266,17 @@ let ysize = 128;
         }
 
         sim.render_minimap(miniMapContext);
+
+        if(showPerfGraph.checked){
+            const colors = ["#fff", "#ff3f3f", "#7f7fff", "#00ff00", "#ff00ff", "#fff"];
+            while(perfLabel.firstChild) perfLabel.removeChild(perfLabel.firstChild);
+            sim.render_perf(perfContext).forEach((text, idx) => {
+                const elem = document.createElement("div");
+                elem.innerHTML = text;
+                elem.style.color = colors[idx % colors.length];
+                perfLabel.appendChild(elem);
+            });
+        }
         // console.log(result);
     }, 50);
     // simulate()

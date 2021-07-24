@@ -1,8 +1,9 @@
 use super::{
+    drop_items::DropItem,
     dyn_iter::{DynIter, DynIterMut},
     items::ItemType,
     water_well::FluidBox,
-    DropItem, FactorishState, Inventory, InventoryTrait, Recipe,
+    FactorishState, Inventory, InventoryTrait, Recipe,
 };
 use rotate_enum::RotateEnum;
 use serde::{Deserialize, Serialize};

@@ -1,8 +1,9 @@
 use super::{
     draw_direction_arrow,
+    drop_items::DropItem,
     items::{render_drop_item, ItemType},
     structure::{RotateErr, Structure, StructureDynIter, StructureId},
-    DropItem, FactorishState, FrameProcResult, Inventory, InventoryTrait, Position, Rotation,
+    FactorishState, FrameProcResult, Inventory, InventoryTrait, Position, Rotation,
 };
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
@@ -196,7 +197,7 @@ impl Structure for Inserter {
                 };
 
                 let mut lets_try_hold = None;
-                if let Some(&DropItem { type_, id, .. }) = state.find_item(&input_position) {
+                if let Some((id, &DropItem { type_, .. })) = state.find_item(&input_position) {
                     if try_hold(structures, type_) {
                         state.remove_item(id);
                     } else {
@@ -293,7 +294,6 @@ impl Structure for Inserter {
                 {
                     if structure
                         .input(&DropItem::new(
-                            &mut state.serial_no,
                             item_type,
                             output_position.x,
                             output_position.y,

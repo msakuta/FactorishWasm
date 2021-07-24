@@ -2,6 +2,7 @@ use super::{
     assembler::Assembler,
     boiler::Boiler,
     chest::Chest,
+    drop_items::{build_index, DropItemEntry},
     elect_pole::ElectPole,
     furnace::Furnace,
     inserter::Inserter,
@@ -14,7 +15,7 @@ use super::{
     terrain::{calculate_back_image, gen_terrain, TerrainParameters},
     transport_belt::TransportBelt,
     water_well::WaterWell,
-    Cell, DropItem, FactorishState, InventoryTrait, Position, PowerWire, Rotation,
+    Cell, FactorishState, InventoryTrait, Position, PowerWire, Rotation,
 };
 use wasm_bindgen::prelude::*;
 
@@ -45,7 +46,7 @@ fn update_water(
 
 fn default_scenario(
     terrain_params: &TerrainParameters,
-) -> (Vec<StructureEntry>, Vec<Cell>, Vec<DropItem>) {
+) -> (Vec<StructureEntry>, Vec<Cell>, Vec<DropItemEntry>) {
     (
         vec![
             wrap_structure(Box::new(TransportBelt::new(10, 3, Rotation::Left))),
@@ -65,7 +66,7 @@ fn default_scenario(
 
 fn pipe_bench(
     terrain_params: &TerrainParameters,
-) -> (Vec<StructureEntry>, Vec<Cell>, Vec<DropItem>) {
+) -> (Vec<StructureEntry>, Vec<Cell>, Vec<DropItemEntry>) {
     let (mut structures, mut terrain, items) = default_scenario(terrain_params);
 
     structures
@@ -84,7 +85,7 @@ fn pipe_bench(
 
 fn inserter_bench(
     terrain_params: &TerrainParameters,
-) -> (Vec<StructureEntry>, Vec<Cell>, Vec<DropItem>) {
+) -> (Vec<StructureEntry>, Vec<Cell>, Vec<DropItemEntry>) {
     let (mut structures, mut terrain, items) = default_scenario(terrain_params);
 
     structures.extend((10..=100).map(|x| {
@@ -135,26 +136,26 @@ fn inserter_bench(
 
 fn transport_bench(
     terrain_params: &TerrainParameters,
-    serial_no: &mut u32,
-) -> (Vec<StructureEntry>, Vec<Cell>, Vec<DropItem>) {
+) -> (Vec<StructureEntry>, Vec<Cell>, Vec<DropItemEntry>) {
     let (mut structures, mut terrain, mut items) = default_scenario(terrain_params);
 
     structures.extend(
         (11..=100).map(|x| wrap_structure(Box::new(TransportBelt::new(x, 10, Rotation::Left)))),
     );
-    items.extend((11..=100).map(|x| DropItem::new(serial_no, ItemType::CoalOre, x, 10)));
+    items.extend((11..=100).map(|x| DropItemEntry::new(ItemType::CoalOre, &Position::new(x, 10))));
     structures.extend(
         (10..=99).map(|x| wrap_structure(Box::new(TransportBelt::new(x, 100, Rotation::Right)))),
     );
-    items.extend((10..=99).map(|x| DropItem::new(serial_no, ItemType::IronOre, x, 100)));
+    items.extend((10..=99).map(|x| DropItemEntry::new(ItemType::IronOre, &Position::new(x, 100))));
     structures.extend(
         (10..=99).map(|x| wrap_structure(Box::new(TransportBelt::new(10, x, Rotation::Bottom)))),
     );
-    items.extend((10..=99).map(|x| DropItem::new(serial_no, ItemType::CopperOre, 10, x)));
+    items.extend((10..=99).map(|x| DropItemEntry::new(ItemType::CopperOre, &Position::new(10, x))));
     structures.extend(
         (11..=100).map(|x| wrap_structure(Box::new(TransportBelt::new(100, x, Rotation::Top)))),
     );
-    items.extend((11..=100).map(|x| DropItem::new(serial_no, ItemType::StoneOre, 100, x)));
+    items
+        .extend((11..=100).map(|x| DropItemEntry::new(ItemType::StoneOre, &Position::new(100, x))));
 
     update_water(&structures, &mut terrain, &terrain_params);
 
@@ -163,7 +164,7 @@ fn transport_bench(
 
 fn electric_bench(
     terrain_params: &TerrainParameters,
-) -> (Vec<StructureEntry>, Vec<Cell>, Vec<DropItem>) {
+) -> (Vec<StructureEntry>, Vec<Cell>, Vec<DropItemEntry>) {
     let (mut structures, mut terrain, items) = default_scenario(terrain_params);
 
     structures.extend((10..=100).filter_map(|x| {
@@ -205,13 +206,12 @@ fn electric_bench(
 pub(crate) fn select_scenario(
     name: &str,
     terrain_params: &TerrainParameters,
-    serial_no: &mut u32,
-) -> Result<(Vec<StructureEntry>, Vec<Cell>, Vec<DropItem>), JsValue> {
+) -> Result<(Vec<StructureEntry>, Vec<Cell>, Vec<DropItemEntry>), JsValue> {
     match name {
         "default" => Ok(default_scenario(terrain_params)),
         "pipe_bench" => Ok(pipe_bench(terrain_params)),
         "inserter_bench" => Ok(inserter_bench(terrain_params)),
-        "transport_bench" => Ok(transport_bench(terrain_params, serial_no)),
+        "transport_bench" => Ok(transport_bench(terrain_params)),
         "electric_bench" => Ok(electric_bench(terrain_params)),
         _ => js_err!("Scenario name not valid: {}", name),
     }
@@ -305,6 +305,8 @@ impl FactorishState {
                 .map(|d| d.on_construction_self(id, &others, true))
                 .unwrap_or(Ok(()))?;
         }
+
+        self.drop_items_index = build_index(&self.drop_items);
 
         Ok(())
     }
