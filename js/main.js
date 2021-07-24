@@ -313,7 +313,7 @@ let ysize = 128;
     perfLabel.style.left = '8px';
     perfLabel.style.bottom = '216px';
     perfLabel.style.padding = "4px";
-    perfLabel.style.backgroundColor = "rgba(191, 191, 191, 0.75)";
+    perfLabel.style.backgroundColor = "rgba(0, 0, 0, 0.75)";
     container.appendChild(perfLabel);
 
     refreshSize();
@@ -1268,7 +1268,7 @@ let ysize = 128;
         sim.render_minimap(miniMapContext);
 
         if(showPerfGraph.checked){
-            const colors = ["#000", "#ff0000", "#0000ff"];
+            const colors = ["#fff", "#ff3f3f", "#7f7fff", "#00ff00"];
             while(perfLabel.firstChild) perfLabel.removeChild(perfLabel.firstChild);
             sim.render_perf(perfContext).forEach((text, idx) => {
                 const elem = document.createElement("div");

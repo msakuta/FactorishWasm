@@ -449,6 +449,7 @@ pub struct FactorishState {
     // Performance measurements
     perf_build_index: PerfStats,
     perf_drop_items: PerfStats,
+    perf_simulate: PerfStats,
 
     // on_show_inventory: js_sys::Function,
     image_dirt: Option<ImageBundle>,
@@ -559,6 +560,7 @@ impl FactorishState {
             debug_power_network: false,
             perf_build_index: PerfStats::default(),
             perf_drop_items: PerfStats::default(),
+            perf_simulate: PerfStats::default(),
             image_dirt: None,
             image_back_tiles: None,
             image_weeds: None,
@@ -1065,6 +1067,7 @@ impl FactorishState {
     }
 
     pub fn simulate(&mut self, delta_time: f64) -> Result<js_sys::Array, JsValue> {
+        let start_simulate = performance().now();
         // console_log!("simulating delta_time {}, {}", delta_time, self.sim_time);
         const SERIALIZE_PERIOD: f64 = 100.;
         if (self.sim_time / SERIALIZE_PERIOD).floor()
@@ -1250,6 +1253,8 @@ impl FactorishState {
             })
             .filter(|ent| 0. < ent.life)
             .collect();
+
+        self.perf_simulate.add(performance().now() - start_simulate);
 
         // self.drop_items = drop_items;
         self.update_info();

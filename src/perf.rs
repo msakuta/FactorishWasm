@@ -42,7 +42,9 @@ impl FactorishState {
         let get_max = |vd: &VecDeque<f64>| vd.iter().fold(1.0f64, |a, b| a.max(*b));
         let get_avg = |vd: &VecDeque<f64>| vd.iter().sum::<f64>() / vd.len() as f64;
 
-        let max = get_max(&self.perf_build_index.values).max(get_max(&self.perf_drop_items.values));
+        let max = get_max(&self.perf_build_index.values)
+            .max(get_max(&self.perf_drop_items.values))
+            .max(get_max(&self.perf_simulate.values));
 
         let plot_series = |vd: &VecDeque<f64>| {
             let mut series = vd.iter();
@@ -56,13 +58,16 @@ impl FactorishState {
             context.stroke();
         };
 
-        context.set_stroke_style(&JsValue::from_str("blue"));
+        context.set_stroke_style(&JsValue::from_str("#7f7fff"));
         plot_series(&self.perf_build_index.values);
 
-        context.set_stroke_style(&JsValue::from_str("red"));
+        context.set_stroke_style(&JsValue::from_str("#ff3f3f"));
         plot_series(&self.perf_drop_items.values);
 
-        js_sys::Array::of3(
+        context.set_stroke_style(&JsValue::from_str("#00ff00"));
+        plot_series(&self.perf_simulate.values);
+
+        js_sys::Array::of4(
             &js_str!("Max: {:.3} ms", max),
             &js_str!(
                 "Drop Items Avg: {:.3} ms",
@@ -71,6 +76,10 @@ impl FactorishState {
             &js_str!(
                 "Build index Avg: {:.3} ms",
                 get_avg(&self.perf_build_index.values)
+            ),
+            &js_str!(
+                "Simulate Avg: {:.3} ms",
+                get_avg(&self.perf_simulate.values)
             ),
         )
     }
