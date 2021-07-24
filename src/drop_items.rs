@@ -1,8 +1,6 @@
-use crate::TILE_SIZE;
-
 use super::{dyn_iter::DynIter, items::ItemType, Position, TILE_SIZE_I};
 use serde::{Deserialize, Serialize};
-use std::cmp::Ordering;
+use std::{cmp::Ordering, collections::HashMap};
 use wasm_bindgen::prelude::*;
 
 pub(crate) const DROP_ITEM_SIZE: f64 = 8.;
@@ -238,14 +236,33 @@ impl<'a, T> DynIter for SplitSlice<'a, T> {
     }
 }
 
-pub(crate) fn build_index(items: &[DropItemEntry]) -> Vec<GenId> {
-    let mut sorted = items
+pub(crate) const INDEX_CHUNK_SIZE: usize = 16;
+const INDEX_GRID_SIZE: usize = INDEX_CHUNK_SIZE * TILE_SIZE_I as usize;
+const INDEX_GRID_SIZE_I: i32 = INDEX_GRID_SIZE as i32;
+
+pub(crate) fn build_index(items: &[DropItemEntry]) -> HashMap<(i32, i32), Vec<GenId>> {
+    let mut ret = HashMap::<(i32, i32), Vec<GenId>>::new();
+    for (id, item) in items
         .iter()
         .enumerate()
         .filter_map(|(i, item)| Some((GenId::new(i as u32, item.gen), item.item.as_ref()?)))
-        .collect::<Vec<_>>();
-    sorted.sort_by_key(|(_, item)| item.x + item.y);
-    sorted.iter().map(|(id, item)| *id).collect()
+    {
+        ret.entry((item.x / INDEX_GRID_SIZE_I, item.y / INDEX_GRID_SIZE_I))
+            .or_default()
+            .push(id);
+    }
+    ret
+}
+
+pub(crate) fn hist(index: &HashMap<(i32, i32), Vec<GenId>>) -> Vec<usize> {
+    let mut ret = vec![];
+    for cell in index {
+        if ret.len() < cell.1.len() + 1 {
+            ret.resize(cell.1.len() + 1, 0);
+        }
+        ret[cell.1.len()] += 1;
+    }
+    ret
 }
 
 /// Check whether given coordinates hits some object
@@ -274,77 +291,24 @@ pub(crate) fn hit_check(
 /// Check whether given coordinates hits some object
 pub(crate) fn hit_check_with_index(
     items: &[DropItemEntry],
-    index: &[DropItemId],
+    index: &HashMap<(i32, i32), Vec<DropItemId>>,
     x: i32,
     y: i32,
     ignore: Option<DropItemId>,
 ) -> bool {
-    let start = index.binary_search_by(|id| {
-        if id.gen != items[id.id as usize].gen {
-            return Ordering::Less;
-        }
-        items
-            .get(id.id as usize)
-            .and_then(|item| item.item.as_ref())
-            .map(|item| {
-                if item.x + item.y < x + y {
-                    Ordering::Less
-                } else if x + y < item.x + item.y {
-                    Ordering::Greater
-                } else {
-                    Ordering::Equal
-                }
-            })
-            .unwrap_or(Ordering::Less)
-    });
-
-    println!("x: {}, start: {:?}", x, start);
-    if let Ok(start) | Err(start) = start {
-        for num in 0.. {
-            if start < num {
-                break;
+    let start = index.get(&(x / INDEX_GRID_SIZE_I, y / INDEX_GRID_SIZE_I));
+    if let Some(start) = start {
+        for id in start {
+            if Some(*id) == ignore {
+                continue;
             }
-            let left = index
-                .get((start - num) as usize)
-                .and_then(|id| Some((id, items.get(id.id as usize)?)))
-                .and_then(|(id, entry)| Some((id, entry.item.as_ref()?)));
-            println!("  start - num: {:?}, {:?}", start - num, left.is_some());
-            let left_lim = if let Some((id, item)) = left {
-                println!("  x, y: ({:?} {:?}), ({:?}, {:?})", item.x, item.y, x, y);
-                if Some(*id) != ignore
-                    && (x - item.x).abs() < DROP_ITEM_SIZE_I
-                    && (y - item.y).abs() < DROP_ITEM_SIZE_I
-                {
+            if let Some(item) = items
+                .get(id.id as usize)
+                .and_then(|entry| entry.item.as_ref())
+            {
+                if (x - item.x).abs() < DROP_ITEM_SIZE_I && (y - item.y).abs() < DROP_ITEM_SIZE_I {
                     return true;
                 }
-                2 * DROP_ITEM_SIZE_I < (x - item.x).abs()
-            } else {
-                false
-            };
-
-            if items.len() < start + num {
-                break;
-            }
-            let right = index
-                .get((start + num) as usize)
-                .and_then(|id| Some((id, items.get(id.id as usize)?)))
-                .and_then(|(id, entry)| Some((id, entry.item.as_ref()?)));
-            println!("  start + num: {:?}, {:?}", start + num, right.is_some());
-            let right_lim = if let Some((id, item)) = right {
-                println!("  x, y: ({:?} {:?}), ({:?}, {:?})", item.x, item.y, x, y);
-                if Some(*id) != ignore
-                    && (x - item.x).abs() < DROP_ITEM_SIZE_I
-                    && (y - item.y).abs() < DROP_ITEM_SIZE_I
-                {
-                    return true;
-                }
-                2 * DROP_ITEM_SIZE_I < (x - item.x).abs()
-            } else {
-                false
-            };
-
-            if left_lim && right_lim {
-                break;
             }
         }
     }
@@ -354,7 +318,7 @@ pub(crate) fn hit_check_with_index(
 #[test]
 fn test_hit_check() {
     fn tr(x: i32) -> i32 {
-        x * 4
+        x * TILE_SIZE_I * 4
     }
 
     let items = vec![
@@ -381,42 +345,14 @@ fn test_hit_check() {
 
     let index = build_index(&items);
 
+    assert_eq!(index.len(), 4);
     assert_eq!(
         index
-            .iter()
-            .map(|i| items
-                .get(i.id as usize)
-                .and_then(|entry| entry.item.as_ref())
-                .map(|item| (item.x, item.y))
-                .unwrap())
-            .collect::<Vec<_>>(),
-        vec![
-            (1, 1),
-            (2, 1),
-            (3, 1),
-            (4, 1),
-            (5, 1),
-            (6, 1),
-            (7, 1),
-            (8, 1),
-            (3, 10)
-        ]
-        .into_iter()
-        .map(|(x, y)| (tr(x), tr(y)))
-        .collect::<Vec<_>>()
-    );
-
-    println!(
-        "index: {:?}, {:?}",
-        index,
-        index
-            .iter()
-            .map(|i| items
-                .get(i.id as usize)
-                .and_then(|entry| entry.item.as_ref())
-                .map(|item| item.x)
-                .unwrap())
-            .collect::<Vec<_>>()
+            .values()
+            .map(|v| v.len())
+            .reduce(|acc, v| acc + v)
+            .unwrap(),
+        items.len()
     );
 
     assert_eq!(
