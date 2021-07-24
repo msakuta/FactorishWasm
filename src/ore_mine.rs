@@ -1,6 +1,6 @@
 use super::{
     draw_direction_arrow,
-    drop_items::{drop_item_id_iter, hit_check},
+    drop_items::hit_check,
     inventory::{Inventory, InventoryTrait},
     items::ItemType,
     structure::{RotateErr, Structure, StructureDynIter, StructureId},

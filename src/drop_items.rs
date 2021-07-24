@@ -1,7 +1,6 @@
-use super::{dyn_iter::DynIter, items::ItemType, Position, TILE_SIZE_I};
+use super::{items::ItemType, Position, TILE_SIZE_I};
 use serde::{Deserialize, Serialize};
-use std::{cmp::Ordering, collections::HashMap};
-use wasm_bindgen::prelude::*;
+use std::collections::HashMap;
 
 pub(crate) const DROP_ITEM_SIZE: f64 = 8.;
 pub(crate) const DROP_ITEM_SIZE_I: i32 = DROP_ITEM_SIZE as i32;
@@ -60,6 +59,7 @@ pub(crate) fn drop_item_id_iter(
 }
 
 /// Returns an iterator over valid structures
+#[allow(dead_code)]
 pub(crate) fn drop_item_id_iter_mut(
     drop_items: &mut [DropItemEntry],
 ) -> impl Iterator<Item = (DropItemId, &mut DropItem)> {
@@ -98,144 +98,6 @@ pub(crate) struct GenEntry<T> {
     pub item: Option<T>,
 }
 
-/// A structure that allow random access to structure array excluding single element.
-/// It is convenient when you want to have mutable reference to two elements in the array at the same time.
-pub(crate) struct SplitSlice<'a, T> {
-    left_start: usize,
-    left: &'a mut [GenEntry<T>],
-    right_start: usize,
-    right: &'a mut [GenEntry<T>],
-}
-
-impl<'a, T> SplitSlice<'a, T> {
-    #[allow(dead_code)]
-    pub(crate) fn new_all(source: &'a mut [GenEntry<T>]) -> Self {
-        Self {
-            left_start: 0,
-            right_start: source.len(),
-            left: source,
-            right: &mut [],
-        }
-    }
-
-    pub(crate) fn new(
-        source: &'a mut [GenEntry<T>],
-        split_idx: usize,
-    ) -> Result<(&'a mut GenEntry<T>, Self), JsValue> {
-        let (left, right) = source.split_at_mut(split_idx);
-        let (center, right) = right
-            .split_first_mut()
-            .ok_or_else(|| JsValue::from_str("Structures split fail"))?;
-        Ok((
-            center,
-            Self {
-                left_start: 0,
-                left,
-                right_start: split_idx + 1,
-                right,
-            },
-        ))
-    }
-
-    /// Accessor without generation checking.
-    #[allow(dead_code)]
-    pub(crate) fn get_at(&self, idx: usize) -> Option<&GenEntry<T>> {
-        if self.left_start <= idx && idx < self.left_start + self.left.len() {
-            self.left.get(idx - self.left_start)
-        } else if self.right_start <= idx && idx < self.right_start + self.right.len() {
-            self.right.get(idx - self.right_start)
-        } else {
-            None
-        }
-    }
-
-    /// Mutable accessor without generation checking.
-    #[allow(dead_code)]
-    pub(crate) fn get_at_mut(&mut self, idx: usize) -> Option<&mut GenEntry<T>> {
-        if self.left_start <= idx && idx < self.left_start + self.left.len() {
-            self.left.get_mut(idx - self.left_start)
-        } else if self.right_start <= idx && idx < self.right_start + self.right.len() {
-            self.right.get_mut(idx - self.right_start)
-        } else {
-            None
-        }
-    }
-
-    /// Accessor with generation checking.
-    #[allow(dead_code)]
-    pub(crate) fn get(&self, id: GenId) -> Option<&T> {
-        let idx = id.id as usize;
-        if self.left_start <= idx && idx < self.left_start + self.left.len() {
-            self.left
-                .get(idx - self.left_start)
-                .filter(|s| s.gen == id.gen)
-                .map(|s| s.item.as_ref())
-                .flatten()
-        } else if self.right_start <= idx && idx < self.right_start + self.right.len() {
-            self.right
-                .get(idx - self.right_start)
-                .filter(|s| s.gen == id.gen)
-                .map(|s| s.item.as_ref())
-                .flatten()
-        } else {
-            None
-        }
-    }
-
-    /// Mutable accessor with generation checking.
-    #[allow(dead_code)]
-    pub(crate) fn get_mut(&mut self, id: GenId) -> Option<&mut T> {
-        let idx = id.id as usize;
-        if self.left_start <= idx && idx < self.left_start + self.left.len() {
-            self.left
-                .get_mut(idx - self.left_start)
-                .filter(|s| s.gen == id.gen)
-                .map(|s| s.item.as_mut())
-                // Interestingly, we need .map(|s| s as &mut dyn Structure) to compile.
-                // .map(|s| s.item.as_deref_mut())
-                .flatten()
-        } else if self.right_start <= idx && idx < self.right_start + self.right.len() {
-            self.right
-                .get_mut(idx - self.right_start)
-                .filter(|s| s.gen == id.gen)
-                .map(|s| s.item.as_mut())
-                // .map(|s| s.item.as_deref_mut())
-                .flatten()
-        } else {
-            None
-        }
-    }
-
-    pub(crate) fn dyn_iter_id(&self) -> impl Iterator<Item = (GenId, &T)> + '_ {
-        self.left
-            .iter()
-            .enumerate()
-            .map(move |(i, val)| (GenId::new((i + self.left_start) as u32, val.gen), val))
-            .chain(
-                self.right
-                    .iter()
-                    .enumerate()
-                    .map(move |(i, val)| (GenId::new((i + self.right_start) as u32, val.gen), val)),
-            )
-            .filter_map(|(i, s)| Some((i, s.item.as_ref()?)))
-    }
-}
-
-impl<'a, T> DynIter for SplitSlice<'a, T> {
-    type Item = T;
-    fn dyn_iter(&self) -> Box<dyn Iterator<Item = &Self::Item> + '_> {
-        Box::new(
-            self.left
-                .iter()
-                .chain(self.right.iter())
-                .filter_map(|s| s.item.as_ref()),
-        )
-    }
-    fn as_dyn_iter(&self) -> &dyn DynIter<Item = Self::Item> {
-        self
-    }
-}
-
 pub(crate) const INDEX_CHUNK_SIZE: usize = 16;
 const INDEX_GRID_SIZE: usize = INDEX_CHUNK_SIZE * TILE_SIZE_I as usize;
 const INDEX_GRID_SIZE_I: i32 = INDEX_GRID_SIZE as i32;
@@ -250,17 +112,6 @@ pub(crate) fn build_index(items: &[DropItemEntry]) -> HashMap<(i32, i32), Vec<Ge
         ret.entry((item.x / INDEX_GRID_SIZE_I, item.y / INDEX_GRID_SIZE_I))
             .or_default()
             .push(id);
-    }
-    ret
-}
-
-pub(crate) fn hist(index: &HashMap<(i32, i32), Vec<GenId>>) -> Vec<usize> {
-    let mut ret = vec![];
-    for cell in index {
-        if ret.len() < cell.1.len() + 1 {
-            ret.resize(cell.1.len() + 1, 0);
-        }
-        ret[cell.1.len()] += 1;
     }
     ret
 }
