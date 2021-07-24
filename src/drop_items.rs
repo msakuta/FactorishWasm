@@ -288,6 +288,14 @@ pub(crate) fn hit_check(
     false
 }
 
+fn intersecting_chunks(x: i32, y: i32) -> [i32; 4] {
+    let left = (x - DROP_ITEM_SIZE_I).div_euclid(INDEX_GRID_SIZE_I);
+    let top = (y - DROP_ITEM_SIZE_I).div_euclid(INDEX_GRID_SIZE_I);
+    let right = (x + DROP_ITEM_SIZE_I).div_euclid(INDEX_GRID_SIZE_I);
+    let bottom = (y + DROP_ITEM_SIZE_I).div_euclid(INDEX_GRID_SIZE_I);
+    [left, top, right, bottom]
+}
+
 /// Check whether given coordinates hits some object
 pub(crate) fn hit_check_with_index(
     items: &[DropItemEntry],
@@ -296,18 +304,24 @@ pub(crate) fn hit_check_with_index(
     y: i32,
     ignore: Option<DropItemId>,
 ) -> bool {
-    let start = index.get(&(x / INDEX_GRID_SIZE_I, y / INDEX_GRID_SIZE_I));
-    if let Some(start) = start {
-        for id in start {
-            if Some(*id) == ignore {
-                continue;
-            }
-            if let Some(item) = items
-                .get(id.id as usize)
-                .and_then(|entry| entry.item.as_ref())
-            {
-                if (x - item.x).abs() < DROP_ITEM_SIZE_I && (y - item.y).abs() < DROP_ITEM_SIZE_I {
-                    return true;
+    let [left, top, right, bottom] = intersecting_chunks(x, y);
+    for cy in top..=bottom {
+        for cx in left..=right {
+            if let Some(start) = index.get(&(cx, cy)) {
+                for id in start {
+                    if Some(*id) == ignore {
+                        continue;
+                    }
+                    if let Some(item) = items
+                        .get(id.id as usize)
+                        .and_then(|entry| entry.item.as_ref())
+                    {
+                        if (x - item.x).abs() < DROP_ITEM_SIZE_I
+                            && (y - item.y).abs() < DROP_ITEM_SIZE_I
+                        {
+                            return true;
+                        }
+                    }
                 }
             }
         }
@@ -366,5 +380,20 @@ fn test_hit_check() {
     assert_eq!(
         hit_check_with_index(&items, &index, tr(3), tr(5), None),
         false
+    );
+}
+
+#[test]
+fn test_rounding() {
+    assert_eq!(
+        intersecting_chunks(INDEX_GRID_SIZE_I / 2, INDEX_GRID_SIZE_I / 2),
+        [0; 4]
+    );
+    assert_eq!(intersecting_chunks(0, INDEX_GRID_SIZE_I / 2), [-1, 0, 0, 0]);
+    assert_eq!(intersecting_chunks(0, 0), [-1, -1, 0, 0]);
+    assert_eq!(intersecting_chunks(-INDEX_GRID_SIZE_I, 0), [-2, -1, -1, 0]);
+    assert_eq!(
+        intersecting_chunks(INDEX_GRID_SIZE_I, DROP_ITEM_SIZE_I),
+        [0, 0, 1, 0]
     );
 }

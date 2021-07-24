@@ -2712,8 +2712,8 @@ impl FactorishState {
                 );
             }
             context.set_stroke_style(&js_str!("black"));
-            for y in 0..self.height / INDEX_CHUNK_SIZE {
-                for x in 0..self.width / INDEX_CHUNK_SIZE {
+            for y in 0..self.height / INDEX_CHUNK_SIZE as u32 {
+                for x in 0..self.width / INDEX_CHUNK_SIZE as u32 {
                     context.stroke_rect(
                         x as f64 * TILE_SIZE * INDEX_CHUNK_SIZE as f64,
                         y as f64 * TILE_SIZE * INDEX_CHUNK_SIZE as f64,
