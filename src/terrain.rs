@@ -62,6 +62,9 @@ impl ChunksExt for Chunks {
     }
 }
 
+/// Generate a chunk at given position. It does not update background image, because it requires
+/// knowledge on connecting chunks. The caller needs to call [`calculate_back_image`] or
+/// [`calculate_back_image_all`] at some point.
 fn gen_chunk(position: Position, terrain_params: &TerrainParameters) -> Chunk {
     let TerrainParameters {
         terrain_seed,
@@ -119,7 +122,6 @@ fn gen_chunk(position: Position, terrain_params: &TerrainParameters) -> Chunk {
             }
         }
     }
-    calculate_back_image(&mut ret);
     ret
 }
 
@@ -134,13 +136,11 @@ pub(crate) fn gen_terrain(params: &TerrainParameters) -> Chunks {
         }
     }
 
-    for (_, chunk) in &mut ret {
-        calculate_back_image(chunk);
-    }
+    calculate_back_image_all(&mut ret);
     ret
 }
 
-pub(crate) fn calculate_back_image(ret: &mut [Cell]) {
+pub(crate) fn calculate_back_image(terrain: &Chunks, chunk_pos: &Position, ret: &mut Chunk) {
     let mut rng = Xor128::new(23424321);
     // Some number with fractional part is desirable, but we don't care too precisely since it is just a visual aid.
     let noise_scale = 3.75213;
@@ -156,9 +156,15 @@ pub(crate) fn calculate_back_image(ret: &mut [Cell]) {
             }
             let get_at = |x: i32, y: i32| {
                 if x < 0 || CHUNK_SIZE as i32 <= x || y < 0 || CHUNK_SIZE as i32 <= y {
-                    false
+                    terrain
+                        .get_tile(Position::new(
+                            x + chunk_pos.x * CHUNK_SIZE_I,
+                            y + chunk_pos.y * CHUNK_SIZE_I,
+                        ))
+                        .map(|tile| tile.water)
+                        .unwrap_or(false)
                 } else {
-                    ret[x as usize + y as usize * CHUNK_SIZE].water
+                    ret[(x + y * CHUNK_SIZE_I) as usize].water
                 }
             };
             let l = get_at(x - 1, y) as u8;
@@ -191,5 +197,13 @@ pub(crate) fn calculate_back_image(ret: &mut [Cell]) {
                 .max(0.)
                 .min(6.) as u8;
         }
+    }
+}
+
+pub(crate) fn calculate_back_image_all(terrain: &mut Chunks) {
+    for chunk_pos in &terrain.keys().copied().collect::<Vec<_>>() {
+        let mut chunk = std::mem::take(terrain.get_mut(chunk_pos).unwrap());
+        calculate_back_image(terrain, chunk_pos, &mut chunk);
+        terrain.insert(*chunk_pos, chunk);
     }
 }

@@ -12,11 +12,14 @@ use super::{
     power_network::build_power_networks,
     steam_engine::SteamEngine,
     structure::{Structure, StructureBoxed, StructureDynIter, StructureEntry, StructureId},
-    terrain::{calculate_back_image, gen_terrain, Chunks, ChunksExt, TerrainParameters},
+    terrain::{
+        calculate_back_image, gen_terrain, Chunks, ChunksExt, TerrainParameters, CHUNK_SIZE_I,
+    },
     transport_belt::TransportBelt,
     water_well::WaterWell,
     FactorishState, InventoryTrait, Position, PowerWire, Rotation,
 };
+use std::collections::HashSet;
 use wasm_bindgen::prelude::*;
 
 fn wrap_structure(s: StructureBoxed) -> StructureEntry {
@@ -32,17 +35,25 @@ fn update_water(
     terrain: &mut Chunks,
     _terrain_params: &TerrainParameters,
 ) {
+    let mut to_update = HashSet::new();
     for structure in structures {
         if let Some(dynamic) = structure.dynamic.as_deref() {
             let position = *dynamic.position();
             terrain
                 .get_tile_mut(position)
                 .map(|cell| cell.water = false);
+            to_update.insert(Position::new(
+                position.x.div_euclid(CHUNK_SIZE_I),
+                position.y.div_euclid(CHUNK_SIZE_I),
+            ));
         }
     }
 
-    for (_, chunk) in terrain {
-        calculate_back_image(chunk);
+    // Update back image in only touched chunks
+    for chunk_pos in &to_update {
+        let mut chunk = std::mem::take(terrain.get_mut(chunk_pos).unwrap());
+        calculate_back_image(terrain, &chunk_pos, &mut chunk);
+        terrain.insert(*chunk_pos, chunk);
     }
 }
 

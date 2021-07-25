@@ -37,7 +37,7 @@ use crate::{
     },
     perf::PerfStats,
     scenarios::select_scenario,
-    terrain::{calculate_back_image, Chunks, TerrainParameters, CHUNK_SIZE, CHUNK_SIZE2},
+    terrain::{calculate_back_image_all, Chunks, TerrainParameters, CHUNK_SIZE, CHUNK_SIZE2},
 };
 use assembler::Assembler;
 use boiler::Boiler;
@@ -851,9 +851,9 @@ impl FactorishState {
                 let y: usize = json_as_u64(json_get(&position, 1)?)? as usize;
                 new_chunk[x + y * CHUNK_SIZE] = from_value(json_take(tile, "cell")?)?;
             }
-            calculate_back_image(&mut new_chunk);
             self.board.insert(chunk_pos, new_chunk);
         }
+        calculate_back_image_all(&mut self.board);
 
         let structures = json
             .get_mut("structures")
