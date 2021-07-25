@@ -201,8 +201,6 @@ let unlimited = true;
 
     const canvas = document.getElementById('canvas');
     let canvasSize = canvas.getBoundingClientRect();
-    let viewPortWidth = canvasSize.width / 32;
-    let viewPortHeight = canvasSize.height / 32;
     const refreshSize = (event) => {
         canvasSize = canvas.getBoundingClientRect();
         canvas.width = canvasSize.width;
@@ -253,7 +251,7 @@ let unlimited = true;
     let selectedInventory = null;
     let selectedInventoryItem = null;
 
-    let miniMapDrag = false;
+    let miniMapDrag = null;
     const tilesize = 32;
     const textType = isIE() ? "Text" : "text/plain";
     var windowZIndex = 1000;
@@ -264,14 +262,12 @@ let unlimited = true;
     miniMapElem.style.position = 'absolute';
     miniMapElem.style.border = '1px solid #000';
     miniMapElem.onmousedown = (evt) => {
-        miniMapDrag = true;
+        miniMapDrag = [evt.offsetX, evt.offsetY];
     };
     miniMapElem.onmousemove = function(evt){
         if(miniMapDrag){
-            var rect = this.getBoundingClientRect();
-            const viewport = sim.set_viewport_pos((evt.clientX - rect.left) / rect.width * xsize,
-                (evt.clientY - rect.top) / rect.height * ysize);
-            [viewPortWidth, viewPortHeight] = [viewport[0] / 32., viewport[1] / 32.];
+            sim.delta_viewport_pos((evt.offsetX - miniMapDrag[0]) * tilesize, (evt.offsetY - miniMapDrag[1]) * tilesize);
+            miniMapDrag = [evt.offsetX, evt.offsetY, true];
         }
     };
     miniMapElem.onmouseup = (evt) => miniMapDrag = false;
