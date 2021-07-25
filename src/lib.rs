@@ -2795,6 +2795,7 @@ impl FactorishState {
 
         const WIRE_ATTACH_X: f64 = 28.;
         const WIRE_ATTACH_Y: f64 = 8.;
+        const WIRE_HANG: f64 = 0.15;
 
         let draw_wires = |wires: &[PowerWire]| {
             for PowerWire(first, second) in wires {
@@ -2813,9 +2814,13 @@ impl FactorishState {
                 } else {
                     continue;
                 };
+                let dx = (first.x - second.x) as f64;
+                let dy = (first.y - second.y) as f64;
+                let dist = (dx * dx + dy * dy).sqrt();
                 context.quadratic_curve_to(
                     (first.x + second.x) as f64 / 2. * TILE_SIZE + WIRE_ATTACH_X,
-                    (first.y + second.y) as f64 / 1.9 * TILE_SIZE + WIRE_ATTACH_Y,
+                    ((first.y + second.y) as f64 / 2. + dist * WIRE_HANG) * TILE_SIZE
+                        + WIRE_ATTACH_Y,
                     second.x as f64 * TILE_SIZE + WIRE_ATTACH_X,
                     second.y as f64 * TILE_SIZE + WIRE_ATTACH_Y,
                 );
