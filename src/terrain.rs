@@ -62,14 +62,16 @@ impl ChunksExt for Chunks {
     }
 }
 
-fn gen_chunk(
-    position: Position,
-    terrain_seed: u32,
-    noise_threshold: f64,
-    water_noise_threshold: f64,
-    resource_amount: f64,
-) -> Chunk {
-    let noise_scale = 3.75213;
+fn gen_chunk(position: Position, terrain_params: &TerrainParameters) -> Chunk {
+    let TerrainParameters {
+        terrain_seed,
+        water_noise_threshold,
+        resource_amount,
+        noise_scale,
+        noise_threshold,
+        ..
+    } = *terrain_params;
+
     let mut ret = vec![Cell::default(); CHUNK_SIZE2];
     let bits = 1;
     let mut rng = Xor128::new(terrain_seed);
@@ -122,30 +124,13 @@ fn gen_chunk(
 }
 
 pub(crate) fn gen_terrain(params: &TerrainParameters) -> Chunks {
-    let TerrainParameters {
-        width,
-        height,
-        terrain_seed,
-        water_noise_threshold,
-        resource_amount,
-        noise_scale: _,
-        noise_threshold,
-    } = *params;
+    let TerrainParameters { width, height, .. } = *params;
 
     let mut ret = HashMap::new();
     for y in 0..height as usize / CHUNK_SIZE {
         for x in 0..width as usize / CHUNK_SIZE {
             let pos = Position::new(x as i32, y as i32);
-            ret.insert(
-                pos,
-                gen_chunk(
-                    pos,
-                    terrain_seed,
-                    noise_threshold,
-                    water_noise_threshold,
-                    resource_amount,
-                ),
-            );
+            ret.insert(pos, gen_chunk(pos, params));
         }
     }
 
