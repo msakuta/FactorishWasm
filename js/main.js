@@ -277,8 +277,8 @@ let unlimited = true;
     miniMapElem.onmouseup = (evt) => miniMapDrag = false;
     miniMapElem.onmouseleave = (evt) => miniMapDrag = false;
     container.appendChild(miniMapElem);
-    miniMapElem.setAttribute("width", xsize);
-    miniMapElem.setAttribute("height", ysize);
+    miniMapElem.setAttribute("width", miniMapSize);
+    miniMapElem.setAttribute("height", miniMapSize);
     miniMapElem.style.width = miniMapSize + 'px';
     miniMapElem.style.height = miniMapSize + 'px';
     miniMapElem.style.right = '8px';
@@ -1276,7 +1276,26 @@ let unlimited = true;
             showBurnerStatus(selPos);
         }
 
-        sim.render_minimap(miniMapContext);
+        const minimapData = sim.render_minimap(miniMapSize, miniMapSize);
+        const viewportScale = sim.get_viewport_scale();
+        if(minimapData){
+            (async () => {
+                const imageBitmap = await createImageBitmap(minimapData);
+                miniMapContext.fillStyle = "#7f7f7f";
+                miniMapContext.fillRect(0, 0, miniMapSize, miniMapSize);
+                miniMapContext.drawImage(imageBitmap, 0, 0, miniMapSize, miniMapSize, 0, 0, miniMapSize, miniMapSize);
+                miniMapContext.strokeStyle = "blue";
+                miniMapContext.lineWidth = 1.;
+                const miniMapRect = miniMapElem.getBoundingClientRect();
+                const viewport = canvas.getBoundingClientRect();
+                miniMapContext.strokeRect(
+                    (miniMapRect.width - viewport.width / 32. / viewportScale) / 2,
+                    (miniMapRect.height - viewport.height / 32. / viewportScale) / 2,
+                    viewport.width / 32. / viewportScale,
+                    viewport.height / 32. / viewportScale,
+                );
+            })()
+        }
 
         if(showPerfGraph.checked){
             const colors = ["#fff", "#ff3f3f", "#7f7fff", "#00ff00", "#ff00ff", "#fff"];

@@ -21,9 +21,24 @@ pub(crate) struct TerrainParameters {
 
 pub(crate) const CHUNK_SIZE: usize = 16;
 pub(crate) const CHUNK_SIZE_I: i32 = CHUNK_SIZE as i32;
+pub(crate) const CHUNK_SIZE_F: f64 = CHUNK_SIZE as f64;
 pub(crate) const CHUNK_SIZE2: usize = CHUNK_SIZE * CHUNK_SIZE;
 
-pub(crate) type Chunk = Vec<Cell>;
+pub(crate) struct Chunk {
+    pub cells: Vec<Cell>,
+    /// Maintain a buffer for rendering minimap for performance
+    pub minimap_buffer: Vec<u8>,
+}
+
+impl Chunk {
+    pub(crate) fn new(cells: Vec<Cell>) -> Self {
+        Self {
+            cells,
+            minimap_buffer: vec![0u8; CHUNK_SIZE2 * 4],
+        }
+    }
+}
+
 pub(crate) type Chunks = HashMap<Position, Chunk>;
 
 pub(crate) trait ChunksExt {
@@ -38,7 +53,7 @@ impl ChunksExt for Chunks {
             position.y.div_euclid(CHUNK_SIZE_I),
         ));
         if let Some(chunk) = chunk {
-            chunk.get(
+            chunk.cells.get(
                 (position.x.rem_euclid(CHUNK_SIZE_I)
                     + position.y.rem_euclid(CHUNK_SIZE_I) * CHUNK_SIZE_I) as usize,
             )
@@ -53,7 +68,7 @@ impl ChunksExt for Chunks {
             position.y.div_euclid(CHUNK_SIZE_I),
         ));
         if let Some(chunk) = chunk {
-            chunk.get_mut(
+            chunk.cells.get_mut(
                 (position.x.rem_euclid(CHUNK_SIZE_I)
                     + position.y.rem_euclid(CHUNK_SIZE_I) * CHUNK_SIZE_I) as usize,
             )
@@ -123,7 +138,7 @@ pub(crate) fn gen_chunk(position: Position, terrain_params: &TerrainParameters) 
             }
         }
     }
-    ret
+    Chunk::new(ret)
 }
 
 pub(crate) fn gen_terrain(params: &TerrainParameters) -> Chunks {
@@ -141,7 +156,7 @@ pub(crate) fn gen_terrain(params: &TerrainParameters) -> Chunks {
     ret
 }
 
-pub(crate) fn calculate_back_image(terrain: &Chunks, chunk_pos: &Position, ret: &mut Chunk) {
+pub(crate) fn calculate_back_image(terrain: &Chunks, chunk_pos: &Position, ret: &mut Vec<Cell>) {
     let mut rng = Xor128::new(23424321);
     // Some number with fractional part is desirable, but we don't care too precisely since it is just a visual aid.
     let noise_scale = 3.75213;
@@ -203,8 +218,8 @@ pub(crate) fn calculate_back_image(terrain: &Chunks, chunk_pos: &Position, ret: 
 
 pub(crate) fn calculate_back_image_all(terrain: &mut Chunks) {
     for chunk_pos in &terrain.keys().copied().collect::<Vec<_>>() {
-        let mut chunk = std::mem::take(terrain.get_mut(chunk_pos).unwrap());
+        let mut chunk = std::mem::take(&mut terrain.get_mut(chunk_pos).unwrap().cells);
         calculate_back_image(terrain, chunk_pos, &mut chunk);
-        terrain.insert(*chunk_pos, chunk);
+        terrain.get_mut(chunk_pos).map(|c| c.cells = chunk);
     }
 }

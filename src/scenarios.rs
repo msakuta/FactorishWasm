@@ -51,9 +51,9 @@ fn update_water(
 
     // Update back image in only touched chunks
     for chunk_pos in &to_update {
-        let mut chunk = std::mem::take(terrain.get_mut(chunk_pos).unwrap());
-        calculate_back_image(terrain, &chunk_pos, &mut chunk);
-        terrain.insert(*chunk_pos, chunk);
+        let mut cells = std::mem::take(&mut terrain.get_mut(chunk_pos).unwrap().cells);
+        calculate_back_image(terrain, &chunk_pos, &mut cells);
+        terrain.get_mut(chunk_pos).map(|c| c.cells = cells);
     }
 }
 

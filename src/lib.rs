@@ -38,8 +38,8 @@ use crate::{
     perf::PerfStats,
     scenarios::select_scenario,
     terrain::{
-        calculate_back_image, calculate_back_image_all, gen_chunk, Chunks, TerrainParameters,
-        CHUNK_SIZE, CHUNK_SIZE2, CHUNK_SIZE_I,
+        calculate_back_image, calculate_back_image_all, gen_chunk, Chunk, Chunks,
+        TerrainParameters, CHUNK_SIZE, CHUNK_SIZE2, CHUNK_SIZE_F, CHUNK_SIZE_I,
     },
 };
 use assembler::Assembler;
@@ -67,7 +67,7 @@ use water_well::{FluidType, WaterWell};
 
 use serde::{Deserialize, Serialize};
 use std::hash::Hash;
-use std::{cell::RefCell, collections::HashMap, convert::TryFrom};
+use std::{collections::HashMap, convert::TryFrom};
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::{Clamped, JsCast};
 use web_sys::{
@@ -430,16 +430,17 @@ fn apply_bounds(
     if let Some(bounds) = bounds.as_ref() {
         let left = ((-viewport.x).floor() as i32).max(0);
         let top = ((-viewport.y).floor() as i32).max(0);
-        let right =
-            (((viewport_width / 32. / viewport.scale - viewport.x) + 1.) as i32).min(bounds.width);
-        let bottom = (((viewport_height / 32. / viewport.scale - viewport.y) + 1.) as i32)
-            .min(bounds.height);
+        // Compensate the inclusive boundary with subtracting bounds.width and height by 1
+        let right = (((viewport_width / TILE_SIZE / viewport.scale - viewport.x) + 1.) as i32)
+            .min(bounds.width - 1);
+        let bottom = (((viewport_height / TILE_SIZE / viewport.scale - viewport.y) + 1.) as i32)
+            .min(bounds.height - 1);
         (left, top, right, bottom)
     } else {
         let left = (-viewport.x).floor() as i32;
         let top = (-viewport.y).floor() as i32;
-        let right = ((viewport_width / 32. / viewport.scale - viewport.x) + 1.) as i32;
-        let bottom = ((viewport_height / 32. / viewport.scale - viewport.y) + 1.) as i32;
+        let right = ((viewport_width / TILE_SIZE / viewport.scale - viewport.x) + 1.) as i32;
+        let bottom = ((viewport_height / TILE_SIZE / viewport.scale - viewport.y) + 1.) as i32;
         (left, top, right, bottom)
     }
 }
@@ -476,7 +477,7 @@ pub struct FactorishState {
     cursor: Option<[i32; 2]>,
     info_elem: Option<HtmlDivElement>,
     on_player_update: js_sys::Function,
-    minimap_buffer: RefCell<Vec<u8>>,
+    minimap_buffer: Vec<u8>,
     power_wires: Vec<PowerWire>,
     popup_texts: Vec<PopupText>,
     debug_bbox: bool,
@@ -598,7 +599,7 @@ impl FactorishState {
                 .collect(),
             },
             info_elem: None,
-            minimap_buffer: RefCell::new(vec![]),
+            minimap_buffer: vec![],
             power_wires: vec![],
             power_networks: vec![],
             popup_texts: vec![],
@@ -769,6 +770,7 @@ impl FactorishState {
                             serde_json::to_value(chunk.0)?,
                             chunk
                                 .1
+                                .cells
                                 .iter()
                                 .enumerate()
                                 .filter(|(_, cell)| cell.ore.is_some() || cell.water)
@@ -901,7 +903,7 @@ impl FactorishState {
                 let y: usize = json_as_u64(json_get(&position, 1)?)? as usize;
                 new_chunk[x + y * CHUNK_SIZE] = from_value(json_take(tile, "cell")?)?;
             }
-            self.board.insert(chunk_pos, new_chunk);
+            self.board.insert(chunk_pos, Chunk::new(new_chunk));
         }
         calculate_back_image_all(&mut self.board);
 
@@ -1359,7 +1361,7 @@ impl FactorishState {
         let (chunk_pos, mp) = tile.div_mod(CHUNK_SIZE as i32);
         let chunk = self.board.get(&chunk_pos)?;
         if 0 <= mp.x && mp.x < CHUNK_SIZE as i32 && 0 <= mp.y && mp.y < CHUNK_SIZE as i32 {
-            Some(chunk[mp.x as usize + mp.y as usize * CHUNK_SIZE])
+            Some(chunk.cells[mp.x as usize + mp.y as usize * CHUNK_SIZE])
         } else {
             None
         }
@@ -1369,7 +1371,7 @@ impl FactorishState {
         let (chunk_pos, mp) = tile.div_mod(CHUNK_SIZE as i32);
         let chunk = self.board.get_mut(&chunk_pos)?;
         if 0 <= mp.x && mp.x < CHUNK_SIZE as i32 && 0 <= mp.y && mp.y < CHUNK_SIZE as i32 {
-            Some(&mut chunk[mp.x as usize + mp.y as usize * CHUNK_SIZE])
+            Some(&mut chunk.cells[mp.x as usize + mp.y as usize * CHUNK_SIZE])
         } else {
             None
         }
@@ -1450,7 +1452,7 @@ impl FactorishState {
                         let (chunk_pos, mp) =
                             Position::new(cursor[0], cursor[1]).div_mod(CHUNK_SIZE as i32);
                         if let Some(chunk) = self.board.get(&chunk_pos) {
-                            let cell = &chunk[mp.x as usize + mp.y as usize * CHUNK_SIZE];
+                            let cell = &chunk.cells[mp.x as usize + mp.y as usize * CHUNK_SIZE];
                             format!(
                                 r#"Empty tile<br>
                                 {}<br>"#,
@@ -1579,9 +1581,9 @@ impl FactorishState {
                 &StructureDynIter::new_all(&mut self.structures),
                 false,
             )?;
-            if let Ok(ref mut data) = self.minimap_buffer.try_borrow_mut() {
-                self.render_minimap_data_pixel(data, &position);
-            }
+            let mut chunks = std::mem::take(&mut self.board);
+            self.render_minimap_data_pixel(&mut chunks, &position);
+            self.board = chunks;
             for (item_type, count) in structure.destroy_inventory() {
                 popup_text += &format!("+{} {}\n", count, &item_to_str(&item_type));
                 self.player.add_item(&item_type, count)
@@ -2155,9 +2157,10 @@ impl FactorishState {
 
                         self.update_fluid_connections(&cursor)?;
 
-                        if let Ok(ref mut data) = self.minimap_buffer.try_borrow_mut() {
-                            self.render_minimap_data_pixel(data, &cursor);
-                        }
+                        let mut chunks = std::mem::take(&mut self.board);
+                        self.render_minimap_data_pixel(&mut chunks, &cursor);
+                        self.board = chunks;
+
                         if let Some(count) = self.player.inventory.get_mut(&selected_tool) {
                             *count -= 1;
                         }
@@ -2343,19 +2346,32 @@ impl FactorishState {
     }
 
     fn render_minimap_data(&mut self) -> Result<(), JsValue> {
-        let mut data = self
-            .minimap_buffer
-            .try_borrow_mut()
-            .map_err(|_| js_str!("Couldn't acquire mutable ref for minimap buffer"))?;
-        *data = vec![0u8; (self.width * self.height * 4) as usize];
+        let mut chunks = std::mem::take(&mut self.board);
+        let mut painted = 0;
+        for (chunk_pos, chunk) in &mut chunks {
+            painted += self.render_minimap_chunk(chunk_pos, chunk);
+        }
+        self.board = chunks;
 
-        for y in 0..self.height as i32 {
-            for x in 0..self.width as i32 {
-                let cell = self.tile_at(&Position { x, y }).unwrap();
-                let start = ((x + y * self.width as i32) * 4) as usize;
-                data[start + 3] = 255;
-                let color = Self::color_of_cell(&cell);
-                data[start..start + 3].copy_from_slice(&color);
+        console_log!("painted {}", painted);
+
+        Ok(())
+    }
+
+    fn render_minimap_chunk(&self, chunk_pos: &Position, chunk: &mut Chunk) -> usize {
+        let mut painted = 0;
+        let data = &mut chunk.minimap_buffer;
+
+        for y in 0..CHUNK_SIZE_I {
+            for x in 0..CHUNK_SIZE_I {
+                let cell_pos = Position::new(x, y);
+                if let Some(cell) = chunk.cells.get((x + y * CHUNK_SIZE_I) as usize) {
+                    let start = ((cell_pos.x + cell_pos.y * CHUNK_SIZE_I) * 4) as usize;
+                    data[start + 3] = 255;
+                    let color = Self::color_of_cell(&cell);
+                    data[start..start + 3].copy_from_slice(&color);
+                    painted += 1;
+                }
             }
         }
 
@@ -2363,17 +2379,22 @@ impl FactorishState {
         let color = [0x00, 0xff, 0x7f];
         for structure in self.structure_iter() {
             let Position { x, y } = *structure.position();
-            if x < self.width as i32 && y < self.height as i32 {
-                let start = ((x + y * self.width as i32) * 4) as usize;
+            if chunk_pos.x * CHUNK_SIZE_I <= x
+                && x < (chunk_pos.x + 1) * CHUNK_SIZE_I
+                && chunk_pos.y * CHUNK_SIZE_I <= y
+                && y < (chunk_pos.y + 1) * CHUNK_SIZE_I
+            {
+                let start = ((x.rem_euclid(CHUNK_SIZE_I)
+                    + y.rem_euclid(CHUNK_SIZE_I) * CHUNK_SIZE_I)
+                    * 4) as usize;
                 data[start..start + 3].copy_from_slice(&color);
             }
         }
 
-        Ok(())
+        painted
     }
 
-    fn render_minimap_data_pixel(&self, data: &mut Vec<u8>, position: &Position) {
-        let Position { x, y } = *position;
+    fn render_minimap_data_pixel(&self, chunks: &mut Chunks, position: &Position) {
         let color;
         if self.structures.iter().any(|structure| {
             structure
@@ -2387,8 +2408,11 @@ impl FactorishState {
             let cell = self.tile_at(position).unwrap();
             color = Self::color_of_cell(&cell);
         }
-        let start = ((x + y * self.width as i32) * 4) as usize;
-        data[start..start + 3].copy_from_slice(&color);
+        let (chunk_pos, cell_pos) = position.div_mod(CHUNK_SIZE_I);
+        if let Some(chunk) = chunks.get_mut(&chunk_pos) {
+            let start = ((cell_pos.x + cell_pos.y * self.width as i32) * 4) as usize;
+            chunk.minimap_buffer[start..start + 3].copy_from_slice(&color);
+        }
     }
 
     pub fn reset_viewport(&mut self, canvas: HtmlCanvasElement) {
@@ -2650,6 +2674,10 @@ impl FactorishState {
         )
     }
 
+    pub fn get_viewport_scale(&self) -> f64 {
+        self.viewport.scale
+    }
+
     pub fn set_viewport_pos(&mut self, x: f64, y: f64) -> Result<js_sys::Array, JsValue> {
         let viewport = self.get_viewport();
         self.viewport.x = -(x - viewport.0 / TILE_SIZE / 2.)
@@ -2693,7 +2721,8 @@ impl FactorishState {
                         self.board.len()
                     );
                     let mut chunk = gen_chunk(chunk_pos, &self.terrain_params);
-                    calculate_back_image(&mut self.board, &chunk_pos, &mut chunk);
+                    calculate_back_image(&mut self.board, &chunk_pos, &mut chunk.cells);
+                    self.render_minimap_chunk(&chunk_pos, &mut chunk);
                     self.board.insert(chunk_pos, chunk);
                 }
             }
@@ -2742,8 +2771,8 @@ impl FactorishState {
             // let mut cell_draws = 0;
             let (left, top, right, bottom) = apply_bounds(&self.bounds, &self.viewport, self.viewport_width, self.viewport_height);
 
-            for y in top..bottom {
-                for x in left..right {
+            for y in top..=bottom {
+                for x in left..=right {
                     let chunk_pos = Position::new(x.div_euclid(CHUNK_SIZE_I), y.div_euclid(CHUNK_SIZE_I));
                     let chunk = self.board.get(&chunk_pos);
                     let chunk = if let Some(chunk) = chunk {
@@ -2752,7 +2781,7 @@ impl FactorishState {
                         continue;
                     };
                     let (mx, my) = (x as usize % CHUNK_SIZE, y as usize % CHUNK_SIZE);
-                    let cell = &chunk[(mx + my * CHUNK_SIZE) as usize];
+                    let cell = &chunk.cells[(mx + my * CHUNK_SIZE) as usize];
                     let (dx, dy) = (x as f64 * 32., y as f64 * 32.);
                     if cell.water || cell.image != 0 {
                         let srcx = cell.image % 4;
@@ -3000,36 +3029,91 @@ impl FactorishState {
         Ok(())
     }
 
-    pub fn render_minimap(&mut self, context: CanvasRenderingContext2d) -> Result<(), JsValue> {
+    /// Instead of rendering the minimap on the canvas context, it will return a ImageData
+    /// that can be used to construct ImageBitmap on JS side, because dealing with promise in Rust
+    /// code is cumbersome.
+    pub fn render_minimap(
+        &mut self,
+        minimap_width: u32,
+        minimap_height: u32,
+    ) -> Result<ImageData, JsValue> {
         let start_render = performance().now();
-        let width = self.width as f64;
-        let height = self.height as f64;
-        context.save();
 
-        context.set_fill_style(&JsValue::from_str("#7f7f7f"));
-        context.fill_rect(0., 0., width, height);
-
-        if let Ok(ref mut data) = self.minimap_buffer.try_borrow_mut() {
-            let image_data = ImageData::new_with_u8_clamped_array_and_sh(
-                Clamped::<_>(&mut *data),
-                self.width as u32,
-                self.height as u32,
-            )?;
-
-            context.put_image_data(&image_data, 0., 0.)?;
+        struct ImageBuffer<'a> {
+            buf: &'a mut [u8],
+            width: usize,
+            height: usize,
         }
 
-        context.set_stroke_style(&JsValue::from_str("blue"));
-        context.set_line_width(1.);
-        let viewport = self.get_viewport();
-        context.stroke_rect(
-            -self.viewport.x,
-            -self.viewport.y,
-            viewport.0 / 32.,
-            viewport.1 / 32.,
-        );
-        context.restore();
+        fn copy_rect(dest: &mut ImageBuffer, src: &ImageBuffer, x: i32, y: i32) {
+            let x0 = x.min(dest.width as i32).max(0) as usize;
+            let x1 = (x + src.width as i32).min(dest.width as i32).max(0) as usize;
+            let sx0 = (x0 as i32 - x).min(src.width as i32).max(0) as usize;
+            if x0 == x1 {
+                return;
+            }
+            let sx1 = (sx0 + (x1 - x0)).min(src.width).max(0) as usize;
+            let y0 = y.min(dest.height as i32).max(0);
+            let sy0 = (y0 - y) as usize;
+            let y0 = y0 as usize;
+            let y1 = (y + src.height as i32).min(dest.height as i32).max(0) as usize;
+            if y0 == y1 {
+                return;
+            }
+            // let dblen = dest.buf.len();
+            // let sblen = src.buf.len();
+            // console_log!("src: {} y: {} y1: {} sx0 {}, sx1 {}", src.height, y, y1, sx0, sx1);
+            for y in y0..y1 {
+                let sy = y - y0 + sy0;
+                let d0 = (x0 + y * dest.width) * 4;
+                let d1 = (x1 + y * dest.width) * 4;
+                let s0 = (sx0 + sy * src.width) * 4;
+                let s1 = (sx1 + sy * src.width) * 4;
+                // console_log!("y {}: d [{}] {}..{}/{} s [{}] {}..{}/{}", y,
+                //     d1 - d0, d0, d1, dblen,
+                //     s1 - s0, s0, s1, sblen);
+                let d = &mut dest.buf[d0..d1];
+                let s = &src.buf[s0..s1];
+                if d.len() != s.len() {
+                    panic!("d {} s {}", d.len(), s.len());
+                }
+                d.copy_from_slice(s);
+            }
+        }
+
+        let vp = self.get_viewport();
+        let data = &mut self.minimap_buffer;
+        if data.len() != (minimap_width * minimap_height * 4) as usize {
+            *data = vec![0u8; (minimap_width * minimap_height * 4) as usize];
+        }
+
+        data.fill(0);
+        let mut data_buf = ImageBuffer {
+            buf: data.as_mut(),
+            width: minimap_width as usize,
+            height: minimap_height as usize,
+        };
+        for (pos, chunk) in &mut self.board {
+            let src = ImageBuffer {
+                buf: &mut chunk.minimap_buffer,
+                width: CHUNK_SIZE,
+                height: CHUNK_SIZE,
+            };
+            copy_rect(
+                &mut data_buf,
+                &src,
+                pos.x * CHUNK_SIZE_I + self.viewport.x as i32 + minimap_width as i32 / 2
+                    - (vp.0 / CHUNK_SIZE_F) as i32 / 4,
+                pos.y * CHUNK_SIZE_I + self.viewport.y as i32 + minimap_height as i32 / 2
+                    - (vp.1 / CHUNK_SIZE_F) as i32 / 4,
+            );
+        }
+        let image_data = ImageData::new_with_u8_clamped_array_and_sh(
+            Clamped::<_>(&mut *data),
+            minimap_width as u32,
+            minimap_height as u32,
+        )?;
         self.perf_minimap.add(performance().now() - start_render);
-        Ok(())
+        return Ok(image_data);
     }
 }
