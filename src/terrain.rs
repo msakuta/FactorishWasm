@@ -17,6 +17,7 @@ pub(crate) struct TerrainParameters {
     pub resource_amount: f64,
     pub noise_scale: f64,
     pub noise_threshold: f64,
+    pub noise_octaves: u32,
 }
 
 pub(crate) const CHUNK_SIZE: usize = 16;
@@ -88,11 +89,12 @@ pub(crate) fn gen_chunk(position: Position, terrain_params: &TerrainParameters) 
         resource_amount,
         noise_scale,
         noise_threshold,
+        noise_octaves,
         ..
     } = *terrain_params;
 
     let mut ret = vec![Cell::default(); CHUNK_SIZE2];
-    let bits = 1;
+    let bits = noise_octaves;
     let mut rng = Xor128::new(terrain_seed);
     let ocean_terms = gen_terms(&mut rng, bits);
     let iron_terms = gen_terms(&mut rng, bits);

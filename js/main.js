@@ -160,14 +160,16 @@ let unlimited = true;
         });
     }
 
-    let waterNoiseThreshold = 0.35;
+    let waterNoiseThreshold = 0.28;
     sliderInit("waterNoiseThreshold", "waterNoiseThresholdLabel", value => waterNoiseThreshold = value);
     let resourceAmount = 1000.;
     sliderInit("resourceAmount", "resourceAmountLabel", value => resourceAmount = value);
     let noiseScale = 5.;
     sliderInit("noiseScale", "noiseScaleLabel", value => noiseScale = value);
-    let noiseThreshold = 0.45;
+    let noiseThreshold = 0.35;
     sliderInit("noiseThreshold", "noiseThresholdLabel", value => noiseThreshold = value);
+    let noiseOctaves = 3;
+    sliderInit("noiseOctaves", "noiseOctavesLabel", value => noiseOctaves = value);
 
     function initPane(buttonId, containerId){
         const button = document.getElementById(buttonId);
@@ -195,6 +197,7 @@ let unlimited = true;
             resource_amount: resourceAmount,
             noise_scale: noiseScale,
             noise_threshold: noiseThreshold,
+            noise_octaves: noiseOctaves,
         },
         updateInventory,
         scenarioSelectElem.value);
@@ -1239,6 +1242,7 @@ let unlimited = true;
                 resource_amount: resourceAmount,
                 noise_scale: noiseScale,
                 noise_threshold: noiseThreshold,
+                noise_octaves: noiseOctaves,
             },
             updateInventory,
             scenarioSelectElem.value);
