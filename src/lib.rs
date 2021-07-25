@@ -1,66 +1,44 @@
 #![allow(non_upper_case_globals)]
 
-macro_rules! console_log {
-    ($fmt:expr, $($arg1:expr),*) => {
-        crate::log(&format!($fmt, $($arg1),+))
-    };
-    ($fmt:expr) => {
-        crate::log($fmt)
-    }
-}
-
-/// format-like macro that returns js_sys::String
-macro_rules! js_str {
-    ($fmt:expr, $($arg1:expr),*) => {
-        JsValue::from_str(&format!($fmt, $($arg1),+))
-    };
-    ($fmt:expr) => {
-        JsValue::from_str($fmt)
-    }
-}
-
-/// format-like macro that returns Err(js_sys::String)
-macro_rules! js_err {
-    ($fmt:expr, $($arg1:expr),*) => {
-        Err(JsValue::from_str(&format!($fmt, $($arg1),+)))
-    };
-    ($fmt:expr) => {
-        Err(JsValue::from_str($fmt))
-    }
-}
-
-macro_rules! hash_map {
-    { $($key:expr => $value:expr),+ } => {
-        {
-            let mut m = ::std::collections::HashMap::new();
-            $(
-                m.insert($key, $value);
-            )+
-            m
-        }
-    };
-}
+/// Macros needs to come first in order to be accessible from all the codes
+#[macro_use]
+mod macros;
 
 mod assembler;
 mod boiler;
 mod chest;
+mod drop_items;
 mod dyn_iter;
 mod elect_pole;
 mod furnace;
 mod inserter;
+mod inventory;
 mod items;
 mod offshore_pump;
 mod ore_mine;
+mod perf;
 mod perlin_noise;
 mod pipe;
 mod power_network;
+mod scenarios;
 mod splitter;
 mod steam_engine;
 mod structure;
+mod terrain;
 mod transport_belt;
 mod utils;
 mod water_well;
 
+use crate::{
+    drop_items::{
+        add_index, build_index, drop_item_id_iter, drop_item_iter, hit_check, hit_check_with_index,
+        remove_index, update_index, DropItem, DropItemEntry, DropItemId, DropItemIndex,
+        DROP_ITEM_SIZE, INDEX_CHUNK_SIZE,
+    },
+    perf::PerfStats,
+    scenarios::select_scenario,
+    terrain::{calculate_back_image, Chunks, TerrainParameters, CHUNK_SIZE, CHUNK_SIZE2},
+};
 use assembler::Assembler;
 use boiler::Boiler;
 use chest::Chest;
@@ -68,10 +46,11 @@ use dyn_iter::{Chained, DynIterMut, MutRef};
 use elect_pole::ElectPole;
 use furnace::Furnace;
 use inserter::Inserter;
-use items::{item_to_str, render_drop_item, str_to_item, DropItem, ItemType};
+use inventory::{Inventory, InventoryTrait, InventoryType};
+use items::{item_to_str, render_drop_item, str_to_item, ItemType};
 use offshore_pump::OffshorePump;
 use ore_mine::OreMine;
-use perlin_noise::{gen_terms, perlin_noise_pixel, Xor128};
+use perlin_noise::Xor128;
 use pipe::Pipe;
 use power_network::{build_power_networks, PowerNetwork};
 use splitter::Splitter;
@@ -137,10 +116,14 @@ fn body() -> web_sys::HtmlElement {
     document().body().expect("document should have a body")
 }
 
+fn performance() -> web_sys::Performance {
+    window()
+        .performance()
+        .expect("performance should be available")
+}
+
 const TILE_SIZE: f64 = 32.;
 const TILE_SIZE_I: i32 = TILE_SIZE as i32;
-const DROP_ITEM_SIZE: f64 = 8.;
-const DROP_ITEM_SIZE_I: i32 = DROP_ITEM_SIZE as i32;
 
 const COAL_POWER: f64 = 100.; // kilojoules
 const SAVE_VERSION: i64 = 5;
@@ -201,144 +184,6 @@ impl Cell {
             Some(OreValue(Ore::Stone, _)) => Some(ItemType::StoneOre),
             _ => None,
         }
-    }
-}
-
-const CHUNK_SIZE: usize = 16;
-const CHUNK_SIZE2: usize = CHUNK_SIZE * CHUNK_SIZE;
-
-type Chunk = Vec<Cell>;
-type Chunks = HashMap<Position, Chunk>;
-
-fn gen_chunk(
-    position: Position,
-    terrain_seed: u32,
-    noise_threshold: f64,
-    water_noise_threshold: f64,
-    resource_amount: f64,
-) -> Chunk {
-    let noise_scale = 3.75213;
-    let mut ret = vec![Cell::default(); CHUNK_SIZE2];
-    let bits = 1;
-    let mut rng = Xor128::new(terrain_seed);
-    let ocean_terms = gen_terms(&mut rng, bits);
-    let iron_terms = gen_terms(&mut rng, bits);
-    let copper_terms = gen_terms(&mut rng, bits);
-    let coal_terms = gen_terms(&mut rng, bits);
-    let stone_terms = gen_terms(&mut rng, bits);
-    for y in 0..CHUNK_SIZE {
-        for x in 0..CHUNK_SIZE {
-            let [fx, fy] = [
-                (x as f64 + position.x as f64 * CHUNK_SIZE as f64) / noise_scale,
-                (y as f64 + position.y as f64 * CHUNK_SIZE as f64) / noise_scale,
-            ];
-            let cell = &mut ret[(x + y * CHUNK_SIZE) as usize];
-            cell.water = water_noise_threshold < perlin_noise_pixel(fx, fy, bits, &ocean_terms);
-            if cell.water {
-                continue; // No ores in water
-            }
-            let iron = (perlin_noise_pixel(fx, fy, bits, &iron_terms) - noise_threshold)
-                * 4.
-                * resource_amount;
-            let copper = (perlin_noise_pixel(fx, fy, bits, &copper_terms) - noise_threshold)
-                * 4.
-                * resource_amount;
-            let coal = (perlin_noise_pixel(fx, fy, bits, &coal_terms) - noise_threshold)
-                * 4.
-                * resource_amount;
-            let stone = (perlin_noise_pixel(fx, fy, bits, &stone_terms) - noise_threshold)
-                * 4.
-                * resource_amount;
-
-            match [
-                (Ore::Iron, iron),
-                (Ore::Copper, copper),
-                (Ore::Coal, coal),
-                (Ore::Stone, stone),
-            ]
-            .iter()
-            .map(|(ore, v)| (ore, v.max(0.) as u32))
-            .max_by_key(|v| v.1)
-            {
-                Some((ore, v)) if 0 < v => cell.ore = Some(OreValue(*ore, v)),
-                _ => (),
-            }
-        }
-    }
-    calculate_back_image(&mut ret, CHUNK_SIZE, CHUNK_SIZE);
-    ret
-}
-
-type Inventory = HashMap<ItemType, usize>;
-
-trait InventoryTrait {
-    fn remove_item(&mut self, item: &ItemType) -> bool {
-        self.remove_items(item, 1)
-    }
-    fn remove_items(&mut self, item: &ItemType, count: usize) -> bool;
-    fn add_item(&mut self, item: &ItemType) {
-        self.add_items(item, 1);
-    }
-    fn add_items(&mut self, item: &ItemType, count: usize);
-    fn count_item(&self, item: &ItemType) -> usize;
-    fn merge(&mut self, other: Inventory);
-    fn describe(&self) -> String;
-}
-
-impl InventoryTrait for Inventory {
-    fn remove_items(&mut self, item: &ItemType, count: usize) -> bool {
-        if let Some(entry) = self.get_mut(item) {
-            if *entry <= count {
-                self.remove(item);
-            } else {
-                *entry -= count;
-            }
-            true
-        } else {
-            false
-        }
-    }
-
-    fn add_items(&mut self, item: &ItemType, count: usize) {
-        if let Some(entry) = self.get_mut(item) {
-            *entry += count;
-        } else {
-            self.insert(*item, count);
-        }
-    }
-
-    fn count_item(&self, item: &ItemType) -> usize {
-        *self.get(item).unwrap_or(&0)
-    }
-
-    fn merge(&mut self, other: Inventory) {
-        for (k, v) in other {
-            if let Some(vv) = self.get_mut(&k) {
-                *vv += v;
-            } else {
-                self.insert(k, v);
-            }
-        }
-    }
-
-    fn describe(&self) -> String {
-        self.iter()
-            .map(|item| format!("{:?}: {}<br>", item.0, item.1))
-            .fold(String::from(""), |accum, item| accum + &item)
-    }
-}
-
-#[derive(PartialEq, Debug, Serialize, Deserialize)]
-enum InventoryType {
-    Input,
-    Output,
-    Burner,
-}
-
-impl TryFrom<JsValue> for InventoryType {
-    type Error = JsValue;
-    fn try_from(value: JsValue) -> Result<Self, JsValue> {
-        value.into_serde().map_err(|e| js_str!("{}", e.to_string()))
     }
 }
 
@@ -550,56 +395,19 @@ struct OreHarvesting {
     timer: i32,
 }
 
-fn calculate_back_image(ret: &mut [Cell], width: usize, height: usize) {
-    let mut rng = Xor128::new(23424321);
-    // Some number with fractional part is desirable, but we don't care too precisely since it is just a visual aid.
-    let noise_scale = 3.75213;
-    let bits = 1;
-    let grass_terms = gen_terms(&mut rng, bits);
-    for uy in 0..height {
-        let y = uy as i32;
-        for ux in 0..width {
-            let x = ux as i32;
-            if ret[(ux + uy * width) as usize].water {
-                ret[(ux + uy * width) as usize].image = 15;
-                continue;
-            }
-            let get_at = |x: i32, y: i32| {
-                if x < 0 || width as i32 <= x || y < 0 || height as i32 <= y {
-                    false
-                } else {
-                    ret[(x as usize + y as usize * width) as usize].water
-                }
-            };
-            let l = get_at(x - 1, y) as u8;
-            let t = get_at(x, y - 1) as u8;
-            let r = get_at(x + 1, y) as u8;
-            let b = get_at(x, y + 1) as u8;
-            let lt = get_at(x - 1, y - 1) as u8;
-            let rt = get_at(x + 1, y - 1) as u8;
-            let rb = get_at(x + 1, y + 1) as u8;
-            let lb = get_at(x - 1, y + 1) as u8;
-            let neighbor = l | (t << 1) | (r << 2) | (b << 3);
-            let diagonal = lt | (rt << 1) | (rb << 2) | (lb << 3);
-            let cell = &mut ret[(ux + uy * width) as usize];
-            cell.image = if neighbor != 0 {
-                neighbor
-            } else if diagonal != 0 {
-                diagonal | (1 << 4)
-            } else {
-                0
-            };
+#[derive(Serialize, Deserialize)]
+struct Viewport {
+    x: f64,
+    y: f64,
+    scale: f64,
+}
 
-            cell.grass_image = ((perlin_noise_pixel(
-                x as f64 / noise_scale,
-                y as f64 / noise_scale,
-                bits,
-                &grass_terms,
-            ) - 0.)
-                * 4.
-                * 6.)
-                .max(0.)
-                .min(6.) as u8;
+impl Default for Viewport {
+    fn default() -> Self {
+        Self {
+            x: 0.,
+            y: 0.,
+            scale: 1.,
         }
     }
 }
@@ -613,14 +421,12 @@ pub struct FactorishState {
     height: u32,
     viewport_width: f64,
     viewport_height: f64,
-    viewport_x: f64,
-    viewport_y: f64,
-    view_scale: f64,
+    viewport: Viewport,
     board: Chunks,
     structures: Vec<StructureEntry>,
     selected_structure_inventory: Option<Position>,
-    drop_items: Vec<DropItem>,
-    serial_no: u32,
+    drop_items: Vec<DropItemEntry>,
+    drop_items_index: DropItemIndex,
     tool_belt: [Option<ItemType>; 10],
     power_networks: Vec<PowerNetwork>,
 
@@ -642,6 +448,13 @@ pub struct FactorishState {
     debug_bbox: bool,
     debug_fluidbox: bool,
     debug_power_network: bool,
+
+    // Performance measurements
+    perf_structures: PerfStats,
+    perf_drop_items: PerfStats,
+    perf_simulate: PerfStats,
+    perf_minimap: PerfStats,
+    perf_render: PerfStats,
 
     // on_show_inventory: js_sys::Function,
     image_dirt: Option<ImageBundle>,
@@ -692,40 +505,35 @@ enum NewObjectErr {
 impl FactorishState {
     #[wasm_bindgen(constructor)]
     pub fn new(
-        width: u32,
-        height: u32,
+        terrain_params: JsValue,
         on_player_update: js_sys::Function,
         // on_show_inventory: js_sys::Function,
-        terrain_seed: u32,
-        water_noise_threshold: f64,
-        resource_amount: f64,
-        noise_scale: f64,
-        noise_threshold: f64,
+        scenario: &str,
     ) -> Result<FactorishState, JsValue> {
         console_log!("FactorishState constructor");
 
-        fn wrap_structure(s: StructureBoxed) -> StructureEntry {
-            StructureEntry {
-                gen: 0,
-                dynamic: Some(s),
-            }
-        }
+        let terrain_params: TerrainParameters = serde_wasm_bindgen::from_value(terrain_params)?;
 
         let mut tool_belt = [None; 10];
         tool_belt[0] = Some(ItemType::OreMine);
         tool_belt[1] = Some(ItemType::Inserter);
         tool_belt[2] = Some(ItemType::TransportBelt);
         tool_belt[3] = Some(ItemType::Furnace);
-        Ok(FactorishState {
+
+        let (structures, board, drop_items) = select_scenario(scenario, &terrain_params)?;
+
+        let mut ret = FactorishState {
             delta_time: 0.1,
             sim_time: 0.0,
-            width,
-            height,
+            width: terrain_params.width,
+            height: terrain_params.height,
             viewport_height: 0.,
             viewport_width: 0.,
-            viewport_x: 0.,
-            viewport_y: 0.,
-            view_scale: 1.,
+            viewport: Viewport {
+                x: 0.,
+                y: 0.,
+                scale: 1.,
+            },
             cursor: None,
             tool_belt,
             selected_item: None,
@@ -755,6 +563,11 @@ impl FactorishState {
             debug_bbox: false,
             debug_fluidbox: false,
             debug_power_network: false,
+            perf_structures: PerfStats::default(),
+            perf_drop_items: PerfStats::default(),
+            perf_simulate: PerfStats::default(),
+            perf_minimap: PerfStats::default(),
+            perf_render: PerfStats::default(),
             image_dirt: None,
             image_back_tiles: None,
             image_weeds: None,
@@ -789,67 +602,45 @@ impl FactorishState {
             image_smoke: None,
             image_fuel_alarm: None,
             image_electricity_alarm: None,
-            board: {
-                let mut board = HashMap::new();
-                for y in 0..height as usize / CHUNK_SIZE {
-                    for x in 0..width as usize / CHUNK_SIZE {
-                        let pos = Position::new(x as i32, y as i32);
-                        board.insert(
-                            pos,
-                            gen_chunk(
-                                pos,
-                                terrain_seed,
-                                noise_threshold,
-                                water_noise_threshold,
-                                resource_amount,
-                            ),
-                        );
-                    }
-                }
-                board
-            },
-            structures: vec![
-                wrap_structure(Box::new(TransportBelt::new(10, 3, Rotation::Left))),
-                wrap_structure(Box::new(TransportBelt::new(11, 3, Rotation::Left))),
-                wrap_structure(Box::new(TransportBelt::new(12, 3, Rotation::Left))),
-                wrap_structure(Box::new(OreMine::new(12, 2, Rotation::Bottom))),
-                wrap_structure(Box::new(Furnace::new(&Position::new(8, 3)))),
-                wrap_structure(Box::new(Assembler::new(&Position::new(6, 3)))),
-                wrap_structure(Box::new(Boiler::new(&Position::new(13, 5)))),
-                wrap_structure(Box::new(SteamEngine::new(&Position::new(12, 5)))),
-            ],
+            board,
+            structures,
             selected_structure_inventory: None,
             ore_harvesting: None,
-            drop_items: vec![],
-            serial_no: 0,
+            drop_items,
+            drop_items_index: DropItemIndex::default(),
             on_player_update,
             temp_ents: vec![],
             rng: Xor128::new(3142125),
             // on_show_inventory,
-        })
+        };
+
+        ret.update_cache()?;
+
+        Ok(ret)
     }
 
     pub fn serialize_game(&self) -> Result<String, JsValue> {
         use serde_json::Value as SValue;
         console_log!("Serializing...");
+
         fn map_err(
             result: Result<SValue, serde_json::Error>,
             name: &str,
         ) -> Result<SValue, JsValue> {
             result.map_err(|e| js_str!("serialize failed for {}: {}", name, e))
         }
+
+        fn to_value<T: Serialize>(value: T, name: &str) -> Result<SValue, JsValue> {
+            map_err(serde_json::to_value(value), name)
+        }
+
         let mut map = serde_json::Map::new();
+        map.insert("version".to_string(), to_value(&SAVE_VERSION, "version")?);
+        map.insert("sim_time".to_string(), SValue::from(self.sim_time));
+        map.insert("player".to_string(), to_value(&self.player, "player")?);
         map.insert(
-            "version".to_string(),
-            map_err(serde_json::to_value(&SAVE_VERSION), "version")?,
-        );
-        map.insert(
-            "sim_time".to_string(),
-            serde_json::Value::from(self.sim_time),
-        );
-        map.insert(
-            "player".to_string(),
-            map_err(serde_json::to_value(&self.player), "player")?,
+            "viewport".to_string(),
+            to_value(&self.viewport, "viewport")?,
         );
         map.insert("width".to_string(), serde_json::Value::from(self.width));
         map.insert("height".to_string(), serde_json::Value::from(self.height));
@@ -909,14 +700,14 @@ impl FactorishState {
 
         map.insert(
             "items".to_string(),
-            serde_json::to_value(
+            serde_json::Value::from(
                 self.drop_items
                     .iter()
+                    .filter_map(|entry| entry.item.as_ref())
                     .map(serde_json::to_value)
                     .collect::<serde_json::Result<Vec<serde_json::Value>>>()
                     .map_err(|e| js_str!("Serialize error: {}", e))?,
-            )
-            .map_err(|e| js_str!("Serialize error: {}", e))?,
+            ),
         );
         map.insert(
             "tool_belt".to_string(),
@@ -1025,6 +816,10 @@ impl FactorishState {
 
         self.player = from_value(json_take(&mut json, "player")?)?;
 
+        self.viewport = json_take(&mut json, "viewport")
+            .and_then(from_value)
+            .unwrap_or_default();
+
         self.width = json_as_u64(json_get(&json, "width")?)? as u32;
         self.height = json_as_u64(json_get(&json, "height")?)? as u32;
 
@@ -1056,7 +851,7 @@ impl FactorishState {
                 let y: usize = json_as_u64(json_get(&position, 1)?)? as usize;
                 new_chunk[x + y * CHUNK_SIZE] = from_value(json_take(tile, "cell")?)?;
             }
-            calculate_back_image(&mut new_chunk, CHUNK_SIZE, CHUNK_SIZE);
+            calculate_back_image(&mut new_chunk);
             self.board.insert(chunk_pos, new_chunk);
         }
 
@@ -1119,12 +914,21 @@ impl FactorishState {
         let s_d_iter = StructureDynIter::new_all(&mut self.structures);
         self.power_networks = build_power_networks(&s_d_iter, &self.power_wires);
 
-        self.drop_items = serde_json::from_value(
-            json.get_mut("items")
-                .ok_or_else(|| js_str!("\"items\" not found"))?
-                .take(),
-        )
-        .map_err(|_| js_str!("drop items deserialization error"))?;
+        self.drop_items = json
+            .get_mut("items")
+            .ok_or_else(|| js_str!("\"items\" not found"))?
+            .as_array_mut()
+            .ok_or_else(|| js_str!("items in saved data is not an array"))?
+            .into_iter()
+            .map(|value| {
+                Ok(DropItemEntry::from_value(
+                    serde_json::from_value(std::mem::take(value))
+                        .map_err(|e| js_str!("Item deserialization error: {:?}", e))?,
+                ))
+            })
+            .collect::<Result<Vec<DropItemEntry>, JsValue>>()?;
+
+        self.drop_items_index = build_index(&self.drop_items);
 
         self.tool_belt = from_value(json_take(&mut json, "tool_belt")?)?;
 
@@ -1304,6 +1108,7 @@ impl FactorishState {
     }
 
     pub fn simulate(&mut self, delta_time: f64) -> Result<js_sys::Array, JsValue> {
+        let start_simulate = performance().now();
         // console_log!("simulating delta_time {}, {}", delta_time, self.sim_time);
         const SERIALIZE_PERIOD: f64 = 100.;
         if (self.sim_time / SERIALIZE_PERIOD).floor()
@@ -1385,6 +1190,7 @@ impl FactorishState {
             self.popup_texts.remove(*i);
         }
 
+        let start_structures = performance().now();
         // This is silly way to avoid borrow checker that temporarily move the structures
         // away from self so that they do not claim mutable borrow twice, but it works.
         let mut structures = std::mem::take(&mut self.structures);
@@ -1403,10 +1209,20 @@ impl FactorishState {
                 );
             }
         }
+        self.perf_structures
+            .add(performance().now() - start_structures);
 
-        let mut to_remove = vec![];
+        let start_index = performance().now();
+        let index = &mut self.drop_items_index; //build_index(&self.drop_items);
         for i in 0..self.drop_items.len() {
-            let item = &self.drop_items[i];
+            // (id, item) in drop_item_id_iter_mut(&mut self.drop_items) {
+            let entry = &self.drop_items[i];
+            let item = if let Some(item) = entry.item.as_ref() {
+                item
+            } else {
+                continue;
+            };
+            let id = DropItemId::new(i as u32, entry.gen);
             if 0 < item.x
                 && item.x < self.width as i32 * tilesize
                 && 0 < item.y
@@ -1425,7 +1241,13 @@ impl FactorishState {
                 {
                     match item_response_result.0 {
                         ItemResponse::Move(moved_x, moved_y) => {
-                            if self.hit_check(moved_x, moved_y, Some(item.id)) {
+                            if hit_check_with_index(
+                                &self.drop_items,
+                                &index,
+                                moved_x,
+                                moved_y,
+                                Some(id),
+                            ) {
                                 continue;
                             }
                             let position = Position {
@@ -1443,12 +1265,14 @@ impl FactorishState {
                             } else {
                                 continue;
                             }
-                            let item = &mut self.drop_items[i];
+                            update_index(index, id, item.x, item.y, moved_x, moved_y);
+                            let item = self.drop_items[i].item.as_mut().unwrap();
                             item.x = moved_x;
                             item.y = moved_y;
                         }
                         ItemResponse::Consume => {
-                            to_remove.push(item.id);
+                            remove_index(index, id, item.x, item.y);
+                            self.drop_items[i].item = None;
                         }
                     }
                     if let Some(result) = item_response_result.1 {
@@ -1457,10 +1281,7 @@ impl FactorishState {
                 }
             }
         }
-
-        for id in to_remove {
-            self.remove_item(id);
-        }
+        self.perf_drop_items.add(performance().now() - start_index);
 
         self.structures = structures;
 
@@ -1476,6 +1297,8 @@ impl FactorishState {
             })
             .filter(|ent| 0. < ent.life)
             .collect();
+
+        self.perf_simulate.add(performance().now() - start_simulate);
 
         // self.drop_items = drop_items;
         self.update_info();
@@ -1540,33 +1363,28 @@ impl FactorishState {
         self.find_structure_tile(&[(pos[0] / 32.) as i32, (pos[1] / 32.) as i32])
     }
 
-    fn find_item(&self, pos: &Position) -> Option<&DropItem> {
-        self.drop_items
-            .iter()
-            .find(|item| item.x / 32 == pos.x && item.y / 32 == pos.y)
+    fn find_item(&self, pos: &Position) -> Option<(DropItemId, &DropItem)> {
+        drop_item_id_iter(&self.drop_items)
+            .find(|(_, item)| item.x / 32 == pos.x && item.y / 32 == pos.y)
     }
 
-    fn remove_item(&mut self, id: u32) -> Option<DropItem> {
-        if let Some((i, _)) = self
-            .drop_items
-            .iter()
-            .enumerate()
-            .find(|item| item.1.id == id)
-        {
-            Some(self.drop_items.remove(i))
+    fn remove_item(&mut self, id: DropItemId) -> Option<DropItem> {
+        if let Some(entry) = self.drop_items.get_mut(id.id as usize) {
+            entry.item.take()
         } else {
             None
         }
     }
 
     fn _remove_item_pos(&mut self, pos: &Position) -> Option<DropItem> {
-        if let Some((i, _)) = self
-            .drop_items
-            .iter()
-            .enumerate()
-            .find(|item| item.1.x / 32 == pos.x && item.1.y / 32 == pos.y)
-        {
-            Some(self.drop_items.remove(i))
+        if let Some(entry) = self.drop_items.iter_mut().find(|item| {
+            if let Some(item) = item.item.as_ref() {
+                item.x / 32 == pos.x && item.y / 32 == pos.y
+            } else {
+                false
+            }
+        }) {
+            entry.item.take()
         } else {
             None
         }
@@ -1605,21 +1423,6 @@ impl FactorishState {
         }
     }
 
-    /// Check whether given coordinates hits some object
-    fn hit_check(&self, x: i32, y: i32, ignore: Option<u32>) -> bool {
-        for item in &self.drop_items {
-            if let Some(ignore_id) = ignore {
-                if ignore_id == item.id {
-                    continue;
-                }
-            }
-            if (x - item.x).abs() < DROP_ITEM_SIZE_I && (y - item.y).abs() < DROP_ITEM_SIZE_I {
-                return true;
-            }
-        }
-        false
-    }
-
     fn rotate(&mut self) -> Result<bool, RotateErr> {
         if let Some(SelectedItem::ToolBelt(_selected_tool)) = self.selected_item {
             self.tool_rotation = self.tool_rotation.next();
@@ -1648,19 +1451,40 @@ impl FactorishState {
         if cell.water {
             return Err(NewObjectErr::OnWater);
         }
-        let obj = DropItem::new(&mut self.serial_no, type_, pos.x, pos.y);
         if 0 <= pos.x && pos.x < self.width as i32 && 0 <= pos.y && pos.y < self.height as i32 {
             if let Some(stru) = self.find_structure_tile(&[pos.x, pos.y]) {
                 if !stru.movable() {
                     return Err(NewObjectErr::BlockedByStructure);
                 }
             }
+            let item = DropItem::new(type_, pos.x, pos.y);
             // return board[c + r * ysize].structure.input(obj);
-            if self.hit_check(obj.x, obj.y, Some(obj.id)) {
+            if hit_check(&self.drop_items, item.x, item.y, None) {
                 return Err(NewObjectErr::BlockedByItem);
             }
-            // obj.addElem();
-            self.drop_items.push(obj);
+            let (x, y) = (item.x, item.y);
+            let entry = self
+                .drop_items
+                .iter_mut()
+                .enumerate()
+                .find(|(_, entry)| entry.item.is_none());
+            let id = if let Some((i, entry)) = entry {
+                entry.item = Some(item);
+                entry.gen += 1;
+                DropItemId {
+                    id: i as u32,
+                    gen: entry.gen,
+                }
+            } else {
+                let obj = DropItemEntry::from_value(item);
+                let i = self.drop_items.len();
+                self.drop_items.push(obj);
+                DropItemId {
+                    id: i as u32,
+                    gen: 0,
+                }
+            };
+            add_index(&mut self.drop_items_index, id, x, y);
             return Ok(());
         }
         Err(NewObjectErr::OutOfMap)
@@ -1733,10 +1557,18 @@ impl FactorishState {
         if !harvested_structure && clear_item {
             // Pick up dropped items in the cell
             let mut picked_items = Inventory::new();
-            while let Some(item_index) = self.drop_items.iter().position(|item| {
-                item.x / TILE_SIZE_I == position.x && item.y / TILE_SIZE_I == position.y
-            }) {
-                let item_type = self.drop_items.remove(item_index).type_;
+            for entry in &mut self.drop_items {
+                let item = if let Some(item) = entry.item.as_ref() {
+                    item
+                } else {
+                    continue;
+                };
+
+                if !(item.x / TILE_SIZE_I == position.x && item.y / TILE_SIZE_I == position.y) {
+                    continue;
+                }
+                let item_type = item.type_;
+                entry.item = None;
                 picked_items.add_item(&item_type);
                 self.player.add_item(&item_type, 1);
                 harvested_items = true;
@@ -2127,15 +1959,15 @@ impl FactorishState {
             return Err(JsValue::from_str("position must have 2 elements"));
         }
         let cursor = Position {
-            x: (pos[0] / self.view_scale / 32. - self.viewport_x) as i32,
-            y: (pos[1] / self.view_scale / 32. - self.viewport_y) as i32,
+            x: (pos[0] / self.viewport.scale / 32. - self.viewport.x) as i32,
+            y: (pos[1] / self.viewport.scale / 32. - self.viewport.y) as i32,
         };
 
         console_log!("mouse_down: {}, {}, button: {}", cursor.x, cursor.y, button);
         if button == 2
             && self.find_structure_tile(&[cursor.x, cursor.y]).is_none()
             // Let the player pick up drop items before harvesting ore below.
-            && !self.drop_items.iter().any(|item| {
+            && !drop_item_iter(&self.drop_items).any(|item| {
                 item.x / TILE_SIZE_I == pos[0] as i32 / TILE_SIZE_I
                     && item.y / TILE_SIZE_I == pos[1] as i32 / TILE_SIZE_I
             })
@@ -2159,8 +1991,8 @@ impl FactorishState {
             return Err(JsValue::from_str("position must have 2 elements"));
         }
         let cursor = Position {
-            x: (pos[0] / self.view_scale / 32. - self.viewport_x) as i32,
-            y: (pos[1] / self.view_scale / 32. - self.viewport_y) as i32,
+            x: (pos[0] / self.viewport.scale / 32. - self.viewport.x) as i32,
+            y: (pos[1] / self.viewport.scale / 32. - self.viewport.y) as i32,
         };
         let mut events = vec![];
 
@@ -2330,8 +2162,8 @@ impl FactorishState {
             return Err(JsValue::from_str("position must have 2 elements"));
         }
         let cursor = [
-            (pos[0] / self.view_scale / 32. - self.viewport_x) as i32,
-            (pos[1] / self.view_scale / 32. - self.viewport_y) as i32,
+            (pos[0] / self.viewport.scale / 32. - self.viewport.x) as i32,
+            (pos[1] / self.viewport.scale / 32. - self.viewport.y) as i32,
         ];
         if cursor[0] < 0
             || self.width as i32 <= cursor[0]
@@ -2363,13 +2195,15 @@ impl FactorishState {
     pub fn mouse_wheel(&mut self, delta: i32, x: f64, y: f64) -> Result<(), JsValue> {
         let base = (2_f64).powf(1. / 5.);
         let new_scale = if delta < 0 {
-            (self.view_scale * base).min(8.)
+            (self.viewport.scale * base).min(8.)
         } else {
-            (self.view_scale / base).max(0.5)
+            (self.viewport.scale / base).max(0.5)
         };
-        self.viewport_x += (x as f64 / self.view_scale / 32.) * (1. - new_scale / self.view_scale);
-        self.viewport_y += (y as f64 / self.view_scale / 32.) * (1. - new_scale / self.view_scale);
-        self.view_scale = new_scale;
+        self.viewport.x +=
+            (x as f64 / self.viewport.scale / 32.) * (1. - new_scale / self.viewport.scale);
+        self.viewport.y +=
+            (y as f64 / self.viewport.scale / 32.) * (1. - new_scale / self.viewport.scale);
+        self.viewport.scale = new_scale;
         Ok(())
     }
 
@@ -2392,22 +2226,22 @@ impl FactorishState {
             }
             37 => {
                 // Left
-                self.viewport_x = (self.viewport_x + 1.).min(0.);
+                self.viewport.x = (self.viewport.x + 1.).min(0.);
                 Ok(JsValue::from_bool(true))
             }
             38 => {
                 // Up
-                self.viewport_y = (self.viewport_y + 1.).min(0.);
+                self.viewport.y = (self.viewport.y + 1.).min(0.);
                 Ok(JsValue::from_bool(true))
             }
             39 => {
                 // Right
-                self.viewport_x = (self.viewport_x - 1.).max(-(self.width as f64));
+                self.viewport.x = (self.viewport.x - 1.).max(-(self.width as f64));
                 Ok(JsValue::from_bool(true))
             }
             40 => {
                 // Down
-                self.viewport_y = (self.viewport_y - 1.).max(-(self.height as f64));
+                self.viewport.y = (self.viewport.y - 1.).max(-(self.height as f64));
                 Ok(JsValue::from_bool(true))
             }
             69 => {
@@ -2760,17 +2594,17 @@ impl FactorishState {
 
     fn get_viewport(&self) -> (f64, f64) {
         (
-            self.viewport_width / self.view_scale,
-            self.viewport_height / self.view_scale,
+            self.viewport_width / self.viewport.scale,
+            self.viewport_height / self.viewport.scale,
         )
     }
 
     pub fn set_viewport_pos(&mut self, x: f64, y: f64) -> Result<js_sys::Array, JsValue> {
         let viewport = self.get_viewport();
-        self.viewport_x = -(x - viewport.0 / 32. / 2.)
+        self.viewport.x = -(x - viewport.0 / 32. / 2.)
             .max(0.)
             .min(self.width as f64 - viewport.0 / 32. - 1.);
-        self.viewport_y = -(y - viewport.1 / 32. / 2.)
+        self.viewport.y = -(y - viewport.1 / 32. / 2.)
             .max(0.)
             .min(self.height as f64 - viewport.1 / 32. - 1.);
         Ok(js_sys::Array::of2(
@@ -2780,8 +2614,8 @@ impl FactorishState {
     }
 
     pub fn delta_viewport_pos(&mut self, x: f64, y: f64) -> Result<(), JsValue> {
-        self.viewport_x += x / self.view_scale / 32.;
-        self.viewport_y += y / self.view_scale / 32.;
+        self.viewport.x += x / self.viewport.scale / 32.;
+        self.viewport.y += y / self.viewport.scale / 32.;
         Ok(())
     }
 
@@ -2791,8 +2625,8 @@ impl FactorishState {
     fn new_popup_text(&mut self, text: String, x: f64, y: f64) {
         let pop = PopupText {
             text: text.to_string(),
-            x: (x + self.viewport_x * TILE_SIZE) * self.view_scale,
-            y: (y + self.viewport_y * TILE_SIZE) * self.view_scale,
+            x: (x + self.viewport.x * TILE_SIZE) * self.viewport.scale,
+            y: (y + self.viewport.y * TILE_SIZE) * self.viewport.scale,
             life: POPUP_TEXT_LIFE,
         };
         self.popup_texts.push(pop);
@@ -2803,14 +2637,16 @@ impl FactorishState {
         self.structures.iter().filter_map(|s| s.dynamic.as_deref())
     }
 
-    pub fn render(&self, context: CanvasRenderingContext2d) -> Result<(), JsValue> {
+    pub fn render(&mut self, context: CanvasRenderingContext2d) -> Result<(), JsValue> {
         use std::f64;
+
+        let start_render = performance().now();
 
         context.clear_rect(0., 0., self.viewport_width, self.viewport_height);
 
         context.save();
-        context.scale(self.view_scale, self.view_scale)?;
-        context.translate(self.viewport_x * 32., self.viewport_y * 32.)?;
+        context.scale(self.viewport.scale, self.viewport.scale)?;
+        context.translate(self.viewport.x * 32., self.viewport.y * 32.)?;
 
         (|| {
             fn unwrap_img(img: &Option<ImageBundle>) -> Result<&ImageBundle, JsValue> {
@@ -2823,12 +2659,12 @@ impl FactorishState {
             let img_copper = unwrap_img(&self.image_copper)?;
             let img_stone = unwrap_img(&self.image_stone)?;
             // let mut cell_draws = 0;
-            let left = (-self.viewport_x).max(0.) as u32;
-            let top = (-self.viewport_y).max(0.) as u32;
-            let right = (((self.viewport_width / 32. / self.view_scale - self.viewport_x) + 1.)
+            let left = (-self.viewport.x).max(0.) as u32;
+            let top = (-self.viewport.y).max(0.) as u32;
+            let right = (((self.viewport_width / 32. / self.viewport.scale - self.viewport.x) + 1.)
                 as u32)
                 .min(self.width);
-            let bottom = (((self.viewport_height / 32. / self.view_scale - self.viewport_y)
+            let bottom = (((self.viewport_height / 32. / self.viewport.scale - self.viewport.y)
                 + 1.) as u32)
                 .min(self.height);
             for y in top..bottom {
@@ -2898,7 +2734,7 @@ impl FactorishState {
 
         draw_structures(0)?;
 
-        for item in &self.drop_items {
+        for item in drop_item_iter(&self.drop_items) {
             render_drop_item(self, &context, &item.type_, item.x, item.y)?;
         }
 
@@ -2963,13 +2799,24 @@ impl FactorishState {
                 );
             }
             context.set_stroke_style(&js_str!("purple"));
-            for item in &self.drop_items {
+            for item in drop_item_iter(&self.drop_items) {
                 context.stroke_rect(
                     item.x as f64 - DROP_ITEM_SIZE / 2.,
                     item.y as f64 - DROP_ITEM_SIZE / 2.,
                     DROP_ITEM_SIZE,
                     DROP_ITEM_SIZE,
                 );
+            }
+            context.set_stroke_style(&js_str!("black"));
+            for y in 0..self.height / INDEX_CHUNK_SIZE as u32 {
+                for x in 0..self.width / INDEX_CHUNK_SIZE as u32 {
+                    context.stroke_rect(
+                        x as f64 * TILE_SIZE * INDEX_CHUNK_SIZE as f64,
+                        y as f64 * TILE_SIZE * INDEX_CHUNK_SIZE as f64,
+                        TILE_SIZE * INDEX_CHUNK_SIZE as f64,
+                        TILE_SIZE * INDEX_CHUNK_SIZE as f64,
+                    );
+                }
             }
             context.restore();
         }
@@ -3076,10 +2923,12 @@ impl FactorishState {
             context.fill_text(&item.text, item.x, item.y)?;
         }
 
+        self.perf_render.add(performance().now() - start_render);
         Ok(())
     }
 
-    pub fn render_minimap(&self, context: CanvasRenderingContext2d) -> Result<(), JsValue> {
+    pub fn render_minimap(&mut self, context: CanvasRenderingContext2d) -> Result<(), JsValue> {
+        let start_render = performance().now();
         let width = self.width as f64;
         let height = self.height as f64;
         context.save();
@@ -3101,12 +2950,13 @@ impl FactorishState {
         context.set_line_width(1.);
         let viewport = self.get_viewport();
         context.stroke_rect(
-            -self.viewport_x,
-            -self.viewport_y,
+            -self.viewport.x,
+            -self.viewport.y,
             viewport.0 / 32.,
             viewport.1 / 32.,
         );
         context.restore();
+        self.perf_minimap.add(performance().now() - start_render);
         Ok(())
     }
 }

@@ -1,4 +1,4 @@
-use super::{tilesize, FactorishState, ImageBundle};
+use super::{FactorishState, ImageBundle};
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 use web_sys::CanvasRenderingContext2d;
@@ -85,28 +85,6 @@ pub(crate) fn str_to_item(name: &str) -> Option<ItemType> {
         "Splitter" => Some(ItemType::Splitter),
 
         _ => None,
-    }
-}
-
-#[derive(Serialize, Deserialize)]
-pub(crate) struct DropItem {
-    pub id: u32,
-    pub type_: ItemType,
-    pub x: i32,
-    pub y: i32,
-}
-
-impl DropItem {
-    pub(crate) fn new(serial_no: &mut u32, type_: ItemType, c: i32, r: i32) -> Self {
-        let itilesize = tilesize as i32;
-        let ret = DropItem {
-            id: *serial_no,
-            type_,
-            x: c * itilesize + itilesize / 2,
-            y: r * itilesize + itilesize / 2,
-        };
-        *serial_no += 1;
-        ret
     }
 }
 
