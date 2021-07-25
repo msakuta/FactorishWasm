@@ -230,8 +230,8 @@ impl Position {
     }
 
     pub(crate) fn div_mod(&self, size: i32) -> (Position, Position) {
-        let div = Position::new(self.x / size, self.y / size);
-        let mod_ = Position::new(self.x % size, self.y % size);
+        let div = Position::new(self.x.div_euclid(size), self.y.div_euclid(size));
+        let mod_ = Position::new(self.x.rem_euclid(size), self.y.rem_euclid(size));
         (div, mod_)
     }
 

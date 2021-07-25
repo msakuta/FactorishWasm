@@ -1428,32 +1428,28 @@ impl FactorishState {
     fn update_info(&self) {
         if let Some(cursor) = self.cursor {
             if let Some(ref elem) = self.info_elem {
-                if cursor[0] < self.width as i32 && cursor[1] < self.height as i32 {
-                    elem.set_inner_html(
-                        &if let Some(structure) = self.find_structure_tile(&cursor) {
-                            format!(r#"Type: {}<br>{}"#, structure.name(), structure.desc(&self))
+                elem.set_inner_html(
+                    &if let Some(structure) = self.find_structure_tile(&cursor) {
+                        format!(r#"Type: {}<br>{}"#, structure.name(), structure.desc(&self))
+                    } else {
+                        let (chunk_pos, mp) =
+                            Position::new(cursor[0], cursor[1]).div_mod(CHUNK_SIZE as i32);
+                        if let Some(chunk) = self.board.get(&chunk_pos) {
+                            let cell = &chunk[mp.x as usize + mp.y as usize * CHUNK_SIZE];
+                            format!(
+                                r#"Empty tile<br>
+                                {}<br>"#,
+                                if let Some(ore) = cell.ore.as_ref() {
+                                    format!("{:?}: {}", ore.0, ore.1)
+                                } else {
+                                    "No ore".to_string()
+                                }
+                            )
                         } else {
-                            let (chunk_pos, mp) =
-                                Position::new(cursor[0], cursor[1]).div_mod(CHUNK_SIZE as i32);
-                            if let Some(chunk) = self.board.get(&chunk_pos) {
-                                let cell = &chunk[mp.x as usize + mp.y as usize * CHUNK_SIZE];
-                                format!(
-                                    r#"Empty tile<br>
-                                    {}<br>"#,
-                                    if let Some(ore) = cell.ore.as_ref() {
-                                        format!("{:?}: {}", ore.0, ore.1)
-                                    } else {
-                                        "No ore".to_string()
-                                    }
-                                )
-                            } else {
-                                format!("Empty tile")
-                            }
-                        },
-                    );
-                } else {
-                    elem.set_inner_html("");
-                }
+                            format!("Empty tile")
+                        }
+                    },
+                );
             }
         }
     }
@@ -2197,17 +2193,19 @@ impl FactorishState {
             return Err(JsValue::from_str("position must have 2 elements"));
         }
         let cursor = [
-            (pos[0] / self.viewport.scale / 32. - self.viewport.x) as i32,
-            (pos[1] / self.viewport.scale / 32. - self.viewport.y) as i32,
+            (pos[0] / self.viewport.scale / 32. - self.viewport.x).floor() as i32,
+            (pos[1] / self.viewport.scale / 32. - self.viewport.y).floor() as i32,
         ];
-        if cursor[0] < 0
-            || self.width as i32 <= cursor[0]
-            || cursor[1] < 0
-            || self.height as i32 <= cursor[1]
-        {
-            // return Err(js_str!("invalid mouse position: {:?}", cursor));
-            // This is not particularly an error. Just ignore it.
-            return Ok(());
+        if let Some(bounds) = self.bounds.as_ref() {
+            if cursor[0] < 0
+                || bounds.width as i32 <= cursor[0]
+                || cursor[1] < 0
+                || bounds.height as i32 <= cursor[1]
+            {
+                // return Err(js_str!("invalid mouse position: {:?}", cursor));
+                // This is not particularly an error. Just ignore it.
+                return Ok(());
+            }
         }
         self.cursor = Some(cursor);
         // console_log!("mouse_move: cursor: {}, {}", cursor[0], cursor[1]);
@@ -2673,9 +2671,12 @@ impl FactorishState {
         for cx in left.div_euclid(CHUNK_SIZE_I)..=right.div_euclid(CHUNK_SIZE_I) {
             for cy in top.div_euclid(CHUNK_SIZE_I)..=bottom.div_euclid(CHUNK_SIZE_I) {
                 let chunk_pos = Position::new(cx, cy);
-                console_log!("Checking chunk_pos {:?}", chunk_pos);
                 if !self.board.contains_key(&chunk_pos) {
-                    console_log!("Generating chunk_pos {:?}", chunk_pos);
+                    console_log!(
+                        "Generating chunk_pos {:?}, {} chunks total",
+                        chunk_pos,
+                        self.board.len()
+                    );
                     let mut chunk = gen_chunk(chunk_pos, &self.terrain_params);
                     calculate_back_image(&mut self.board, &chunk_pos, &mut chunk);
                     self.board.insert(chunk_pos, chunk);
@@ -2867,15 +2868,13 @@ impl FactorishState {
                 );
             }
             context.set_stroke_style(&js_str!("black"));
-            for y in 0..self.height / INDEX_CHUNK_SIZE as u32 {
-                for x in 0..self.width / INDEX_CHUNK_SIZE as u32 {
-                    context.stroke_rect(
-                        x as f64 * TILE_SIZE * INDEX_CHUNK_SIZE as f64,
-                        y as f64 * TILE_SIZE * INDEX_CHUNK_SIZE as f64,
-                        TILE_SIZE * INDEX_CHUNK_SIZE as f64,
-                        TILE_SIZE * INDEX_CHUNK_SIZE as f64,
-                    );
-                }
+            for chunk in self.board.keys() {
+                context.stroke_rect(
+                    chunk.x as f64 * TILE_SIZE * INDEX_CHUNK_SIZE as f64,
+                    chunk.y as f64 * TILE_SIZE * INDEX_CHUNK_SIZE as f64,
+                    TILE_SIZE * INDEX_CHUNK_SIZE as f64,
+                    TILE_SIZE * INDEX_CHUNK_SIZE as f64,
+                );
             }
             context.restore();
         }
