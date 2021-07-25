@@ -1414,13 +1414,14 @@ impl FactorishState {
     //         .map(|s| s.as_mut())
     // }
 
-    fn _find_structure(&self, pos: &[f64]) -> Option<&dyn Structure> {
-        self.find_structure_tile(&[(pos[0] / 32.) as i32, (pos[1] / 32.) as i32])
-    }
+    // fn _find_structure(&self, pos: &[f64]) -> Option<&dyn Structure> {
+    //     self.find_structure_tile(&[(pos[0] / 32.) as i32, (pos[1] / 32.) as i32])
+    // }
 
     fn find_item(&self, pos: &Position) -> Option<(DropItemId, &DropItem)> {
-        drop_item_id_iter(&self.drop_items)
-            .find(|(_, item)| item.x / 32 == pos.x && item.y / 32 == pos.y)
+        drop_item_id_iter(&self.drop_items).find(|(_, item)| {
+            item.x.div_euclid(TILE_SIZE_I) == pos.x && item.y.div_euclid(TILE_SIZE_I) == pos.y
+        })
     }
 
     fn remove_item(&mut self, id: DropItemId) -> Option<DropItem> {
