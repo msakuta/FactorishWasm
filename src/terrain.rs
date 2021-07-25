@@ -65,7 +65,7 @@ impl ChunksExt for Chunks {
 /// Generate a chunk at given position. It does not update background image, because it requires
 /// knowledge on connecting chunks. The caller needs to call [`calculate_back_image`] or
 /// [`calculate_back_image_all`] at some point.
-fn gen_chunk(position: Position, terrain_params: &TerrainParameters) -> Chunk {
+pub(crate) fn gen_chunk(position: Position, terrain_params: &TerrainParameters) -> Chunk {
     let TerrainParameters {
         terrain_seed,
         water_noise_threshold,

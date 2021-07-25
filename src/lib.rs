@@ -37,7 +37,10 @@ use crate::{
     },
     perf::PerfStats,
     scenarios::select_scenario,
-    terrain::{calculate_back_image_all, Chunks, TerrainParameters, CHUNK_SIZE, CHUNK_SIZE2},
+    terrain::{
+        calculate_back_image, calculate_back_image_all, gen_chunk, Chunks, TerrainParameters,
+        CHUNK_SIZE, CHUNK_SIZE2, CHUNK_SIZE_I,
+    },
 };
 use assembler::Assembler;
 use boiler::Boiler;
@@ -412,6 +415,34 @@ impl Default for Viewport {
     }
 }
 
+struct Bounds {
+    width: i32,
+    height: i32,
+}
+
+fn apply_bounds(
+    bounds: &Option<Bounds>,
+    viewport: &Viewport,
+    viewport_width: f64,
+    viewport_height: f64,
+) -> (i32, i32, i32, i32) {
+    if let Some(bounds) = bounds.as_ref() {
+        let left = ((-viewport.x).floor() as i32).max(0);
+        let top = ((-viewport.y).floor() as i32).max(0);
+        let right =
+            (((viewport_width / 32. / viewport.scale - viewport.x) + 1.) as i32).min(bounds.width);
+        let bottom = (((viewport_height / 32. / viewport.scale - viewport.y) + 1.) as i32)
+            .min(bounds.height);
+        (left, top, right, bottom)
+    } else {
+        let left = (-viewport.x).floor() as i32;
+        let top = (-viewport.y).floor() as i32;
+        let right = ((viewport_width / 32. / viewport.scale - viewport.x) + 1.) as i32;
+        let bottom = ((viewport_height / 32. / viewport.scale - viewport.y) + 1.) as i32;
+        (left, top, right, bottom)
+    }
+}
+
 #[wasm_bindgen]
 pub struct FactorishState {
     #[allow(dead_code)]
@@ -419,10 +450,12 @@ pub struct FactorishState {
     sim_time: f64,
     width: u32,
     height: u32,
+    bounds: Option<Bounds>,
     viewport_width: f64,
     viewport_height: f64,
     viewport: Viewport,
     board: Chunks,
+    terrain_params: TerrainParameters,
     structures: Vec<StructureEntry>,
     selected_structure_inventory: Option<Position>,
     drop_items: Vec<DropItemEntry>,
@@ -527,6 +560,7 @@ impl FactorishState {
             sim_time: 0.0,
             width: terrain_params.width,
             height: terrain_params.height,
+            bounds: None,
             viewport_height: 0.,
             viewport_width: 0.,
             viewport: Viewport {
@@ -603,6 +637,7 @@ impl FactorishState {
             image_fuel_alarm: None,
             image_electricity_alarm: None,
             board,
+            terrain_params,
             structures,
             selected_structure_inventory: None,
             ore_harvesting: None,
@@ -2204,6 +2239,9 @@ impl FactorishState {
         self.viewport.y +=
             (y as f64 / self.viewport.scale / 32.) * (1. - new_scale / self.viewport.scale);
         self.viewport.scale = new_scale;
+
+        self.gen_chunks_in_viewport();
+
         Ok(())
     }
 
@@ -2601,12 +2639,15 @@ impl FactorishState {
 
     pub fn set_viewport_pos(&mut self, x: f64, y: f64) -> Result<js_sys::Array, JsValue> {
         let viewport = self.get_viewport();
-        self.viewport.x = -(x - viewport.0 / 32. / 2.)
+        self.viewport.x = -(x - viewport.0 / TILE_SIZE / 2.)
             .max(0.)
-            .min(self.width as f64 - viewport.0 / 32. - 1.);
-        self.viewport.y = -(y - viewport.1 / 32. / 2.)
+            .min(self.width as f64 - viewport.0 / TILE_SIZE - 1.);
+        self.viewport.y = -(y - viewport.1 / TILE_SIZE / 2.)
             .max(0.)
-            .min(self.height as f64 - viewport.1 / 32. - 1.);
+            .min(self.height as f64 - viewport.1 / TILE_SIZE - 1.);
+
+        self.gen_chunks_in_viewport();
+
         Ok(js_sys::Array::of2(
             &JsValue::from_f64(viewport.0),
             &JsValue::from_f64(viewport.1),
@@ -2616,7 +2657,31 @@ impl FactorishState {
     pub fn delta_viewport_pos(&mut self, x: f64, y: f64) -> Result<(), JsValue> {
         self.viewport.x += x / self.viewport.scale / 32.;
         self.viewport.y += y / self.viewport.scale / 32.;
+
+        self.gen_chunks_in_viewport();
+
         Ok(())
+    }
+
+    fn gen_chunks_in_viewport(&mut self) {
+        let (left, top, right, bottom) = apply_bounds(
+            &self.bounds,
+            &self.viewport,
+            self.viewport_width,
+            self.viewport_height,
+        );
+        for cx in left.div_euclid(CHUNK_SIZE_I)..=right.div_euclid(CHUNK_SIZE_I) {
+            for cy in top.div_euclid(CHUNK_SIZE_I)..=bottom.div_euclid(CHUNK_SIZE_I) {
+                let chunk_pos = Position::new(cx, cy);
+                console_log!("Checking chunk_pos {:?}", chunk_pos);
+                if !self.board.contains_key(&chunk_pos) {
+                    console_log!("Generating chunk_pos {:?}", chunk_pos);
+                    let mut chunk = gen_chunk(chunk_pos, &self.terrain_params);
+                    calculate_back_image(&mut self.board, &chunk_pos, &mut chunk);
+                    self.board.insert(chunk_pos, chunk);
+                }
+            }
+        }
     }
 
     /// Add a new popup text that will show for a moment and automatically disappears
@@ -2659,17 +2724,11 @@ impl FactorishState {
             let img_copper = unwrap_img(&self.image_copper)?;
             let img_stone = unwrap_img(&self.image_stone)?;
             // let mut cell_draws = 0;
-            let left = (-self.viewport.x).max(0.) as u32;
-            let top = (-self.viewport.y).max(0.) as u32;
-            let right = (((self.viewport_width / 32. / self.viewport.scale - self.viewport.x) + 1.)
-                as u32)
-                .min(self.width);
-            let bottom = (((self.viewport_height / 32. / self.viewport.scale - self.viewport.y)
-                + 1.) as u32)
-                .min(self.height);
+            let (left, top, right, bottom) = apply_bounds(&self.bounds, &self.viewport, self.viewport_width, self.viewport_height);
+
             for y in top..bottom {
                 for x in left..right {
-                    let chunk_pos = Position::new(x as i32 / CHUNK_SIZE as i32, y as i32 / CHUNK_SIZE as i32);
+                    let chunk_pos = Position::new(x.div_euclid(CHUNK_SIZE_I), y.div_euclid(CHUNK_SIZE_I));
                     let chunk = self.board.get(&chunk_pos);
                     let chunk = if let Some(chunk) = chunk {
                         chunk
