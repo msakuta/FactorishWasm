@@ -205,8 +205,8 @@ pub(crate) fn calculate_back_image(terrain: &Chunks, chunk_pos: &Position, ret: 
             };
 
             cell.grass_image = ((perlin_noise_pixel(
-                x as f64 / noise_scale,
-                y as f64 / noise_scale,
+                (x + chunk_pos.x * CHUNK_SIZE_I) as f64 / noise_scale,
+                (y + chunk_pos.y * CHUNK_SIZE_I) as f64 / noise_scale,
                 bits,
                 &grass_terms,
             ) - 0.)
