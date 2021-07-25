@@ -16,7 +16,6 @@ use super::{
         calculate_back_image, gen_terrain, Chunks, ChunksExt, TerrainParameters, CHUNK_SIZE_I,
     },
     transport_belt::TransportBelt,
-    water_well::WaterWell,
     FactorishState, InventoryTrait, Position, PowerWire, Rotation,
 };
 use std::collections::HashSet;

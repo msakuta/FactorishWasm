@@ -40,7 +40,7 @@ use crate::{
     scenarios::select_scenario,
     terrain::{
         calculate_back_image, calculate_back_image_all, gen_chunk, Chunk, Chunks,
-        TerrainParameters, CHUNK_SIZE, CHUNK_SIZE2, CHUNK_SIZE_F, CHUNK_SIZE_I,
+        TerrainParameters, CHUNK_SIZE, CHUNK_SIZE2, CHUNK_SIZE_I,
     },
 };
 use assembler::Assembler;
