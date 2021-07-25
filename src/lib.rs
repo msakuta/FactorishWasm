@@ -415,6 +415,7 @@ impl Default for Viewport {
     }
 }
 
+#[derive(Serialize, Deserialize)]
 struct Bounds {
     width: i32,
     height: i32,
@@ -560,7 +561,14 @@ impl FactorishState {
             sim_time: 0.0,
             width: terrain_params.width,
             height: terrain_params.height,
-            bounds: None,
+            bounds: if terrain_params.unlimited {
+                None
+            } else {
+                Some(Bounds {
+                    width: terrain_params.width as i32,
+                    height: terrain_params.height as i32,
+                })
+            },
             viewport_height: 0.,
             viewport_width: 0.,
             viewport: Viewport {
@@ -679,6 +687,9 @@ impl FactorishState {
         );
         map.insert("width".to_string(), serde_json::Value::from(self.width));
         map.insert("height".to_string(), serde_json::Value::from(self.height));
+        if let Some(bounds) = self.bounds.as_ref() {
+            map.insert("bounds".to_string(), to_value(bounds, "bounds")?);
+        }
         map.insert(
             "structures".to_string(),
             serde_json::Value::from(
@@ -857,6 +868,10 @@ impl FactorishState {
 
         self.width = json_as_u64(json_get(&json, "width")?)? as u32;
         self.height = json_as_u64(json_get(&json, "height")?)? as u32;
+
+        self.bounds = json_take(&mut json, "bounds")
+            .and_then(from_value)
+            .unwrap_or(None);
 
         let chunks = json
             .get_mut("board")

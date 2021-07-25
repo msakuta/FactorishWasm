@@ -54,6 +54,7 @@ function isIE(){
 const tooltipZIndex = 10000;
 let xsize = 128;
 let ysize = 128;
+let unlimited = true;
 
 (async function(){
     // We could fetch and await in Rust code, but it's far easier to do in JavaScript runtime.
@@ -188,6 +189,7 @@ let ysize = 128;
         {
             width: xsize,
             height: ysize,
+            unlimited,
             terrain_seed: terrainSeed,
             water_noise_threshold: waterNoiseThreshold,
             resource_amount: resourceAmount,
@@ -1219,11 +1221,20 @@ let ysize = 128;
 
     const generateBoard = document.getElementById("generateBoard");
     generateBoard.addEventListener("click", () => {
-        xsize = ysize = parseInt(document.getElementById("sizeSelect").value);
+        const sizeStr = document.getElementById("sizeSelect").value;
+        if(sizeStr === "unlimited"){
+            xsize = ysize = 128;
+            unlimited = true;
+        }
+        else{
+            xsize = ysize = parseInt(sizeStr);
+            unlimited = false;
+        }
         sim = new FactorishState(
             {
                 width: xsize,
                 height: ysize,
+                unlimited,
                 terrain_seed: terrainSeed,
                 water_noise_threshold: waterNoiseThreshold,
                 resource_amount: resourceAmount,

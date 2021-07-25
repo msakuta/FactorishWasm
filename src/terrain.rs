@@ -11,6 +11,7 @@ use wasm_bindgen::prelude::*;
 pub(crate) struct TerrainParameters {
     pub width: u32,
     pub height: u32,
+    pub unlimited: bool,
     pub terrain_seed: u32,
     pub water_noise_threshold: f64,
     pub resource_amount: f64,
