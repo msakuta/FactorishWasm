@@ -228,6 +228,13 @@ impl Position {
     pub fn new(x: i32, y: i32) -> Self {
         Self { x, y }
     }
+
+    pub(crate) fn div_mod(&self, size: i32) -> (Position, Position) {
+        let div = Position::new(self.x.div_euclid(size), self.y.div_euclid(size));
+        let mod_ = Position::new(self.x.rem_euclid(size), self.y.rem_euclid(size));
+        (div, mod_)
+    }
+
     pub(crate) fn add(&self, o: (i32, i32)) -> Position {
         Self {
             x: self.x + o.0,

@@ -54,6 +54,7 @@ function isIE(){
 const tooltipZIndex = 10000;
 let xsize = 128;
 let ysize = 128;
+let unlimited = true;
 
 (async function(){
     // We could fetch and await in Rust code, but it's far easier to do in JavaScript runtime.
@@ -159,14 +160,16 @@ let ysize = 128;
         });
     }
 
-    let waterNoiseThreshold = 0.35;
+    let waterNoiseThreshold = 0.28;
     sliderInit("waterNoiseThreshold", "waterNoiseThresholdLabel", value => waterNoiseThreshold = value);
     let resourceAmount = 1000.;
     sliderInit("resourceAmount", "resourceAmountLabel", value => resourceAmount = value);
     let noiseScale = 5.;
     sliderInit("noiseScale", "noiseScaleLabel", value => noiseScale = value);
-    let noiseThreshold = 0.45;
+    let noiseThreshold = 0.30;
     sliderInit("noiseThreshold", "noiseThresholdLabel", value => noiseThreshold = value);
+    let noiseOctaves = 3;
+    sliderInit("noiseOctaves", "noiseOctavesLabel", value => noiseOctaves = value);
 
     function initPane(buttonId, containerId){
         const button = document.getElementById(buttonId);
@@ -188,19 +191,19 @@ let ysize = 128;
         {
             width: xsize,
             height: ysize,
+            unlimited,
             terrain_seed: terrainSeed,
             water_noise_threshold: waterNoiseThreshold,
             resource_amount: resourceAmount,
             noise_scale: noiseScale,
             noise_threshold: noiseThreshold,
+            noise_octaves: noiseOctaves,
         },
         updateInventory,
         scenarioSelectElem.value);
 
     const canvas = document.getElementById('canvas');
     let canvasSize = canvas.getBoundingClientRect();
-    let viewPortWidth = canvasSize.width / 32;
-    let viewPortHeight = canvasSize.height / 32;
     const refreshSize = (event) => {
         canvasSize = canvas.getBoundingClientRect();
         canvas.width = canvasSize.width;
@@ -251,7 +254,7 @@ let ysize = 128;
     let selectedInventory = null;
     let selectedInventoryItem = null;
 
-    let miniMapDrag = false;
+    let miniMapDrag = null;
     const tilesize = 32;
     const textType = isIE() ? "Text" : "text/plain";
     var windowZIndex = 1000;
@@ -262,21 +265,22 @@ let ysize = 128;
     miniMapElem.style.position = 'absolute';
     miniMapElem.style.border = '1px solid #000';
     miniMapElem.onmousedown = (evt) => {
-        miniMapDrag = true;
+        miniMapDrag = [evt.offsetX, evt.offsetY];
     };
     miniMapElem.onmousemove = function(evt){
         if(miniMapDrag){
-            var rect = this.getBoundingClientRect();
-            const viewport = sim.set_viewport_pos((evt.clientX - rect.left) / rect.width * xsize,
-                (evt.clientY - rect.top) / rect.height * ysize);
-            [viewPortWidth, viewPortHeight] = [viewport[0] / 32., viewport[1] / 32.];
+            sim.delta_viewport_pos(
+                (evt.offsetX - miniMapDrag[0]) * tilesize,
+                (evt.offsetY - miniMapDrag[1]) * tilesize,
+                false);
+            miniMapDrag = [evt.offsetX, evt.offsetY, true];
         }
     };
     miniMapElem.onmouseup = (evt) => miniMapDrag = false;
     miniMapElem.onmouseleave = (evt) => miniMapDrag = false;
     container.appendChild(miniMapElem);
-    miniMapElem.setAttribute("width", xsize);
-    miniMapElem.setAttribute("height", ysize);
+    miniMapElem.setAttribute("width", miniMapSize);
+    miniMapElem.setAttribute("height", miniMapSize);
     miniMapElem.style.width = miniMapSize + 'px';
     miniMapElem.style.height = miniMapSize + 'px';
     miniMapElem.style.right = '8px';
@@ -1080,7 +1084,7 @@ let ysize = 128;
         if(!paused)
             sim.mouse_move([evt.offsetX, evt.offsetY]);
         if(dragging){
-            sim.delta_viewport_pos(evt.offsetX - dragging[0], evt.offsetY - dragging[1]);
+            sim.delta_viewport_pos(evt.offsetX - dragging[0], evt.offsetY - dragging[1], true);
             dragging = [evt.offsetX, evt.offsetY, true];
         }
     });
@@ -1219,16 +1223,26 @@ let ysize = 128;
 
     const generateBoard = document.getElementById("generateBoard");
     generateBoard.addEventListener("click", () => {
-        xsize = ysize = parseInt(document.getElementById("sizeSelect").value);
+        const sizeStr = document.getElementById("sizeSelect").value;
+        if(sizeStr === "unlimited"){
+            xsize = ysize = 128;
+            unlimited = true;
+        }
+        else{
+            xsize = ysize = parseInt(sizeStr);
+            unlimited = false;
+        }
         sim = new FactorishState(
             {
                 width: xsize,
                 height: ysize,
+                unlimited,
                 terrain_seed: terrainSeed,
                 water_noise_threshold: waterNoiseThreshold,
                 resource_amount: resourceAmount,
                 noise_scale: noiseScale,
                 noise_threshold: noiseThreshold,
+                noise_octaves: noiseOctaves,
             },
             updateInventory,
             scenarioSelectElem.value);
@@ -1265,7 +1279,26 @@ let ysize = 128;
             showBurnerStatus(selPos);
         }
 
-        sim.render_minimap(miniMapContext);
+        const minimapData = sim.render_minimap(miniMapSize, miniMapSize);
+        const viewportScale = sim.get_viewport_scale();
+        if(minimapData){
+            (async () => {
+                const imageBitmap = await createImageBitmap(minimapData);
+                miniMapContext.fillStyle = "#7f7f7f";
+                miniMapContext.fillRect(0, 0, miniMapSize, miniMapSize);
+                miniMapContext.drawImage(imageBitmap, 0, 0, miniMapSize, miniMapSize, 0, 0, miniMapSize, miniMapSize);
+                miniMapContext.strokeStyle = "blue";
+                miniMapContext.lineWidth = 1.;
+                const miniMapRect = miniMapElem.getBoundingClientRect();
+                const viewport = canvas.getBoundingClientRect();
+                miniMapContext.strokeRect(
+                    (miniMapRect.width - viewport.width / 32. / viewportScale) / 2,
+                    (miniMapRect.height - viewport.height / 32. / viewportScale) / 2,
+                    viewport.width / 32. / viewportScale,
+                    viewport.height / 32. / viewportScale,
+                );
+            })()
+        }
 
         if(showPerfGraph.checked){
             const colors = ["#fff", "#ff3f3f", "#7f7fff", "#00ff00", "#ff00ff", "#fff"];
