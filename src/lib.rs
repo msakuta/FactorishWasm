@@ -1275,61 +1275,64 @@ impl FactorishState {
                 continue;
             };
             let id = DropItemId::new(i as u32, entry.gen);
-            if 0 < item.x
-                && item.x < self.width as i32 * tilesize
-                && 0 < item.y
-                && item.y < self.height as i32 * tilesize
-            {
-                if let Some(item_response_result) = structures
-                    .iter_mut()
-                    .filter_map(|s| s.dynamic.as_mut())
-                    .find(|s| {
-                        s.contains(&Position {
-                            x: item.x / TILE_SIZE_I,
-                            y: item.y / TILE_SIZE_I,
-                        })
-                    })
-                    .and_then(|structure| structure.item_response(item).ok())
+            if let Some(bounds) = self.bounds.as_ref() {
+                if !(0 < item.x
+                    && item.x < bounds.width * tilesize
+                    && 0 < item.y
+                    && item.y < bounds.height * tilesize)
                 {
-                    match item_response_result.0 {
-                        ItemResponse::Move(moved_x, moved_y) => {
-                            if hit_check_with_index(
-                                &self.drop_items,
-                                &index,
-                                moved_x,
-                                moved_y,
-                                Some(id),
-                            ) {
+                    continue;
+                }
+            }
+            if let Some(item_response_result) = structures
+                .iter_mut()
+                .filter_map(|s| s.dynamic.as_mut())
+                .find(|s| {
+                    s.contains(&Position {
+                        x: item.x.div_euclid(TILE_SIZE_I),
+                        y: item.y.div_euclid(TILE_SIZE_I),
+                    })
+                })
+                .and_then(|structure| structure.item_response(item).ok())
+            {
+                match item_response_result.0 {
+                    ItemResponse::Move(moved_x, moved_y) => {
+                        if hit_check_with_index(
+                            &self.drop_items,
+                            &index,
+                            moved_x,
+                            moved_y,
+                            Some(id),
+                        ) {
+                            continue;
+                        }
+                        let position = Position {
+                            x: moved_x.div_euclid(TILE_SIZE_I),
+                            y: moved_y.div_euclid(TILE_SIZE_I),
+                        };
+                        if let Some(s) = structures
+                            .iter()
+                            .filter_map(|s| s.dynamic.as_deref())
+                            .find(|s| s.contains(&position))
+                        {
+                            if !s.movable() {
                                 continue;
                             }
-                            let position = Position {
-                                x: moved_x / 32,
-                                y: moved_y / 32,
-                            };
-                            if let Some(s) = structures
-                                .iter()
-                                .filter_map(|s| s.dynamic.as_deref())
-                                .find(|s| s.contains(&position))
-                            {
-                                if !s.movable() {
-                                    continue;
-                                }
-                            } else {
-                                continue;
-                            }
-                            update_index(index, id, item.x, item.y, moved_x, moved_y);
-                            let item = self.drop_items[i].item.as_mut().unwrap();
-                            item.x = moved_x;
-                            item.y = moved_y;
+                        } else {
+                            continue;
                         }
-                        ItemResponse::Consume => {
-                            remove_index(index, id, item.x, item.y);
-                            self.drop_items[i].item = None;
-                        }
+                        update_index(index, id, item.x, item.y, moved_x, moved_y);
+                        let item = self.drop_items[i].item.as_mut().unwrap();
+                        item.x = moved_x;
+                        item.y = moved_y;
                     }
-                    if let Some(result) = item_response_result.1 {
-                        frame_proc_result_to_event(Ok(result));
+                    ItemResponse::Consume => {
+                        remove_index(index, id, item.x, item.y);
+                        self.drop_items[i].item = None;
                     }
+                }
+                if let Some(result) = item_response_result.1 {
+                    frame_proc_result_to_event(Ok(result));
                 }
             }
         }
@@ -1499,43 +1502,45 @@ impl FactorishState {
         if cell.water {
             return Err(NewObjectErr::OnWater);
         }
-        if 0 <= pos.x && pos.x < self.width as i32 && 0 <= pos.y && pos.y < self.height as i32 {
-            if let Some(stru) = self.find_structure_tile(&[pos.x, pos.y]) {
-                if !stru.movable() {
-                    return Err(NewObjectErr::BlockedByStructure);
-                }
+        if let Some(bounds) = self.bounds.as_ref() {
+            if !(0 <= pos.x && pos.x < bounds.width && 0 <= pos.y && pos.y < bounds.height) {
+                return Err(NewObjectErr::OutOfMap);
             }
-            let item = DropItem::new(type_, pos.x, pos.y);
-            // return board[c + r * ysize].structure.input(obj);
-            if hit_check(&self.drop_items, item.x, item.y, None) {
-                return Err(NewObjectErr::BlockedByItem);
-            }
-            let (x, y) = (item.x, item.y);
-            let entry = self
-                .drop_items
-                .iter_mut()
-                .enumerate()
-                .find(|(_, entry)| entry.item.is_none());
-            let id = if let Some((i, entry)) = entry {
-                entry.item = Some(item);
-                entry.gen += 1;
-                DropItemId {
-                    id: i as u32,
-                    gen: entry.gen,
-                }
-            } else {
-                let obj = DropItemEntry::from_value(item);
-                let i = self.drop_items.len();
-                self.drop_items.push(obj);
-                DropItemId {
-                    id: i as u32,
-                    gen: 0,
-                }
-            };
-            add_index(&mut self.drop_items_index, id, x, y);
-            return Ok(());
         }
-        Err(NewObjectErr::OutOfMap)
+        if let Some(stru) = self.find_structure_tile(&[pos.x, pos.y]) {
+            if !stru.movable() {
+                return Err(NewObjectErr::BlockedByStructure);
+            }
+        }
+        let item = DropItem::new(type_, pos.x, pos.y);
+        // return board[c + r * ysize].structure.input(obj);
+        if hit_check(&self.drop_items, item.x, item.y, None) {
+            return Err(NewObjectErr::BlockedByItem);
+        }
+        let (x, y) = (item.x, item.y);
+        let entry = self
+            .drop_items
+            .iter_mut()
+            .enumerate()
+            .find(|(_, entry)| entry.item.is_none());
+        let id = if let Some((i, entry)) = entry {
+            entry.item = Some(item);
+            entry.gen += 1;
+            DropItemId {
+                id: i as u32,
+                gen: entry.gen,
+            }
+        } else {
+            let obj = DropItemEntry::from_value(item);
+            let i = self.drop_items.len();
+            self.drop_items.push(obj);
+            DropItemId {
+                id: i as u32,
+                gen: 0,
+            }
+        };
+        add_index(&mut self.drop_items_index, id, x, y);
+        return Ok(());
     }
 
     fn harvest(&mut self, position: &Position, clear_item: bool) -> Result<bool, JsValue> {
@@ -1612,7 +1617,9 @@ impl FactorishState {
                     continue;
                 };
 
-                if !(item.x / TILE_SIZE_I == position.x && item.y / TILE_SIZE_I == position.y) {
+                if !(item.x.div_euclid(TILE_SIZE_I) == position.x
+                    && item.y.div_euclid(TILE_SIZE_I) == position.y)
+                {
                     continue;
                 }
                 let item_type = item.type_;
