@@ -60,21 +60,22 @@ fn update_water(
 fn default_scenario(
     terrain_params: &TerrainParameters,
 ) -> (Vec<StructureEntry>, Chunks, Vec<DropItemEntry>) {
-    (
-        vec![
-            wrap_structure(Box::new(TransportBelt::new(10, 3, Rotation::Left))),
-            wrap_structure(Box::new(TransportBelt::new(11, 3, Rotation::Left))),
-            wrap_structure(Box::new(TransportBelt::new(12, 3, Rotation::Left))),
-            wrap_structure(Box::new(OreMine::new(12, 2, Rotation::Bottom))),
-            wrap_structure(Box::new(Furnace::new(&Position::new(8, 3)))),
-            wrap_structure(Box::new(Assembler::new(&Position::new(6, 3)))),
-            wrap_structure(Box::new(WaterWell::new(&Position::new(14, 5)))),
-            wrap_structure(Box::new(Boiler::new(&Position::new(13, 5)))),
-            wrap_structure(Box::new(SteamEngine::new(&Position::new(12, 5)))),
-        ],
-        gen_terrain(terrain_params),
-        vec![],
-    )
+    let structures = vec![
+        wrap_structure(Box::new(TransportBelt::new(10, 3, Rotation::Left))),
+        wrap_structure(Box::new(TransportBelt::new(11, 3, Rotation::Left))),
+        wrap_structure(Box::new(TransportBelt::new(12, 3, Rotation::Left))),
+        wrap_structure(Box::new(OreMine::new(12, 2, Rotation::Bottom))),
+        wrap_structure(Box::new(Furnace::new(&Position::new(8, 3)))),
+        wrap_structure(Box::new(Assembler::new(&Position::new(6, 3)))),
+        wrap_structure(Box::new(Boiler::new(&Position::new(13, 5)))),
+        wrap_structure(Box::new(Pipe::new(&Position::new(12, 5)))),
+        wrap_structure(Box::new(SteamEngine::new(&Position::new(11, 5)))),
+    ];
+    let mut terrain = gen_terrain(terrain_params);
+
+    update_water(&structures, &mut terrain, &terrain_params);
+
+    (structures, terrain, vec![])
 }
 
 fn pipe_bench(
