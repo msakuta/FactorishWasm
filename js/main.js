@@ -166,7 +166,7 @@ let unlimited = true;
     sliderInit("resourceAmount", "resourceAmountLabel", value => resourceAmount = value);
     let noiseScale = 5.;
     sliderInit("noiseScale", "noiseScaleLabel", value => noiseScale = value);
-    let noiseThreshold = 0.35;
+    let noiseThreshold = 0.30;
     sliderInit("noiseThreshold", "noiseThresholdLabel", value => noiseThreshold = value);
     let noiseOctaves = 3;
     sliderInit("noiseOctaves", "noiseOctavesLabel", value => noiseOctaves = value);
