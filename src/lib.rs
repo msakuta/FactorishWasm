@@ -2007,8 +2007,8 @@ impl FactorishState {
             return Err(JsValue::from_str("position must have 2 elements"));
         }
         let cursor = Position {
-            x: (pos[0] / self.viewport.scale / 32. - self.viewport.x) as i32,
-            y: (pos[1] / self.viewport.scale / 32. - self.viewport.y) as i32,
+            x: (pos[0] / self.viewport.scale / TILE_SIZE - self.viewport.x).floor() as i32,
+            y: (pos[1] / self.viewport.scale / TILE_SIZE - self.viewport.y).floor() as i32,
         };
 
         console_log!("mouse_down: {}, {}, button: {}", cursor.x, cursor.y, button);
@@ -2039,8 +2039,8 @@ impl FactorishState {
             return Err(JsValue::from_str("position must have 2 elements"));
         }
         let cursor = Position {
-            x: (pos[0] / self.viewport.scale / 32. - self.viewport.x) as i32,
-            y: (pos[1] / self.viewport.scale / 32. - self.viewport.y) as i32,
+            x: (pos[0] / self.viewport.scale / TILE_SIZE - self.viewport.x).floor() as i32,
+            y: (pos[1] / self.viewport.scale / TILE_SIZE - self.viewport.y).floor() as i32,
         };
         let mut events = vec![];
 
@@ -2211,8 +2211,8 @@ impl FactorishState {
             return Err(JsValue::from_str("position must have 2 elements"));
         }
         let cursor = [
-            (pos[0] / self.viewport.scale / 32. - self.viewport.x).floor() as i32,
-            (pos[1] / self.viewport.scale / 32. - self.viewport.y).floor() as i32,
+            (pos[0] / self.viewport.scale / TILE_SIZE - self.viewport.x).floor() as i32,
+            (pos[1] / self.viewport.scale / TILE_SIZE - self.viewport.y).floor() as i32,
         ];
         if let Some(bounds) = self.bounds.as_ref() {
             if cursor[0] < 0
@@ -2395,23 +2395,28 @@ impl FactorishState {
     }
 
     fn render_minimap_data_pixel(&self, chunks: &mut Chunks, position: &Position) {
-        let color;
-        if self.structures.iter().any(|structure| {
-            structure
-                .dynamic
-                .as_deref()
-                .map(|s| *s.position() == *position)
-                .unwrap_or(false)
-        }) {
-            color = [0x00, 0xff, 0x7f];
-        } else {
-            let cell = self.tile_at(position).unwrap();
-            color = Self::color_of_cell(&cell);
-        }
+        let color = self
+            .structures
+            .iter()
+            .find(|structure| {
+                structure
+                    .dynamic
+                    .as_deref()
+                    .map(|s| *s.position() == *position)
+                    .unwrap_or(false)
+            })
+            .map(|_| [0x00, 0xff, 0x7f])
+            .or_else(|| {
+                self.tile_at(position)
+                    .map(|cell| Self::color_of_cell(&cell))
+            })
+            .unwrap_or([0x7f, 0x7f, 0x7f]);
         let (chunk_pos, cell_pos) = position.div_mod(CHUNK_SIZE_I);
         if let Some(chunk) = chunks.get_mut(&chunk_pos) {
-            let start = ((cell_pos.x + cell_pos.y * self.width as i32) * 4) as usize;
-            chunk.minimap_buffer[start..start + 3].copy_from_slice(&color);
+            let start = ((cell_pos.x + cell_pos.y * CHUNK_SIZE_I) * 4) as usize;
+            if start + 3 < chunk.minimap_buffer.len() {
+                chunk.minimap_buffer[start..start + 3].copy_from_slice(&color);
+            }
         }
     }
 
