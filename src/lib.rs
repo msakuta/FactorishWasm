@@ -2708,9 +2708,23 @@ impl FactorishState {
         ))
     }
 
-    pub fn delta_viewport_pos(&mut self, x: f64, y: f64) -> Result<(), JsValue> {
-        self.viewport.x += x / self.viewport.scale / 32.;
-        self.viewport.y += y / self.viewport.scale / 32.;
+    /// Move viewport relative to current position. Intended for use with mouse move.
+    ///
+    /// * `scale_relative` -  If true, the delta is divided by current view zoom factor.
+    ///   Intended for use with the minimap, which does not change scale.
+    pub fn delta_viewport_pos(
+        &mut self,
+        x: f64,
+        y: f64,
+        scale_relative: bool,
+    ) -> Result<(), JsValue> {
+        if scale_relative {
+            self.viewport.x += x / self.viewport.scale / TILE_SIZE;
+            self.viewport.y += y / self.viewport.scale / TILE_SIZE;
+        } else {
+            self.viewport.x += x / TILE_SIZE;
+            self.viewport.y += y / TILE_SIZE;
+        }
 
         self.gen_chunks_in_viewport();
 

@@ -266,7 +266,10 @@ let unlimited = true;
     };
     miniMapElem.onmousemove = function(evt){
         if(miniMapDrag){
-            sim.delta_viewport_pos((evt.offsetX - miniMapDrag[0]) * tilesize, (evt.offsetY - miniMapDrag[1]) * tilesize);
+            sim.delta_viewport_pos(
+                (evt.offsetX - miniMapDrag[0]) * tilesize,
+                (evt.offsetY - miniMapDrag[1]) * tilesize,
+                false);
             miniMapDrag = [evt.offsetX, evt.offsetY, true];
         }
     };
@@ -1078,7 +1081,7 @@ let unlimited = true;
         if(!paused)
             sim.mouse_move([evt.offsetX, evt.offsetY]);
         if(dragging){
-            sim.delta_viewport_pos(evt.offsetX - dragging[0], evt.offsetY - dragging[1]);
+            sim.delta_viewport_pos(evt.offsetX - dragging[0], evt.offsetY - dragging[1], true);
             dragging = [evt.offsetX, evt.offsetY, true];
         }
     });
