@@ -33,6 +33,24 @@ impl Furnace {
             recipe: None,
         }
     }
+
+    /// A list of fixed recipes, because dynamic get_recipes() can only return a Vec.
+    fn recipes() -> [Recipe; 2] {
+        [
+            Recipe::new(
+                hash_map!(ItemType::IronOre => 1usize),
+                hash_map!(ItemType::IronPlate => 1usize),
+                20.,
+                50.,
+            ),
+            Recipe::new(
+                hash_map!(ItemType::CopperOre => 1usize),
+                hash_map!(ItemType::CopperPlate => 1usize),
+                20.,
+                50.,
+            ),
+        ]
+    }
 }
 
 impl Structure for Furnace {
@@ -115,6 +133,17 @@ impl Structure for Furnace {
         state: &mut FactorishState,
         _structures: &mut StructureDynIter,
     ) -> Result<FrameProcResult, ()> {
+        if self.recipe.is_none() {
+            self.recipe = Self::recipes()
+                .iter()
+                .find(|recipe| {
+                    recipe
+                        .input
+                        .iter()
+                        .all(|(type_, count)| *count <= self.input_inventory.count_item(&type_))
+                })
+                .cloned();
+        }
         if let Some(recipe) = &self.recipe {
             let mut ret = FrameProcResult::None;
             // First, check if we need to refill the energy buffer in order to continue the current work.
@@ -276,20 +305,7 @@ impl Structure for Furnace {
     }
 
     fn get_recipes(&self) -> Vec<Recipe> {
-        vec![
-            Recipe::new(
-                hash_map!(ItemType::IronOre => 1usize),
-                hash_map!(ItemType::IronPlate => 1usize),
-                20.,
-                50.,
-            ),
-            Recipe::new(
-                hash_map!(ItemType::CopperOre => 1usize),
-                hash_map!(ItemType::CopperPlate => 1usize),
-                20.,
-                50.,
-            ),
-        ]
+        Self::recipes().iter().cloned().collect()
     }
 
     fn get_selected_recipe(&self) -> Option<&Recipe> {
