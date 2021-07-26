@@ -176,6 +176,14 @@ impl Structure for Furnace {
     }
 
     fn input(&mut self, o: &DropItem) -> Result<(), JsValue> {
+        // Fuels are always welcome.
+        if o.type_ == ItemType::CoalOre
+            && self.input_inventory.count_item(&ItemType::CoalOre) < FUEL_CAPACITY
+        {
+            self.input_inventory.add_item(&ItemType::CoalOre);
+            return Ok(());
+        }
+
         if self.recipe.is_none() {
             match o.type_ {
                 ItemType::IronOre => {
@@ -203,14 +211,6 @@ impl Structure for Furnace {
             }
         }
 
-        // Fuels are always welcome.
-        if o.type_ == ItemType::CoalOre
-            && self.input_inventory.count_item(&ItemType::CoalOre) < FUEL_CAPACITY
-        {
-            self.input_inventory.add_item(&ItemType::CoalOre);
-            return Ok(());
-        }
-
         if let Some(recipe) = &self.recipe {
             if 0 < recipe.input.count_item(&o.type_) || 0 < recipe.output.count_item(&o.type_) {
                 self.input_inventory.add_item(&o.type_);
@@ -223,15 +223,15 @@ impl Structure for Furnace {
     }
 
     fn can_input(&self, item_type: &ItemType) -> bool {
+        if *item_type == ItemType::CoalOre {
+            if self.input_inventory.count_item(item_type) < FUEL_CAPACITY {
+                return true;
+            }
+        }
         if let Some(recipe) = &self.recipe {
-            *item_type == ItemType::CoalOre
-                && self.input_inventory.count_item(item_type) < FUEL_CAPACITY
-                || recipe.input.get(item_type).is_some()
+            recipe.input.get(item_type).is_some()
         } else {
-            matches!(
-                item_type,
-                ItemType::CoalOre | ItemType::IronOre | ItemType::CopperOre
-            )
+            matches!(item_type, ItemType::IronOre | ItemType::CopperOre)
         }
     }
 
