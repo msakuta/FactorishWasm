@@ -173,6 +173,9 @@ impl Structure for Furnace {
                     }
                     self.progress = Some(0.);
                     ret = FrameProcResult::InventoryChanged(self.position);
+                } else {
+                    self.recipe = None;
+                    return Ok(FrameProcResult::None); // Return here to avoid borrow checker
                 }
             }
 
