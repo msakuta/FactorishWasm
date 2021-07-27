@@ -178,8 +178,6 @@ impl Structure for Assembler {
                     }
                 }
                 self.power += accumulated;
-                self.input_inventory.remove_item(&ItemType::CoalOre);
-                ret = FrameProcResult::InventoryChanged(self.position);
             }
 
             if self.progress.is_none() {
