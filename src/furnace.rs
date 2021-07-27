@@ -4,11 +4,30 @@ use super::{
     DropItem, FactorishState, FrameProcResult, Inventory, InventoryTrait, ItemType, Position,
     Recipe, TempEnt, COAL_POWER,
 };
+use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 use web_sys::CanvasRenderingContext2d;
 
 const FUEL_CAPACITY: usize = 10;
+
+/// A list of fixed recipes, because dynamic get_recipes() can only return a Vec.
+static RECIPES: Lazy<[Recipe; 2]> = Lazy::new(|| {
+    [
+        Recipe::new(
+            hash_map!(ItemType::IronOre => 1usize),
+            hash_map!(ItemType::IronPlate => 1usize),
+            20.,
+            50.,
+        ),
+        Recipe::new(
+            hash_map!(ItemType::CopperOre => 1usize),
+            hash_map!(ItemType::CopperPlate => 1usize),
+            20.,
+            50.,
+        ),
+    ]
+});
 
 #[derive(Serialize, Deserialize)]
 pub(crate) struct Furnace {
@@ -32,24 +51,6 @@ impl Furnace {
             max_power: 20.,
             recipe: None,
         }
-    }
-
-    /// A list of fixed recipes, because dynamic get_recipes() can only return a Vec.
-    fn recipes() -> [Recipe; 2] {
-        [
-            Recipe::new(
-                hash_map!(ItemType::IronOre => 1usize),
-                hash_map!(ItemType::IronPlate => 1usize),
-                20.,
-                50.,
-            ),
-            Recipe::new(
-                hash_map!(ItemType::CopperOre => 1usize),
-                hash_map!(ItemType::CopperPlate => 1usize),
-                20.,
-                50.,
-            ),
-        ]
     }
 }
 
@@ -134,7 +135,7 @@ impl Structure for Furnace {
         _structures: &mut StructureDynIter,
     ) -> Result<FrameProcResult, ()> {
         if self.recipe.is_none() {
-            self.recipe = Self::recipes()
+            self.recipe = RECIPES
                 .iter()
                 .find(|recipe| {
                     recipe
@@ -307,8 +308,8 @@ impl Structure for Furnace {
         ret
     }
 
-    fn get_recipes(&self) -> Vec<Recipe> {
-        Self::recipes().iter().cloned().collect()
+    fn get_recipes(&self) -> std::borrow::Cow<[Recipe]> {
+        std::borrow::Cow::from(&RECIPES[..])
     }
 
     fn get_selected_recipe(&self) -> Option<&Recipe> {

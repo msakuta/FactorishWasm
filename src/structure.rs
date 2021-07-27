@@ -7,6 +7,7 @@ use super::{
 };
 use rotate_enum::RotateEnum;
 use serde::{Deserialize, Serialize};
+use std::borrow::Cow;
 use wasm_bindgen::prelude::*;
 use web_sys::CanvasRenderingContext2d;
 
@@ -478,8 +479,11 @@ pub(crate) trait Structure {
         );
         ret
     }
-    fn get_recipes(&self) -> Vec<Recipe> {
-        vec![]
+    /// Returns a list of recipes. The return value is wrapped in a Cow because some
+    /// structures can return dynamically configured list of recipes, while some others
+    /// have static fixed list of recipes. In reality, all our structures return a fixed list though.
+    fn get_recipes(&self) -> Cow<[Recipe]> {
+        Cow::from(&[][..])
     }
     fn select_recipe(&mut self, _index: usize) -> Result<bool, JsValue> {
         Err(JsValue::from_str("recipes not available"))

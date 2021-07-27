@@ -1807,6 +1807,7 @@ impl FactorishState {
             Ok(JsValue::from_serde(
                 &structure
                     .get_recipes()
+                    .into_owned()
                     .into_iter()
                     .map(RecipeSerial::from)
                     .collect::<Vec<_>>(),
