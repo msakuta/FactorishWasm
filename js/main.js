@@ -241,6 +241,7 @@ let unlimited = true;
         }
         headerContainer.style.display = v ? "block" : "none";
         headerButton.classList = "headerButton " + (v ? "open" : "");
+        headerButton.innerHTML = v ? "^" : ""
     }
 
     if(headerButton){
