@@ -32,6 +32,7 @@ body {
     height: 0.8em;
     background-color: #3f3f3f;
     border: #070707 solid 1px;
+    color: white;
 }
 
 .headerButton.open {
