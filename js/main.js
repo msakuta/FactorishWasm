@@ -1152,8 +1152,6 @@ let unlimited = true;
         document.execCommand("copy");
     };
 
-    
-
     const saveButton = document.getElementById("saveButton");
     saveButton.onclick = () => {
         var textFileAsBlob = new Blob([sim.serialize_game()], {
