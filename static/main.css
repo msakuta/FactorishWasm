@@ -41,6 +41,8 @@ body {
 
 .headerButton:hover {
     background-color: yellow;
+    color: black;
+    cursor: pointer;
 }
 
 .footer {
