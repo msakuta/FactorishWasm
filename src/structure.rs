@@ -61,6 +61,7 @@ impl<'a> DynIterMut for StructureEntryIterator<'a> {
     }
 }
 
+#[derive(Default)]
 pub(crate) struct StructureSlice<'a> {
     start: usize,
     slice: &'a mut [StructureEntry],
@@ -101,6 +102,32 @@ impl<'a> StructureDynIter<'a> {
                 },
             ]),
         ))
+    }
+
+    pub(crate) fn exclude(&mut self, idx: usize) -> Result<&mut StructureEntry, JsValue> {
+        if let Some((slice_idx, _)) = self
+            .0
+            .iter_mut()
+            .enumerate()
+            .find(|(_, slice)| slice.start <= idx && idx < slice.start + slice.slice.len())
+        {
+            let slice = std::mem::take(&mut self.0[slice_idx]);
+            let (left, right) = slice.slice.split_at_mut(slice_idx - slice.start);
+            let (center, right) = right
+                .split_first_mut()
+                .ok_or_else(|| js_str!("Structure split fail"))?;
+            self.0[slice_idx] = StructureSlice {
+                start: slice.start,
+                slice: left,
+            };
+            self.0.push(StructureSlice {
+                start: idx,
+                slice: right,
+            });
+            Ok(center)
+        } else {
+            js_err!("Strucutre slices out of range")
+        }
     }
 
     /// Accessor without generation checking.
@@ -193,11 +220,12 @@ impl<'a> DynIter for StructureDynIter<'a> {
 
 impl<'a> DynIterMut for StructureDynIter<'a> {
     fn dyn_iter_mut(&mut self) -> Box<dyn Iterator<Item = &mut Self::Item> + '_> {
-        Box::new(
-            self.0
+        Box::new(self.0.iter_mut().flat_map(|slice| {
+            slice
+                .slice
                 .iter_mut()
-                .flat_map(|slice| slice.slice.iter_mut().filter_map(|s| s.dynamic.as_deref_mut())),
-        )
+                .filter_map(|s| s.dynamic.as_deref_mut())
+        }))
     }
 }
 
