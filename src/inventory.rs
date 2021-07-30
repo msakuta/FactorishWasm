@@ -62,7 +62,7 @@ impl InventoryTrait for Inventory {
     }
 }
 
-#[derive(PartialEq, Debug, Serialize, Deserialize)]
+#[derive(PartialEq, Eq, Debug, Serialize, Deserialize, Clone, Copy)]
 pub(crate) enum InventoryType {
     Input,
     Output,

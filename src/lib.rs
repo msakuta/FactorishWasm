@@ -367,18 +367,18 @@ struct PopupText {
     life: i32,
 }
 
-#[derive(Eq, PartialEq, Copy, Clone, Debug)]
+#[derive(Eq, PartialEq, Copy, Clone, Debug, Serialize)]
 enum SelectedItem {
     /// This is index into `tool_belt`. It is kind of duplicate of `player.selected_item`,
     /// but we make it separate field because multiple tool belt slots refer to the same item type.
     ToolBelt(usize),
     PlayerInventory(ItemType),
-    StructInventory(Position, ItemType),
+    StructInventory(Position, InventoryType, ItemType),
 }
 
 impl SelectedItem {
     fn map_struct(&self, position: &Position) -> Option<ItemType> {
-        if let SelectedItem::StructInventory(self_pos, item) = self {
+        if let SelectedItem::StructInventory(self_pos, _, item) = self {
             if self_pos == position {
                 Some(*item)
             } else {
@@ -1777,10 +1777,11 @@ impl FactorishState {
         })
     }
 
-    pub fn select_structure_inventory(&mut self, name: &str) -> Result<(), JsValue> {
+    pub fn select_structure_inventory(&mut self, name: &str, inventory_type: JsValue) -> Result<(), JsValue> {
         self.selected_item = Some(SelectedItem::StructInventory(
             self.selected_structure_inventory
                 .ok_or_else(|| js_str!("Structure not selected"))?,
+            InventoryType::try_from(inventory_type)?,
             str_to_item(name).ok_or_else(|| JsValue::from("Item name not valid"))?,
         ));
         Ok(())
@@ -2053,7 +2054,11 @@ impl FactorishState {
                     self.player.inventory.get(&selected_tool).zip(cell.as_ref())
                 {
                     if 1 <= *count && cell.water ^ (selected_tool != ItemType::OffshorePump) {
-                        let mut new_s = self.new_structure(&selected_tool, &cursor)?;
+                        let mut new_s = if let Ok(s) = self.new_structure(&selected_tool, &cursor) {
+                            s
+                        } else {
+                            return Ok(JsValue::UNDEFINED);
+                        };
                         let bbox = new_s.bounding_box();
                         for y in bbox.y0..bbox.y1 {
                             for x in bbox.x0..bbox.x1 {
@@ -2473,6 +2478,8 @@ impl FactorishState {
         }
     }
 
+    /// Returns a selected item from either player inventory, toolbelt or a structure inventory.
+    /// Returns null if none is selected.
     pub fn get_selected_tool_or_item(&self) -> JsValue {
         if let Some(selected_item) = self.get_selected_tool_or_item_opt() {
             JsValue::from_str(&item_to_str(&selected_item))
@@ -2528,20 +2535,35 @@ impl FactorishState {
         }
     }
 
+    /// Returns a selected item from either player inventory, toolbelt or a structure inventory.
     fn get_selected_tool_or_item_opt(&self) -> Option<ItemType> {
         match self.selected_item {
             Some(SelectedItem::ToolBelt(tool)) => self.tool_belt[tool],
-            Some(SelectedItem::PlayerInventory(item)) => tool_defs
-                .iter()
-                .find(|def| def.item_type == item)
-                .and(Some(item)),
-            Some(SelectedItem::StructInventory(pos, item)) => self
+            Some(SelectedItem::PlayerInventory(item)) => Some(item),
+            Some(SelectedItem::StructInventory(pos, inventory_type, item)) => self
                 .structure_iter()
                 .find(|s| *s.position() == pos)
-                .and_then(|s| s.inventory(false))
+                .and_then(|s| match inventory_type {
+                    InventoryType::Input => s.inventory(true),
+                    InventoryType::Output => s.inventory(false),
+                    InventoryType::Burner => s.burner_inventory(),
+                })
                 .and_then(|inventory| inventory.get(&item))
                 .and(Some(item)),
             None => None,
+        }
+    }
+
+    pub fn get_selected_item_type(&self) -> JsValue {
+        self.selected_item.and_then(|i| JsValue::from_serde(&i).ok()).unwrap_or(JsValue::NULL)
+    }
+
+    /// Returns either "Input", "Output" or "Burner" for the selected inventory
+    pub fn get_selected_inventory_type(&self) -> JsValue {
+        if let Some(SelectedItem::StructInventory(_, type_, _)) = self.selected_item {
+            JsValue::from_serde(&type_).unwrap_or(JsValue::NULL)
+        } else {
+            JsValue::NULL
         }
     }
 
@@ -2939,10 +2961,11 @@ impl FactorishState {
             if let Some(selected_tool) = self.get_selected_tool_or_item_opt() {
                 context.save();
                 context.set_global_alpha(0.5);
-                let mut tool = self.new_structure(&selected_tool, &Position::from(cursor))?;
-                tool.set_rotation(&self.tool_rotation).ok();
-                for depth in 0..3 {
-                    tool.draw(self, &context, depth, false)?;
+                if let Ok(mut tool) = self.new_structure(&selected_tool, &Position::from(cursor)) {
+                    tool.set_rotation(&self.tool_rotation).ok();
+                    for depth in 0..3 {
+                        tool.draw(self, &context, depth, false)?;
+                    }
                 }
                 context.restore();
             }

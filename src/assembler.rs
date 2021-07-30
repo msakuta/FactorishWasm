@@ -195,6 +195,7 @@ impl Structure for Assembler {
                         self.input_inventory.remove_items(item, *count);
                     }
                     self.progress = Some(0.);
+                    console_log!("inputting from Assembler {}", recipe.output.len());
                     ret = FrameProcResult::InventoryChanged(self.position);
                 }
             }
@@ -212,6 +213,7 @@ impl Structure for Assembler {
                         self.output_inventory
                             .add_items(&output_item.0, *output_item.1);
                     }
+                    console_log!("outputting from Assembler {}", recipe.output.len());
                     return Ok(FrameProcResult::InventoryChanged(self.position));
                 } else {
                     self.progress = Some(prev_progress + progress);

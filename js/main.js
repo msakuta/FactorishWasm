@@ -349,10 +349,7 @@ let unlimited = true;
         const item = sim.get_selected_tool_or_item();
         if(item){
             mouseIcon.style.display = "block";
-            let imageFile = getImageFile(item);
-            if(imageFile instanceof Array)
-                imageFile = imageFile[0];
-            mouseIcon.style.backgroundImage = `url(${imageFile})`;
+            setItemImageToElem(mouseIcon, item, true);
         }
         else
             mouseIcon.style.display = "none";
@@ -587,21 +584,26 @@ let unlimited = true;
             ...position, "Output"));
     }
 
-    function generateItemImage(i, iconSize, count){
-        var img = document.createElement('div');
+    function setItemImageToElem(img, i, iconSize){
         var imageFile = getImageFile(i);
         img.style.backgroundImage = 'url(' + (imageFile instanceof Array ?
             imageFile[0] : imageFile) + ')';
         var size = iconSize ? 32 : objViewSize;
         img.style.width = size + 'px';
         img.style.height = size + 'px';
-        img.style.display = 'inline-block';
         if(imageFile instanceof Array)
             img.style.backgroundSize = size * imageFile[1] + 'px ' + size + 'px';
         else
             img.style.backgroundSize = size + 'px ' + size + 'px';
+    }
+
+    function generateItemImage(i, iconSize, count){
+        var img = document.createElement('div');
+        setItemImageToElem(img, i, iconSize);
+        img.style.display = 'inline-block';
         img.setAttribute('draggable', 'false');
         if(iconSize && count){
+            var size = iconSize ? 32 : objViewSize;
             var container = document.createElement('span');
             container.style.position = 'relative';
             container.style.display = 'inline-block';
@@ -674,26 +676,43 @@ let unlimited = true;
             /// Either clicking or start dragging will select the item, so that
             /// it can be moved on drop
             function selectThisItem(itemName){
+                const currentItem = sim.get_selected_item_type();
+                if(currentItem){
+                    // elem.onclick();
+                    return false;
+                    // if(currntItem[0] === "PlayerInventory" && elem === playerInventoryElem){
+                    //     if(sim.move_selected_inventory_item(!data.fromPlayer, data.inventoryType)){
+                    //         deselectPlayerInventory();
+                    //         updateInventory(sim.get_player_inventory());
+                    //         updateToolBar();
+                    //         updateStructureInventory();
+                    //     }
+                    // }
+                }
                 if(selectedInventory === owner && selectedInventoryItem === itemName){
                     deselectPlayerInventory();
                     selectedInventoryItem = null;
                     updateInventorySelection(elem);
-                    return;
+                    return true;
                 }
                 selectedInventory = owner;
                 selectedInventoryItem = itemName;
                 if(elem === playerInventoryElem){
                     sim.select_player_inventory(selectedInventoryItem);
-                    updateMouseIcon();
                 }
                 else{
-                    sim.select_structure_inventory(selectedInventoryItem);
+                    sim.select_structure_inventory(selectedInventoryItem,
+                        elem === inventoryContentElem ? "Input" :
+                        elem === outputInventoryContentElem ? "Output" :
+                        "Burner");
                 }
+                updateMouseIcon();
                 updateInventorySelection(elem);
+                return true;
             };
             div.onclick = (name => evt => {
-                selectThisItem(name);
-                evt.stopPropagation();
+                if(selectThisItem(name))
+                    evt.stopPropagation();
             })(name);
             div.setAttribute('draggable', 'true');
             div.ondragstart = (name => ev => {
@@ -723,32 +742,35 @@ let unlimited = true;
     inputFuelElem.style.backgroundImage = `url(${fuelBack})`;
 
     [inventoryContentElem, outputInventoryContentElem, inputFuelElem].forEach((elem, idx) => {
-        elem.ondragover = function(ev){
-            var ok = false;
-            for(var i = 0; i < ev.dataTransfer.types.length; i++){
-                if(ev.dataTransfer.types[i].toUpperCase() === textType.toUpperCase())
-                    ok = true;
-            }
-            if(ok){
-                ev.preventDefault();
-                // Set the dropEffect to move
-                ev.dataTransfer.dropEffect = "move";
-            }
-        }
-        elem.addEventListener("drop", (ev) => {
-            ev.preventDefault();
-            var data = JSON.parse(ev.dataTransfer.getData(textType));
-            if(data.fromPlayer){
-                // The amount could have changed during dragging, so we'll query current value
-                // from the source inventory.
-                if(sim.move_selected_inventory_item(!data.fromPlayer, idx === 0 ? "Input" : idx === 1 ? "Output" : "Burner")){
-                    deselectPlayerInventory();
-                    updateInventory(sim.get_player_inventory());
-                    updateToolBar();
-                    updateStructureInventory();
-                }
-            }
-        }, true);
+        // elem.ondragover = function(ev){
+        //     var ok = false;
+        //     for(var i = 0; i < ev.dataTransfer.types.length; i++){
+        //         if(ev.dataTransfer.types[i].toUpperCase() === textType.toUpperCase())
+        //             ok = true;
+        //     }
+        //     if(ok){
+        //         ev.preventDefault();
+        //         // Set the dropEffect to move
+        //         ev.dataTransfer.dropEffect = "move";
+        //     }
+        // }
+        // elem.addEventListener("drop", (ev) => {
+        //     ev.preventDefault();
+        //     var data = JSON.parse(ev.dataTransfer.getData(textType));
+        //     if(data.fromPlayer){
+        //         // The amount could have changed during dragging, so we'll query current value
+        //         // from the source inventory.
+        //         if(sim.move_selected_inventory_item(!data.fromPlayer, idx === 0 ? "Input" : idx === 1 ? "Output" : "Burner")){
+        //             deselectPlayerInventory();
+        //             updateInventory(sim.get_player_inventory());
+        //             updateToolBar();
+        //             updateStructureInventory();
+        //         }
+        //     }
+        // }, true);
+        elem.addEventListener("click", (ev) => {
+            console.log("Clicked inventory");
+        })
     });
     inventoryElem.style.display = 'none';
 
