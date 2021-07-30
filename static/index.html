@@ -5,6 +5,7 @@
 		<meta charset="utf-8">
 		<meta name="viewport" content="width=device-width, initial-scale=1.0">
 		<link rel="stylesheet" href="main.css"></link rel="stylesheet">
+		<script src="https://cdn.jsdelivr.net/npm/vue@2/dist/vue.js"></script>
 	</head>
 	<body>
 		<canvas id="canvas"></canvas>
@@ -99,6 +100,9 @@
 						<img id="recipeSelectButton" draggable="false" src="../img/recipe-select.png" alt="Recipe select" style="position: absolute; left: 0px; top: 80px; border: 1px solid #7f7f7f">
 					</div>
 					<div id="inventory2Client">
+						<div id="vueApp">
+							{{ message }}
+						</div>
 						<div id="burnerContainer" class="burnerContainer">
 							<div id="inputFuel" class="fuelBackground"></div>
 							<div class="burnerEnergyBack">

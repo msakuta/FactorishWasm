@@ -730,6 +730,15 @@ let unlimited = true;
         }
     }
 
+    const vueApp = new Vue({
+        el: '#vueApp',
+        data: {
+            message: 'Hello Vue!',
+            hasBurner: false,
+            burnerEnergy: 0,
+        }
+    });
+
     const inventory2ClientElem = document.getElementById('inventory2Client');
     const inputInventoryTitleElem = document.getElementById('inputInventoryTitle');
     const inventoryContentElem = document.getElementById('inputInventoryContent');
@@ -839,6 +848,7 @@ let unlimited = true;
         const [burnerInventory, _] = sim.get_structure_inventory(c, r, "Burner");
         if(burnerInventory){
             burnerContainer.style.display = "block";
+            vueApp.hasBurner = true;
             const elem = inputFuelElem;
             // Clear the elements first
             // while(elem.firstChild)
@@ -876,12 +886,15 @@ let unlimited = true;
             }
 
             const burnerEnergy = sim.get_structure_burner_energy(c, r, true);
+            // if(burnerEnergy)
+            //     vueApp.burnerEnergy = burnerEnergy[0] / burnerEnergy[1] * 80;
             if(burnerEnergy){
                 const burnerEnergyElem = document.getElementById('burnerEnergy');
                 burnerEnergyElem.style.width = `${burnerEnergy[0] / burnerEnergy[1] * 80}px`;
             }
         }
         else{
+            vueApp.hasBurner = false;
             burnerContainer.style.display = "none";
         }
     }
@@ -914,6 +927,7 @@ let unlimited = true;
             recipeSelectButtonElem.style.display = "none";
             playerElem.style.left = "40px";
         }
+        vueApp.message = "Inventory shown";
     }
 
     let recipeTarget = null;
