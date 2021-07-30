@@ -19,15 +19,26 @@
 					<div id="paramsContainer" class="params" style="display: none;">
 						<div style="font-size: 120%; font-weight: 700;">New game settings</div>
 						<div>
-							Size:
+							<label for="sizeSelect">Size:</label>
 							<select id="sizeSelect">
 								<option>16</option>
 								<option>24</option>
 								<option>32</option>
 								<option>48</option>
 								<option>64</option>
-								<option selected>128</option>
+								<option>128</option>
 								<option>256</option>
+								<option selected>unlimited</option>
+							</select>
+						</div>
+						<div>
+							<label for="scenarioSelect">Scenario:</label>
+							<select id="scenarioSelect">
+								<option value="default" selected>Default</option>
+								<option value="pipe_bench">Pipe benchmark</option>
+								<option value="inserter_bench">Inserter benchmark</option>
+								<option value="transport_bench">Transport belt benchmark</option>
+								<option value="electric_bench">Electric network benchmark</option>
 							</select>
 						</div>
 						<div>
@@ -36,7 +47,7 @@
 						</div>
 						<div>
 							Water Noise Threshold=<span id="waterNoiseThresholdLabel"></span>
-							<input id="waterNoiseThreshold" type="range" max="1" min="0" step="1e-3" value="0.35">
+							<input id="waterNoiseThreshold" type="range" max="0.5" min="0" step="1e-3" value="0.28">
 						</div>
 						<div>
 							Resource Amount=<span id="resourceAmountLabel"></span>
@@ -48,7 +59,11 @@
 						</div>
 						<div>
 							Resource Noise threshold=<span id="noiseThresholdLabel"></span>
-							<input id="noiseThreshold" type="range" max="1" min="0" step="1e-3" value="0.45">
+							<input id="noiseThreshold" type="range" max="0.5" min="0" step="1e-3" value="0.30">
+						</div>
+						<div>
+							Noise Octaves=<span id="noiseOctavesLabel"></span>
+							<input id="noiseOctaves" type="range" max="10" min="1" step="1" value="3">
 						</div>
 						<div style="text-align: center;">
 							<button type="button" id="generateBoard">Start a new game!</button>
@@ -59,6 +74,7 @@
 						<div><label><input type="checkbox" id="showDebugBBox">Show Debug Bounding Box</label></div>
 						<div><label><input type="checkbox" id="showDebugFluidBox">Show Debug Fluid Box</label></div>
 						<div><label><input type="checkbox" id="showDebugPowerNetwork">Show Debug Power Network</label></div>
+						<div><label><input type="checkbox" id="showPerfGraph">Show performance graph</label></div>
 					</div>
 				</div>
 				<hr>
@@ -70,7 +86,7 @@
 				<hr>
 				<div>Source on <a href="https://github.com/msakuta/FactorishWasm">GitHub</a>.</div>
 			</div>
-			<div class="headerButton open" id="headerButton"></div>
+			<div class="headerButton open" id="headerButton">^</div>
 		</div>
 		<div>
 			<div id="container2">

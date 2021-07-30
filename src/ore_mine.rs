@@ -1,9 +1,11 @@
 use super::{
     draw_direction_arrow,
+    drop_items::hit_check,
+    inventory::{Inventory, InventoryTrait},
     items::ItemType,
     structure::{RotateErr, Structure, StructureDynIter, StructureId},
-    DropItem, FactorishState, FrameProcResult, Inventory, InventoryTrait, Position, Recipe,
-    Rotation, TempEnt, COAL_POWER, TILE_SIZE, TILE_SIZE_I,
+    DropItem, FactorishState, FrameProcResult, Position, Recipe, Rotation, TempEnt, COAL_POWER,
+    TILE_SIZE, TILE_SIZE_I,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -117,8 +119,11 @@ impl Structure for OreMine {
     }
 
     fn desc(&self, state: &FactorishState) -> String {
-        let tile = &state.board
-            [self.position.x as usize + self.position.y as usize * state.width as usize];
+        let tile = if let Some(tile) = state.tile_at(&self.position) {
+            tile
+        } else {
+            return "Cell not found".to_string();
+        };
         if let Some(_recipe) = &self.recipe {
             // Progress bar
             format!("{}{}{}{}{}",
@@ -217,7 +222,6 @@ impl Structure for OreMine {
                             if let Ok(val) = output(state, *item.0, &self.position) {
                                 structure
                                     .input(&DropItem {
-                                        id: 0,
                                         type_: *item.0,
                                         x: output_position.x,
                                         y: output_position.y,
@@ -241,7 +245,7 @@ impl Structure for OreMine {
                 }
                 let drop_x = output_position.x * TILE_SIZE_I + TILE_SIZE_I / 2;
                 let drop_y = output_position.y * TILE_SIZE_I + TILE_SIZE_I / 2;
-                if !state.hit_check(drop_x, drop_y, None)
+                if !hit_check(&state.drop_items, drop_x, drop_y, None)
                     && state
                         .tile_at(&output_position)
                         .map(|cell| !cell.water)

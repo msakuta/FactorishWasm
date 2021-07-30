@@ -1,8 +1,9 @@
 use super::{
     draw_direction_arrow,
+    drop_items::DropItem,
     items::{render_drop_item, ItemType},
     structure::{RotateErr, Structure, StructureDynIter, StructureId},
-    DropItem, FactorishState, FrameProcResult, Inventory, InventoryTrait, Position, Rotation,
+    FactorishState, FrameProcResult, Inventory, InventoryTrait, Position, Rotation,
 };
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
@@ -177,8 +178,7 @@ impl Structure for Inserter {
                 let ret = FrameProcResult::None;
 
                 let mut try_hold = |structures: &mut StructureDynIter, type_| -> bool {
-                    if let Some(structure) =
-                        self.output_structure.map(|id| structures.get(id)).flatten()
+                    if let Some(structure) = self.output_structure.and_then(|id| structures.get(id))
                     {
                         if structure.can_input(&type_) || structure.movable() {
                             // ret = FrameProcResult::InventoryChanged(output_position);
@@ -195,8 +195,8 @@ impl Structure for Inserter {
                     }
                 };
 
-                let mut lets_try_hold: Option<Inventory> = None;
-                if let Some(&DropItem { type_, id, .. }) = state.find_item(&input_position) {
+                let mut lets_try_hold = None;
+                if let Some((id, &DropItem { type_, .. })) = state.find_item(&input_position) {
                     if try_hold(structures, type_) {
                         state.remove_item(id);
                     } else {
@@ -204,10 +204,10 @@ impl Structure for Inserter {
                     }
                 } else if let Some(structure) = self
                     .input_structure
-                    .map(|id| structures.get_mut(id))
+                    .and_then(|id| structures.exclude_id(id).ok())
                     .flatten()
                 {
-                    // lets_try_hold = Some(structure.can_output(structures));
+                    lets_try_hold = Some(structure.can_output(structures));
                     // console_log!("outputting from a structure at {:?}", structure.position());
                     // if let Ok((item, callback)) = structure.output(state, &output_position) {
                     //     lets_try_hold = Some((item, callback));
@@ -293,7 +293,6 @@ impl Structure for Inserter {
                 {
                     if structure
                         .input(&DropItem::new(
-                            &mut state.serial_no,
                             item_type,
                             output_position.x,
                             output_position.y,

@@ -1,13 +1,15 @@
 mod iter;
 
 use super::{
+    drop_items::DropItem,
     dyn_iter::{DynIter, DynIterMut},
     items::ItemType,
     water_well::FluidBox,
-    DropItem, FactorishState, Inventory, InventoryTrait, Recipe,
+    FactorishState, Inventory, InventoryTrait, Recipe,
 };
 use rotate_enum::RotateEnum;
 use serde::{Deserialize, Serialize};
+use std::borrow::Cow;
 use wasm_bindgen::prelude::*;
 use web_sys::CanvasRenderingContext2d;
 
@@ -61,75 +63,7 @@ impl<'a> DynIterMut for StructureEntryIterator<'a> {
     }
 }
 
-pub(crate) use self::iter::{
-    StructureDynIter, StructureDynIterId, StructureDynIterIter, StructureDynIterIterMut,
-};
-
-impl<'a> StructureDynIter<'a> {
-    pub(crate) fn dyn_iter_id(&self) -> impl Iterator<Item = (StructureId, &dyn Structure)> + '_ {
-        StructureDynIterId::new(self)
-        // self.left
-        //     .iter()
-        //     .enumerate()
-        //     .map(move |(i, val)| {
-        //         (
-        //             StructureId {
-        //                 id: (i + self.left_start) as u32,
-        //                 gen: val.gen,
-        //             },
-        //             val,
-        //         )
-        //     })
-        //     .chain(self.right.iter().enumerate().map(move |(i, val)| {
-        //         (
-        //             StructureId {
-        //                 id: (i + self.right_start) as u32,
-        //                 gen: val.gen,
-        //             },
-        //             val,
-        //         )
-        //     }))
-        //     .filter_map(|(i, s)| Some((i, s.dynamic.as_deref()?)))
-    }
-
-    fn dyn_iter(&self) -> StructureDynIterIter<'_, '_> {
-        StructureDynIterIter::new(self)
-    }
-
-    fn dyn_iter_mut<'s, 'b>(&'s mut self) -> StructureDynIterIterMut<'b, 'a>
-    where
-        's: 'b,
-        'b: 'a,
-    {
-        StructureDynIterIterMut::new(self)
-    }
-}
-
-// impl<'a> DynIter for StructureDynIter<'a> {
-//     type Item = dyn Structure;
-//     fn dyn_iter(&self) -> Box<dyn Iterator<Item = &Self::Item> + '_> {
-//         Box::new(StructureDynIterIter::new(self)
-//             // self.left
-//             //     .iter()
-//             //     .chain(self.right.iter())
-//             //     .filter_map(|s| s.dynamic.as_deref()),
-//         )
-//     }
-//     fn as_dyn_iter(&self) -> &dyn DynIter<Item = Self::Item> {
-//         self
-//     }
-// }
-
-// impl<'a> DynIterMut for StructureDynIter<'a> {
-//     fn dyn_iter_mut(&mut self) -> Box<dyn Iterator<Item = &mut Self::Item> + '_> {
-//         Box::new(
-//             self.left
-//                 .iter_mut()
-//                 .chain(self.right.iter_mut())
-//                 .filter_map(|s| s.dynamic.as_deref_mut()),
-//         )
-//     }
-// }
+pub(crate) use self::iter::StructureDynIter;
 
 #[derive(Eq, PartialEq, Hash, Copy, Clone, Debug, Serialize, Deserialize)]
 pub(crate) struct Position {
@@ -141,6 +75,13 @@ impl Position {
     pub fn new(x: i32, y: i32) -> Self {
         Self { x, y }
     }
+
+    pub(crate) fn div_mod(&self, size: i32) -> (Position, Position) {
+        let div = Position::new(self.x.div_euclid(size), self.y.div_euclid(size));
+        let mod_ = Position::new(self.x.rem_euclid(size), self.y.rem_euclid(size));
+        (div, mod_)
+    }
+
     pub(crate) fn add(&self, o: (i32, i32)) -> Position {
         Self {
             x: self.x + o.0,
@@ -384,8 +325,11 @@ pub(crate) trait Structure {
         );
         ret
     }
-    fn get_recipes(&self) -> Vec<Recipe> {
-        vec![]
+    /// Returns a list of recipes. The return value is wrapped in a Cow because some
+    /// structures can return dynamically configured list of recipes, while some others
+    /// have static fixed list of recipes. In reality, all our structures return a fixed list though.
+    fn get_recipes(&self) -> Cow<[Recipe]> {
+        Cow::from(&[][..])
     }
     fn select_recipe(&mut self, _index: usize) -> Result<bool, JsValue> {
         Err(JsValue::from_str("recipes not available"))

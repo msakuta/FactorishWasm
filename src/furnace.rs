@@ -4,11 +4,30 @@ use super::{
     DropItem, FactorishState, FrameProcResult, Inventory, InventoryTrait, ItemType, Position,
     Recipe, TempEnt, COAL_POWER,
 };
+use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 use web_sys::CanvasRenderingContext2d;
 
 const FUEL_CAPACITY: usize = 10;
+
+/// A list of fixed recipes, because dynamic get_recipes() can only return a Vec.
+static RECIPES: Lazy<[Recipe; 2]> = Lazy::new(|| {
+    [
+        Recipe::new(
+            hash_map!(ItemType::IronOre => 1usize),
+            hash_map!(ItemType::IronPlate => 1usize),
+            20.,
+            50.,
+        ),
+        Recipe::new(
+            hash_map!(ItemType::CopperOre => 1usize),
+            hash_map!(ItemType::CopperPlate => 1usize),
+            20.,
+            50.,
+        ),
+    ]
+});
 
 #[derive(Serialize, Deserialize)]
 pub(crate) struct Furnace {
@@ -115,6 +134,17 @@ impl Structure for Furnace {
         state: &mut FactorishState,
         _structures: &mut StructureDynIter,
     ) -> Result<FrameProcResult, ()> {
+        if self.recipe.is_none() {
+            self.recipe = RECIPES
+                .iter()
+                .find(|recipe| {
+                    recipe
+                        .input
+                        .iter()
+                        .all(|(type_, count)| *count <= self.input_inventory.count_item(&type_))
+                })
+                .cloned();
+        }
         if let Some(recipe) = &self.recipe {
             let mut ret = FrameProcResult::None;
             // First, check if we need to refill the energy buffer in order to continue the current work.
@@ -144,6 +174,9 @@ impl Structure for Furnace {
                     }
                     self.progress = Some(0.);
                     ret = FrameProcResult::InventoryChanged(self.position);
+                } else {
+                    self.recipe = None;
+                    return Ok(FrameProcResult::None); // Return here to avoid borrow checker
                 }
             }
 
@@ -176,6 +209,14 @@ impl Structure for Furnace {
     }
 
     fn input(&mut self, o: &DropItem) -> Result<(), JsValue> {
+        // Fuels are always welcome.
+        if o.type_ == ItemType::CoalOre
+            && self.input_inventory.count_item(&ItemType::CoalOre) < FUEL_CAPACITY
+        {
+            self.input_inventory.add_item(&ItemType::CoalOre);
+            return Ok(());
+        }
+
         if self.recipe.is_none() {
             match o.type_ {
                 ItemType::IronOre => {
@@ -203,14 +244,6 @@ impl Structure for Furnace {
             }
         }
 
-        // Fuels are always welcome.
-        if o.type_ == ItemType::CoalOre
-            && self.input_inventory.count_item(&ItemType::CoalOre) < FUEL_CAPACITY
-        {
-            self.input_inventory.add_item(&ItemType::CoalOre);
-            return Ok(());
-        }
-
         if let Some(recipe) = &self.recipe {
             if 0 < recipe.input.count_item(&o.type_) || 0 < recipe.output.count_item(&o.type_) {
                 self.input_inventory.add_item(&o.type_);
@@ -223,15 +256,15 @@ impl Structure for Furnace {
     }
 
     fn can_input(&self, item_type: &ItemType) -> bool {
+        if *item_type == ItemType::CoalOre {
+            if self.input_inventory.count_item(item_type) < FUEL_CAPACITY {
+                return true;
+            }
+        }
         if let Some(recipe) = &self.recipe {
-            *item_type == ItemType::CoalOre
-                && self.input_inventory.count_item(item_type) < FUEL_CAPACITY
-                || recipe.input.get(item_type).is_some()
+            recipe.input.get(item_type).is_some()
         } else {
-            matches!(
-                item_type,
-                ItemType::CoalOre | ItemType::IronOre | ItemType::CopperOre
-            )
+            matches!(item_type, ItemType::IronOre | ItemType::CopperOre)
         }
     }
 
@@ -275,21 +308,8 @@ impl Structure for Furnace {
         ret
     }
 
-    fn get_recipes(&self) -> Vec<Recipe> {
-        vec![
-            Recipe::new(
-                hash_map!(ItemType::IronOre => 1usize),
-                hash_map!(ItemType::IronPlate => 1usize),
-                20.,
-                50.,
-            ),
-            Recipe::new(
-                hash_map!(ItemType::CopperOre => 1usize),
-                hash_map!(ItemType::CopperPlate => 1usize),
-                20.,
-                50.,
-            ),
-        ]
+    fn get_recipes(&self) -> std::borrow::Cow<[Recipe]> {
+        std::borrow::Cow::from(&RECIPES[..])
     }
 
     fn get_selected_recipe(&self) -> Option<&Recipe> {

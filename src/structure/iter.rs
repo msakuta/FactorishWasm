@@ -1,343 +1,206 @@
 use super::{Structure, StructureEntry, StructureId};
+use crate::dyn_iter::{DynIter, DynIterMut};
 use wasm_bindgen::prelude::*;
 
-/// A structure that allow random access to structure array excluding single element.
-/// It is convenient when you want to have mutable reference to two elements in the array at the same time.
-pub(crate) enum StructureDynIter<'a> {
-    Slice(&'a mut [StructureEntry]),
-    Split {
-        left_start: usize,
-        left: Box<StructureDynIter<'a>>,
-        right_start: usize,
-        right: Box<StructureDynIter<'a>>,
-        len: usize,
-    },
+#[derive(Default)]
+pub(crate) struct StructureSlice<'a> {
+    start: usize,
+    slice: &'a mut [StructureEntry],
 }
+
+/// A structure that allow random access to structure array with possible gaps.
+/// It uses a Vec of slices, which will use dynamic memory, which is a bit sad, but we can allow any number
+/// of slices and access internal object in O(n) where n is the number of slices, not the number of objects.
+/// It is convenient when you want to have mutable reference to two elements in the array at the same time.
+pub(crate) struct StructureDynIter<'a>(Vec<StructureSlice<'a>>);
 
 impl<'a> StructureDynIter<'a> {
     pub(crate) fn new_all(source: &'a mut [StructureEntry]) -> Self {
-        Self::Slice(source)
+        Self(vec![StructureSlice {
+            start: 0,
+            slice: source,
+        }])
     }
-
-    // pub(crate) fn new_offset(source: &'a mut [StructureEntry], offset: usize) -> Self {
-
-    // }
 
     pub(crate) fn new(
         source: &'a mut [StructureEntry],
         split_idx: usize,
     ) -> Result<(&'a mut StructureEntry, Self), JsValue> {
-        let len = source.len();
         let (left, right) = source.split_at_mut(split_idx);
         let (center, right) = right
             .split_first_mut()
             .ok_or_else(|| JsValue::from_str("Structures split fail"))?;
         Ok((
             center,
-            Self::Split {
-                left_start: 0,
-                left: Box::new(Self::new_all(left)),
-                right_start: split_idx + 1,
-                right: Box::new(Self::new_all(right)),
-                len,
-            },
+            Self(vec![
+                StructureSlice {
+                    start: 0,
+                    slice: left,
+                },
+                StructureSlice {
+                    start: split_idx + 1,
+                    slice: right,
+                },
+            ]),
         ))
     }
 
-    fn len(&self) -> usize {
-        match self {
-            Self::Slice(slice) => slice.len(),
-            Self::Split { len, .. } => *len,
+    pub(crate) fn exclude(&mut self, idx: usize) -> Result<&mut StructureEntry, JsValue> {
+        if let Some((slice_idx, _)) = self
+            .0
+            .iter_mut()
+            .enumerate()
+            .find(|(_, slice)| slice.start <= idx && idx < slice.start + slice.slice.len())
+        {
+            let slice = std::mem::take(&mut self.0[slice_idx]);
+            let (left, right) = slice.slice.split_at_mut(idx - slice.start);
+            let (center, right) = right
+                .split_first_mut()
+                .ok_or_else(|| js_str!("Structure split fail"))?;
+            self.0[slice_idx] = StructureSlice {
+                start: slice.start,
+                slice: left,
+            };
+            self.0.push(StructureSlice {
+                start: idx,
+                slice: right,
+            });
+            Ok(center)
+        } else {
+            js_err!("Strucutre slices out of range")
+        }
+    }
+
+    pub(crate) fn exclude_id(
+        &mut self,
+        id: StructureId,
+    ) -> Result<Option<&'a mut (dyn Structure + 'static)>, JsValue> {
+        let idx = id.id as usize;
+        if let Some((slice_idx, _)) = self
+            .0
+            .iter_mut()
+            .enumerate()
+            .find(|(_, slice)| slice.start <= idx && idx < slice.start + slice.slice.len())
+        {
+            let slice_borrow = &self.0[slice_idx];
+            let entry = &slice_borrow.slice[idx - slice_borrow.start];
+            if entry.gen != id.gen || entry.dynamic.is_none() {
+                return Ok(None);
+            }
+            let slice = std::mem::take(&mut self.0[slice_idx]);
+            let (left, right) = slice.slice.split_at_mut(idx - slice.start);
+            let (center, right) = right
+                .split_first_mut()
+                .ok_or_else(|| js_str!("Structure split fail"))?;
+            self.0[slice_idx] = StructureSlice {
+                start: slice.start,
+                slice: left,
+            };
+            self.0.push(StructureSlice {
+                start: idx,
+                slice: right,
+            });
+            Ok(center.dynamic.as_deref_mut())
+        } else {
+            js_err!("Strucutre slices out of range")
         }
     }
 
     /// Accessor without generation checking.
     #[allow(dead_code)]
     pub(crate) fn get_at(&self, idx: usize) -> Option<&StructureEntry> {
-        match self {
-            Self::Slice(slice) => slice.get(idx),
-            Self::Split {
-                left_start,
-                left,
-                right_start,
-                right,
-                ..
-            } => {
-                if *left_start <= idx && idx < *left_start + left.len() {
-                    left.get_at(idx - *left_start)
-                } else if *right_start <= idx && idx < *right_start + right.len() {
-                    right.get_at(idx - *right_start)
-                } else {
-                    None
-                }
-            }
-        }
+        self.0
+            .iter()
+            .find(|slice| slice.start <= idx && idx < slice.start + slice.slice.len())
+            .and_then(|slice| slice.slice.get(idx - slice.start))
     }
 
     /// Mutable accessor without generation checking.
     #[allow(dead_code)]
-    pub(crate) fn get_at_mut<'b>(&'b mut self, idx: usize) -> Option<&'a mut StructureEntry>
-    where
-        'a: 'b,
-    {
-        let slice = match self {
-            Self::Slice(slice) => Some(slice), //slice.deref_mut().first_mut(),
-            _ => None,
-            // Self::Split{ left_start, left, right_start, right, .. } => {
-            //     if *left_start <= idx && idx < *left_start + left.len() {
-            //         left.get_at_mut(idx - *left_start)
-            //     } else if *right_start <= idx && idx < *right_start + right.len() {
-            //         right.get_at_mut(idx - *right_start)
-            //     } else {
-            //         None
-            //     }
-            // }
-        };
-        if let Some(slice) = slice {
-            return slice.first_mut();
-        } else {
-            None
-        }
+    pub(crate) fn get_at_mut(&mut self, idx: usize) -> Option<&mut StructureEntry> {
+        self.0
+            .iter_mut()
+            .find(|slice| slice.start <= idx && idx < slice.start + slice.slice.len())
+            .and_then(|slice| slice.slice.get_mut(idx - slice.start))
     }
 
     /// Accessor with generation checking.
     #[allow(dead_code)]
     pub(crate) fn get(&self, id: StructureId) -> Option<&dyn Structure> {
         let idx = id.id as usize;
-        let entry = self.get_at(idx)?;
-        if entry.gen == id.gen {
-            Some(entry.dynamic?.as_ref())
-        } else {
-            None
-        }
+        self.0
+            .iter()
+            .find(|slice| slice.start <= idx && idx < slice.start + slice.slice.len())
+            .and_then(|slice| {
+                slice
+                    .slice
+                    .get(idx - slice.start)
+                    .filter(|s| s.gen == id.gen)
+                    .and_then(|s| s.dynamic.as_deref())
+            })
     }
 
     /// Mutable accessor with generation checking.
-    pub(crate) fn get_mut<'b>(&'b mut self, id: StructureId) -> Option<&'a mut (dyn Structure)>
-    where
-        'a: 'b,
-    {
+    pub(crate) fn get_mut(&mut self, id: StructureId) -> Option<&mut (dyn Structure + '_)> {
         let idx = id.id as usize;
-        let entry = self.get_at_mut(idx)?;
-        if entry.gen == id.gen {
-            Some(entry.dynamic?.as_mut())
-        } else {
-            None
-        }
+        self.0
+            .iter_mut()
+            .find(|slice| slice.start <= idx && idx < slice.start + slice.slice.len())
+            .and_then(|slice| {
+                slice
+                    .slice
+                    .get_mut(idx - slice.start)
+                    .filter(|s| s.gen == id.gen)
+                    .and_then(|s| s.dynamic.as_deref_mut().map(|s| s as &mut dyn Structure))
+                // Interestingly, we need .map(|s| s as &mut dyn Structure) to compile.
+                // .map(|s| s.dynamic.as_deref_mut())
+            })
+    }
+
+    pub(crate) fn dyn_iter_id(&self) -> impl Iterator<Item = (StructureId, &dyn Structure)> + '_ {
+        self.0
+            .iter()
+            .flat_map(move |slice| {
+                let start = slice.start;
+                slice
+                    .slice
+                    .iter()
+                    .enumerate()
+                    .map(move |(i, val)| (i + start, val))
+            })
+            .filter_map(|(id, val)| {
+                Some((
+                    StructureId {
+                        id: id as u32,
+                        gen: val.gen,
+                    },
+                    val.dynamic.as_deref()?,
+                ))
+            })
     }
 }
 
-pub(crate) struct StructureDynIterIter<'a, 'b> {
-    src: &'a StructureDynIter<'b>,
-    idx: usize,
-}
-
-impl<'a, 'b> StructureDynIterIter<'a, 'b> {
-    pub(crate) fn new(src: &'a StructureDynIter<'b>) -> Self {
-        Self { src, idx: 0 }
+impl<'a> DynIter for StructureDynIter<'a> {
+    type Item = dyn Structure;
+    fn dyn_iter(&self) -> Box<dyn Iterator<Item = &Self::Item> + '_> {
+        Box::new(
+            self.0
+                .iter()
+                .flat_map(|slice| slice.slice.iter().filter_map(|s| s.dynamic.as_deref())),
+        )
+    }
+    fn as_dyn_iter(&self) -> &dyn DynIter<Item = Self::Item> {
+        self
     }
 }
 
-impl<'a, 'b> Iterator for StructureDynIterIter<'a, 'b>
-where
-    'a: 'b,
-{
-    type Item = &'b dyn Structure;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        loop {
-            if let Some(ret) = self.src.get_at(self.idx) {
-                if let Some(dynamic) = ret.dynamic.as_deref() {
-                    return Some(dynamic);
-                }
-            }
-            self.idx += 1;
-            if self.src.len() <= self.idx {
-                return None;
-            }
-        }
+impl<'a> DynIterMut for StructureDynIter<'a> {
+    fn dyn_iter_mut(&mut self) -> Box<dyn Iterator<Item = &mut Self::Item> + '_> {
+        Box::new(self.0.iter_mut().flat_map(|slice| {
+            slice
+                .slice
+                .iter_mut()
+                .filter_map(|s| s.dynamic.as_deref_mut())
+        }))
     }
 }
-
-pub(crate) struct StructureDynIterId<'a, 'b> {
-    src: &'a StructureDynIter<'b>,
-    idx: usize,
-}
-
-impl<'a, 'b> StructureDynIterId<'a, 'b> {
-    pub(crate) fn new(src: &'a StructureDynIter<'b>) -> Self {
-        Self { src, idx: 0 }
-    }
-}
-
-impl<'a, 'b> Iterator for StructureDynIterId<'a, 'b>
-where
-    'a: 'b,
-{
-    type Item = (StructureId, &'b dyn Structure);
-
-    fn next(&mut self) -> Option<Self::Item> {
-        loop {
-            if let Some(ret) = self.src.get_at(self.idx) {
-                if let Some(dynamic) = ret.dynamic.as_deref() {
-                    return Some((
-                        StructureId {
-                            id: self.idx as u32,
-                            gen: ret.gen,
-                        },
-                        dynamic,
-                    ));
-                }
-            }
-            self.idx += 1;
-            if self.src.len() <= self.idx {
-                return None;
-            }
-        }
-    }
-}
-
-pub(crate) struct StructureDynIterIterMut<'iter, 's>
-where
-    's: 'iter,
-{
-    src: &'iter mut StructureDynIter<'s>,
-    idx: usize,
-}
-
-impl<'iter, 's> StructureDynIterIterMut<'iter, 's> {
-    pub(crate) fn new(src: &'iter mut StructureDynIter<'s>) -> Self {
-        Self { src, idx: 0 }
-    }
-
-    fn next<'t>(&'t mut self) -> Option<&'t mut dyn Structure> {
-        // loop {
-        if let Some(ret) = self.src.get_at_mut(self.idx) {
-            if let Some(dynamic) = ret.dynamic.as_deref_mut() {
-                return Some(dynamic);
-            }
-        }
-        self.idx += 1;
-        if self.src.len() <= self.idx {
-            return None;
-        }
-        None
-        // }
-    }
-}
-
-impl<'iter, 's> Iterator for StructureDynIterIterMut<'iter, 's>
-where
-    's: 'iter,
-{
-    type Item = &'s mut dyn Structure;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        loop {
-            if let Some(ret) = self.src.get_at_mut(self.idx) {
-                if let Some(dynamic) = ret.dynamic.as_deref_mut() {
-                    return Some(dynamic);
-                }
-            }
-            self.idx += 1;
-            if self.src.len() <= self.idx {
-                return None;
-            }
-        }
-    }
-}
-
-pub(crate) struct StructureDynIterIterMutId<'a, 'b> {
-    src: &'a mut StructureDynIter<'b>,
-    idx: usize,
-}
-
-impl<'a, 'b> StructureDynIterIterMutId<'a, 'b> {
-    pub(crate) fn new(src: &'a mut StructureDynIter<'b>) -> Self {
-        Self { src, idx: 0 }
-    }
-}
-
-impl<'a, 'b> Iterator for StructureDynIterIterMutId<'a, 'b>
-where
-    'a: 'b,
-{
-    type Item = (StructureId, &'b mut dyn Structure);
-
-    fn next(&mut self) -> Option<Self::Item> {
-        loop {
-            if let Some(ret) = self.src.get_at_mut(self.idx) {
-                if let Some(dynamic) = ret.dynamic.as_deref_mut() {
-                    return Some((
-                        StructureId {
-                            id: self.idx as u32,
-                            gen: ret.gen,
-                        },
-                        dynamic,
-                    ));
-                }
-            }
-            self.idx += 1;
-            if self.src.len() <= self.idx {
-                return None;
-            }
-        }
-    }
-}
-
-// enum StructureCursor<'b> {
-//     Slice(std::slice::Iter<'b, StructureEntry>),
-//     Split(bool),
-// }
-
-// pub(crate) struct StructureDynIterIter<'a, 'b> {
-//     src: &'a StructureDynIter<'b>,
-//     cursor: Vec<StructureCursor<'a>>,
-// }
-
-// impl<'a, 'b> StructureDynIterIter<'a, 'b> {
-//     pub(crate) fn new(src: &'a StructureDynIter<'b>) -> Self {
-//         Self {
-//             src,
-//             cursor: vec![],
-//         }
-//     }
-// }
-
-// impl<'a, 'b> Iterator for StructureDynIterIter<'a, 'b> {
-//     type Item = (StructureId, &dyn Structure);
-
-//     fn next(&mut self) -> Option<&Self::Item> {
-//         if self.cursor.is_empty() {
-//             match self.src {
-//                 StructureDynIter::Slice(slice) => self.cursor.push(StructureCursor::Slice(slice.iter())),
-//                 StructureDynIter::Split{ left_start, left, right_start, right, len} => {
-//                     self.cursor.push()
-//                 }
-//             }
-//         }
-//         if let Some(last) = self.cursor.last() {
-//             match last {
-//                 StructureCursor::Slice(iter) => return Some(iter.next()),
-//                 StructureCursor::Split(is_right) => {
-//                     let mut split = self.src;
-//                     let mut is_right = self.cursor.first()?;
-//                     let mut level = 0;
-//                     loop {
-//                         split = match split {
-//                             &StructureDynIter::Split{left, right, ..} => {
-//                                 if is_right {
-//                                     right
-//                                 } else {
-//                                     left
-//                                 }
-//                             }
-//                         };
-//                         level += 1;
-//                         is_right = self.cursor[level]
-//                         if is_right {
-//                             self.cursor.push(self.src.)
-//                 }
-//             }
-//         }
-//     }

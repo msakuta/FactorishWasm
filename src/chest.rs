@@ -1,6 +1,9 @@
-use super::items::{DropItem, ItemType};
-use super::structure::{ItemResponse, ItemResponseResult, Structure, StructureDynIter};
-use super::{FactorishState, FrameProcResult, Inventory, InventoryTrait, Position};
+use super::{
+    drop_items::DropItem,
+    items::ItemType,
+    structure::{ItemResponse, ItemResponseResult, Structure, StructureDynIter},
+    FactorishState, FrameProcResult, Inventory, InventoryTrait, Position,
+};
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 use web_sys::CanvasRenderingContext2d;
