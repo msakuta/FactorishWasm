@@ -52,12 +52,6 @@ impl OreMine {
         let output_position = self.position.add(self.rotation.delta());
         if *other.position() == output_position {
             self.output_structure = if construct { Some(other_id) } else { None };
-            console_log!(
-                "OreMine{:?}: {} output_structure {:?}",
-                self.position,
-                if construct { "set" } else { "unset" },
-                other_id
-            );
         }
         Ok(())
     }

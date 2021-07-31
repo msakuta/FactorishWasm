@@ -906,7 +906,6 @@ impl FactorishState {
                 .as_array_mut()
                 .ok_or_else(|| js_str!("Chunk data is not an array"))?;
             let mut new_chunk = vec![Cell::default(); CHUNK_SIZE2];
-            console_log!("new chunk {:?}", chunk_pos);
             for tile in chunk_data {
                 let position = json_get(tile, "position")?;
                 let x: usize = json_as_u64(json_get(&position, 0)?)? as usize;
