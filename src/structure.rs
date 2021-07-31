@@ -4,6 +4,7 @@ use super::{
     drop_items::DropItem,
     dyn_iter::{DynIter, DynIterMut},
     items::ItemType,
+    underground_belt::UnderDirection,
     water_well::FluidBox,
     FactorishState, Inventory, InventoryTrait, Recipe,
 };
@@ -210,6 +211,15 @@ pub(crate) trait Structure {
     fn rotation(&self) -> Option<Rotation> {
         None
     }
+
+    /// Specialized method to get underground belt direction.
+    /// We don't like to put this to Structure trait method, but we don't have an option
+    /// as long as we use trait object polymorphism.
+    /// TODO: Revise needed in ECS.
+    fn under_direction(&self) -> Option<UnderDirection> {
+        None
+    }
+
     fn size(&self) -> Size {
         Size {
             width: 1,

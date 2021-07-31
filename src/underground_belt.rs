@@ -79,6 +79,10 @@ impl Structure for UndergroundBelt {
         Some(self.rotation)
     }
 
+    fn under_direction(&self) -> Option<self::UnderDirection> {
+        Some(self.direction)
+    }
+
     fn draw(
         &self,
         state: &FactorishState,
@@ -128,12 +132,28 @@ impl Structure for UndergroundBelt {
         if self.direction == ToSurface {
             return Ok(FrameProcResult::None);
         }
-        if let Some((target, distance)) = self
-            .target
-            .and_then(|id| structures.get(id))
-            .and_then(|target| Some((*target.position(), self.distance(target.position())?)))
+        if let Some((target, distance)) =
+            self.target
+                .and_then(|id| structures.get(id))
+                .and_then(|target| {
+                    // If the direction of the other side of the underground belt does not align with us
+                    // (ToGround vs. ToGround), we don't want to run the underground belt
+                    // which will send items back and forth like ping-pong.
+                    // Note that we don't have to worry about ToSurface vs. ToSurface because ToSurface will
+                    // not run this branch, but this logic will also disable motion if we did.
+                    if target
+                        .under_direction()
+                        .map(|d| d == self.direction)
+                        .unwrap_or(true)
+                    {
+                        None
+                    } else {
+                        Some((*target.position(), self.distance(target.position())?))
+                    }
+                })
         {
-            let mut delete_me = None;
+            // Because we have ordered queue, we only need to remember the last index and pop out the rest.
+            let mut delete_index = None;
             for i in 0..self.items.len() {
                 let next_pos = if i + 1 < self.items.len() {
                     self.items[i + 1].0
@@ -142,13 +162,13 @@ impl Structure for UndergroundBelt {
                 };
                 let item = &mut self.items[i];
                 if distance * TILE_SIZE_I < item.0 {
-                    delete_me = Some(i);
+                    delete_index = Some(i);
                     break;
                 } else if item.0 + DROP_ITEM_SIZE_I < next_pos {
                     item.0 += 1;
                 }
             }
-            if let Some(delete_index) = delete_me {
+            if let Some(delete_index) = delete_index {
                 for i in (delete_index..self.items.len()).rev() {
                     match state.new_object(&target, self.items[i].1) {
                         Ok(()) => {
@@ -258,10 +278,7 @@ impl Structure for UndergroundBelt {
             }
             return Ok(());
         }
-        if other.name() != self.name() {
-            return Ok(());
-        }
-        if other.rotation() != Some(self.rotation.next().next()) {
+        if other.name() != self.name() || other.rotation() != Some(self.rotation.next().next()) {
             return Ok(());
         }
         let opos = *other.position();
