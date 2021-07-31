@@ -1578,15 +1578,21 @@ impl FactorishState {
                     JsValue::from_str(&format!("wrong structure name: {:?}", structure.name()))
                 })?);
             popup_text += &format!("+1 {}\n", structure.name());
-            for notify_structure in &mut self.structures {
+
+            let mut structures = std::mem::take(&mut self.structures);
+            for i in 0..structures.len() {
+                let (notify_structure, others) = StructureDynIter::new(&mut structures, i)?;
                 if let Some(s) = notify_structure.dynamic.as_deref_mut() {
                     s.on_construction(
                         StructureId { id: i as u32, gen },
                         structure.as_mut(),
+                        &others,
                         false,
                     )?;
                 }
             }
+            self.structures = structures;
+
             let position = *structure.position();
             self.power_wires = std::mem::take(&mut self.power_wires)
                 .into_iter()
@@ -2139,11 +2145,14 @@ impl FactorishState {
                         )?;
 
                         // Notify structures after a slot has been decided
-                        for structure in &mut self.structures {
+                        let mut structures = std::mem::take(&mut self.structures);
+                        for i in 0..structures.len() {
+                            let (structure, others) = StructureDynIter::new(&mut structures, i)?;
                             if let Some(s) = structure.dynamic.as_deref_mut() {
-                                s.on_construction(id, new_s.as_mut(), true)?;
+                                s.on_construction(id, new_s.as_mut(), &others, true)?;
                             }
                         }
+                        self.structures = structures;
 
                         if id.id < self.structures.len() as u32 {
                             self.structures[id.id as usize].dynamic = Some(new_s);

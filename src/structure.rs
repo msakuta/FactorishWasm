@@ -136,7 +136,7 @@ pub(crate) struct BoundingBox {
     pub y1: i32,
 }
 
-#[derive(Copy, Clone, Serialize, Deserialize, RotateEnum)]
+#[derive(Copy, Clone, Serialize, Deserialize, RotateEnum, PartialEq)]
 pub(crate) enum Rotation {
     Left,
     Top,
@@ -207,6 +207,9 @@ pub(crate) enum RotateErr {
 pub(crate) trait Structure {
     fn name(&self) -> &str;
     fn position(&self) -> &Position;
+    fn rotation(&self) -> Option<Rotation> {
+        None
+    }
     fn size(&self) -> Size {
         Size {
             width: 1,
@@ -249,6 +252,7 @@ pub(crate) trait Structure {
         &mut self,
         _other_id: StructureId,
         _other: &dyn Structure,
+        _others: &StructureDynIter,
         _construct: bool,
     ) -> Result<(), JsValue> {
         Ok(())

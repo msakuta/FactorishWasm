@@ -45,6 +45,7 @@ impl<'a> StructureDynIter<'a> {
         ))
     }
 
+    #[allow(dead_code)]
     pub(crate) fn exclude(&mut self, idx: usize) -> Result<&mut StructureEntry, JsValue> {
         if let Some((slice_idx, _)) = self
             .0

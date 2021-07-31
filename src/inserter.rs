@@ -319,6 +319,7 @@ impl Structure for Inserter {
         &mut self,
         other_id: StructureId,
         other: &dyn Structure,
+        _others: &StructureDynIter,
         construct: bool,
     ) -> Result<(), JsValue> {
         self.on_construction_common(other_id, other, construct)

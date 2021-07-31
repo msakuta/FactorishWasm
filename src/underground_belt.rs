@@ -8,14 +8,12 @@ use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 use web_sys::CanvasRenderingContext2d;
 
+const UNDERGROUND_REACH: i32 = 3;
+
 #[derive(Serialize, Deserialize, PartialEq, Eq)]
 pub(crate) enum UnderDirection {
     ToGround,
     ToSurface,
-}
-
-pub(crate) struct UndergroundSection {
-    items: Vec<(i32, ItemType)>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -38,11 +36,23 @@ impl UndergroundBelt {
         }
     }
 
-    fn distance(&self, target: &Position) -> i32 {
-        match self.rotation {
-            Rotation::Left | Rotation::Right => (target.x - self.position().x).abs(),
-            Rotation::Top | Rotation::Bottom => (target.y - self.position().y).abs(),
+    /// Distance to possibly connecting underground belt.
+    fn distance(&self, target: &Position) -> Option<i32> {
+        let src = self.position;
+        if !match self.rotation {
+            Rotation::Left | Rotation::Right => target.y == src.y,
+            Rotation::Top | Rotation::Bottom => target.x == src.x,
+        } {
+            return None;
         }
+        let dx = target.x - src.x;
+        let dy = target.y - src.y;
+        Some(match self.rotation {
+            Rotation::Left => -dx,
+            Rotation::Right => dx,
+            Rotation::Top => -dy,
+            Rotation::Bottom => dy,
+        })
     }
 }
 
@@ -53,6 +63,10 @@ impl Structure for UndergroundBelt {
 
     fn position(&self) -> &Position {
         &self.position
+    }
+
+    fn rotation(&self) -> Option<Rotation> {
+        Some(self.rotation)
     }
 
     fn draw(
@@ -95,22 +109,30 @@ impl Structure for UndergroundBelt {
     fn frame_proc(
         &mut self,
         _me: StructureId,
-        _state: &mut FactorishState,
+        state: &mut FactorishState,
         structures: &mut StructureDynIter,
     ) -> Result<FrameProcResult, ()> {
-        if let Some(target) = self.target.and_then(|id| structures.get(id)) {
-            let distance = self.distance(target.position());
+        if let Some((target, distance)) = self
+            .target
+            .and_then(|id| structures.get(id))
+            .and_then(|target| Some((*target.position(), self.distance(target.position())?)))
+        {
+            console_log!("UndergroundBelt dist: {}", distance * TILE_SIZE_I);
             let mut delete_me = vec![];
             for (i, item) in self.items.iter_mut().enumerate() {
-                item.0 += 1;
                 if distance * TILE_SIZE_I < item.0 {
                     delete_me.push(i);
+                } else {
+                    item.0 += 1;
                 }
             }
-            delete_me
-                .into_iter()
-                .rev()
-                .map(|i| self.items.swap_remove(i));
+            for i in delete_me.into_iter().rev() {
+                let item = self.items[i];
+                match state.new_object(&target, item.1) {
+                    Ok(()) => { self.items.swap_remove(i); },
+                    Err(_) => (),
+                }
+            }
         }
         Ok(FrameProcResult::None)
     }
@@ -130,31 +152,25 @@ impl Structure for UndergroundBelt {
     }
 
     fn item_response(&mut self, item: &DropItem) -> Result<ItemResponseResult, ()> {
-        let vx = self.rotation.delta().0;
-        let vy = self.rotation.delta().1;
-        let ax = if self.rotation.is_vertcial() {
-            (item.x as f64 / TILE_SIZE).floor() * TILE_SIZE + TILE_SIZE / 2.
+        if self.target.is_some() {
+            self.items.push((0, item.type_));
+            Ok((ItemResponse::Consume, None))
         } else {
-            item.x as f64
-        };
-        let ay = if self.rotation.is_horizontal() {
-            (item.y as f64 / TILE_SIZE).floor() * TILE_SIZE + TILE_SIZE / 2.
-        } else {
-            item.y as f64
-        };
-        let moved_x = ax as i32 + vx;
-        let moved_y = ay as i32 + vy;
-        Ok((ItemResponse::Move(moved_x, moved_y), None))
+            Err(())
+        }
     }
 
-    fn can_input(&self, item_type: &ItemType) -> bool {
+    fn can_input(&self, _item_type: &ItemType) -> bool {
         self.direction == UnderDirection::ToGround
     }
 
     fn can_output(&self, structures: &StructureDynIter) -> Inventory {
         if self.direction == UnderDirection::ToSurface {
-            if let Some(target) = self.target.and_then(|id| structures.get(id)) {
-                let distance = self.distance(target.position());
+            if let Some(distance) = self
+                .target
+                .and_then(|id| structures.get(id))
+                .and_then(|target| self.distance(target.position()))
+            {
                 return self
                     .items
                     .iter()
@@ -169,6 +185,92 @@ impl Structure for UndergroundBelt {
             }
         }
         Inventory::new()
+    }
+
+    fn desc(&self, _state: &FactorishState) -> String {
+        format!("Connection: {:?}<br>Items: {:?}", self.target, self.items)
+    }
+
+    fn on_construction(
+        &mut self,
+        other_id: StructureId,
+        other: &dyn Structure,
+        others: &StructureDynIter,
+        construct: bool,
+    ) -> Result<(), JsValue> {
+        if !construct {
+            // This resetting is not strictly necessary with generational id
+            if self.target == Some(other_id) {
+                self.target = None;
+            }
+            return Ok(());
+        }
+        if other.name() != self.name() {
+            return Ok(());
+        }
+        if other.rotation() != Some(self.rotation.next().next()) {
+            return Ok(());
+        }
+        let opos = *other.position();
+        let d = if let Some(d) = self.distance(&opos) {
+            d
+        } else {
+            return Ok(());
+        };
+
+        if 0 < d && d < UNDERGROUND_REACH {
+            return Ok(());
+        }
+
+        // If there is already an underground belt with shorter distance, don't connect to the new one.
+        if let Some(target) = self.target.and_then(|target| others.get(target)) {
+            let target_pos = target.position();
+            if let Some(target_d) = self.distance(target_pos) {
+                if target_d < d {
+                    return Ok(());
+                }
+            }
+        }
+
+        self.target = Some(other_id);
+
+        Ok(())
+    }
+
+    fn on_construction_self(
+        &mut self,
+        _id: StructureId,
+        others: &StructureDynIter,
+        _construct: bool,
+    ) -> Result<(), JsValue> {
+        if let Some((id, _)) = others.dyn_iter_id().find(|(_, other)| {
+            if other.name() != self.name() || other.rotation() != Some(self.rotation.next().next())
+            {
+                return false;
+            }
+
+            let opos = *other.position();
+            let d = if let Some(d) = self.distance(&opos) {
+                d
+            } else {
+                return false;
+            };
+
+            // If there is already an underground belt with shorter distance, don't connect to the new one.
+            if let Some(target) = self.target.and_then(|target| others.get(target)) {
+                let target_pos = target.position();
+                if let Some(target_d) = self.distance(target_pos) {
+                    if target_d < d {
+                        return false;
+                    }
+                }
+            }
+
+            true
+        }) {
+            self.target = Some(id);
+        }
+        Ok(())
     }
 
     crate::serialize_impl!();
