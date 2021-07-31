@@ -540,6 +540,8 @@ let unlimited = true;
             return circuit;
         case 'Transport Belt':
             return transport;
+        case 'Underground Belt':
+            return undergroundBeltItem;
         case 'Splitter':
             return splitter;
         case 'Inserter':
