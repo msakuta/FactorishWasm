@@ -180,7 +180,7 @@ impl Rotation {
         matches!(self, Rotation::Left | Rotation::Right)
     }
 
-    pub fn is_vertial(&self) -> bool {
+    pub fn is_vertcial(&self) -> bool {
         !self.is_horizontal()
     }
 }

@@ -87,7 +87,7 @@ impl Structure for TransportBelt {
     fn item_response(&mut self, item: &DropItem) -> Result<ItemResponseResult, ()> {
         let vx = self.rotation.delta().0;
         let vy = self.rotation.delta().1;
-        let ax = if self.rotation.is_vertial() {
+        let ax = if self.rotation.is_vertcial() {
             (item.x as f64 / TILE_SIZE).floor() * TILE_SIZE + TILE_SIZE / 2.
         } else {
             item.x as f64
