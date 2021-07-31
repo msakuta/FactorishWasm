@@ -13,7 +13,7 @@ use std::collections::VecDeque;
 use wasm_bindgen::prelude::*;
 use web_sys::CanvasRenderingContext2d;
 
-const UNDERGROUND_REACH: i32 = 3;
+const UNDERGROUND_REACH: i32 = 4;
 
 #[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Copy, RotateEnum)]
 pub(crate) enum UnderDirection {
@@ -288,7 +288,7 @@ impl Structure for UndergroundBelt {
             return Ok(());
         };
 
-        if 0 < d && d < UNDERGROUND_REACH {
+        if d < 1 || UNDERGROUND_REACH < d {
             return Ok(());
         }
 
@@ -313,7 +313,7 @@ impl Structure for UndergroundBelt {
         others: &StructureDynIter,
         _construct: bool,
     ) -> Result<(), JsValue> {
-        if let Some((id, _)) = others.dyn_iter_id().find(|(_, other)| {
+        if let Some((id, _)) = others.dyn_iter_id().find(|(id, other)| {
             if other.name() != self.name() || other.rotation() != Some(self.rotation.next().next())
             {
                 return false;
@@ -325,6 +325,10 @@ impl Structure for UndergroundBelt {
             } else {
                 return false;
             };
+
+            if d < 1 || UNDERGROUND_REACH < d {
+                return false;
+            }
 
             // If there is already an underground belt with shorter distance, don't connect to the new one.
             if let Some(target) = self.target.and_then(|target| others.get(target)) {
