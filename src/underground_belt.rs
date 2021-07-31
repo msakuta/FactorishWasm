@@ -85,7 +85,7 @@ impl Structure for UndergroundBelt {
         depth: i32,
         _is_toolbar: bool,
     ) -> Result<(), JsValue> {
-        if depth != 0 {
+        if depth != 0 && depth != 1 {
             return Ok(());
         };
         match state.image_underground_belt.as_ref() {
@@ -102,7 +102,7 @@ impl Structure for UndergroundBelt {
                     match self.direction {
                         ToGround => 0.,
                         ToSurface => 64.,
-                    },
+                    } + depth as f64 * 128.,
                     TILE_SIZE,
                     TILE_SIZE * 2.,
                     self.position.x as f64 * TILE_SIZE,
