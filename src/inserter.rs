@@ -202,12 +202,11 @@ impl Structure for Inserter {
                     } else {
                         // console_log!("fail output_object: {:?}", type_);
                     }
-                } else if let Some(structure) = self
+                } else if let Some((Some(structure), structures)) = self
                     .input_structure
                     .and_then(|id| structures.exclude_id(id).ok())
-                    .flatten()
                 {
-                    lets_try_hold = Some(structure.can_output(structures));
+                    lets_try_hold = Some(structure.can_output(&structures));
                     // console_log!("outputting from a structure at {:?}", structure.position());
                     // if let Ok((item, callback)) = structure.output(state, &output_position) {
                     //     lets_try_hold = Some((item, callback));
@@ -220,7 +219,7 @@ impl Structure for Inserter {
                     if let Some(type_) = (|| {
                         // First, try matching the item that the structure at the output position can accept.
                         if let Some(structure) =
-                            self.output_structure.map(|id| structures.get(id)).flatten()
+                            self.output_structure.and_then(|id| structures.get(id))
                         {
                             // console_log!(
                             //     "found structure to output[{}]: {}, {}, {}",
@@ -245,16 +244,15 @@ impl Structure for Inserter {
                         }
                         None
                     })() {
-                        if let Some(structure) = self
-                            .input_structure
-                            .map(|id| structures.get_mut(id))
-                            .flatten()
+                        if let Some(structure) =
+                            self.input_structure.and_then(|id| structures.get_mut(id))
                         {
                             structure.output(state, &type_.0)?;
                             return Ok(FrameProcResult::InventoryChanged(input_position));
                         } else {
                             console_log!(
-                                "We have confirmed that there is input structure, right???"
+                                "We have confirmed that there is input structure {:?}, right???",
+                                self.input_structure
                             );
                             return Err(());
                         }
@@ -335,6 +333,19 @@ impl Structure for Inserter {
             self.on_construction_common(id, s, construct)?;
         }
         Ok(())
+    }
+
+    fn desc(&self, state: &FactorishState) -> String {
+        format!(
+            "Input: {:?} {}<br>Output: {:?}",
+            self.input_structure,
+            self.input_structure
+                .and_then(|id| state.structures.get(id.id as usize))
+                .and_then(|s| s.dynamic.as_deref())
+                .map(|d| d.name())
+                .unwrap_or("Not found"),
+            self.output_structure
+        )
     }
 
     fn rotate(&mut self, others: &StructureDynIter) -> Result<(), RotateErr> {

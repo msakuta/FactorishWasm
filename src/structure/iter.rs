@@ -72,36 +72,73 @@ impl<'a> StructureDynIter<'a> {
         }
     }
 
-    pub(crate) fn exclude_id(
-        &mut self,
+    pub(crate) fn exclude_id<'b>(
+        &'b mut self,
         id: StructureId,
-    ) -> Result<Option<&'a mut (dyn Structure + 'static)>, JsValue> {
+    ) -> Result<
+        (
+            Option<&'b mut (dyn Structure + 'static)>,
+            StructureDynIter<'b>,
+        ),
+        JsValue,
+    >
+    where
+        'a: 'b,
+    {
         let idx = id.id as usize;
         if let Some((slice_idx, _)) = self
             .0
-            .iter_mut()
+            .iter()
             .enumerate()
             .find(|(_, slice)| slice.start <= idx && idx < slice.start + slice.slice.len())
         {
             let slice_borrow = &self.0[slice_idx];
             let entry = &slice_borrow.slice[idx - slice_borrow.start];
             if entry.gen != id.gen || entry.dynamic.is_none() {
-                return Ok(None);
+                return Ok((
+                    None,
+                    StructureDynIter(
+                        self.0
+                            .iter_mut()
+                            .map(|i| StructureSlice {
+                                start: i.start,
+                                slice: &mut i.slice[..],
+                            })
+                            .collect(),
+                    ),
+                ));
             }
-            let slice = std::mem::take(&mut self.0[slice_idx]);
+            let (left_slices, right_slices) = self.0.split_at_mut(slice_idx);
+            let (slice, right_slices) = right_slices
+                .split_first_mut()
+                .ok_or_else(|| js_str!("Structure slice split fail"))?;
+
             let (left, right) = slice.slice.split_at_mut(idx - slice.start);
             let (center, right) = right
                 .split_first_mut()
                 .ok_or_else(|| js_str!("Structure split fail"))?;
-            self.0[slice_idx] = StructureSlice {
+
+            let left_slices = left_slices
+                .iter_mut()
+                .map(|i| StructureSlice {
+                    start: i.start,
+                    slice: &mut i.slice[..],
+                })
+                .collect::<Vec<_>>();
+            let mut slices = left_slices;
+            slices.push(StructureSlice {
                 start: slice.start,
                 slice: left,
-            };
-            self.0.push(StructureSlice {
+            });
+            slices.push(StructureSlice {
                 start: idx,
                 slice: right,
             });
-            Ok(center.dynamic.as_deref_mut())
+            slices.extend(right_slices.iter_mut().map(|i| StructureSlice {
+                start: i.start,
+                slice: &mut i.slice[..],
+            }));
+            Ok((center.dynamic.as_deref_mut(), StructureDynIter(slices)))
         } else {
             js_err!("Strucutre slices out of range")
         }
