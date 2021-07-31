@@ -310,5 +310,13 @@ impl Structure for UndergroundBelt {
         Ok(())
     }
 
+    fn destroy_inventory(&mut self) -> Inventory {
+        let mut ret = Inventory::new();
+        for (_, item) in std::mem::take(&mut self.items) {
+            *ret.entry(item).or_default() += 1;
+        }
+        ret
+    }
+
     crate::serialize_impl!();
 }
