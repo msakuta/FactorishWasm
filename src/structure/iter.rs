@@ -8,6 +8,25 @@ pub(crate) struct StructureSlice<'a> {
     slice: &'a mut [StructureEntry],
 }
 
+impl<'a> StructureSlice<'a> {
+    /// A "dirty" clone that takes mutable reference.
+    /// Because it requires mutable reference to self, we cannot implement Clone trait.
+    ///
+    /// Conceptually, it sonds weird that you need a mutable reference in order to clone,
+    /// but in this case what we need is the exclusivity, not the mutability, to ensure that
+    /// our internal mutable slice would not have aliases.
+    ///
+    /// Lifetime annotation is still a bit weird, it should return StructureSlice<'a> since the
+    /// underlying StructureEntry lifetime should not change by making a slice to it, but
+    /// somehow it fails to compile if I do.
+    fn clone<'b>(&'b mut self) -> StructureSlice<'b> {
+        StructureSlice {
+            start: self.start,
+            slice: &mut self.slice[..],
+        }
+    }
+}
+
 /// A structure that allow random access to structure array with possible gaps.
 /// It uses a Vec of slices, which will use dynamic memory, which is a bit sad, but we can allow any number
 /// of slices and access internal object in O(n) where n is the number of slices, not the number of objects.
@@ -97,17 +116,14 @@ impl<'a> StructureDynIter<'a> {
             if entry.gen != id.gen || entry.dynamic.is_none() {
                 return Ok((
                     None,
-                    StructureDynIter(
-                        self.0
-                            .iter_mut()
-                            .map(|i| StructureSlice {
-                                start: i.start,
-                                slice: &mut i.slice[..],
-                            })
-                            .collect(),
-                    ),
+                    StructureDynIter(self.0.iter_mut().map(|i| i.clone()).collect()),
                 ));
             }
+
+            // [slice_0] [slice_1] .. [left..center..right] .. [slice_i+1] .. [slice_n]
+            //   to
+            // [slice_0] [slice_1] .. [left] [right] .. [slice_i+1] .. [slice_n]
+            //    and  center
             let (left_slices, right_slices) = self.0.split_at_mut(slice_idx);
             let (slice, right_slices) = right_slices
                 .split_first_mut()
@@ -120,10 +136,7 @@ impl<'a> StructureDynIter<'a> {
 
             let left_slices = left_slices
                 .iter_mut()
-                .map(|i| StructureSlice {
-                    start: i.start,
-                    slice: &mut i.slice[..],
-                })
+                .map(|i| i.clone())
                 .collect::<Vec<_>>();
             let mut slices = left_slices;
             slices.push(StructureSlice {
@@ -134,10 +147,7 @@ impl<'a> StructureDynIter<'a> {
                 start: idx,
                 slice: right,
             });
-            slices.extend(right_slices.iter_mut().map(|i| StructureSlice {
-                start: i.start,
-                slice: &mut i.slice[..],
-            }));
+            slices.extend(right_slices.iter_mut().map(|i| i.clone()));
             Ok((center.dynamic.as_deref_mut(), StructureDynIter(slices)))
         } else {
             js_err!("Strucutre slices out of range")
