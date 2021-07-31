@@ -1,4 +1,5 @@
 use super::{
+    drop_items::DROP_ITEM_SIZE_I,
     items::ItemType,
     structure::{ItemResponse, ItemResponseResult, Structure, StructureDynIter, StructureId},
     transport_belt::TransportBelt,
@@ -7,6 +8,7 @@ use super::{
 };
 use rotate_enum::RotateEnum;
 use serde::{Deserialize, Serialize};
+use std::collections::VecDeque;
 use wasm_bindgen::prelude::*;
 use web_sys::CanvasRenderingContext2d;
 
@@ -26,7 +28,10 @@ pub(crate) struct UndergroundBelt {
     rotation: Rotation,
     direction: UnderDirection,
     target: Option<StructureId>,
-    items: Vec<(i32, ItemType)>,
+
+    /// Items in the underground belt. First value is the absolute position in the underground belt
+    /// from the entrance.
+    items: VecDeque<(i32, ItemType)>,
 }
 
 impl UndergroundBelt {
@@ -36,7 +41,7 @@ impl UndergroundBelt {
             rotation,
             direction,
             target: None,
-            items: vec![],
+            items: VecDeque::new(),
         }
     }
 
@@ -127,21 +132,29 @@ impl Structure for UndergroundBelt {
             .and_then(|id| structures.get(id))
             .and_then(|target| Some((*target.position(), self.distance(target.position())?)))
         {
-            let mut delete_me = vec![];
-            for (i, item) in self.items.iter_mut().enumerate() {
-                if distance * TILE_SIZE_I < item.0 {
-                    delete_me.push(i);
+            let mut delete_me = None;
+            for i in 0..self.items.len() {
+                let next_pos = if i + 1 < self.items.len() {
+                    self.items[i + 1].0
                 } else {
+                    (distance + 1) * TILE_SIZE_I
+                };
+                let item = &mut self.items[i];
+                if distance * TILE_SIZE_I < item.0 {
+                    delete_me = Some(i);
+                    break;
+                } else if item.0 + DROP_ITEM_SIZE_I < next_pos {
                     item.0 += 1;
                 }
             }
-            for i in delete_me.into_iter().rev() {
-                let item = self.items[i];
-                match state.new_object(&target, item.1) {
-                    Ok(()) => {
-                        self.items.swap_remove(i);
+            if let Some(delete_index) = delete_me {
+                for i in (delete_index..self.items.len()).rev() {
+                    match state.new_object(&target, self.items[i].1) {
+                        Ok(()) => {
+                            self.items.pop_back().ok_or(())?;
+                        }
+                        Err(_) => (),
                     }
-                    Err(_) => (),
                 }
             }
         }
@@ -154,6 +167,9 @@ impl Structure for UndergroundBelt {
 
     fn rotate(&mut self, _others: &StructureDynIter) -> Result<(), RotateErr> {
         self.direction = self.direction.next();
+        if self.direction == ToSurface {
+            self.items.clear();
+        }
         Ok(())
     }
 
@@ -165,7 +181,13 @@ impl Structure for UndergroundBelt {
     fn item_response(&mut self, item: &DropItem) -> Result<ItemResponseResult, ()> {
         if self.direction == ToGround {
             if self.target.is_some() {
-                self.items.push((0, item.type_));
+                if let Some(first_item) = self.items.front() {
+                    // Do not insert if the underground buffer is full
+                    if first_item.0 < DROP_ITEM_SIZE_I {
+                        return Err(());
+                    }
+                }
+                self.items.push_front((0, item.type_));
                 Ok((ItemResponse::Consume, None))
             } else {
                 Err(())
