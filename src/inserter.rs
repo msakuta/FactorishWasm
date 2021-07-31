@@ -348,7 +348,11 @@ impl Structure for Inserter {
         )
     }
 
-    fn rotate(&mut self, others: &StructureDynIter) -> Result<(), RotateErr> {
+    fn rotate(
+        &mut self,
+        _state: &mut FactorishState,
+        others: &StructureDynIter,
+    ) -> Result<(), RotateErr> {
         self.rotation = self.rotation.next();
         for (id, s) in others.dyn_iter_id() {
             self.on_construction_common(id, s, true)

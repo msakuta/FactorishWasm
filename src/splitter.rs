@@ -140,7 +140,11 @@ impl Structure for Splitter {
         true
     }
 
-    fn rotate(&mut self, _others: &StructureDynIter) -> Result<(), RotateErr> {
+    fn rotate(
+        &mut self,
+        _state: &mut FactorishState,
+        _others: &StructureDynIter,
+    ) -> Result<(), RotateErr> {
         self.rotation = self.rotation.next();
         Ok(())
     }

@@ -269,7 +269,11 @@ pub(crate) trait Structure {
     fn movable(&self) -> bool {
         false
     }
-    fn rotate(&mut self, _others: &StructureDynIter) -> Result<(), RotateErr> {
+    fn rotate(
+        &mut self,
+        _state: &mut FactorishState,
+        _others: &StructureDynIter,
+    ) -> Result<(), RotateErr> {
         Err(RotateErr::NotSupported)
     }
     fn set_rotation(&mut self, _rotation: &Rotation) -> Result<(), ()> {

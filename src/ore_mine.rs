@@ -290,7 +290,11 @@ impl Structure for OreMine {
         Ok(ret)
     }
 
-    fn rotate(&mut self, others: &StructureDynIter) -> Result<(), RotateErr> {
+    fn rotate(
+        &mut self,
+        _state: &mut FactorishState,
+        others: &StructureDynIter,
+    ) -> Result<(), RotateErr> {
         self.rotation = self.rotation.next();
         self.output_structure = None;
         for (id, s) in others.dyn_iter_id() {

@@ -1495,12 +1495,15 @@ impl FactorishState {
         } else {
             if let Some(ref cursor) = self.cursor {
                 if let Some(idx) = self.find_structure_tile_idx(cursor) {
-                    let (s, others) = StructureDynIter::new(&mut self.structures, idx)
+                    let mut structures = std::mem::take(&mut self.structures);
+                    let (s, others) = StructureDynIter::new(&mut structures, idx)
                         .map_err(|_| RotateErr::NotFound)?;
                     s.dynamic
                         .as_deref_mut()
                         .ok_or(RotateErr::NotFound)?
-                        .rotate(&others)?;
+                        .rotate(self, &others)?;
+                    self.structures = structures;
+                    return Ok(false);
                 }
             }
             Err(RotateErr::NotFound)

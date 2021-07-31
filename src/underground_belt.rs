@@ -1,10 +1,11 @@
 use super::{
     drop_items::DROP_ITEM_SIZE_I,
+    inventory::InventoryTrait,
     items::ItemType,
     structure::{ItemResponse, ItemResponseResult, Structure, StructureDynIter, StructureId},
     transport_belt::TransportBelt,
-    DropItem, FactorishState, FrameProcResult, Inventory, Position, RotateErr, Rotation, TILE_SIZE,
-    TILE_SIZE_I,
+    window, DropItem, FactorishState, FrameProcResult, Inventory, Position, RotateErr, Rotation,
+    TILE_SIZE, TILE_SIZE_I,
 };
 use rotate_enum::RotateEnum;
 use serde::{Deserialize, Serialize};
@@ -165,10 +166,25 @@ impl Structure for UndergroundBelt {
         true
     }
 
-    fn rotate(&mut self, _others: &StructureDynIter) -> Result<(), RotateErr> {
+    fn rotate(
+        &mut self,
+        state: &mut FactorishState,
+        _others: &StructureDynIter,
+    ) -> Result<(), RotateErr> {
         self.direction = self.direction.next();
         if self.direction == ToSurface {
-            self.items.clear();
+            state.player.inventory.merge(self.destroy_inventory());
+            state
+                .on_player_update
+                .call1(
+                    &window(),
+                    &JsValue::from(
+                        state
+                            .get_player_inventory()
+                            .map_err(|e| RotateErr::Other(e))?,
+                    ),
+                )
+                .unwrap_or_else(|_| JsValue::from(true));
         }
         Ok(())
     }

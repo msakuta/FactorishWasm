@@ -504,8 +504,8 @@ let unlimited = true;
     }
 
     function rotate(){
-        var newRotation = sim.rotate_tool();
-        updateToolBarImage();
+        if(sim.rotate_tool())
+            updateToolBarImage();
     }
 
     function updateToolBar(){
