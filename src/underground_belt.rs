@@ -1,20 +1,24 @@
 use super::{
     items::ItemType,
     structure::{ItemResponse, ItemResponseResult, Structure, StructureDynIter, StructureId},
+    transport_belt::TransportBelt,
     DropItem, FactorishState, FrameProcResult, Inventory, Position, RotateErr, Rotation, TILE_SIZE,
     TILE_SIZE_I,
 };
+use rotate_enum::RotateEnum;
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 use web_sys::CanvasRenderingContext2d;
 
 const UNDERGROUND_REACH: i32 = 3;
 
-#[derive(Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Copy, RotateEnum)]
 pub(crate) enum UnderDirection {
     ToGround,
     ToSurface,
 }
+
+use UnderDirection::*;
 
 #[derive(Serialize, Deserialize)]
 pub(crate) struct UndergroundBelt {
@@ -90,7 +94,10 @@ impl Structure for UndergroundBelt {
                         Rotation::Right => 2.,
                         Rotation::Bottom => 3.,
                     } * TILE_SIZE,
-                    0.,
+                    match self.direction {
+                        ToGround => 0.,
+                        ToSurface => 64.,
+                    },
                     TILE_SIZE,
                     TILE_SIZE * 2.,
                     self.position.x as f64 * TILE_SIZE,
@@ -112,12 +119,14 @@ impl Structure for UndergroundBelt {
         state: &mut FactorishState,
         structures: &mut StructureDynIter,
     ) -> Result<FrameProcResult, ()> {
+        if self.direction == ToSurface {
+            return Ok(FrameProcResult::None);
+        }
         if let Some((target, distance)) = self
             .target
             .and_then(|id| structures.get(id))
             .and_then(|target| Some((*target.position(), self.distance(target.position())?)))
         {
-            console_log!("UndergroundBelt dist: {}", distance * TILE_SIZE_I);
             let mut delete_me = vec![];
             for (i, item) in self.items.iter_mut().enumerate() {
                 if distance * TILE_SIZE_I < item.0 {
@@ -129,7 +138,9 @@ impl Structure for UndergroundBelt {
             for i in delete_me.into_iter().rev() {
                 let item = self.items[i];
                 match state.new_object(&target, item.1) {
-                    Ok(()) => { self.items.swap_remove(i); },
+                    Ok(()) => {
+                        self.items.swap_remove(i);
+                    }
                     Err(_) => (),
                 }
             }
@@ -142,7 +153,7 @@ impl Structure for UndergroundBelt {
     }
 
     fn rotate(&mut self, _others: &StructureDynIter) -> Result<(), RotateErr> {
-        self.rotation = self.rotation.next();
+        self.direction = self.direction.next();
         Ok(())
     }
 
@@ -152,20 +163,24 @@ impl Structure for UndergroundBelt {
     }
 
     fn item_response(&mut self, item: &DropItem) -> Result<ItemResponseResult, ()> {
-        if self.target.is_some() {
-            self.items.push((0, item.type_));
-            Ok((ItemResponse::Consume, None))
+        if self.direction == ToGround {
+            if self.target.is_some() {
+                self.items.push((0, item.type_));
+                Ok((ItemResponse::Consume, None))
+            } else {
+                Err(())
+            }
         } else {
-            Err(())
+            TransportBelt::transport_item(self.rotation.next().next(), item)
         }
     }
 
     fn can_input(&self, _item_type: &ItemType) -> bool {
-        self.direction == UnderDirection::ToGround
+        self.direction == ToGround
     }
 
     fn can_output(&self, structures: &StructureDynIter) -> Inventory {
-        if self.direction == UnderDirection::ToSurface {
+        if self.direction == ToSurface {
             if let Some(distance) = self
                 .target
                 .and_then(|id| structures.get(id))

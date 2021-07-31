@@ -20,6 +20,27 @@ impl TransportBelt {
             rotation,
         }
     }
+
+    pub(crate) fn transport_item(
+        rotation: Rotation,
+        item: &DropItem,
+    ) -> Result<ItemResponseResult, ()> {
+        let vx = rotation.delta().0;
+        let vy = rotation.delta().1;
+        let ax = if rotation.is_vertcial() {
+            (item.x as f64 / TILE_SIZE).floor() * TILE_SIZE + TILE_SIZE / 2.
+        } else {
+            item.x as f64
+        };
+        let ay = if rotation.is_horizontal() {
+            (item.y as f64 / TILE_SIZE).floor() * TILE_SIZE + TILE_SIZE / 2.
+        } else {
+            item.y as f64
+        };
+        let moved_x = ax as i32 + vx;
+        let moved_y = ay as i32 + vy;
+        Ok((ItemResponse::Move(moved_x, moved_y), None))
+    }
 }
 
 impl Structure for TransportBelt {
@@ -85,21 +106,7 @@ impl Structure for TransportBelt {
     }
 
     fn item_response(&mut self, item: &DropItem) -> Result<ItemResponseResult, ()> {
-        let vx = self.rotation.delta().0;
-        let vy = self.rotation.delta().1;
-        let ax = if self.rotation.is_vertcial() {
-            (item.x as f64 / TILE_SIZE).floor() * TILE_SIZE + TILE_SIZE / 2.
-        } else {
-            item.x as f64
-        };
-        let ay = if self.rotation.is_horizontal() {
-            (item.y as f64 / TILE_SIZE).floor() * TILE_SIZE + TILE_SIZE / 2.
-        } else {
-            item.y as f64
-        };
-        let moved_x = ax as i32 + vx;
-        let moved_y = ay as i32 + vy;
-        Ok((ItemResponse::Move(moved_x, moved_y), None))
+        Self::transport_item(self.rotation, item)
     }
 
     crate::serialize_impl!();
