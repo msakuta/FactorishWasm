@@ -1476,7 +1476,7 @@ impl FactorishState {
                                 }
                             )
                         } else {
-                            format!("Empty tile")
+                            "Empty tile".to_string()
                         }
                     },
                 );
@@ -1511,7 +1511,7 @@ impl FactorishState {
 
     /// Insert an object on the board.  It could fail if there's already some object at the position.
     fn new_object(&mut self, pos: &Position, type_: ItemType) -> Result<(), NewObjectErr> {
-        let cell = self.tile_at(pos).ok_or_else(|| NewObjectErr::OutOfMap)?;
+        let cell = self.tile_at(pos).ok_or(NewObjectErr::OutOfMap)?;
         if cell.water {
             return Err(NewObjectErr::OnWater);
         }
@@ -1553,7 +1553,7 @@ impl FactorishState {
             }
         };
         add_index(&mut self.drop_items_index, id, x, y);
-        return Ok(());
+        Ok(())
     }
 
     fn harvest(&mut self, position: &Position, clear_item: bool) -> Result<bool, JsValue> {
@@ -1898,19 +1898,14 @@ impl FactorishState {
                             return Ok(true);
                         }
                     }
-                } else {
-                    if let Some(SelectedItem::PlayerInventory(i)) = self.selected_item {
-                        self.player.inventory.remove_items(
-                            &i,
-                            structure
-                                .add_burner_inventory(
-                                    &i,
-                                    self.player.inventory.count_item(&i) as isize,
-                                )
-                                .abs() as usize,
-                        );
-                        return Ok(true);
-                    }
+                } else if let Some(SelectedItem::PlayerInventory(i)) = self.selected_item {
+                    self.player.inventory.remove_items(
+                        &i,
+                        structure
+                            .add_burner_inventory(&i, self.player.inventory.count_item(&i) as isize)
+                            .abs() as usize,
+                    );
+                    return Ok(true);
                 }
             }
             _ => {
@@ -2700,7 +2695,7 @@ impl FactorishState {
                         self.board.len()
                     );
                     let mut chunk = gen_chunk(chunk_pos, &self.terrain_params);
-                    calculate_back_image(&mut self.board, &chunk_pos, &mut chunk.cells);
+                    calculate_back_image(&self.board, &chunk_pos, &mut chunk.cells);
                     self.render_minimap_chunk(&chunk_pos, &mut chunk);
                     self.board.insert(chunk_pos, chunk);
                 }
@@ -2713,7 +2708,7 @@ impl FactorishState {
     /// @param text Is given as owned string because the text is most likely dynamic.
     fn new_popup_text(&mut self, text: String, x: f64, y: f64) {
         let pop = PopupText {
-            text: text.to_string(),
+            text,
             x: (x + self.viewport.x * TILE_SIZE) * self.viewport.scale,
             y: (y + self.viewport.y * TILE_SIZE) * self.viewport.scale,
             life: POPUP_TEXT_LIFE,

@@ -38,9 +38,9 @@ fn update_water(
     for structure in structures {
         if let Some(dynamic) = structure.dynamic.as_deref() {
             let position = *dynamic.position();
-            terrain
-                .get_tile_mut(position)
-                .map(|cell| cell.water = false);
+            if let Some(cell) = terrain.get_tile_mut(position) {
+                cell.water = false;
+            }
             to_update.insert(Position::new(
                 position.x.div_euclid(CHUNK_SIZE_I),
                 position.y.div_euclid(CHUNK_SIZE_I),
@@ -52,7 +52,9 @@ fn update_water(
     for chunk_pos in &to_update {
         let mut cells = std::mem::take(&mut terrain.get_mut(chunk_pos).unwrap().cells);
         calculate_back_image(terrain, &chunk_pos, &mut cells);
-        terrain.get_mut(chunk_pos).map(|c| c.cells = cells);
+        if let Some(c) = terrain.get_mut(chunk_pos) {
+            c.cells = cells;
+        }
     }
 }
 
@@ -105,9 +107,9 @@ fn inserter_bench(
         if x % 2 == 0 {
             wrap_structure(Box::new({
                 let mut chest = Chest::new(&Position::new(x, 10));
-                chest
-                    .inventory_mut(true)
-                    .map(|inv| inv.add_item(&ItemType::IronOre));
+                if let Some(inv) = chest.inventory_mut(true) {
+                    inv.add_item(&ItemType::IronOre);
+                }
                 chest
             }))
         } else {
@@ -118,9 +120,9 @@ fn inserter_bench(
         wrap_structure(if x % 2 == 0 {
             Box::new({
                 let mut chest = Chest::new(&Position::new(x, 100));
-                chest
-                    .inventory_mut(true)
-                    .map(|inv| inv.add_item(&ItemType::CoalOre));
+                if let Some(inv) = chest.inventory_mut(true) {
+                    inv.add_item(&ItemType::CoalOre);
+                }
                 chest
             })
         } else {
@@ -180,13 +182,13 @@ fn electric_bench(
 ) -> (Vec<StructureEntry>, Chunks, Vec<DropItemEntry>) {
     let (mut structures, mut terrain, items) = default_scenario(terrain_params);
 
-    structures.extend((10..=100).filter_map(|x| {
+    structures.extend((10..=100).map(|x| {
         if x % 2 == 0 {
             let p = Box::new(Assembler::new(&Position::new(x, 10)));
-            Some(wrap_structure(p as Box<dyn Structure>))
+            wrap_structure(p as Box<dyn Structure>)
         } else {
             let p = Box::new(ElectPole::new(&Position::new(x, 10)));
-            Some(wrap_structure(p as Box<dyn Structure>))
+            wrap_structure(p as Box<dyn Structure>)
         }
     }));
     structures.extend((10..=100).map(|x| {

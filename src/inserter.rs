@@ -344,7 +344,7 @@ impl Structure for Inserter {
         self.rotation = self.rotation.next();
         for (id, s) in others.dyn_iter_id() {
             self.on_construction_common(id, s, true)
-                .map_err(|e| RotateErr::Other(e))?;
+                .map_err(RotateErr::Other)?;
         }
         Ok(())
     }

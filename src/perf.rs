@@ -51,9 +51,9 @@ impl FactorishState {
         let plot_series = |vd: &VecDeque<f64>| {
             let mut series = vd.iter();
             context.begin_path();
-            series
-                .next()
-                .map(|p| context.move_to(0., (1. - *p / max) * height as f64));
+            if let Some(p) = series.next() {
+                context.move_to(0., (1. - *p / max) * height as f64);
+            }
             for (i, p) in series.enumerate() {
                 context.line_to((i + 1) as f64, (1. - *p / max) * height as f64);
             }

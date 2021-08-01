@@ -12,17 +12,17 @@ impl<'a> StructureSlice<'a> {
     /// A "dirty" clone that takes mutable reference.
     /// Because it requires mutable reference to self, we cannot implement Clone trait.
     ///
-    /// Conceptually, it sonds weird that you need a mutable reference in order to clone,
+    /// Conceptually, it sounds weird that you need a mutable reference in order to clone,
     /// but in this case what we need is the exclusivity, not the mutability, to ensure that
     /// our internal mutable slice would not have aliases.
     ///
     /// Lifetime annotation is still a bit weird, it should return StructureSlice<'a> since the
     /// underlying StructureEntry lifetime should not change by making a slice to it, but
     /// somehow it fails to compile if I do.
-    fn clone<'b>(&'b mut self) -> StructureSlice<'b> {
+    fn clone(&mut self) -> StructureSlice {
         StructureSlice {
             start: self.start,
-            slice: &mut self.slice[..],
+            slice: self.slice,
         }
     }
 }

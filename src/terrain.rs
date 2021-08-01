@@ -158,6 +158,7 @@ pub(crate) fn gen_terrain(params: &TerrainParameters) -> Chunks {
     ret
 }
 
+#[allow(clippy::many_single_char_names)]
 pub(crate) fn calculate_back_image(terrain: &Chunks, chunk_pos: &Position, ret: &mut Vec<Cell>) {
     let mut rng = Xor128::new(23424321);
     // Some number with fractional part is desirable, but we don't care too precisely since it is just a visual aid.
@@ -222,6 +223,8 @@ pub(crate) fn calculate_back_image_all(terrain: &mut Chunks) {
     for chunk_pos in &terrain.keys().copied().collect::<Vec<_>>() {
         let mut chunk = std::mem::take(&mut terrain.get_mut(chunk_pos).unwrap().cells);
         calculate_back_image(terrain, chunk_pos, &mut chunk);
-        terrain.get_mut(chunk_pos).map(|c| c.cells = chunk);
+        if let Some(c) = terrain.get_mut(chunk_pos) {
+            c.cells = chunk;
+        }
     }
 }

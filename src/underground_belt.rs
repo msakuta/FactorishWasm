@@ -170,11 +170,8 @@ impl Structure for UndergroundBelt {
             }
             if let Some(delete_index) = delete_index {
                 for i in (delete_index..self.items.len()).rev() {
-                    match state.new_object(&target, self.items[i].1) {
-                        Ok(()) => {
-                            self.items.pop_back().ok_or(())?;
-                        }
-                        Err(_) => (),
+                    if let Ok(()) = state.new_object(&target, self.items[i].1) {
+                        self.items.pop_back().ok_or(())?;
                     }
                 }
             }
@@ -198,11 +195,7 @@ impl Structure for UndergroundBelt {
                 .on_player_update
                 .call1(
                     &window(),
-                    &JsValue::from(
-                        state
-                            .get_player_inventory()
-                            .map_err(|e| RotateErr::Other(e))?,
-                    ),
+                    &JsValue::from(state.get_player_inventory().map_err(RotateErr::Other)?),
                 )
                 .unwrap_or_else(|_| JsValue::from(true));
         }
@@ -313,7 +306,7 @@ impl Structure for UndergroundBelt {
         others: &StructureDynIter,
         _construct: bool,
     ) -> Result<(), JsValue> {
-        if let Some((id, _)) = others.dyn_iter_id().find(|(id, other)| {
+        if let Some((id, _)) = others.dyn_iter_id().find(|(_, other)| {
             if other.name() != self.name() || other.rotation() != Some(self.rotation.next().next())
             {
                 return false;
