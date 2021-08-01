@@ -191,32 +191,10 @@ let unlimited = true;
 
     let paused = false;
 
-    let sim = new FactorishState(
-        {
-            width: xsize,
-            height: ysize,
-            unlimited,
-            terrain_seed: terrainSeed,
-            water_noise_threshold: waterNoiseThreshold,
-            resource_amount: resourceAmount,
-            noise_scale: noiseScale,
-            noise_threshold: noiseThreshold,
-            noise_octaves: noiseOctaves,
-        },
-        updateInventory,
-        scenarioSelectElem.value);
-
     const canvas = document.getElementById('canvas');
     let canvasSize = canvas.getBoundingClientRect();
-    const refreshSize = (event) => {
-        canvasSize = canvas.getBoundingClientRect();
-        canvas.width = canvasSize.width;
-        canvas.height = canvasSize.height;
-        infoElem.style.height = (canvasSize.height - mrect.height - tableMargin * 3) + 'px';
-        sim.reset_viewport(canvas);
-    };
-    document.body.onresize = refreshSize;
-    const ctx = canvas.getContext('2d');
+    const context = canvas.getContext('webgl');
+
     const container = document.getElementById('container2');
     const containerRect = container.getBoundingClientRect();
     const inventoryElem = document.getElementById('inventory2');
@@ -236,6 +214,45 @@ let unlimited = true;
     infoElem.style.border = '1px solid #00f';
     container.appendChild(infoElem);
 
+
+    let loadedImages;
+    let sim;
+    try{
+        loadedImages = await Promise.all(loadImages);
+
+        sim = new FactorishState(
+        {
+            width: xsize,
+            height: ysize,
+            unlimited,
+            terrain_seed: terrainSeed,
+            water_noise_threshold: waterNoiseThreshold,
+            resource_amount: resourceAmount,
+            noise_scale: noiseScale,
+            noise_threshold: noiseThreshold,
+            noise_octaves: noiseOctaves,
+        },
+        updateInventory,
+        scenarioSelectElem.value,
+        context,
+        loadedImages,
+        );
+
+        sim.render_init(canvas, infoElem, loadedImages);
+        sim.render_gl_init(context);
+    } catch(e) {
+        alert(`FactorishState.render_init failed: ${e}`);
+    }
+
+    const refreshSize = (event) => {
+        canvasSize = canvas.getBoundingClientRect();
+        canvas.width = canvasSize.width;
+        canvas.height = canvasSize.height;
+        context.viewport(0, 0, canvas.width, canvas.height);
+        infoElem.style.height = (canvasSize.height - mrect.height - tableMargin * 3) + 'px';
+        sim.reset_viewport(canvas);
+    };
+    document.body.onresize = refreshSize;
     const headerButton = document.getElementById("headerButton");
     const headerContainer = document.getElementById("headerContainer");
 
@@ -487,19 +504,11 @@ let unlimited = true;
     inventoryButton.onmouseleave = () => toolTip.style.display = 'none';
     toolBarElem.appendChild(inventoryButton);
 
-    let loadedImages;
-    try{
-        loadedImages = await Promise.all(loadImages);
-        sim.render_init(canvas, infoElem, loadedImages);
-    } catch(e) {
-        alert(`FactorishState.render_init failed: ${e}`);
-    }
-
     function updateToolBarImage(){
         for(var i = 0; i < toolBarCanvases.length; i++){
             var canvasElem = toolBarCanvases[i];
             var context = canvasElem.getContext('2d');
-            sim.render_tool(i, context);
+            // sim.render_tool(i, context);
         }
     }
 
@@ -1252,9 +1261,12 @@ let unlimited = true;
                 noise_octaves: noiseOctaves,
             },
             updateInventory,
-            scenarioSelectElem.value);
+            scenarioSelectElem.value,
+            context,
+            loadedImages);
         try{
             sim.render_init(canvas, infoElem, loadedImages);
+            sim.render_gl_init(context);
         } catch(e) {
             alert(`FactorishState.render_init failed: ${e}`);
         }
@@ -1279,7 +1291,8 @@ let unlimited = true;
     window.setInterval(function(){
         if(!paused)
             processEvents(sim.simulate(0.05));
-        let result = sim.render(ctx);
+        // let result = sim.render(ctx);
+        let result = sim.render_gl(context);
 
         const selPos = sim.get_selected_inventory();
         if(selPos){

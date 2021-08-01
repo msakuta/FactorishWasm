@@ -30,6 +30,12 @@ mod transport_belt;
 mod underground_belt;
 mod utils;
 mod water_well;
+mod gl {
+    pub(crate) mod assets;
+    mod render_gl;
+    mod shader_bundle;
+    mod utils;
+}
 
 use crate::{
     drop_items::{
@@ -37,6 +43,7 @@ use crate::{
         remove_index, update_index, DropItem, DropItemEntry, DropItemId, DropItemIndex,
         DROP_ITEM_SIZE, INDEX_CHUNK_SIZE,
     },
+    gl::assets::Assets,
     perf::PerfStats,
     scenarios::select_scenario,
     terrain::{
@@ -73,7 +80,9 @@ use std::hash::Hash;
 use std::{collections::HashMap, convert::TryFrom};
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
-use web_sys::{CanvasRenderingContext2d, HtmlCanvasElement, HtmlDivElement, ImageBitmap};
+use web_sys::{
+    CanvasRenderingContext2d, HtmlCanvasElement, HtmlDivElement, ImageBitmap, WebGlRenderingContext,
+};
 
 #[wasm_bindgen]
 extern "C" {
@@ -533,6 +542,8 @@ pub struct FactorishState {
     image_fuel_alarm: Option<ImageBundle>,
     image_electricity_alarm: Option<ImageBundle>,
     image_underground_belt_item: Option<ImageBundle>,
+
+    assets: Assets,
 }
 
 #[derive(Debug)]
@@ -551,6 +562,8 @@ impl FactorishState {
         on_player_update: js_sys::Function,
         // on_show_inventory: js_sys::Function,
         scenario: &str,
+        context: WebGlRenderingContext,
+        assets: js_sys::Array,
     ) -> Result<FactorishState, JsValue> {
         console_log!("FactorishState constructor");
 
@@ -666,6 +679,7 @@ impl FactorishState {
             temp_ents: vec![],
             rng: Xor128::new(3142125),
             // on_show_inventory,
+            assets: Assets::new(&context, assets)?,
         };
 
         ret.update_cache()?;
