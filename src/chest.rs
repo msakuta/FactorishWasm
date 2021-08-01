@@ -1,7 +1,7 @@
 use super::{
     drop_items::DropItem,
     items::ItemType,
-    structure::{ItemResponse, ItemResponseResult, Structure},
+    structure::{ItemResponse, ItemResponseResult, Structure, StructureDynIter},
     FactorishState, FrameProcResult, Inventory, InventoryTrait, Position,
 };
 use serde::{Deserialize, Serialize};
@@ -87,7 +87,7 @@ impl Structure for Chest {
         self.inventory.len() < CHEST_CAPACITY
     }
 
-    fn can_output(&self) -> Inventory {
+    fn can_output(&self, _structures: &StructureDynIter) -> Inventory {
         self.inventory.clone()
     }
 

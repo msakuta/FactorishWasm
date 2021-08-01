@@ -27,6 +27,7 @@ mod steam_engine;
 mod structure;
 mod terrain;
 mod transport_belt;
+mod underground_belt;
 mod utils;
 mod water_well;
 
@@ -64,6 +65,7 @@ use structure::{
     StructureDynIter, StructureEntry, StructureId,
 };
 use transport_belt::TransportBelt;
+use underground_belt::{UnderDirection, UndergroundBelt};
 use water_well::{FluidType, WaterWell};
 
 use serde::{Deserialize, Serialize};
@@ -194,7 +196,7 @@ struct ToolDef {
     item_type: ItemType,
     desc: &'static str,
 }
-const tool_defs: [ToolDef; 13] = [
+const tool_defs: [ToolDef; 14] = [
     ToolDef {
         item_type: ItemType::TransportBelt,
         desc: "Transports items on ground",
@@ -246,6 +248,10 @@ const tool_defs: [ToolDef; 13] = [
     ToolDef {
         item_type: ItemType::ElectPole,
         desc: "Electric pole.",
+    },
+    ToolDef {
+        item_type: ItemType::UndergroundBelt,
+        desc: "Underground belt can connect transport belts without blocking other structures in between.",
     },
 ];
 
@@ -499,6 +505,7 @@ pub struct FactorishState {
     image_copper: Option<ImageBundle>,
     image_stone: Option<ImageBundle>,
     image_belt: Option<ImageBundle>,
+    image_underground_belt: Option<ImageBundle>,
     image_chest: Option<ImageBundle>,
     image_mine: Option<ImageBundle>,
     image_furnace: Option<ImageBundle>,
@@ -525,6 +532,7 @@ pub struct FactorishState {
     image_smoke: Option<ImageBundle>,
     image_fuel_alarm: Option<ImageBundle>,
     image_electricity_alarm: Option<ImageBundle>,
+    image_underground_belt_item: Option<ImageBundle>,
 }
 
 #[derive(Debug)]
@@ -592,6 +600,7 @@ impl FactorishState {
                     (ItemType::OffshorePump, 2usize),
                     (ItemType::Pipe, 15usize),
                     (ItemType::SteamEngine, 2usize),
+                    (ItemType::UndergroundBelt, 5usize),
                 ]
                 .iter()
                 .copied()
@@ -618,6 +627,7 @@ impl FactorishState {
             image_stone: None,
             image_copper: None,
             image_belt: None,
+            image_underground_belt: None,
             image_chest: None,
             image_mine: None,
             image_furnace: None,
@@ -644,6 +654,7 @@ impl FactorishState {
             image_smoke: None,
             image_fuel_alarm: None,
             image_electricity_alarm: None,
+            image_underground_belt_item: None,
             board,
             terrain_params,
             structures,
@@ -895,7 +906,6 @@ impl FactorishState {
                 .as_array_mut()
                 .ok_or_else(|| js_str!("Chunk data is not an array"))?;
             let mut new_chunk = vec![Cell::default(); CHUNK_SIZE2];
-            console_log!("new chunk {:?}", chunk_pos);
             for tile in chunk_data {
                 let position = json_get(tile, "position")?;
                 let x: usize = json_as_u64(json_get(&position, 0)?)? as usize;
@@ -1466,7 +1476,7 @@ impl FactorishState {
                                 }
                             )
                         } else {
-                            format!("Empty tile")
+                            "Empty tile".to_string()
                         }
                     },
                 );
@@ -1484,12 +1494,15 @@ impl FactorishState {
         } else {
             if let Some(ref cursor) = self.cursor {
                 if let Some(idx) = self.find_structure_tile_idx(cursor) {
-                    let (s, others) = StructureDynIter::new(&mut self.structures, idx)
+                    let mut structures = std::mem::take(&mut self.structures);
+                    let (s, others) = StructureDynIter::new(&mut structures, idx)
                         .map_err(|_| RotateErr::NotFound)?;
                     s.dynamic
                         .as_deref_mut()
                         .ok_or(RotateErr::NotFound)?
-                        .rotate(&others)?;
+                        .rotate(self, &others)?;
+                    self.structures = structures;
+                    return Ok(false);
                 }
             }
             Err(RotateErr::NotFound)
@@ -1498,7 +1511,7 @@ impl FactorishState {
 
     /// Insert an object on the board.  It could fail if there's already some object at the position.
     fn new_object(&mut self, pos: &Position, type_: ItemType) -> Result<(), NewObjectErr> {
-        let cell = self.tile_at(pos).ok_or_else(|| NewObjectErr::OutOfMap)?;
+        let cell = self.tile_at(pos).ok_or(NewObjectErr::OutOfMap)?;
         if cell.water {
             return Err(NewObjectErr::OnWater);
         }
@@ -1540,7 +1553,7 @@ impl FactorishState {
             }
         };
         add_index(&mut self.drop_items_index, id, x, y);
-        return Ok(());
+        Ok(())
     }
 
     fn harvest(&mut self, position: &Position, clear_item: bool) -> Result<bool, JsValue> {
@@ -1567,15 +1580,21 @@ impl FactorishState {
                     JsValue::from_str(&format!("wrong structure name: {:?}", structure.name()))
                 })?);
             popup_text += &format!("+1 {}\n", structure.name());
-            for notify_structure in &mut self.structures {
+
+            let mut structures = std::mem::take(&mut self.structures);
+            for i in 0..structures.len() {
+                let (notify_structure, others) = StructureDynIter::new(&mut structures, i)?;
                 if let Some(s) = notify_structure.dynamic.as_deref_mut() {
                     s.on_construction(
                         StructureId { id: i as u32, gen },
                         structure.as_mut(),
+                        &others,
                         false,
                     )?;
                 }
             }
+            self.structures = structures;
+
             let position = *structure.position();
             self.power_wires = std::mem::take(&mut self.power_wires)
                 .into_iter()
@@ -1879,19 +1898,14 @@ impl FactorishState {
                             return Ok(true);
                         }
                     }
-                } else {
-                    if let Some(SelectedItem::PlayerInventory(i)) = self.selected_item {
-                        self.player.inventory.remove_items(
-                            &i,
-                            structure
-                                .add_burner_inventory(
-                                    &i,
-                                    self.player.inventory.count_item(&i) as isize,
-                                )
-                                .abs() as usize,
-                        );
-                        return Ok(true);
-                    }
+                } else if let Some(SelectedItem::PlayerInventory(i)) = self.selected_item {
+                    self.player.inventory.remove_items(
+                        &i,
+                        structure
+                            .add_burner_inventory(&i, self.player.inventory.count_item(&i) as isize)
+                            .abs() as usize,
+                    );
+                    return Ok(true);
                 }
             }
             _ => {
@@ -1952,6 +1966,12 @@ impl FactorishState {
             ItemType::Pipe => Box::new(Pipe::new(cursor)),
             ItemType::SteamEngine => Box::new(SteamEngine::new(cursor)),
             ItemType::ElectPole => Box::new(ElectPole::new(cursor)),
+            ItemType::UndergroundBelt => Box::new(UndergroundBelt::new(
+                cursor.x,
+                cursor.y,
+                self.tool_rotation,
+                UnderDirection::ToGround,
+            )),
             _ => return js_err!("Can't make a structure from {:?}", tool),
         })
     }
@@ -2000,6 +2020,9 @@ impl FactorishState {
                 Box::new(map_err(serde_json::from_value::<SteamEngine>(payload))?)
             }
             ItemType::ElectPole => Box::new(map_err(serde_json::from_value::<ElectPole>(payload))?),
+            ItemType::UndergroundBelt => {
+                Box::new(map_err(serde_json::from_value::<UndergroundBelt>(payload))?)
+            }
             _ => return js_err!("Can't make a structure from {:?}", type_str),
         })
     }
@@ -2119,11 +2142,14 @@ impl FactorishState {
                         )?;
 
                         // Notify structures after a slot has been decided
-                        for structure in &mut self.structures {
+                        let mut structures = std::mem::take(&mut self.structures);
+                        for i in 0..structures.len() {
+                            let (structure, others) = StructureDynIter::new(&mut structures, i)?;
                             if let Some(s) = structure.dynamic.as_deref_mut() {
-                                s.on_construction(id, new_s.as_mut(), true)?;
+                                s.on_construction(id, new_s.as_mut(), &others, true)?;
                             }
                         }
+                        self.structures = structures;
 
                         if id.id < self.structures.len() as u32 {
                             self.structures[id.id as usize].dynamic = Some(new_s);
@@ -2405,6 +2431,7 @@ impl FactorishState {
         self.image_copper = Some(load_image("copper")?);
         self.image_stone = Some(load_image("stone")?);
         self.image_belt = Some(load_image("transport")?);
+        self.image_underground_belt = Some(load_image("undergroundBelt")?);
         self.image_chest = Some(load_image("chest")?);
         self.image_mine = Some(load_image("mine")?);
         self.image_furnace = Some(load_image("furnace")?);
@@ -2431,6 +2458,7 @@ impl FactorishState {
         self.image_smoke = Some(load_image("smoke")?);
         self.image_fuel_alarm = Some(load_image("fuelAlarm")?);
         self.image_electricity_alarm = Some(load_image("electricityAlarm")?);
+        self.image_underground_belt_item = Some(load_image("undergroundBeltItem")?);
         Ok(())
     }
 
@@ -2667,7 +2695,7 @@ impl FactorishState {
                         self.board.len()
                     );
                     let mut chunk = gen_chunk(chunk_pos, &self.terrain_params);
-                    calculate_back_image(&mut self.board, &chunk_pos, &mut chunk.cells);
+                    calculate_back_image(&self.board, &chunk_pos, &mut chunk.cells);
                     self.render_minimap_chunk(&chunk_pos, &mut chunk);
                     self.board.insert(chunk_pos, chunk);
                 }
@@ -2680,7 +2708,7 @@ impl FactorishState {
     /// @param text Is given as owned string because the text is most likely dynamic.
     fn new_popup_text(&mut self, text: String, x: f64, y: f64) {
         let pop = PopupText {
-            text: text.to_string(),
+            text,
             x: (x + self.viewport.x * TILE_SIZE) * self.viewport.scale,
             y: (y + self.viewport.y * TILE_SIZE) * self.viewport.scale,
             life: POPUP_TEXT_LIFE,

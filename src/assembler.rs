@@ -235,7 +235,7 @@ impl Structure for Assembler {
         Err(JsValue::from_str("Recipe is not initialized"))
     }
 
-    fn can_output(&self) -> Inventory {
+    fn can_output(&self, _structures: &StructureDynIter) -> Inventory {
         self.output_inventory.clone()
     }
 
@@ -287,6 +287,12 @@ impl Structure for Assembler {
                 Recipe::new(
                     hash_map!(ItemType::IronPlate => 1usize, ItemType::Gear => 1usize),
                     hash_map!(ItemType::TransportBelt => 1usize),
+                    20.,
+                    50.,
+                ),
+                Recipe::new(
+                    hash_map!(ItemType::TransportBelt => 1, ItemType::Gear => 2),
+                    hash_map!(ItemType::UndergroundBelt => 1usize),
                     20.,
                     50.,
                 ),

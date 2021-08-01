@@ -7,6 +7,7 @@ import coal from "../img/coal.png";
 import copper from "../img/copper.png";
 import stone from "../img/stone.png";
 import transport from "../img/transport.png";
+import undergroundBelt from "../img/underbelt.png";
 import splitter from "../img/splitter.png";
 import chest from "../img/chest.png";
 import mine from "../img/mine.png";
@@ -32,6 +33,7 @@ import pipeItem from "../img/pipe-item.png";
 import steamEngine from "../img/steam-engine.png";
 import electPole from "../img/elect-pole.png";
 import smoke from "../img/smoke.png";
+import undergroundBeltItem from "../img/underground-belt-item.png";
 import fuelAlarm from '../img/fuel-alarm.png';
 import electricityAlarm from '../img/electricity-alarm.png';
 import rotateImage from "../img/rotate.png";
@@ -69,6 +71,7 @@ let unlimited = true;
         ["copper", copper],
         ["stone", stone],
         ["transport", transport],
+        ["undergroundBelt", undergroundBelt],
         ["chest", chest],
         ["mine", mine],
         ["furnace", furnace],
@@ -91,6 +94,7 @@ let unlimited = true;
         ["gear", gear],
         ["copperWire", copperWire],
         ["circuit", circuit],
+        ["undergroundBeltItem", undergroundBeltItem],
         ["time", time],
         ["smoke", smoke],
         ["fuelAlarm", fuelAlarm],
@@ -500,8 +504,8 @@ let unlimited = true;
     }
 
     function rotate(){
-        var newRotation = sim.rotate_tool();
-        updateToolBarImage();
+        if(sim.rotate_tool())
+            updateToolBarImage();
     }
 
     function updateToolBar(){
@@ -536,6 +540,8 @@ let unlimited = true;
             return circuit;
         case 'Transport Belt':
             return transport;
+        case 'Underground Belt':
+            return undergroundBeltItem;
         case 'Splitter':
             return splitter;
         case 'Inserter':

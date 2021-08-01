@@ -1,7 +1,10 @@
+mod iter;
+
 use super::{
     drop_items::DropItem,
     dyn_iter::{DynIter, DynIterMut},
     items::ItemType,
+    underground_belt::UnderDirection,
     water_well::FluidBox,
     FactorishState, Inventory, InventoryTrait, Recipe,
 };
@@ -61,163 +64,7 @@ impl<'a> DynIterMut for StructureEntryIterator<'a> {
     }
 }
 
-/// A structure that allow random access to structure array excluding single element.
-/// It is convenient when you want to have mutable reference to two elements in the array at the same time.
-pub(crate) struct StructureDynIter<'a> {
-    left_start: usize,
-    left: &'a mut [StructureEntry],
-    right_start: usize,
-    right: &'a mut [StructureEntry],
-}
-
-impl<'a> StructureDynIter<'a> {
-    pub(crate) fn new_all(source: &'a mut [StructureEntry]) -> Self {
-        Self {
-            left_start: 0,
-            right_start: source.len(),
-            left: source,
-            right: &mut [],
-        }
-    }
-
-    pub(crate) fn new(
-        source: &'a mut [StructureEntry],
-        split_idx: usize,
-    ) -> Result<(&'a mut StructureEntry, Self), JsValue> {
-        let (left, right) = source.split_at_mut(split_idx);
-        let (center, right) = right
-            .split_first_mut()
-            .ok_or_else(|| JsValue::from_str("Structures split fail"))?;
-        Ok((
-            center,
-            Self {
-                left_start: 0,
-                left,
-                right_start: split_idx + 1,
-                right,
-            },
-        ))
-    }
-
-    /// Accessor without generation checking.
-    #[allow(dead_code)]
-    pub(crate) fn get_at(&self, idx: usize) -> Option<&StructureEntry> {
-        if self.left_start <= idx && idx < self.left_start + self.left.len() {
-            self.left.get(idx - self.left_start)
-        } else if self.right_start <= idx && idx < self.right_start + self.right.len() {
-            self.right.get(idx - self.right_start)
-        } else {
-            None
-        }
-    }
-
-    /// Mutable accessor without generation checking.
-    #[allow(dead_code)]
-    pub(crate) fn get_at_mut(&mut self, idx: usize) -> Option<&mut StructureEntry> {
-        if self.left_start <= idx && idx < self.left_start + self.left.len() {
-            self.left.get_mut(idx - self.left_start)
-        } else if self.right_start <= idx && idx < self.right_start + self.right.len() {
-            self.right.get_mut(idx - self.right_start)
-        } else {
-            None
-        }
-    }
-
-    /// Accessor with generation checking.
-    #[allow(dead_code)]
-    pub(crate) fn get(&self, id: StructureId) -> Option<&dyn Structure> {
-        let idx = id.id as usize;
-        if self.left_start <= idx && idx < self.left_start + self.left.len() {
-            self.left
-                .get(idx - self.left_start)
-                .filter(|s| s.gen == id.gen)
-                .map(|s| s.dynamic.as_deref())
-                .flatten()
-        } else if self.right_start <= idx && idx < self.right_start + self.right.len() {
-            self.right
-                .get(idx - self.right_start)
-                .filter(|s| s.gen == id.gen)
-                .map(|s| s.dynamic.as_deref())
-                .flatten()
-        } else {
-            None
-        }
-    }
-
-    /// Mutable accessor with generation checking.
-    pub(crate) fn get_mut(&mut self, id: StructureId) -> Option<&mut (dyn Structure + '_)> {
-        let idx = id.id as usize;
-        if self.left_start <= idx && idx < self.left_start + self.left.len() {
-            self.left
-                .get_mut(idx - self.left_start)
-                .filter(|s| s.gen == id.gen)
-                .map(|s| s.dynamic.as_deref_mut().map(|s| s as &mut dyn Structure))
-                // Interestingly, we need .map(|s| s as &mut dyn Structure) to compile.
-                // .map(|s| s.dynamic.as_deref_mut())
-                .flatten()
-        } else if self.right_start <= idx && idx < self.right_start + self.right.len() {
-            self.right
-                .get_mut(idx - self.right_start)
-                .filter(|s| s.gen == id.gen)
-                .map(|s| s.dynamic.as_deref_mut().map(|s| s as &mut dyn Structure))
-                // .map(|s| s.dynamic.as_deref_mut())
-                .flatten()
-        } else {
-            None
-        }
-    }
-
-    pub(crate) fn dyn_iter_id(&self) -> impl Iterator<Item = (StructureId, &dyn Structure)> + '_ {
-        self.left
-            .iter()
-            .enumerate()
-            .map(move |(i, val)| {
-                (
-                    StructureId {
-                        id: (i + self.left_start) as u32,
-                        gen: val.gen,
-                    },
-                    val,
-                )
-            })
-            .chain(self.right.iter().enumerate().map(move |(i, val)| {
-                (
-                    StructureId {
-                        id: (i + self.right_start) as u32,
-                        gen: val.gen,
-                    },
-                    val,
-                )
-            }))
-            .filter_map(|(i, s)| Some((i, s.dynamic.as_deref()?)))
-    }
-}
-
-impl<'a> DynIter for StructureDynIter<'a> {
-    type Item = dyn Structure;
-    fn dyn_iter(&self) -> Box<dyn Iterator<Item = &Self::Item> + '_> {
-        Box::new(
-            self.left
-                .iter()
-                .chain(self.right.iter())
-                .filter_map(|s| s.dynamic.as_deref()),
-        )
-    }
-    fn as_dyn_iter(&self) -> &dyn DynIter<Item = Self::Item> {
-        self
-    }
-}
-
-impl<'a> DynIterMut for StructureDynIter<'a> {
-    fn dyn_iter_mut(&mut self) -> Box<dyn Iterator<Item = &mut Self::Item> + '_> {
-        Box::new(
-            self.left
-                .iter_mut()
-                .chain(self.right.iter_mut())
-                .filter_map(|s| s.dynamic.as_deref_mut()),
-        )
-    }
-}
+pub(crate) use self::iter::StructureDynIter;
 
 #[derive(Eq, PartialEq, Hash, Copy, Clone, Debug, Serialize, Deserialize)]
 pub(crate) struct Position {
@@ -290,7 +137,7 @@ pub(crate) struct BoundingBox {
     pub y1: i32,
 }
 
-#[derive(Copy, Clone, Serialize, Deserialize, RotateEnum)]
+#[derive(Copy, Clone, Serialize, Deserialize, RotateEnum, PartialEq)]
 pub(crate) enum Rotation {
     Left,
     Top,
@@ -334,7 +181,7 @@ impl Rotation {
         matches!(self, Rotation::Left | Rotation::Right)
     }
 
-    pub fn is_vertial(&self) -> bool {
+    pub fn is_vertcial(&self) -> bool {
         !self.is_horizontal()
     }
 }
@@ -361,6 +208,18 @@ pub(crate) enum RotateErr {
 pub(crate) trait Structure {
     fn name(&self) -> &str;
     fn position(&self) -> &Position;
+    fn rotation(&self) -> Option<Rotation> {
+        None
+    }
+
+    /// Specialized method to get underground belt direction.
+    /// We don't like to put this to Structure trait method, but we don't have an option
+    /// as long as we use trait object polymorphism.
+    /// TODO: Revise needed in ECS.
+    fn under_direction(&self) -> Option<UnderDirection> {
+        None
+    }
+
     fn size(&self) -> Size {
         Size {
             width: 1,
@@ -403,6 +262,7 @@ pub(crate) trait Structure {
         &mut self,
         _other_id: StructureId,
         _other: &dyn Structure,
+        _others: &StructureDynIter,
         _construct: bool,
     ) -> Result<(), JsValue> {
         Ok(())
@@ -419,7 +279,11 @@ pub(crate) trait Structure {
     fn movable(&self) -> bool {
         false
     }
-    fn rotate(&mut self, _others: &StructureDynIter) -> Result<(), RotateErr> {
+    fn rotate(
+        &mut self,
+        _state: &mut FactorishState,
+        _others: &StructureDynIter,
+    ) -> Result<(), RotateErr> {
         Err(RotateErr::NotSupported)
     }
     fn set_rotation(&mut self, _rotation: &Rotation) -> Result<(), ()> {
@@ -443,7 +307,7 @@ pub(crate) trait Structure {
     }
     /// Query a set of items that this structure can output. Actual output would not happen until `output()`, thus
     /// this method is immutable. It should return empty Inventory if it cannot output anything.
-    fn can_output(&self) -> Inventory {
+    fn can_output(&self, _structures: &StructureDynIter) -> Inventory {
         Inventory::new()
     }
     /// Perform actual output. The operation should always succeed since the output-tability is checked beforehand

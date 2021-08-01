@@ -256,10 +256,10 @@ impl Structure for Furnace {
     }
 
     fn can_input(&self, item_type: &ItemType) -> bool {
-        if *item_type == ItemType::CoalOre {
-            if self.input_inventory.count_item(item_type) < FUEL_CAPACITY {
-                return true;
-            }
+        if *item_type == ItemType::CoalOre
+            && self.input_inventory.count_item(item_type) < FUEL_CAPACITY
+        {
+            return true;
         }
         if let Some(recipe) = &self.recipe {
             recipe.input.get(item_type).is_some()
@@ -268,7 +268,7 @@ impl Structure for Furnace {
         }
     }
 
-    fn can_output(&self) -> Inventory {
+    fn can_output(&self, _structures: &StructureDynIter) -> Inventory {
         self.output_inventory.clone()
     }
 

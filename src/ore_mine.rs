@@ -52,12 +52,6 @@ impl OreMine {
         let output_position = self.position.add(self.rotation.delta());
         if *other.position() == output_position {
             self.output_structure = if construct { Some(other_id) } else { None };
-            console_log!(
-                "OreMine{:?}: {} output_structure {:?}",
-                self.position,
-                if construct { "set" } else { "unset" },
-                other_id
-            );
         }
         Ok(())
     }
@@ -290,12 +284,16 @@ impl Structure for OreMine {
         Ok(ret)
     }
 
-    fn rotate(&mut self, others: &StructureDynIter) -> Result<(), RotateErr> {
+    fn rotate(
+        &mut self,
+        _state: &mut FactorishState,
+        others: &StructureDynIter,
+    ) -> Result<(), RotateErr> {
         self.rotation = self.rotation.next();
         self.output_structure = None;
         for (id, s) in others.dyn_iter_id() {
             self.on_construction_common(id, s, true)
-                .map_err(|e| RotateErr::Other(e))?;
+                .map_err(RotateErr::Other)?;
         }
         Ok(())
     }
@@ -325,6 +323,7 @@ impl Structure for OreMine {
         &mut self,
         other_id: StructureId,
         other: &dyn Structure,
+        _others: &StructureDynIter,
         construct: bool,
     ) -> Result<(), JsValue> {
         self.on_construction_common(other_id, other, construct)
