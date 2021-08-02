@@ -35,12 +35,13 @@ impl FactorishState {
         .ok_or_else(|| js_str!("world transform cast failed"))?;
 
         let back_texture_transform =
-            (Matrix3::from_translation(Vector2::new(-self.viewport.x, -self.viewport.y))
-                * Matrix3::from_nonuniform_scale(
-                    self.viewport_width / self.viewport.scale,
-                    self.viewport_height / self.viewport.scale,
-                )
-                * Matrix3::from_nonuniform_scale(0.5 / TILE_SIZE, -0.5 / TILE_SIZE))
+            (Matrix3::from_translation(Vector2::new(
+                -self.viewport.x,
+                self.viewport_height / self.viewport.scale / TILE_SIZE - self.viewport.y,
+            )) * Matrix3::from_nonuniform_scale(
+                self.viewport_width / self.viewport.scale,
+                self.viewport_height / self.viewport.scale,
+            ) * Matrix3::from_nonuniform_scale(1. / TILE_SIZE, -1. / TILE_SIZE))
             //  * Matrix3::from_translation(Vector2::new(-2. * self.viewport.x * self.viewport.scale / TILE_SIZE, 2. * self.viewport.y * self.viewport.scale / TILE_SIZE)))
             .cast::<f32>()
             .ok_or_else(|| js_str!("world transform cast failed"))?;
@@ -64,14 +65,16 @@ impl FactorishState {
         context.bind_texture(GL::TEXTURE_2D, Some(&self.assets.tex_dirt));
         enable_buffer(
             &context,
-            &self.assets.rect_buffer,
+            &self.assets.screen_buffer,
             2,
             shader.vertex_position,
         );
         context.uniform_matrix4fv_with_f32_array(
             shader.transform_loc.as_ref(),
             false,
-            <Matrix4<f32> as AsRef<[f32; 16]>>::as_ref(&Matrix4::from_scale(1.)),
+            <Matrix4<f32> as AsRef<[f32; 16]>>::as_ref(
+                &(Matrix4::from_translation(Vector3::new(-1., -1., 0.)) * Matrix4::from_scale(2.)),
+            ),
         );
         context.draw_arrays(GL::TRIANGLE_FAN, 0, 4);
 
@@ -106,6 +109,13 @@ impl FactorishState {
         // }
 
         let mut draws = 0;
+
+        enable_buffer(
+            &context,
+            &self.assets.rect_buffer,
+            2,
+            shader.vertex_position,
+        );
 
         context.bind_texture(GL::TEXTURE_2D, Some(&self.assets.tex_back));
         for y in top..=bottom {

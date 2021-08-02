@@ -171,6 +171,11 @@ impl Assets {
         let rect_vertices: [f32; 8] = [1., 1., -1., 1., -1., -1., 1., -1.];
         vertex_buffer_data(&context, &rect_vertices);
 
+        self.screen_buffer = Some(context.create_buffer().ok_or("failed to create buffer")?);
+        context.bind_buffer(GL::ARRAY_BUFFER, self.screen_buffer.as_ref());
+        let rect_vertices: [f32; 8] = [1., 1., 0., 1., 0., 0., 1., 0.];
+        vertex_buffer_data(&context, &rect_vertices);
+
         context.clear_color(0.0, 0.0, 0.5, 0.5);
 
         Ok(())
