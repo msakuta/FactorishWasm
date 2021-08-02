@@ -11,6 +11,9 @@ pub(crate) struct Assets {
 
     pub tex_back: WebGlTexture,
     pub tex_iron: WebGlTexture,
+    pub tex_copper: WebGlTexture,
+    pub tex_coal: WebGlTexture,
+    pub tex_stone: WebGlTexture,
 
     pub sprite_shader: Option<ShaderBundle>,
     pub textured_shader: Option<ShaderBundle>,
@@ -51,6 +54,9 @@ impl Assets {
                 * Matrix4::from_nonuniform_scale(2. / FWIDTH, -2. / FHEIGHT, 1.),
             tex_back: load_texture_local("dirt")?,
             tex_iron: load_texture_local("iron")?,
+            tex_copper: load_texture_local("copper")?,
+            tex_coal: load_texture_local("coal")?,
+            tex_stone: load_texture_local("stone")?,
             sprite_shader: None,
             textured_shader: None,
             rect_buffer: None,

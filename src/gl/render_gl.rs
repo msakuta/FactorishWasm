@@ -128,12 +128,13 @@ impl FactorishState {
         context.disable(GL::DEPTH_TEST);
 
         let world_transform = (Matrix4::from_translation(Vector3::new(-1., 1., 0.))
-            * Matrix4::from_nonuniform_scale(2., -2., 1.)
             * Matrix4::from_nonuniform_scale(
-                2. / self.viewport_width,
-                -2. / self.viewport_height,
+                TILE_SIZE / self.viewport_width,
+                TILE_SIZE / self.viewport_height,
                 1.,
-            ))
+            )
+            * Matrix4::from_scale(self.viewport.scale)
+            * Matrix4::from_nonuniform_scale(1., -1., 1.))
         .cast::<f32>()
         .ok_or_else(|| js_str!("world transform cast failed"))?;
 
@@ -176,40 +177,9 @@ impl FactorishState {
         );
         context.draw_arrays(GL::TRIANGLE_FAN, 0, 4);
 
-        context.bind_texture(GL::TEXTURE_2D, Some(&self.assets.tex_iron));
-        context.uniform_matrix4fv_with_f32_array(
-            shader.transform_loc.as_ref(),
-            false,
-            <Matrix4<f32> as AsRef<[f32; 16]>>::as_ref(
-                &(Matrix4::from_nonuniform_scale(
-                    TILE_SIZE / self.viewport_width,
-                    TILE_SIZE / self.viewport_height,
-                    1.,
-                ) * Matrix4::from_scale(self.viewport.scale)
-                    * Matrix4::from_nonuniform_scale(1., -1., 1.)
-                    * Matrix4::from_translation(Vector3::new(
-                        self.viewport.x,
-                        self.viewport.y,
-                        0.,
-                    )))
-                .cast::<f32>()
-                .unwrap(),
-            ),
-        );
-        context.uniform_matrix3fv_with_f32_array(
-            shader.tex_transform_loc.as_ref(),
-            false,
-            <Matrix3<f32> as AsRef<[f32; 9]>>::as_ref(
-                &(Matrix3::from_nonuniform_scale(1. / 4., 1.)
-                    * Matrix3::from_translation(Vector2::new(
-                        (self.sim_time as f32 % 4.).floor(),
-                        0.,
-                    ))
-                    * Matrix3::from_translation(Vector2::new(0.5, 0.5))
-                    * Matrix3::from_scale(0.5)),
-            ),
-        );
-        context.draw_arrays(GL::TRIANGLE_FAN, 0, 4);
+        context.enable(GL::BLEND);
+        context.blend_equation(GL::FUNC_ADD);
+        context.blend_func(GL::SRC_ALPHA, GL::ONE_MINUS_SRC_ALPHA);
 
         let (left, top, right, bottom) = apply_bounds(
             &self.bounds,
@@ -218,11 +188,43 @@ impl FactorishState {
             self.viewport_height,
         );
 
-        console_log!("bounds: {:?}", (left, top, right, bottom));
+        let mut draws = 0;
 
-        context.enable(GL::BLEND);
-        context.blend_equation(GL::FUNC_ADD);
-        context.blend_func(GL::SRC_ALPHA, GL::ONE_MINUS_SRC_ALPHA);
+        let mut draw_ore = |x, y, ore: u32, img: &WebGlTexture| -> Result<(), JsValue> {
+            if 0 < ore {
+                let idx = (ore / 10).min(3);
+                context.bind_texture(GL::TEXTURE_2D, Some(img));
+                context.uniform_matrix4fv_with_f32_array(
+                    shader.transform_loc.as_ref(),
+                    false,
+                    <Matrix4<f32> as AsRef<[f32; 16]>>::as_ref(
+                        &(world_transform
+                            * Matrix4::from_translation(
+                                Vector3::new(
+                                    2. * (self.viewport.x + x as f64),
+                                    2. * (self.viewport.y + y as f64),
+                                    0.,
+                                )
+                                .cast::<f32>()
+                                .unwrap(),
+                            )),
+                    ),
+                );
+                context.uniform_matrix3fv_with_f32_array(
+                    shader.tex_transform_loc.as_ref(),
+                    false,
+                    <Matrix3<f32> as AsRef<[f32; 9]>>::as_ref(
+                        &(Matrix3::from_nonuniform_scale(1. / 4., 1.)
+                            * Matrix3::from_translation(Vector2::new(idx as f32, 0.))
+                            * Matrix3::from_translation(Vector2::new(0.5, 0.5))
+                            * Matrix3::from_scale(0.5)),
+                    ),
+                );
+                context.draw_arrays(GL::TRIANGLE_FAN, 0, 4);
+                draws += 1;
+            }
+            Ok(())
+        };
 
         for y in top..=bottom {
             for x in left..=right {
@@ -254,40 +256,19 @@ impl FactorishState {
                 //     console_log!("Weed image not found");
                 // }
                 // }
-                let draw_ore = |ore: u32, img: &WebGlTexture| -> Result<(), JsValue> {
-                    if 0 < ore {
-                        // let idx = (ore / 10).min(3);
-                        // console_log!("x: {}, y: {}, idx: {}, ore: {}", x, y, idx, ore);
-                        context.bind_texture(GL::TEXTURE_2D, Some(img));
-                        context.uniform_matrix4fv_with_f32_array(
-                            shader.transform_loc.as_ref(),
-                            false,
-                            <Matrix4<f32> as AsRef<[f32; 16]>>::as_ref(
-                                &(world_transform
-                                    * Matrix4::from_translation(Vector3::new(
-                                        x as f32 * TILE_SIZE as f32,
-                                        y as f32 * TILE_SIZE as f32,
-                                        0.,
-                                    ))),
-                            ),
-                        );
-                        // context.draw_image_with_image_bitmap_and_sw_and_sh_and_dx_and_dy_and_dw_and_dh(
-                        //     img, (idx * 32) as f64, 0., 32., 32., x as f64 * 32., y as f64 * 32., 32., 32.)?;
-                        context.draw_arrays(GL::TRIANGLE_FAN, 0, 4);
-                        // console_log!("Drawing ore {} {} -> {:?}", x, y, world_transform * Matrix4::from_translation(Vector3::new(x as f32 * TILE_SIZE as f32, y as f32 * TILE_SIZE as f32, 0.)));
-                    }
-                    Ok(())
-                };
+
                 match cell.ore {
-                    Some(OreValue(Ore::Iron, v)) => draw_ore(v, &self.assets.tex_iron)?,
-                    // Some(OreValue(Ore::Coal, v)) => draw_ore(v, &img_coal.bitmap)?,
-                    // Some(OreValue(Ore::Copper, v)) => draw_ore(v, &img_copper.bitmap)?,
-                    // Some(OreValue(Ore::Stone, v)) => draw_ore(v, &img_stone.bitmap)?,
+                    Some(OreValue(Ore::Iron, v)) => draw_ore(x, y, v, &self.assets.tex_iron)?,
+                    Some(OreValue(Ore::Coal, v)) => draw_ore(x, y, v, &self.assets.tex_coal)?,
+                    Some(OreValue(Ore::Copper, v)) => draw_ore(x, y, v, &self.assets.tex_copper)?,
+                    Some(OreValue(Ore::Stone, v)) => draw_ore(x, y, v, &self.assets.tex_stone)?,
                     _ => (),
                 }
                 // cell_draws += 1;
             }
         }
+
+        console_log!("drawn: {}, bounds: {:?}", draws, (left, top, right, bottom));
 
         self.perf_render.add(performance().now() - start_render);
 
