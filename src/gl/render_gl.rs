@@ -188,12 +188,30 @@ impl FactorishState {
             self.viewport_height,
         );
 
+        // let (dx, dy) = (x as f64 * 32., y as f64 * 32.);
+        // if cell.water || cell.image != 0 {
+        //     let srcx = cell.image % 4;
+        //     let srcy = cell.image / 4;
+        //     context.draw_arrays(GL::TRIANGLE_FAN, 0, 4);
+        //         &back_tiles.bitmap, (srcx * 32) as f64, (srcy * 32) as f64, 32., 32., dx, dy, 32., 32.)?;
+        // } else {
+        // context.draw_image_with_image_bitmap(&img.bitmap, dx, dy)?;
+        // if let Some(weeds) = &self.image_weeds {
+        //     if 0 < cell.grass_image {
+        //         context.draw_image_with_image_bitmap_and_sw_and_sh_and_dx_and_dy_and_dw_and_dh(
+        //             &weeds.bitmap,
+        //             (cell.grass_image * 32) as f64, 0., 32., 32., dx, dy, 32., 32.)?;
+        //     }
+        // } else {
+        //     console_log!("Weed image not found");
+        // }
+        // }
+
         let mut draws = 0;
 
         let mut draw_ore = |x, y, ore: u32, img: &WebGlTexture| -> Result<(), JsValue> {
             if 0 < ore {
                 let idx = (ore / 10).min(3);
-                context.bind_texture(GL::TEXTURE_2D, Some(img));
                 context.uniform_matrix4fv_with_f32_array(
                     shader.transform_loc.as_ref(),
                     false,
@@ -226,47 +244,36 @@ impl FactorishState {
             Ok(())
         };
 
-        for y in top..=bottom {
-            for x in left..=right {
-                let chunk_pos =
-                    Position::new(x.div_euclid(CHUNK_SIZE_I), y.div_euclid(CHUNK_SIZE_I));
-                let chunk = self.board.get(&chunk_pos);
-                let chunk = if let Some(chunk) = chunk {
-                    chunk
-                } else {
-                    continue;
-                };
-                let (mx, my) = (x as usize % CHUNK_SIZE, y as usize % CHUNK_SIZE);
-                let cell = &chunk.cells[(mx + my * CHUNK_SIZE) as usize];
-                // let (dx, dy) = (x as f64 * 32., y as f64 * 32.);
-                // if cell.water || cell.image != 0 {
-                //     let srcx = cell.image % 4;
-                //     let srcy = cell.image / 4;
-                //     context.draw_arrays(GL::TRIANGLE_FAN, 0, 4);
-                //         &back_tiles.bitmap, (srcx * 32) as f64, (srcy * 32) as f64, 32., 32., dx, dy, 32., 32.)?;
-                // } else {
-                // context.draw_image_with_image_bitmap(&img.bitmap, dx, dy)?;
-                // if let Some(weeds) = &self.image_weeds {
-                //     if 0 < cell.grass_image {
-                //         context.draw_image_with_image_bitmap_and_sw_and_sh_and_dx_and_dy_and_dw_and_dh(
-                //             &weeds.bitmap,
-                //             (cell.grass_image * 32) as f64, 0., 32., 32., dx, dy, 32., 32.)?;
-                //     }
-                // } else {
-                //     console_log!("Weed image not found");
-                // }
-                // }
+        let mut scan_ore = |ore: Ore, tex: &WebGlTexture| -> Result<(), JsValue> {
+            context.bind_texture(GL::TEXTURE_2D, Some(tex));
+            for y in top..=bottom {
+                for x in left..=right {
+                    let chunk_pos =
+                        Position::new(x.div_euclid(CHUNK_SIZE_I), y.div_euclid(CHUNK_SIZE_I));
+                    let chunk = self.board.get(&chunk_pos);
+                    let chunk = if let Some(chunk) = chunk {
+                        chunk
+                    } else {
+                        continue;
+                    };
+                    let (mx, my) = (x as usize % CHUNK_SIZE, y as usize % CHUNK_SIZE);
+                    let cell = &chunk.cells[(mx + my * CHUNK_SIZE) as usize];
 
-                match cell.ore {
-                    Some(OreValue(Ore::Iron, v)) => draw_ore(x, y, v, &self.assets.tex_iron)?,
-                    Some(OreValue(Ore::Coal, v)) => draw_ore(x, y, v, &self.assets.tex_coal)?,
-                    Some(OreValue(Ore::Copper, v)) => draw_ore(x, y, v, &self.assets.tex_copper)?,
-                    Some(OreValue(Ore::Stone, v)) => draw_ore(x, y, v, &self.assets.tex_stone)?,
-                    _ => (),
+                    if let Some(OreValue(cell_ore, v)) = cell.ore {
+                        if cell_ore == ore {
+                            draw_ore(x, y, v, tex)?;
+                        }
+                    }
+                    // cell_draws += 1;
                 }
-                // cell_draws += 1;
             }
-        }
+            Ok(())
+        };
+
+        scan_ore(Ore::Iron, &self.assets.tex_iron)?;
+        scan_ore(Ore::Coal, &self.assets.tex_coal)?;
+        scan_ore(Ore::Copper, &self.assets.tex_copper)?;
+        scan_ore(Ore::Stone, &self.assets.tex_stone)?;
 
         console_log!("drawn: {}, bounds: {:?}", draws, (left, top, right, bottom));
 
