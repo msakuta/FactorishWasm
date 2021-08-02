@@ -9,11 +9,12 @@ const FHEIGHT: f64 = 100.;
 pub(crate) struct Assets {
     pub world_transform: Matrix4<f64>,
 
-    pub tex_back: WebGlTexture,
+    pub tex_dirt: WebGlTexture,
     pub tex_iron: WebGlTexture,
     pub tex_copper: WebGlTexture,
     pub tex_coal: WebGlTexture,
     pub tex_stone: WebGlTexture,
+    pub tex_back: WebGlTexture,
 
     pub sprite_shader: Option<ShaderBundle>,
     pub textured_shader: Option<ShaderBundle>,
@@ -52,11 +53,12 @@ impl Assets {
         Ok(Assets {
             world_transform: Matrix4::from_translation(Vector3::new(-1., 1., 0.))
                 * Matrix4::from_nonuniform_scale(2. / FWIDTH, -2. / FHEIGHT, 1.),
-            tex_back: load_texture_local("dirt")?,
+            tex_dirt: load_texture_local("dirt")?,
             tex_iron: load_texture_local("iron")?,
             tex_copper: load_texture_local("copper")?,
             tex_coal: load_texture_local("coal")?,
             tex_stone: load_texture_local("stone")?,
+            tex_back: load_texture_local("backTiles")?,
             sprite_shader: None,
             textured_shader: None,
             rect_buffer: None,

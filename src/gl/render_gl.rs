@@ -3,8 +3,8 @@ use super::{
     utils::{enable_buffer, vertex_buffer_data},
 };
 use crate::{
-    apply_bounds, performance, FactorishState, Ore, OreValue, Position, CHUNK_SIZE, CHUNK_SIZE_I,
-    TILE_SIZE,
+    apply_bounds, performance, Cell, FactorishState, Ore, OreValue, Position, CHUNK_SIZE,
+    CHUNK_SIZE_I, TILE_SIZE,
 };
 use cgmath::{Matrix3, Matrix4, Vector2, Vector3};
 use wasm_bindgen::prelude::*;
@@ -88,7 +88,7 @@ impl FactorishState {
             uniform sampler2D texture;
 
             void main() {
-                vec4 texColor = texture2D( texture, vec2(texCoords.x, texCoords.y) );
+                vec4 texColor = texture2D( texture, texCoords.xy );
                 gl_FragColor = texColor;
                 // gl_FragColor = vec4(1, 1, 1, 0.5);
             }
@@ -163,7 +163,7 @@ impl FactorishState {
             false,
             <Matrix3<f32> as AsRef<[f32; 9]>>::as_ref(&back_texture_transform),
         );
-        context.bind_texture(GL::TEXTURE_2D, Some(&self.assets.tex_back));
+        context.bind_texture(GL::TEXTURE_2D, Some(&self.assets.tex_dirt));
         enable_buffer(
             &context,
             &self.assets.rect_buffer,
@@ -209,7 +209,56 @@ impl FactorishState {
 
         let mut draws = 0;
 
-        let mut draw_ore = |x, y, ore: u32, img: &WebGlTexture| -> Result<(), JsValue> {
+        context.bind_texture(GL::TEXTURE_2D, Some(&self.assets.tex_back));
+        for y in top..=bottom {
+            for x in left..=right {
+                let chunk_pos =
+                    Position::new(x.div_euclid(CHUNK_SIZE_I), y.div_euclid(CHUNK_SIZE_I));
+                let chunk = self.board.get(&chunk_pos);
+                let chunk = if let Some(chunk) = chunk {
+                    chunk
+                } else {
+                    continue;
+                };
+                let (mx, my) = (x as usize % CHUNK_SIZE, y as usize % CHUNK_SIZE);
+                let cell = &chunk.cells[(mx + my * CHUNK_SIZE) as usize];
+                if !cell.water {
+                    continue;
+                }
+
+                context.uniform_matrix4fv_with_f32_array(
+                    shader.transform_loc.as_ref(),
+                    false,
+                    <Matrix4<f32> as AsRef<[f32; 16]>>::as_ref(
+                        &(world_transform
+                            * Matrix4::from_translation(
+                                Vector3::new(
+                                    2. * (self.viewport.x + x as f64),
+                                    2. * (self.viewport.y + y as f64),
+                                    0.,
+                                )
+                                .cast::<f32>()
+                                .unwrap(),
+                            )),
+                    ),
+                );
+                context.uniform_matrix3fv_with_f32_array(
+                    shader.tex_transform_loc.as_ref(),
+                    false,
+                    <Matrix3<f32> as AsRef<[f32; 9]>>::as_ref(
+                        &(Matrix3::from_nonuniform_scale(0.25, 0.125)
+                            * Matrix3::from_translation(Vector2::new(3., 3.))
+                            * Matrix3::from_translation(Vector2::new(0.5, 0.5))
+                            * Matrix3::from_scale(0.5)),
+                    ),
+                );
+                context.draw_arrays(GL::TRIANGLE_FAN, 0, 4);
+                draws += 1;
+                // cell_draws += 1;
+            }
+        }
+
+        let mut draw_ore = |x, y, ore: u32| -> Result<(), JsValue> {
             if 0 < ore {
                 let idx = (ore / 10).min(3);
                 context.uniform_matrix4fv_with_f32_array(
@@ -244,7 +293,7 @@ impl FactorishState {
             Ok(())
         };
 
-        let mut scan_ore = |ore: Ore, tex: &WebGlTexture| -> Result<(), JsValue> {
+        let mut scan_ore = |ore, tex| -> Result<(), JsValue> {
             context.bind_texture(GL::TEXTURE_2D, Some(tex));
             for y in top..=bottom {
                 for x in left..=right {
@@ -261,7 +310,7 @@ impl FactorishState {
 
                     if let Some(OreValue(cell_ore, v)) = cell.ore {
                         if cell_ore == ore {
-                            draw_ore(x, y, v, tex)?;
+                            draw_ore(x, y, v)?;
                         }
                     }
                     // cell_draws += 1;
