@@ -20,6 +20,7 @@ pub(crate) struct Assets {
     pub tex_coal: WebGlTexture,
     pub tex_stone: WebGlTexture,
     pub tex_back: WebGlTexture,
+    pub tex_weeds: WebGlTexture,
 
     pub sprite_shader: Option<ShaderBundle>,
     pub textured_shader: Option<ShaderBundle>,
@@ -65,6 +66,7 @@ impl Assets {
             tex_coal: load_texture_local("coal")?,
             tex_stone: load_texture_local("stone")?,
             tex_back: load_texture_local("backTiles")?,
+            tex_weeds: load_texture_local("weeds")?,
             sprite_shader: None,
             textured_shader: None,
             screen_buffer: None,
@@ -150,7 +152,8 @@ impl Assets {
             void main() {
                 vec4 texColor = texture2D( texture, texCoords.xy );
                 gl_FragColor = texColor;
-                // gl_FragColor = vec4(1, 1, 1, 0.5);
+                if(gl_FragColor.a < 0.5)
+                    discard;
             }
         "#,
         )?;
