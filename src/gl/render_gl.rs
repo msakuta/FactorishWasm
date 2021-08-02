@@ -130,9 +130,11 @@ impl FactorishState {
                 };
                 let (mx, my) = (x as usize % CHUNK_SIZE, y as usize % CHUNK_SIZE);
                 let cell = &chunk.cells[(mx + my * CHUNK_SIZE) as usize];
-                if !cell.water {
+                if cell.image == 0 {
                     continue;
                 }
+                let srcx = cell.image % 4;
+                let srcy = cell.image / 4;
 
                 context.uniform_matrix4fv_with_f32_array(
                     shader.transform_loc.as_ref(),
@@ -155,7 +157,7 @@ impl FactorishState {
                     false,
                     <Matrix3<f32> as AsRef<[f32; 9]>>::as_ref(
                         &(Matrix3::from_nonuniform_scale(0.25, 0.125)
-                            * Matrix3::from_translation(Vector2::new(3., 3.))
+                            * Matrix3::from_translation(Vector2::new(srcx as f32, srcy as f32))
                             * Matrix3::from_translation(Vector2::new(0.5, 0.5))
                             * Matrix3::from_scale(0.5)),
                     ),
