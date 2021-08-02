@@ -1,5 +1,4 @@
 use crate::document;
-use std::rc::Rc;
 use wasm_bindgen::{JsCast, JsValue};
 use web_sys::{ImageBitmap, WebGlBuffer, WebGlRenderingContext as GL, WebGlTexture};
 
@@ -15,15 +14,15 @@ pub(crate) fn get_context() -> Result<GL, JsValue> {
         .dyn_into::<GL>()?)
 }
 
-/// Initialize a texture and load an image.
-/// When the image finished loading copy it into the texture.
-pub(crate) fn load_texture(gl: &GL, bitmap: ImageBitmap) -> Result<Rc<WebGlTexture>, JsValue> {
+/// Initialize a texture and load an image from ImageBitmap.
+/// It is synchronous, meaning the image has to be loaded already.
+pub(crate) fn load_texture(gl: &GL, bitmap: ImageBitmap) -> Result<WebGlTexture, JsValue> {
     fn is_power_of_2(value: u32) -> bool {
         (value & (value - 1)) == 0
     }
 
-    let texture = Rc::new(gl.create_texture().unwrap());
-    gl.bind_texture(GL::TEXTURE_2D, Some(&*texture));
+    let texture = gl.create_texture().unwrap();
+    gl.bind_texture(GL::TEXTURE_2D, Some(&texture));
 
     let level = 0;
     let internal_format = GL::RGBA as i32;
