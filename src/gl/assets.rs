@@ -3,16 +3,55 @@ use super::{
     utils::{load_texture, vertex_buffer_data},
 };
 use cgmath::{Matrix4, Vector3};
-use wasm_bindgen::{JsCast, JsValue};
+use wasm_bindgen::{prelude::*, JsCast, JsValue};
 use web_sys::{
     ImageBitmap, WebGlBuffer, WebGlProgram, WebGlRenderingContext as GL, WebGlShader, WebGlTexture,
 };
 
 const FWIDTH: f64 = 100.;
 const FHEIGHT: f64 = 100.;
+pub(crate) const MAX_SPRITES: usize = 512;
+
+#[wasm_bindgen]
+extern "C" {
+    #[wasm_bindgen(js_name = ANGLEInstancedArrays)]
+    pub(crate) type AngleInstancedArrays;
+
+    #[wasm_bindgen(method, getter, js_name = VERTEX_ATTRIB_ARRAY_DIVISOR_ANGLE)]
+    pub(crate) fn vertex_attrib_array_divisor_angle(this: &AngleInstancedArrays) -> i32;
+
+    #[wasm_bindgen(method, catch, js_name = drawArraysInstancedANGLE)]
+    pub(crate) fn draw_arrays_instanced_angle(
+        this: &AngleInstancedArrays,
+        mode: u32,
+        first: i32,
+        count: i32,
+        primcount: i32,
+    ) -> Result<(), JsValue>;
+
+    // TODO offset should be i64
+    #[wasm_bindgen(method, catch, js_name = drawElementsInstancedANGLE)]
+    pub(crate) fn draw_elements_instanced_angle(
+        this: &AngleInstancedArrays,
+        mode: u32,
+        count: i32,
+        type_: u32,
+        offset: i32,
+        primcount: i32,
+    ) -> Result<(), JsValue>;
+
+    #[wasm_bindgen(method, js_name = vertexAttribDivisorANGLE)]
+    pub(crate) fn vertex_attrib_divisor_angle(
+        this: &AngleInstancedArrays,
+        index: u32,
+        divisor: u32,
+    );
+}
 
 pub(crate) struct Assets {
     pub world_transform: Matrix4<f64>,
+
+    pub instanced_arrays_ext: Option<AngleInstancedArrays>,
 
     pub tex_dirt: WebGlTexture,
     pub tex_iron: WebGlTexture,
@@ -24,9 +63,12 @@ pub(crate) struct Assets {
 
     pub sprite_shader: Option<ShaderBundle>,
     pub textured_shader: Option<ShaderBundle>,
+    pub textured_instancing_shader: Option<ShaderBundle>,
 
     pub screen_buffer: Option<WebGlBuffer>,
     pub rect_buffer: Option<WebGlBuffer>,
+
+    pub sprites_buffer: Option<WebGlBuffer>,
 }
 
 impl Assets {
@@ -60,6 +102,7 @@ impl Assets {
         Ok(Assets {
             world_transform: Matrix4::from_translation(Vector3::new(-1., 1., 0.))
                 * Matrix4::from_nonuniform_scale(2. / FWIDTH, -2. / FHEIGHT, 1.),
+            instanced_arrays_ext: None,
             tex_dirt: load_texture_local("dirt")?,
             tex_iron: load_texture_local("iron")?,
             tex_copper: load_texture_local("copper")?,
@@ -69,12 +112,27 @@ impl Assets {
             tex_weeds: load_texture_local("weeds")?,
             sprite_shader: None,
             textured_shader: None,
+            textured_instancing_shader: None,
             screen_buffer: None,
             rect_buffer: None,
+            sprites_buffer: None,
         })
     }
 
-    pub(super) fn prepare(&mut self, context: GL) -> Result<(), JsValue> {
+    pub(super) fn prepare(&mut self, gl: GL) -> Result<(), JsValue> {
+        self.instanced_arrays_ext = gl
+            .get_extension("ANGLE_instanced_arrays")
+            .unwrap_or(None)
+            .map(|v| v.unchecked_into::<AngleInstancedArrays>());
+        console_log!(
+            "WebGL Instanced arrays is {}",
+            if self.instanced_arrays_ext.is_some() {
+                "available"
+            } else {
+                "not available"
+            }
+        );
+
         // let vert_shader = compile_shader(
         //     &context,
         //     GL::VERTEX_SHADER,
@@ -118,14 +176,14 @@ impl Assets {
         // context.uniform1i(shader.texture_loc.as_ref(), 0);
         // context.uniform1f(shader.alpha_loc.as_ref(), 1.);
 
-        context.enable(GL::BLEND);
-        context.blend_equation(GL::FUNC_ADD);
-        context.blend_func(GL::SRC_ALPHA, GL::ONE_MINUS_SRC_ALPHA);
+        gl.enable(GL::BLEND);
+        gl.blend_equation(GL::FUNC_ADD);
+        gl.blend_func(GL::SRC_ALPHA, GL::ONE_MINUS_SRC_ALPHA);
 
         // self.assets.sprite_shader = Some(shader);
 
         let vert_shader = compile_shader(
-            &context,
+            &gl,
             GL::VERTEX_SHADER,
             r#"
             attribute vec2 vertexData;
@@ -140,7 +198,7 @@ impl Assets {
         "#,
         )?;
         let frag_shader = compile_shader(
-            &context,
+            &gl,
             GL::FRAGMENT_SHADER,
             r#"
             precision mediump float;
@@ -157,29 +215,82 @@ impl Assets {
             }
         "#,
         )?;
-        let program = link_program(&context, &vert_shader, &frag_shader)?;
-        context.use_program(Some(&program));
-        self.textured_shader = Some(ShaderBundle::new(&context, program));
+        let program = link_program(&gl, &vert_shader, &frag_shader)?;
+        gl.use_program(Some(&program));
+        self.textured_shader = Some(ShaderBundle::new(&gl, program));
 
-        context.active_texture(GL::TEXTURE0);
-        context.uniform1i(
+        gl.active_texture(GL::TEXTURE0);
+        gl.uniform1i(
             self.textured_shader
                 .as_ref()
                 .and_then(|s| s.texture_loc.as_ref()),
             0,
         );
 
-        self.rect_buffer = Some(context.create_buffer().ok_or("failed to create buffer")?);
-        context.bind_buffer(GL::ARRAY_BUFFER, self.rect_buffer.as_ref());
+        let vert_shader_instancing = compile_shader(
+            &gl,
+            GL::VERTEX_SHADER,
+            r#"
+            attribute vec2 vertexData;
+            attribute vec2 position;
+            // attribute float alpha;
+            uniform mat4 transform;
+            uniform mat3 texTransform;
+            varying vec2 texCoords;
+            // varying float alphaVar;
+
+            void main() {
+                mat4 centerize = mat4(
+                    4, 0, 0, 0,
+                    0, -4, 0, 0,
+                    0, 0, 4, 0,
+                    -1, 1, -1, 1);
+                gl_Position = /*centerize **/ (transform * (vec4(vertexData.xy, 0.0, 1.0) + vec4(position.xy, 0.0, 1.0)));
+                texCoords = (texTransform * vec3((vertexData.xy + 1.) * 0.5, 1.)).xy;
+                // alphaVar = alpha;
+            }
+        "#,
+        )?;
+        let frag_shader_instancing = compile_shader(
+            &gl,
+            GL::FRAGMENT_SHADER,
+            r#"
+            precision mediump float;
+
+            varying vec2 texCoords;
+            // varying float alphaVar;
+
+            uniform sampler2D texture;
+
+            void main() {
+                vec4 texColor = texture2D( texture, vec2(texCoords.x, texCoords.y) );
+                gl_FragColor = texColor;
+            }
+        "#,
+        )?;
+        let program = link_program(&gl, &vert_shader_instancing, &frag_shader_instancing)?;
+        let shader = ShaderBundle::new(&gl, program);
+        self.textured_instancing_shader = Some(shader);
+
+        self.rect_buffer = Some(gl.create_buffer().ok_or("failed to create buffer")?);
+        gl.bind_buffer(GL::ARRAY_BUFFER, self.rect_buffer.as_ref());
         let rect_vertices: [f32; 8] = [1., 1., -1., 1., -1., -1., 1., -1.];
-        vertex_buffer_data(&context, &rect_vertices);
+        vertex_buffer_data(&gl, &rect_vertices);
 
-        self.screen_buffer = Some(context.create_buffer().ok_or("failed to create buffer")?);
-        context.bind_buffer(GL::ARRAY_BUFFER, self.screen_buffer.as_ref());
+        self.screen_buffer = Some(gl.create_buffer().ok_or("failed to create buffer")?);
+        gl.bind_buffer(GL::ARRAY_BUFFER, self.screen_buffer.as_ref());
         let rect_vertices: [f32; 8] = [1., 1., 0., 1., 0., 0., 1., 0.];
-        vertex_buffer_data(&context, &rect_vertices);
+        vertex_buffer_data(&gl, &rect_vertices);
 
-        context.clear_color(0.0, 0.0, 0.5, 0.5);
+        self.sprites_buffer = Some(gl.create_buffer().ok_or("failed to create buffer")?);
+        gl.bind_buffer(GL::ARRAY_BUFFER, self.sprites_buffer.as_ref());
+        gl.buffer_data_with_i32(
+            GL::ARRAY_BUFFER,
+            (MAX_SPRITES * 2 * std::mem::size_of::<f32>()) as i32,
+            GL::DYNAMIC_DRAW,
+        );
+
+        gl.clear_color(0.0, 0.0, 0.5, 0.5);
 
         Ok(())
     }

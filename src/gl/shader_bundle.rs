@@ -7,6 +7,7 @@ pub(crate) struct ShaderBundle {
     pub texture_loc: Option<WebGlUniformLocation>,
     pub transform_loc: Option<WebGlUniformLocation>,
     pub tex_transform_loc: Option<WebGlUniformLocation>,
+    pub attrib_position_loc: i32,
     pub alpha_loc: Option<WebGlUniformLocation>,
 }
 
@@ -22,9 +23,10 @@ impl ShaderBundle {
             op
         };
         let vertex_position = gl.get_attrib_location(&program, "vertexData") as u32;
-        let tex_coord_position = gl.get_attrib_location(&program, "vertexData") as u32;
+        let tex_coord_position = gl.get_attrib_location(&program, "texCoord") as u32;
         console_log!("vertex_position: {}", vertex_position);
         console_log!("tex_coord_position: {}", tex_coord_position);
+        let attrib_position_loc = gl.get_attrib_location(&program, "position");
         Self {
             vertex_position,
             tex_coord_position,
@@ -32,6 +34,7 @@ impl ShaderBundle {
             transform_loc: get_uniform("transform"),
             tex_transform_loc: get_uniform("texTransform"),
             alpha_loc: get_uniform("alpha"),
+            attrib_position_loc,
             // Program has to be later than others
             program,
         }

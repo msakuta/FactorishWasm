@@ -1,11 +1,16 @@
-use super::utils::enable_buffer;
+use super::{
+    assets::MAX_SPRITES,
+    shader_bundle::ShaderBundle,
+    utils::{enable_buffer, vertex_buffer_sub_data},
+};
 use crate::{
     apply_bounds, performance, Cell, FactorishState, Ore, OreValue, Position, CHUNK_SIZE,
     CHUNK_SIZE_I, TILE_SIZE,
 };
 use cgmath::{Matrix3, Matrix4, Vector2, Vector3};
+use std::future::Future;
 use wasm_bindgen::prelude::*;
-use web_sys::WebGlRenderingContext as GL;
+use web_sys::{WebGlRenderingContext as GL, WebGlShader, WebGlTexture};
 
 #[wasm_bindgen]
 impl FactorishState {
@@ -13,26 +18,15 @@ impl FactorishState {
         self.assets.prepare(gl)
     }
 
-    pub fn render_gl(&mut self, context: GL) -> Result<(), JsValue> {
+    pub fn render_gl(&mut self, gl: GL) -> Result<(), JsValue> {
         // let context = get_context()?;
         let start_render = performance().now();
 
         // context.clear_color((self.sim_time % 1.) as f32, 0.0, 0.5, 1.0);
-        context.clear(GL::COLOR_BUFFER_BIT);
+        gl.clear(GL::COLOR_BUFFER_BIT);
 
-        context.enable(GL::BLEND);
-        context.disable(GL::DEPTH_TEST);
-
-        let world_transform = (Matrix4::from_translation(Vector3::new(-1., 1., 0.))
-            * Matrix4::from_nonuniform_scale(
-                TILE_SIZE / self.viewport_width,
-                TILE_SIZE / self.viewport_height,
-                1.,
-            )
-            * Matrix4::from_scale(self.viewport.scale)
-            * Matrix4::from_nonuniform_scale(1., -1., 1.))
-        .cast::<f32>()
-        .ok_or_else(|| js_str!("world transform cast failed"))?;
+        gl.enable(GL::BLEND);
+        gl.disable(GL::DEPTH_TEST);
 
         let back_texture_transform =
             (Matrix3::from_translation(Vector2::new(
@@ -52,61 +46,80 @@ impl FactorishState {
             .textured_shader
             .as_ref()
             .ok_or_else(|| js_str!("Shader bundle not found!"))?;
-        context.use_program(Some(&shader.program));
-        context.active_texture(GL::TEXTURE0);
+        gl.use_program(Some(&shader.program));
+        gl.active_texture(GL::TEXTURE0);
 
-        context.uniform1i(shader.texture_loc.as_ref(), 0);
+        gl.uniform1i(shader.texture_loc.as_ref(), 0);
 
-        context.uniform_matrix3fv_with_f32_array(
+        gl.uniform_matrix3fv_with_f32_array(
             shader.tex_transform_loc.as_ref(),
             false,
             <Matrix3<f32> as AsRef<[f32; 9]>>::as_ref(&back_texture_transform),
         );
-        context.bind_texture(GL::TEXTURE_2D, Some(&self.assets.tex_dirt));
-        enable_buffer(
-            &context,
-            &self.assets.screen_buffer,
-            2,
-            shader.vertex_position,
-        );
-        context.uniform_matrix4fv_with_f32_array(
+        gl.bind_texture(GL::TEXTURE_2D, Some(&self.assets.tex_dirt));
+        enable_buffer(&gl, &self.assets.screen_buffer, 2, shader.vertex_position);
+        gl.uniform_matrix4fv_with_f32_array(
             shader.transform_loc.as_ref(),
             false,
             <Matrix4<f32> as AsRef<[f32; 16]>>::as_ref(
                 &(Matrix4::from_translation(Vector3::new(-1., -1., 0.)) * Matrix4::from_scale(2.)),
             ),
         );
-        context.draw_arrays(GL::TRIANGLE_FAN, 0, 4);
+        gl.draw_arrays(GL::TRIANGLE_FAN, 0, 4);
+
+        if self.assets.instanced_arrays_ext.is_some() {
+            let mut positions = vec![];
+            self.render_cells(
+                |x, y, cell| {
+                    if cell.image != 0 && positions.len() < MAX_SPRITES {
+                        positions.push(1. * x as f32);
+                        positions.push(1. * y as f32);
+                    }
+                    Ok(())
+                },
+                apply_bounds(
+                    &self.bounds,
+                    &self.viewport,
+                    self.viewport_width,
+                    self.viewport_height,
+                ),
+            )?;
+            self.render_sprites_gl_instancing(&gl, &self.assets.tex_back, &positions)?;
+        } else {
+            self.render_sprites_gl(&gl, shader)?;
+        }
+
+        self.perf_render.add(performance().now() - start_render);
+
+        Ok(())
+    }
+
+    fn get_world_transform(&self) -> Result<Matrix4<f32>, JsValue> {
+        (Matrix4::from_translation(Vector3::new(-1., 1., 0.))
+            * Matrix4::from_nonuniform_scale(
+                TILE_SIZE / self.viewport_width,
+                TILE_SIZE / self.viewport_height,
+                1.,
+            )
+            * Matrix4::from_scale(self.viewport.scale)
+            * Matrix4::from_nonuniform_scale(1., -1., 1.))
+        .cast::<f32>()
+        .ok_or_else(|| js_str!("world transform cast failed"))
+    }
+
+    fn render_sprites_gl(&self, context: &GL, shader: &ShaderBundle) -> Result<(), JsValue> {
+        let world_transform = self.get_world_transform()?;
 
         context.enable(GL::BLEND);
         context.blend_equation(GL::FUNC_ADD);
         context.blend_func(GL::SRC_ALPHA, GL::ONE_MINUS_SRC_ALPHA);
 
-        let (left, top, right, bottom) = apply_bounds(
+        let bounds = apply_bounds(
             &self.bounds,
             &self.viewport,
             self.viewport_width,
             self.viewport_height,
         );
-
-        // let (dx, dy) = (x as f64 * 32., y as f64 * 32.);
-        // if cell.water || cell.image != 0 {
-        //     let srcx = cell.image % 4;
-        //     let srcy = cell.image / 4;
-        //     context.draw_arrays(GL::TRIANGLE_FAN, 0, 4);
-        //         &back_tiles.bitmap, (srcx * 32) as f64, (srcy * 32) as f64, 32., 32., dx, dy, 32., 32.)?;
-        // } else {
-        // context.draw_image_with_image_bitmap(&img.bitmap, dx, dy)?;
-        // if let Some(weeds) = &self.image_weeds {
-        //     if 0 < cell.grass_image {
-        //         context.draw_image_with_image_bitmap_and_sw_and_sh_and_dx_and_dy_and_dw_and_dh(
-        //             &weeds.bitmap,
-        //             (cell.grass_image * 32) as f64, 0., 32., 32., dx, dy, 32., 32.)?;
-        //     }
-        // } else {
-        //     console_log!("Weed image not found");
-        // }
-        // }
 
         let mut draws = 0;
 
@@ -165,7 +178,7 @@ impl FactorishState {
                 // cell_draws += 1;
                 Ok(())
             },
-            (left, top, right, bottom),
+            bounds,
         )?;
 
         context.bind_texture(GL::TEXTURE_2D, Some(&self.assets.tex_weeds));
@@ -182,7 +195,7 @@ impl FactorishState {
                 // cell_draws += 1;
                 Ok(())
             },
-            (left, top, right, bottom),
+            bounds,
         )?;
 
         let mut draw_ore = |x, y, ore: u32| -> Result<(), JsValue> {
@@ -207,7 +220,7 @@ impl FactorishState {
                     };
                     Ok(())
                 },
-                (left, top, right, bottom),
+                bounds,
             )
         };
 
@@ -216,9 +229,7 @@ impl FactorishState {
         scan_ore(Ore::Copper, &self.assets.tex_copper)?;
         scan_ore(Ore::Stone, &self.assets.tex_stone)?;
 
-        console_log!("drawn: {}, bounds: {:?}", draws, (left, top, right, bottom));
-
-        self.perf_render.add(performance().now() - start_render);
+        console_log!("drawn: {}, bounds: {:?}", draws, bounds);
 
         Ok(())
     }
@@ -245,6 +256,87 @@ impl FactorishState {
                 // cell_draws += 1;
             }
         }
+        Ok(())
+    }
+
+    /// Render particles if the device supports instancing. It is much faster with fewer calls to the API.
+    /// Note that there are no loops at all in this function.
+    fn render_sprites_gl_instancing(
+        &self,
+        gl: &GL,
+        texture: &WebGlTexture,
+        sprites_buf: &[f32],
+    ) -> Result<(), JsValue> {
+        let world_transform = self.get_world_transform()?
+            * Matrix4::from_scale(2.)
+            * Matrix4::from_translation(
+                Vector3::new(self.viewport.x, self.viewport.y, 0.)
+                    .cast::<f32>()
+                    .unwrap(),
+            )
+            * Matrix4::from_scale(2.);
+
+        let instanced_arrays_ext = self
+            .assets
+            .instanced_arrays_ext
+            .as_ref()
+            .ok_or_else(|| JsValue::from_str("Instanced arrays not supported"))?;
+
+        let shader = self
+            .assets
+            .textured_instancing_shader
+            .as_ref()
+            .ok_or_else(|| JsValue::from_str("Could not find textured_instancing_shader"))?;
+        if shader.attrib_position_loc < 0 {
+            return Err(JsValue::from_str("matrix location was not found"));
+        }
+
+        gl.use_program(Some(&shader.program));
+
+        gl.active_texture(GL::TEXTURE0);
+        gl.bind_texture(GL::TEXTURE_2D, Some(texture));
+
+        let scale = Matrix4::from_nonuniform_scale(TILE_SIZE as f32, -TILE_SIZE as f32, 1.);
+
+        gl.uniform_matrix4fv_with_f32_array(
+            shader.transform_loc.as_ref(),
+            false,
+            <Matrix4<f32> as AsRef<[f32; 16]>>::as_ref(&(world_transform)),
+        );
+
+        gl.uniform_matrix3fv_with_f32_array(
+            shader.tex_transform_loc.as_ref(),
+            false,
+            <Matrix3<f32> as AsRef<[f32; 9]>>::as_ref(&Matrix3::from_scale(1.)),
+        );
+
+        enable_buffer(gl, &self.assets.rect_buffer, 2, shader.vertex_position);
+
+        gl.bind_buffer(GL::ARRAY_BUFFER, self.assets.sprites_buffer.as_ref());
+        vertex_buffer_sub_data(gl, &sprites_buf[..sprites_buf.len().min(MAX_SPRITES)]);
+
+        let stride = 2 * 4;
+        gl.vertex_attrib_pointer_with_i32(
+            shader.attrib_position_loc as u32,
+            2,
+            GL::FLOAT,
+            false,
+            stride,
+            0,
+        );
+
+        instanced_arrays_ext.vertex_attrib_divisor_angle(shader.attrib_position_loc as u32, 1);
+        gl.enable_vertex_attrib_array(shader.attrib_position_loc as u32);
+
+        instanced_arrays_ext.draw_arrays_instanced_angle(
+            GL::TRIANGLE_FAN,
+            0,                                             // offset
+            4,                                             // num vertices per instance
+            sprites_buf.len().min(MAX_SPRITES) as i32 / 2, // num instances
+        )?;
+
+        // console_log!("drawn {} instances: {:?}", sprites_buf.len(), &sprites_buf[..10]);
+
         Ok(())
     }
 }
