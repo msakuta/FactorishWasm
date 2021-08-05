@@ -988,6 +988,7 @@ impl FactorishState {
 
         let s_d_iter = StructureDynIter::new_all(&mut self.structures);
         self.power_networks = build_power_networks(&s_d_iter, &self.power_wires);
+        drop(s_d_iter);
 
         self.drop_items = json
             .get_mut("items")
@@ -1515,6 +1516,7 @@ impl FactorishState {
                         .as_deref_mut()
                         .ok_or(RotateErr::NotFound)?
                         .rotate(self, &others)?;
+                    drop(others);
                     self.structures = structures;
                     return Ok(false);
                 }

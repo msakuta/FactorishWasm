@@ -1,5 +1,6 @@
 use super::{Structure, StructureEntry, StructureId};
 use crate::dyn_iter::{DynIter, DynIterMut};
+use smallvec::{smallvec, SmallVec};
 use wasm_bindgen::prelude::*;
 
 #[derive(Default)]
@@ -28,14 +29,29 @@ impl<'a> StructureSlice<'a> {
 }
 
 /// A structure that allow random access to structure array with possible gaps.
-/// It uses a Vec of slices, which will use dynamic memory, which is a bit sad, but we can allow any number
-/// of slices and access internal object in O(n) where n is the number of slices, not the number of objects.
+///
+/// It uses a SmallVec of slices, which will put the slices inline into the struct and avoid heap allocation
+/// up to 2 elements. Most of the time, we only need left and right slices, which are inlined.
+/// In rare occasions we want more slices and it will fall back to heap allocation.
+/// This design requires a little inconvenience in exchange. That is, explicitly dropping the StructureDynIter before
+/// being able to access the structures pointed to, like the example below. It seems to have something to do with the SmallVec's drop check,
+/// but I'm not sure.
+///
+/// ```ignore
+/// fn a(structures: &mut [StructureEntry]) {
+///     let (_, iter) = StructureDynIter::new(&mut structures);
+///     drop(iter);
+///     structures[0].dynamic.name();
+/// }
+/// ```
+///
+/// It can access internal object in O(n) where n is the number of slices, not the number of objects.
 /// It is convenient when you want to have mutable reference to two elements in the array at the same time.
-pub(crate) struct StructureDynIter<'a>(Vec<StructureSlice<'a>>);
+pub(crate) struct StructureDynIter<'a>(SmallVec<[StructureSlice<'a>; 2]>);
 
 impl<'a> StructureDynIter<'a> {
     pub(crate) fn new_all(source: &'a mut [StructureEntry]) -> Self {
-        Self(vec![StructureSlice {
+        Self(smallvec![StructureSlice {
             start: 0,
             slice: source,
         }])
@@ -51,7 +67,7 @@ impl<'a> StructureDynIter<'a> {
             .ok_or_else(|| JsValue::from_str("Structures split fail"))?;
         Ok((
             center,
-            Self(vec![
+            Self(smallvec![
                 StructureSlice {
                     start: 0,
                     slice: left,
@@ -137,7 +153,7 @@ impl<'a> StructureDynIter<'a> {
             let left_slices = left_slices
                 .iter_mut()
                 .map(|i| i.clone())
-                .collect::<Vec<_>>();
+                .collect::<SmallVec<_>>();
             let mut slices = left_slices;
             slices.push(StructureSlice {
                 start: slice.start,
