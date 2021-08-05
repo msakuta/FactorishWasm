@@ -249,7 +249,15 @@ struct InstancingStats {
 }
 
 impl FactorishState {
+    /// Render particles if the device supports instancing. It is much faster with fewer calls to the API.
+    /// Some devices may not support it, so we have a fallback function [`render_sprites_gl`], but I guess
+    /// almost all modern devices do.
     fn render_sprites_gl_instancing(&self, gl: &GL) -> Result<(), JsValue> {
+        // We reserve the buffer with possible maximum size since we almost always use them and the case we would
+        // like to optimize is when there are a lot of sprites, so it is a good investment to pre-allocate buffer.
+        // Also, if we reserve the same size every frame, it is more likely that the allocator will put it in the
+        // same memory address and CPU cache can utilize it.
+        let mut instance_buf = Vec::with_capacity(MAX_SPRITES * SPRITE_COMPONENTS);
         let mut stats = InstancingStats {
             wraps: 0,
             floats: 0,
@@ -267,6 +275,7 @@ impl FactorishState {
                     instance_buf.push((cell.image / 4) as f32);
                 }
             },
+            &mut instance_buf,
             &mut stats,
         )?;
 
@@ -285,6 +294,7 @@ impl FactorishState {
                 instance_buf.push(cell.grass_image as f32 + 1.);
                 instance_buf.push(0.);
             },
+            &mut instance_buf,
             &mut stats,
         )?;
 
@@ -310,6 +320,7 @@ impl FactorishState {
                         }
                     }
                 },
+                &mut instance_buf,
                 &mut stats,
             )?;
         }
@@ -326,10 +337,9 @@ impl FactorishState {
         scale_y: f32,
         texture: &WebGlTexture,
         get_cell: impl Fn(i32, i32, &Cell, &mut Vec<f32>),
+        instance_buf: &mut Vec<f32>,
         stats: &mut InstancingStats,
     ) -> Result<(), JsValue> {
-        let mut instance_buf = vec![];
-
         let shader = self
             .assets
             .textured_instancing_shader
@@ -352,11 +362,13 @@ impl FactorishState {
         gl.active_texture(GL::TEXTURE0);
         gl.bind_texture(GL::TEXTURE_2D, Some(texture));
 
+        instance_buf.clear();
+
         self.render_cells(
             |x, y, cell| {
-                get_cell(x, y, cell, &mut instance_buf);
+                get_cell(x, y, cell, instance_buf);
                 if MAX_SPRITES * SPRITE_COMPONENTS <= instance_buf.len() {
-                    self.render_instances_with_buffer(&gl, &shader, &instance_buf)?;
+                    self.render_instances_with_buffer(&gl, &shader, instance_buf)?;
                     stats.wraps += 1;
                     stats.floats += instance_buf.len();
                     instance_buf.clear();
@@ -371,7 +383,7 @@ impl FactorishState {
             ),
         )?;
         if !instance_buf.is_empty() {
-            self.render_instances_with_buffer(&gl, &shader, &instance_buf)?;
+            self.render_instances_with_buffer(&gl, &shader, instance_buf)?;
             stats.floats += instance_buf.len();
             stats.wraps += 1;
         }
@@ -379,7 +391,7 @@ impl FactorishState {
         Ok(())
     }
 
-    /// Render particles if the device supports instancing. It is much faster with fewer calls to the API.
+    /// Run a single pass of rendering with instance buffer.
     /// Note that there are no loops at all in this function.
     fn render_instances_with_buffer(
         &self,
