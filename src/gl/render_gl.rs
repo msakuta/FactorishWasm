@@ -8,9 +8,8 @@ use crate::{
     CHUNK_SIZE_I, TILE_SIZE,
 };
 use cgmath::{Matrix3, Matrix4, Vector2, Vector3};
-use std::future::Future;
 use wasm_bindgen::prelude::*;
-use web_sys::{WebGlRenderingContext as GL, WebGlShader, WebGlTexture};
+use web_sys::{WebGlRenderingContext as GL, WebGlTexture};
 
 #[wasm_bindgen]
 impl FactorishState {
@@ -68,42 +67,53 @@ impl FactorishState {
         gl.draw_arrays(GL::TRIANGLE_FAN, 0, 4);
 
         if self.assets.instanced_arrays_ext.is_some() {
-            let mut instance_buf = vec![];
-            let mut wraps = 0;
-            let mut floats = 0;
-            self.render_cells(
-                |x, y, cell| {
+            let mut stats = InstancingStats {
+                wraps: 0,
+                floats: 0,
+            };
+            self.render_repeat_gl_instancing(
+                &gl,
+                1. / 4.,
+                1. / 8.,
+                &self.assets.tex_back,
+                |x, y, cell, instance_buf| {
                     if cell.image != 0 {
-                        instance_buf.push(1. * x as f32);
-                        instance_buf.push(1. * y as f32);
+                        instance_buf.push(x as f32);
+                        instance_buf.push(y as f32);
                         instance_buf.push((cell.image % 4) as f32);
                         instance_buf.push((cell.image / 4) as f32);
-                        if MAX_SPRITES * SPRITE_COMPONENTS <= instance_buf.len() {
-                            self.render_sprites_gl_instancing(
-                                &gl,
-                                &self.assets.tex_back,
-                                &instance_buf,
-                            )?;
-                            wraps += 1;
-                            floats += instance_buf.len();
-                            instance_buf.clear();
-                        }
                     }
-                    Ok(())
                 },
-                apply_bounds(
-                    &self.bounds,
-                    &self.viewport,
-                    self.viewport_width,
-                    self.viewport_height,
-                ),
+                &mut stats,
             )?;
-            if !instance_buf.is_empty() {
-                self.render_sprites_gl_instancing(&gl, &self.assets.tex_back, &instance_buf)?;
-                floats += instance_buf.len();
-                wraps += 1;
+
+            for (ore_type, tex) in [
+                (Ore::Iron, &self.assets.tex_iron),
+                (Ore::Copper, &self.assets.tex_copper),
+                (Ore::Coal, &self.assets.tex_coal),
+                (Ore::Stone, &self.assets.tex_stone),
+            ] {
+                self.render_repeat_gl_instancing(
+                    &gl,
+                    1. / 4.,
+                    1.,
+                    tex,
+                    |x, y, cell, instance_buf| {
+                        if let Some(OreValue(ot, ore)) = cell.ore {
+                            if ot == ore_type {
+                                let idx = (ore / 10).min(3);
+                                instance_buf.push(x as f32);
+                                instance_buf.push(y as f32);
+                                instance_buf.push(idx as f32);
+                                instance_buf.push(0.);
+                            }
+                        }
+                    },
+                    &mut stats,
+                )?;
             }
-            console_log!("drawn {} wraps {} floats", wraps, floats);
+
+            console_log!("drawn {} wraps {} floats", stats.wraps, stats.floats);
         } else {
             self.render_sprites_gl(&gl, shader)?;
         }
@@ -277,13 +287,80 @@ impl FactorishState {
         }
         Ok(())
     }
+}
+
+struct InstancingStats {
+    wraps: i32,
+    floats: usize,
+}
+
+impl FactorishState {
+    fn render_repeat_gl_instancing(
+        &self,
+        gl: &GL,
+        scale_x: f32,
+        scale_y: f32,
+        texture: &WebGlTexture,
+        get_cell: impl Fn(i32, i32, &Cell, &mut Vec<f32>),
+        stats: &mut InstancingStats,
+    ) -> Result<(), JsValue> {
+        let mut instance_buf = vec![];
+
+        let shader = self
+            .assets
+            .textured_instancing_shader
+            .as_ref()
+            .ok_or_else(|| JsValue::from_str("Could not find textured_instancing_shader"))?;
+        if shader.attrib_position_loc < 0 {
+            return Err(JsValue::from_str("matrix location was not found"));
+        }
+
+        gl.use_program(Some(&shader.program));
+
+        gl.uniform_matrix3fv_with_f32_array(
+            shader.tex_transform_loc.as_ref(),
+            false,
+            <Matrix3<f32> as AsRef<[f32; 9]>>::as_ref(
+                &(Matrix3::from_nonuniform_scale(scale_x, scale_y)),
+            ),
+        );
+
+        gl.active_texture(GL::TEXTURE0);
+        gl.bind_texture(GL::TEXTURE_2D, Some(texture));
+
+        self.render_cells(
+            |x, y, cell| {
+                get_cell(x, y, cell, &mut instance_buf);
+                if MAX_SPRITES * SPRITE_COMPONENTS <= instance_buf.len() {
+                    self.render_sprites_gl_instancing(&gl, &shader, &instance_buf)?;
+                    stats.wraps += 1;
+                    stats.floats += instance_buf.len();
+                    instance_buf.clear();
+                }
+                Ok(())
+            },
+            apply_bounds(
+                &self.bounds,
+                &self.viewport,
+                self.viewport_width,
+                self.viewport_height,
+            ),
+        )?;
+        if !instance_buf.is_empty() {
+            self.render_sprites_gl_instancing(&gl, &shader, &instance_buf)?;
+            stats.floats += instance_buf.len();
+            stats.wraps += 1;
+        }
+
+        Ok(())
+    }
 
     /// Render particles if the device supports instancing. It is much faster with fewer calls to the API.
     /// Note that there are no loops at all in this function.
     fn render_sprites_gl_instancing(
         &self,
         gl: &GL,
-        texture: &WebGlTexture,
+        shader: &ShaderBundle,
         sprites_buf: &[f32],
     ) -> Result<(), JsValue> {
         let world_transform = self.get_world_transform()?
@@ -301,34 +378,10 @@ impl FactorishState {
             .as_ref()
             .ok_or_else(|| JsValue::from_str("Instanced arrays not supported"))?;
 
-        let shader = self
-            .assets
-            .textured_instancing_shader
-            .as_ref()
-            .ok_or_else(|| JsValue::from_str("Could not find textured_instancing_shader"))?;
-        if shader.attrib_position_loc < 0 {
-            return Err(JsValue::from_str("matrix location was not found"));
-        }
-
-        gl.use_program(Some(&shader.program));
-
-        gl.active_texture(GL::TEXTURE0);
-        gl.bind_texture(GL::TEXTURE_2D, Some(texture));
-
-        let scale = Matrix4::from_nonuniform_scale(TILE_SIZE as f32, -TILE_SIZE as f32, 1.);
-
         gl.uniform_matrix4fv_with_f32_array(
             shader.transform_loc.as_ref(),
             false,
             <Matrix4<f32> as AsRef<[f32; 16]>>::as_ref(&(world_transform)),
-        );
-
-        gl.uniform_matrix3fv_with_f32_array(
-            shader.tex_transform_loc.as_ref(),
-            false,
-            <Matrix3<f32> as AsRef<[f32; 9]>>::as_ref(
-                &(Matrix3::from_nonuniform_scale(1. / 4., 1. / 8.)),
-            ),
         );
 
         enable_buffer(gl, &self.assets.rect_buffer, 2, shader.vertex_position);

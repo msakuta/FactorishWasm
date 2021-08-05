@@ -3,11 +3,13 @@ use web_sys::{WebGlProgram, WebGlRenderingContext as GL, WebGlUniformLocation};
 pub(crate) struct ShaderBundle {
     pub program: WebGlProgram,
     pub vertex_position: u32,
+    #[allow(dead_code)] // May use later
     pub tex_coord_position: u32,
     pub texture_loc: Option<WebGlUniformLocation>,
     pub transform_loc: Option<WebGlUniformLocation>,
     pub tex_transform_loc: Option<WebGlUniformLocation>,
     pub attrib_position_loc: i32,
+    #[allow(dead_code)] // May use later
     pub alpha_loc: Option<WebGlUniformLocation>,
 }
 

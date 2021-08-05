@@ -2,14 +2,11 @@ use super::{
     shader_bundle::ShaderBundle,
     utils::{load_texture, vertex_buffer_data},
 };
-use cgmath::{Matrix4, Vector3};
 use wasm_bindgen::{prelude::*, JsCast, JsValue};
 use web_sys::{
     ImageBitmap, WebGlBuffer, WebGlProgram, WebGlRenderingContext as GL, WebGlShader, WebGlTexture,
 };
 
-const FWIDTH: f64 = 100.;
-const FHEIGHT: f64 = 100.;
 pub(crate) const MAX_SPRITES: usize = 512;
 pub(crate) const SPRITE_COMPONENTS: usize = 4;
 
@@ -50,8 +47,6 @@ extern "C" {
 }
 
 pub(crate) struct Assets {
-    pub world_transform: Matrix4<f64>,
-
     pub instanced_arrays_ext: Option<AngleInstancedArrays>,
 
     pub tex_dirt: WebGlTexture,
@@ -62,7 +57,6 @@ pub(crate) struct Assets {
     pub tex_back: WebGlTexture,
     pub tex_weeds: WebGlTexture,
 
-    pub sprite_shader: Option<ShaderBundle>,
     pub textured_shader: Option<ShaderBundle>,
     pub textured_instancing_shader: Option<ShaderBundle>,
 
@@ -101,8 +95,6 @@ impl Assets {
         };
 
         Ok(Assets {
-            world_transform: Matrix4::from_translation(Vector3::new(-1., 1., 0.))
-                * Matrix4::from_nonuniform_scale(2. / FWIDTH, -2. / FHEIGHT, 1.),
             instanced_arrays_ext: None,
             tex_dirt: load_texture_local("dirt")?,
             tex_iron: load_texture_local("iron")?,
@@ -111,7 +103,6 @@ impl Assets {
             tex_stone: load_texture_local("stone")?,
             tex_back: load_texture_local("backTiles")?,
             tex_weeds: load_texture_local("weeds")?,
-            sprite_shader: None,
             textured_shader: None,
             textured_instancing_shader: None,
             screen_buffer: None,
