@@ -67,53 +67,7 @@ impl FactorishState {
         gl.draw_arrays(GL::TRIANGLE_FAN, 0, 4);
 
         if self.assets.instanced_arrays_ext.is_some() {
-            let mut stats = InstancingStats {
-                wraps: 0,
-                floats: 0,
-            };
-            self.render_repeat_gl_instancing(
-                &gl,
-                1. / 4.,
-                1. / 8.,
-                &self.assets.tex_back,
-                |x, y, cell, instance_buf| {
-                    if cell.image != 0 {
-                        instance_buf.push(x as f32);
-                        instance_buf.push(y as f32);
-                        instance_buf.push((cell.image % 4) as f32);
-                        instance_buf.push((cell.image / 4) as f32);
-                    }
-                },
-                &mut stats,
-            )?;
-
-            for (ore_type, tex) in [
-                (Ore::Iron, &self.assets.tex_iron),
-                (Ore::Copper, &self.assets.tex_copper),
-                (Ore::Coal, &self.assets.tex_coal),
-                (Ore::Stone, &self.assets.tex_stone),
-            ] {
-                self.render_repeat_gl_instancing(
-                    &gl,
-                    1. / 4.,
-                    1.,
-                    tex,
-                    |x, y, cell, instance_buf| {
-                        if let Some(OreValue(ot, ore)) = cell.ore {
-                            if ot == ore_type {
-                                let idx = (ore / 10).min(3);
-                                instance_buf.push(x as f32);
-                                instance_buf.push(y as f32);
-                                instance_buf.push(idx as f32);
-                                instance_buf.push(0.);
-                            }
-                        }
-                    },
-                    &mut stats,
-                )?;
-            }
-
-            console_log!("drawn {} wraps {} floats", stats.wraps, stats.floats);
+            self.render_sprites_gl_instancing(&gl)?;
         } else {
             self.render_sprites_gl(&gl, shader)?;
         }
@@ -295,6 +249,76 @@ struct InstancingStats {
 }
 
 impl FactorishState {
+    fn render_sprites_gl_instancing(&self, gl: &GL) -> Result<(), JsValue> {
+        let mut stats = InstancingStats {
+            wraps: 0,
+            floats: 0,
+        };
+        self.render_repeat_gl_instancing(
+            &gl,
+            1. / 4.,
+            1. / 8.,
+            &self.assets.tex_back,
+            |x, y, cell, instance_buf| {
+                if cell.image != 0 {
+                    instance_buf.push(x as f32);
+                    instance_buf.push(y as f32);
+                    instance_buf.push((cell.image % 4) as f32);
+                    instance_buf.push((cell.image / 4) as f32);
+                }
+            },
+            &mut stats,
+        )?;
+
+        self.render_repeat_gl_instancing(
+            &gl,
+            1. / 7.,
+            1.,
+            &self.assets.tex_weeds,
+            |x, y, cell, instance_buf| {
+                if cell.grass_image == 0 {
+                    return;
+                }
+
+                instance_buf.push(x as f32);
+                instance_buf.push(y as f32);
+                instance_buf.push(cell.grass_image as f32 + 1.);
+                instance_buf.push(0.);
+            },
+            &mut stats,
+        )?;
+
+        for (ore_type, tex) in [
+            (Ore::Iron, &self.assets.tex_iron),
+            (Ore::Copper, &self.assets.tex_copper),
+            (Ore::Coal, &self.assets.tex_coal),
+            (Ore::Stone, &self.assets.tex_stone),
+        ] {
+            self.render_repeat_gl_instancing(
+                &gl,
+                1. / 4.,
+                1.,
+                tex,
+                |x, y, cell, instance_buf| {
+                    if let Some(OreValue(ot, ore)) = cell.ore {
+                        if ot == ore_type {
+                            let idx = (ore / 10).min(3);
+                            instance_buf.push(x as f32);
+                            instance_buf.push(y as f32);
+                            instance_buf.push(idx as f32);
+                            instance_buf.push(0.);
+                        }
+                    }
+                },
+                &mut stats,
+            )?;
+        }
+
+        console_log!("drawn {} wraps {} floats", stats.wraps, stats.floats);
+
+        Ok(())
+    }
+
     fn render_repeat_gl_instancing(
         &self,
         gl: &GL,
@@ -332,7 +356,7 @@ impl FactorishState {
             |x, y, cell| {
                 get_cell(x, y, cell, &mut instance_buf);
                 if MAX_SPRITES * SPRITE_COMPONENTS <= instance_buf.len() {
-                    self.render_sprites_gl_instancing(&gl, &shader, &instance_buf)?;
+                    self.render_instances_with_buffer(&gl, &shader, &instance_buf)?;
                     stats.wraps += 1;
                     stats.floats += instance_buf.len();
                     instance_buf.clear();
@@ -347,7 +371,7 @@ impl FactorishState {
             ),
         )?;
         if !instance_buf.is_empty() {
-            self.render_sprites_gl_instancing(&gl, &shader, &instance_buf)?;
+            self.render_instances_with_buffer(&gl, &shader, &instance_buf)?;
             stats.floats += instance_buf.len();
             stats.wraps += 1;
         }
@@ -357,7 +381,7 @@ impl FactorishState {
 
     /// Render particles if the device supports instancing. It is much faster with fewer calls to the API.
     /// Note that there are no loops at all in this function.
-    fn render_sprites_gl_instancing(
+    fn render_instances_with_buffer(
         &self,
         gl: &GL,
         shader: &ShaderBundle,
