@@ -11,6 +11,7 @@ use web_sys::{
 const FWIDTH: f64 = 100.;
 const FHEIGHT: f64 = 100.;
 pub(crate) const MAX_SPRITES: usize = 512;
+pub(crate) const SPRITE_COMPONENTS: usize = 4;
 
 #[wasm_bindgen]
 extern "C" {
@@ -232,7 +233,7 @@ impl Assets {
             GL::VERTEX_SHADER,
             r#"
             attribute vec2 vertexData;
-            attribute vec2 position;
+            attribute vec4 position;
             // attribute float alpha;
             uniform mat4 transform;
             uniform mat3 texTransform;
@@ -245,8 +246,9 @@ impl Assets {
                     0, -4, 0, 0,
                     0, 0, 4, 0,
                     -1, 1, -1, 1);
-                gl_Position = /*centerize **/ (transform * (vec4(vertexData.xy, 0.0, 1.0) + vec4(position.xy, 0.0, 1.0)));
-                texCoords = (texTransform * vec3((vertexData.xy + 1.) * 0.5, 1.)).xy;
+                gl_Position = /*centerize **/ (transform * (vec4(vertexData.xy * 0.5, 0.0, 1.0) + vec4(position.xy, 0.0, 1.0)));
+                texCoords = (texTransform * vec3(
+                    (vertexData.xy + 1.) * 0.5 + vec2(position.z, position.w), 1.)).xy;
                 // alphaVar = alpha;
             }
         "#,
@@ -286,7 +288,7 @@ impl Assets {
         gl.bind_buffer(GL::ARRAY_BUFFER, self.sprites_buffer.as_ref());
         gl.buffer_data_with_i32(
             GL::ARRAY_BUFFER,
-            (MAX_SPRITES * 2 * std::mem::size_of::<f32>()) as i32,
+            (MAX_SPRITES * SPRITE_COMPONENTS * std::mem::size_of::<f32>()) as i32,
             GL::DYNAMIC_DRAW,
         );
 

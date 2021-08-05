@@ -1,5 +1,5 @@
 use super::{
-    assets::MAX_SPRITES,
+    assets::{MAX_SPRITES, SPRITE_COMPONENTS},
     shader_bundle::ShaderBundle,
     utils::{enable_buffer, vertex_buffer_sub_data},
 };
@@ -68,12 +68,26 @@ impl FactorishState {
         gl.draw_arrays(GL::TRIANGLE_FAN, 0, 4);
 
         if self.assets.instanced_arrays_ext.is_some() {
-            let mut positions = vec![];
+            let mut instance_buf = vec![];
+            let mut wraps = 0;
+            let mut floats = 0;
             self.render_cells(
                 |x, y, cell| {
-                    if cell.image != 0 && positions.len() < MAX_SPRITES {
-                        positions.push(1. * x as f32);
-                        positions.push(1. * y as f32);
+                    if cell.image != 0 {
+                        instance_buf.push(1. * x as f32);
+                        instance_buf.push(1. * y as f32);
+                        instance_buf.push((cell.image % 4) as f32);
+                        instance_buf.push((cell.image / 4) as f32);
+                        if MAX_SPRITES * SPRITE_COMPONENTS <= instance_buf.len() {
+                            self.render_sprites_gl_instancing(
+                                &gl,
+                                &self.assets.tex_back,
+                                &instance_buf,
+                            )?;
+                            wraps += 1;
+                            floats += instance_buf.len();
+                            instance_buf.clear();
+                        }
                     }
                     Ok(())
                 },
@@ -84,7 +98,12 @@ impl FactorishState {
                     self.viewport_height,
                 ),
             )?;
-            self.render_sprites_gl_instancing(&gl, &self.assets.tex_back, &positions)?;
+            if !instance_buf.is_empty() {
+                self.render_sprites_gl_instancing(&gl, &self.assets.tex_back, &instance_buf)?;
+                floats += instance_buf.len();
+                wraps += 1;
+            }
+            console_log!("drawn {} wraps {} floats", wraps, floats);
         } else {
             self.render_sprites_gl(&gl, shader)?;
         }
@@ -307,18 +326,23 @@ impl FactorishState {
         gl.uniform_matrix3fv_with_f32_array(
             shader.tex_transform_loc.as_ref(),
             false,
-            <Matrix3<f32> as AsRef<[f32; 9]>>::as_ref(&Matrix3::from_scale(1.)),
+            <Matrix3<f32> as AsRef<[f32; 9]>>::as_ref(
+                &(Matrix3::from_nonuniform_scale(1. / 4., 1. / 8.)),
+            ),
         );
 
         enable_buffer(gl, &self.assets.rect_buffer, 2, shader.vertex_position);
 
         gl.bind_buffer(GL::ARRAY_BUFFER, self.assets.sprites_buffer.as_ref());
-        vertex_buffer_sub_data(gl, &sprites_buf[..sprites_buf.len().min(MAX_SPRITES)]);
+        vertex_buffer_sub_data(
+            gl,
+            &sprites_buf[..sprites_buf.len().min(MAX_SPRITES * SPRITE_COMPONENTS)],
+        );
 
-        let stride = 2 * 4;
+        let stride = SPRITE_COMPONENTS as i32 * 4;
         gl.vertex_attrib_pointer_with_i32(
             shader.attrib_position_loc as u32,
-            2,
+            SPRITE_COMPONENTS as i32,
             GL::FLOAT,
             false,
             stride,
@@ -330,9 +354,9 @@ impl FactorishState {
 
         instanced_arrays_ext.draw_arrays_instanced_angle(
             GL::TRIANGLE_FAN,
-            0,                                             // offset
-            4,                                             // num vertices per instance
-            sprites_buf.len().min(MAX_SPRITES) as i32 / 2, // num instances
+            0, // offset
+            4, // num vertices per instance
+            (sprites_buf.len().min(MAX_SPRITES * SPRITE_COMPONENTS) / SPRITE_COMPONENTS) as i32, // num instances
         )?;
 
         // console_log!("drawn {} instances: {:?}", sprites_buf.len(), &sprites_buf[..10]);
