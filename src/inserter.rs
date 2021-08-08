@@ -5,7 +5,7 @@ use super::{
         draw_direction_arrow_gl,
         utils::{enable_buffer, Flatten},
     },
-    items::{render_drop_item, ItemType},
+    items::{render_drop_item, render_drop_item_mat_gl, ItemType},
     structure::{RotateErr, Structure, StructureDynIter, StructureId},
     FactorishState, FrameProcResult, Inventory, InventoryTrait, Position, Rotation,
 };
@@ -211,9 +211,13 @@ impl Structure for Inserter {
 
                 const JOINT_POS: (f32, f32) = (0.5, 0.625);
 
-                let base_transform = state.get_world_transform()?
+                let origin_transform = state.get_world_transform()?
                     * Matrix4::from_scale(2.)
                     * Matrix4::from_translation(Vector3::new(x + 0.5, y + 0.5, 0.));
+
+                let base_rotation = Matrix4::from_angle_z(Rad(angles.0 as f32));
+
+                let base_transform = origin_transform * base_rotation;
 
                 let vertex_transform = Matrix4::from_nonuniform_scale(0.5, 1., 1.)
                     * Matrix4::from_translation(Vector3::new(-JOINT_POS.0, -JOINT_POS.1, 0.));
@@ -229,10 +233,7 @@ impl Structure for Inserter {
                 gl.uniform_matrix4fv_with_f32_array(
                     shader.transform_loc.as_ref(),
                     false,
-                    (base_transform
-                        * Matrix4::from_angle_z(Rad(angles.0 as f32))
-                        * vertex_transform)
-                        .flatten(),
+                    (base_transform * vertex_transform).flatten(),
                 );
                 gl.draw_arrays(GL::TRIANGLE_FAN, 0, 4);
 
@@ -246,21 +247,30 @@ impl Structure for Inserter {
                     .flatten(),
                 );
 
+                let middle_transform =
+                    Matrix4::from_translation(Vector3::new(-JOINT_POS2.0, -JOINT_POS2.1, 0.))
+                        * Matrix4::from_angle_z(Rad((angles.1 - angles.0) as f32));
+
                 gl.uniform_matrix4fv_with_f32_array(
                     shader.transform_loc.as_ref(),
                     false,
-                    (base_transform
-                        * Matrix4::from_angle_z(Rad(angles.0 as f32))
-                        * Matrix4::from_translation(Vector3::new(
-                            -JOINT_POS2.0,
-                            -JOINT_POS2.1,
-                            0.,
-                        ))
-                        * Matrix4::from_angle_z(Rad((angles.1 - angles.0) as f32))
-                        * vertex_transform)
-                        .flatten(),
+                    (base_transform * middle_transform * vertex_transform).flatten(),
                 );
                 gl.draw_arrays(GL::TRIANGLE_FAN, 0, 4);
+
+                if let Some(item) = self.hold_item {
+                    render_drop_item_mat_gl(
+                        state,
+                        gl,
+                        &item,
+                        origin_transform
+                            * Matrix4::from_translation(Vector3::new(-0.25, -0.25, 0.))
+                            * base_rotation
+                            * middle_transform
+                            * Matrix4::from_translation(Vector3::new(0., -0.5, 0.))
+                            * Matrix4::from_angle_z(Rad(-angles.1 as f32)),
+                    )?;
+                }
             }
             2 => draw_direction_arrow_gl((x, y), &self.rotation, state, gl)?,
             _ => panic!("render depth not covered: {}", depth),

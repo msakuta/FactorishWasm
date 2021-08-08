@@ -155,12 +155,11 @@ pub(crate) fn render_drop_item(
     }
 }
 
-pub(crate) fn render_drop_item_gl(
+pub(crate) fn render_drop_item_mat_gl(
     state: &FactorishState,
     gl: &GL,
     item_type: &ItemType,
-    x: i32,
-    y: i32,
+    transform: Matrix4<f32>,
 ) -> Result<(), JsValue> {
     let shader = state
         .assets
@@ -178,15 +177,7 @@ pub(crate) fn render_drop_item_gl(
         gl.uniform_matrix4fv_with_f32_array(
             shader.transform_loc.as_ref(),
             false,
-            (state.get_world_transform()?
-                * Matrix4::from_scale(2.)
-                * Matrix4::from_translation(Vector3::new(
-                    x as f32 / TILE_SIZE_F + (state.viewport.x) as f32 - 0.25,
-                    y as f32 / TILE_SIZE_F + state.viewport.y as f32 - 0.25,
-                    0.,
-                ))
-                * Matrix4::from_scale(0.5))
-            .flatten(),
+            (transform * Matrix4::from_scale(0.5)).flatten(),
         );
 
         gl.draw_arrays(GL::TRIANGLE_FAN, 0, 4);
@@ -219,6 +210,27 @@ pub(crate) fn render_drop_item_gl(
         ItemType::Splitter => render16(&state.assets.tex_splitter),
         ItemType::UndergroundBelt => render16(&state.assets.tex_underground_belt_item),
     }
+}
+
+pub(crate) fn render_drop_item_gl(
+    state: &FactorishState,
+    gl: &GL,
+    item_type: &ItemType,
+    x: i32,
+    y: i32,
+) -> Result<(), JsValue> {
+    render_drop_item_mat_gl(
+        state,
+        gl,
+        item_type,
+        state.get_world_transform()?
+            * Matrix4::from_scale(2.)
+            * Matrix4::from_translation(Vector3::new(
+                x as f32 / TILE_SIZE_F + state.viewport.x as f32 - 0.25,
+                y as f32 / TILE_SIZE_F + state.viewport.y as f32 - 0.25,
+                0.,
+            )),
+    )
 }
 
 pub(crate) fn get_item_image_url<'a>(state: &'a FactorishState, item_type: &ItemType) -> &'a str {
