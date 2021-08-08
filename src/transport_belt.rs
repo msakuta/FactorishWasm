@@ -1,11 +1,13 @@
 use super::{
     drop_items::DropItem,
+    gl::utils::enable_buffer,
     structure::{ItemResponse, ItemResponseResult, Structure, StructureDynIter},
     FactorishState, Position, RotateErr, Rotation, TILE_SIZE,
 };
+use cgmath::{Matrix3, Matrix4, Rad, Vector2, Vector3};
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
-use web_sys::CanvasRenderingContext2d;
+use web_sys::{CanvasRenderingContext2d, WebGlRenderingContext as GL};
 
 #[derive(Serialize, Deserialize)]
 pub(crate) struct TransportBelt {
@@ -88,6 +90,54 @@ impl Structure for TransportBelt {
             None => return Err(JsValue::from_str("belt image not available")),
         }
 
+        Ok(())
+    }
+
+    fn draw_gl(
+        &self,
+        state: &FactorishState,
+        gl: &GL,
+        depth: i32,
+        _is_toolbar: bool,
+    ) -> Result<(), JsValue> {
+        let (x, y) = (
+            self.position.x as f32 + state.viewport.x as f32,
+            self.position.y as f32 + state.viewport.y as f32,
+        );
+        match depth {
+            0 => {
+                let shader = state
+                    .assets
+                    .textured_shader
+                    .as_ref()
+                    .ok_or_else(|| js_str!("Shader not found"))?;
+                gl.use_program(Some(&shader.program));
+                gl.active_texture(GL::TEXTURE0);
+                gl.bind_texture(GL::TEXTURE_2D, Some(&state.assets.tex_belt));
+                enable_buffer(&gl, &state.assets.screen_buffer, 2, shader.vertex_position);
+                let sx = -((state.sim_time * 16.) % 32. / 32.) as f32;
+                gl.uniform_matrix3fv_with_f32_array(
+                    shader.tex_transform_loc.as_ref(),
+                    false,
+                    <Matrix3<f32> as AsRef<[f32; 9]>>::as_ref(
+                        &(Matrix3::from_translation(Vector2::new(sx, 0.))
+                            * Matrix3::from_angle_z(Rad(-self.rotation.angle_rad() as f32))),
+                    ),
+                );
+
+                gl.uniform_matrix4fv_with_f32_array(
+                    shader.transform_loc.as_ref(),
+                    false,
+                    <Matrix4<f32> as AsRef<[f32; 16]>>::as_ref(
+                        &(state.get_world_transform()?
+                            * Matrix4::from_scale(2.)
+                            * Matrix4::from_translation(Vector3::new(x, y, 0.))),
+                    ),
+                );
+                gl.draw_arrays(GL::TRIANGLE_FAN, 0, 4);
+            }
+            _ => (),
+        }
         Ok(())
     }
 
