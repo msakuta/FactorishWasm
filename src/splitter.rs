@@ -1,13 +1,18 @@
 use super::{
     drop_items::DropItem,
+    gl::{
+        utils::{enable_buffer, Flatten},
+        ShaderBundle,
+    },
     structure::{
         BoundingBox, ItemResponse, ItemResponseResult, RotateErr, Size, Structure, StructureDynIter,
     },
     FactorishState, Position, Rotation, TILE_SIZE,
 };
+use cgmath::{Matrix3, Matrix4, Rad, Vector2, Vector3};
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
-use web_sys::CanvasRenderingContext2d;
+use web_sys::{CanvasRenderingContext2d, WebGlRenderingContext as GL};
 
 #[derive(Serialize, Deserialize)]
 pub(crate) struct Splitter {
@@ -134,6 +139,83 @@ impl Structure for Splitter {
         context.restore();
 
         ret
+    }
+
+    fn draw_gl(
+        &self,
+        state: &FactorishState,
+        gl: &GL,
+        depth: i32,
+        _is_toolbar: bool,
+    ) -> Result<(), JsValue> {
+        let (x, y) = (
+            self.position.x as f32 + state.viewport.x as f32,
+            self.position.y as f32 + state.viewport.y as f32,
+        );
+
+        let shape = |shader: &ShaderBundle| -> Result<(), JsValue> {
+            gl.uniform_matrix4fv_with_f32_array(
+                shader.transform_loc.as_ref(),
+                false,
+                (state.get_world_transform()?
+                    * Matrix4::from_scale(2.)
+                    * Matrix4::from_translation(Vector3::new(x + 0.5, y + 0.5, 0.))
+                    * Matrix4::from_angle_z(Rad(self.rotation.angle_rad() as f32))
+                    * Matrix4::from_translation(Vector3::new(-0.5, -0.5, 0.))
+                    * Matrix4::from_nonuniform_scale(1., 2., 1.))
+                .flatten(),
+            );
+            Ok(())
+        };
+
+        match depth {
+            0 => {
+                let shader = state
+                    .assets
+                    .textured_shader
+                    .as_ref()
+                    .ok_or_else(|| js_str!("Shader not found"))?;
+                gl.use_program(Some(&shader.program));
+                gl.active_texture(GL::TEXTURE0);
+                gl.bind_texture(GL::TEXTURE_2D, Some(&state.assets.tex_belt));
+                enable_buffer(&gl, &state.assets.screen_buffer, 2, shader.vertex_position);
+                let sx = -((state.sim_time * 16.) % 32. / 32.) as f32;
+                gl.uniform_matrix3fv_with_f32_array(
+                    shader.tex_transform_loc.as_ref(),
+                    false,
+                    (Matrix3::from_nonuniform_scale(1., 2.)
+                        * Matrix3::from_translation(Vector2::new(sx, 0.)))
+                    .flatten(),
+                );
+
+                shape(shader)?;
+
+                gl.draw_arrays(GL::TRIANGLE_FAN, 0, 4);
+            }
+            1 => {
+                let shader = state
+                    .assets
+                    .textured_shader
+                    .as_ref()
+                    .ok_or_else(|| js_str!("Shader not found"))?;
+                gl.use_program(Some(&shader.program));
+                gl.active_texture(GL::TEXTURE0);
+                gl.bind_texture(GL::TEXTURE_2D, Some(&state.assets.tex_splitter));
+                enable_buffer(&gl, &state.assets.screen_buffer, 2, shader.vertex_position);
+                let sy = (if self.direction == 0 { 1. } else { 0. }) as f32;
+                gl.uniform_matrix3fv_with_f32_array(
+                    shader.tex_transform_loc.as_ref(),
+                    false,
+                    Matrix3::from_translation(Vector2::new(0., sy)).flatten(),
+                );
+
+                shape(shader)?;
+
+                gl.draw_arrays(GL::TRIANGLE_FAN, 0, 4);
+            }
+            _ => (),
+        }
+        Ok(())
     }
 
     fn movable(&self) -> bool {
