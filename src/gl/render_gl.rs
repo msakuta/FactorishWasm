@@ -92,7 +92,8 @@ impl FactorishState {
                 ),
             );
             gl.line_width(2.);
-            gl.draw_arrays(GL::LINE_LOOP, 0, 4);
+            enable_buffer(&gl, &self.assets.cursor_buffer, 2, shader.vertex_position);
+            gl.draw_arrays(GL::TRIANGLE_STRIP, 0, 10);
         }
 
         self.perf_render.add(performance().now() - start_render);

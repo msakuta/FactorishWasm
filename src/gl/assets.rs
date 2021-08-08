@@ -2,6 +2,7 @@ use super::{
     shader_bundle::ShaderBundle,
     utils::{load_texture, vertex_buffer_data},
 };
+use slice_of_array::prelude::SliceFlatExt;
 use wasm_bindgen::{prelude::*, JsCast, JsValue};
 use web_sys::{
     ImageBitmap, WebGlBuffer, WebGlProgram, WebGlRenderingContext as GL, WebGlShader, WebGlTexture,
@@ -63,6 +64,7 @@ pub(crate) struct Assets {
 
     pub screen_buffer: Option<WebGlBuffer>,
     pub rect_buffer: Option<WebGlBuffer>,
+    pub cursor_buffer: Option<WebGlBuffer>,
 
     pub sprites_buffer: Option<WebGlBuffer>,
 }
@@ -109,6 +111,7 @@ impl Assets {
             textured_instancing_shader: None,
             screen_buffer: None,
             rect_buffer: None,
+            cursor_buffer: None,
             sprites_buffer: None,
         })
     }
@@ -309,6 +312,23 @@ impl Assets {
             (MAX_SPRITES * SPRITE_COMPONENTS * std::mem::size_of::<f32>()) as i32,
             GL::DYNAMIC_DRAW,
         );
+
+        self.cursor_buffer = Some(gl.create_buffer().ok_or("failed to create buffer")?);
+        gl.bind_buffer(GL::ARRAY_BUFFER, self.cursor_buffer.as_ref());
+        const CURSOR_LINE_WIDTH: f32 = 0.05;
+        let rect_vertices = [
+            [1. + CURSOR_LINE_WIDTH, 1. + CURSOR_LINE_WIDTH],
+            [1. - CURSOR_LINE_WIDTH, 1. - CURSOR_LINE_WIDTH],
+            [-(1. + CURSOR_LINE_WIDTH), 1. + CURSOR_LINE_WIDTH],
+            [-(1. - CURSOR_LINE_WIDTH), 1. - CURSOR_LINE_WIDTH],
+            [-(1. + CURSOR_LINE_WIDTH), -(1. + CURSOR_LINE_WIDTH)],
+            [-(1. - CURSOR_LINE_WIDTH), -(1. - CURSOR_LINE_WIDTH)],
+            [1. + CURSOR_LINE_WIDTH, -(1. + CURSOR_LINE_WIDTH)],
+            [1. - CURSOR_LINE_WIDTH, -(1. - CURSOR_LINE_WIDTH)],
+            [1. + CURSOR_LINE_WIDTH, 1. + CURSOR_LINE_WIDTH],
+            [1. - CURSOR_LINE_WIDTH, 1. - CURSOR_LINE_WIDTH],
+        ];
+        vertex_buffer_data(&gl, rect_vertices.flat());
 
         gl.clear_color(0.0, 0.0, 0.5, 0.5);
 
