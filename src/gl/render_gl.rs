@@ -72,6 +72,29 @@ impl FactorishState {
             self.render_sprites_gl(&gl, shader)?;
         }
 
+        if let Some((ref cursor, shader)) = self.cursor.zip(self.assets.flat_shader.as_ref()) {
+            let (x, y) = (cursor[0] as f64, cursor[1] as f64);
+            gl.use_program(Some(&shader.program));
+            gl.uniform_matrix4fv_with_f32_array(
+                shader.transform_loc.as_ref(),
+                false,
+                <Matrix4<f32> as AsRef<[f32; 16]>>::as_ref(
+                    &(self.get_world_transform()?
+                        * Matrix4::from_translation(
+                            Vector3::new(
+                                2. * (self.viewport.x + x as f64),
+                                2. * (self.viewport.y + y as f64),
+                                0.,
+                            )
+                            .cast::<f32>()
+                            .unwrap(),
+                        )),
+                ),
+            );
+            gl.line_width(2.);
+            gl.draw_arrays(GL::LINE_LOOP, 0, 4);
+        }
+
         self.perf_render.add(performance().now() - start_render);
 
         Ok(())
@@ -325,7 +348,7 @@ impl FactorishState {
             )?;
         }
 
-        console_log!("drawn {} wraps {} floats", stats.wraps, stats.floats);
+        // console_log!("drawn {} wraps {} floats", stats.wraps, stats.floats);
 
         Ok(())
     }

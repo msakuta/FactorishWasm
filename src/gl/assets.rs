@@ -57,6 +57,7 @@ pub(crate) struct Assets {
     pub tex_back: WebGlTexture,
     pub tex_weeds: WebGlTexture,
 
+    pub flat_shader: Option<ShaderBundle>,
     pub textured_shader: Option<ShaderBundle>,
     pub textured_instancing_shader: Option<ShaderBundle>,
 
@@ -103,6 +104,7 @@ impl Assets {
             tex_stone: load_texture_local("stone")?,
             tex_back: load_texture_local("backTiles")?,
             tex_weeds: load_texture_local("weeds")?,
+            flat_shader: None,
             textured_shader: None,
             textured_instancing_shader: None,
             screen_buffer: None,
@@ -167,6 +169,31 @@ impl Assets {
 
         // context.uniform1i(shader.texture_loc.as_ref(), 0);
         // context.uniform1f(shader.alpha_loc.as_ref(), 1.);
+
+        let vert_shader = compile_shader(
+            &gl,
+            GL::VERTEX_SHADER,
+            r#"
+            attribute vec2 vertexData;
+            uniform mat4 transform;
+            void main() {
+                gl_Position = transform * vec4(vertexData.xy, 0., 1.0);
+            }
+        "#,
+        )?;
+        let frag_shader = compile_shader(
+            &gl,
+            GL::FRAGMENT_SHADER,
+            r#"
+            precision mediump float;
+
+            void main() {
+                gl_FragColor = vec4(0, 0, 1, 1);
+            }
+        "#,
+        )?;
+        let program = link_program(&gl, &vert_shader, &frag_shader)?;
+        self.flat_shader = Some(ShaderBundle::new(&gl, program));
 
         gl.enable(GL::BLEND);
         gl.blend_equation(GL::FUNC_ADD);
