@@ -202,7 +202,7 @@ impl Structure for Splitter {
                 gl.active_texture(GL::TEXTURE0);
                 gl.bind_texture(GL::TEXTURE_2D, Some(&state.assets.tex_splitter));
                 enable_buffer(&gl, &state.assets.screen_buffer, 2, shader.vertex_position);
-                let sy = (if self.direction == 0 { 1. } else { 0. }) as f32;
+                let sy = (if self.direction == 0 { 0.5 } else { 0. }) as f32;
                 gl.uniform_matrix3fv_with_f32_array(
                     shader.tex_transform_loc.as_ref(),
                     false,
