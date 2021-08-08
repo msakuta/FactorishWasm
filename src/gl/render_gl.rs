@@ -73,22 +73,18 @@ impl FactorishState {
         }
 
         if let Some((ref cursor, shader)) = self.cursor.zip(self.assets.flat_shader.as_ref()) {
-            let (x, y) = (cursor[0] as f64, cursor[1] as f64);
+            let (x, y) = (cursor[0] as f32, cursor[1] as f32);
             gl.use_program(Some(&shader.program));
             gl.uniform_matrix4fv_with_f32_array(
                 shader.transform_loc.as_ref(),
                 false,
                 <Matrix4<f32> as AsRef<[f32; 16]>>::as_ref(
                     &(self.get_world_transform()?
-                        * Matrix4::from_translation(
-                            Vector3::new(
-                                2. * (self.viewport.x + x as f64),
-                                2. * (self.viewport.y + y as f64),
-                                0.,
-                            )
-                            .cast::<f32>()
-                            .unwrap(),
-                        )),
+                        * Matrix4::from_translation(Vector3::new(
+                            2. * (self.viewport.x as f32 + x) + 1.,
+                            2. * (self.viewport.y as f32 + y) + 1.,
+                            0.,
+                        ))),
                 ),
             );
             gl.line_width(2.);
@@ -132,7 +128,7 @@ impl FactorishState {
 
         enable_buffer(
             &context,
-            &self.assets.rect_buffer,
+            &self.assets.screen_buffer,
             2,
             shader.vertex_position,
         );
@@ -143,10 +139,11 @@ impl FactorishState {
                 false,
                 <Matrix4<f32> as AsRef<[f32; 16]>>::as_ref(
                     &(world_transform
+                        * Matrix4::from_scale(2.)
                         * Matrix4::from_translation(
                             Vector3::new(
-                                2. * (self.viewport.x + x as f64),
-                                2. * (self.viewport.y + y as f64),
+                                self.viewport.x + x as f64,
+                                self.viewport.y + y as f64,
                                 0.,
                             )
                             .cast::<f32>()
@@ -162,9 +159,7 @@ impl FactorishState {
                 false,
                 <Matrix3<f32> as AsRef<[f32; 9]>>::as_ref(
                     &(Matrix3::from_nonuniform_scale(scale_x, scale_y)
-                        * Matrix3::from_translation(Vector2::new(trans_x, trans_y))
-                        * Matrix3::from_translation(Vector2::new(0.5, 0.5))
-                        * Matrix3::from_scale(0.5)),
+                        * Matrix3::from_translation(Vector2::new(trans_x, trans_y))),
                 ),
             );
         };
@@ -444,7 +439,7 @@ impl FactorishState {
             <Matrix4<f32> as AsRef<[f32; 16]>>::as_ref(&(world_transform)),
         );
 
-        enable_buffer(gl, &self.assets.rect_buffer, 2, shader.vertex_position);
+        enable_buffer(gl, &self.assets.screen_buffer, 2, shader.vertex_position);
 
         gl.bind_buffer(GL::ARRAY_BUFFER, self.assets.sprites_buffer.as_ref());
         vertex_buffer_sub_data(

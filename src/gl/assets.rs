@@ -267,9 +267,9 @@ impl Assets {
                     0, -4, 0, 0,
                     0, 0, 4, 0,
                     -1, 1, -1, 1);
-                gl_Position = /*centerize **/ (transform * (vec4(vertexData.xy * 0.5, 0.0, 1.0) + vec4(position.xy, 0.0, 1.0)));
+                gl_Position = /*centerize **/ (transform * (vec4(vertexData.xy, 0.0, 1.0) + vec4(position.xy, 0.0, 1.0)));
                 texCoords = (texTransform * vec3(
-                    (vertexData.xy + 1.) * 0.5 + vec2(position.z, position.w), 1.)).xy;
+                    vertexData.xy + vec2(position.z, position.w), 1.)).xy;
                 // alphaVar = alpha;
             }
         "#,

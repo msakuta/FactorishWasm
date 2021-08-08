@@ -628,7 +628,7 @@ impl FactorishState {
             debug_bbox: false,
             debug_fluidbox: false,
             debug_power_network: false,
-            use_webgl_instancing: false,
+            use_webgl_instancing: true,
             perf_structures: PerfStats::default(),
             perf_drop_items: PerfStats::default(),
             perf_simulate: PerfStats::default(),
