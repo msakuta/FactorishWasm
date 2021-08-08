@@ -1280,6 +1280,8 @@ let unlimited = true;
     showDebugPowerNetwork.addEventListener("click", () => sim.set_debug_power_network(showDebugPowerNetwork.checked));
     const showPerfGraph = document.getElementById("showPerfGraph");
     showPerfGraph.addEventListener("click", updatePerfVisibility);
+    const useWebGLInstancing = document.getElementById("useWebGLInstancing");
+    useWebGLInstancing.addEventListener("click", () => sim.set_use_webgl_instancing(useWebGLInstancing.checked));
 
     function updatePerfVisibility() {
         perfElem.style.display = showPerfGraph.checked ? "block" : "none";

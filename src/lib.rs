@@ -497,6 +497,7 @@ pub struct FactorishState {
     debug_bbox: bool,
     debug_fluidbox: bool,
     debug_power_network: bool,
+    use_webgl_instancing: bool,
 
     // Performance measurements
     perf_structures: PerfStats,
@@ -627,6 +628,7 @@ impl FactorishState {
             debug_bbox: false,
             debug_fluidbox: false,
             debug_power_network: false,
+            use_webgl_instancing: false,
             perf_structures: PerfStats::default(),
             perf_drop_items: PerfStats::default(),
             perf_simulate: PerfStats::default(),
@@ -1880,6 +1882,10 @@ impl FactorishState {
 
     pub fn set_debug_power_network(&mut self, value: bool) {
         self.debug_power_network = value;
+    }
+
+    pub fn set_use_webgl_instancing(&mut self, value: bool) {
+        self.use_webgl_instancing = value;
     }
 
     /// Move inventory items between structure and player

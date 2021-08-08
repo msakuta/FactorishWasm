@@ -66,7 +66,7 @@ impl FactorishState {
         );
         gl.draw_arrays(GL::TRIANGLE_FAN, 0, 4);
 
-        if self.assets.instanced_arrays_ext.is_some() {
+        if self.use_webgl_instancing && self.assets.instanced_arrays_ext.is_some() {
             self.render_sprites_gl_instancing(&gl)?;
         } else {
             self.render_sprites_gl(&gl, shader)?;
