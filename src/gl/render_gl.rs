@@ -4,12 +4,51 @@ use super::{
     utils::{enable_buffer, vertex_buffer_sub_data},
 };
 use crate::{
-    apply_bounds, performance, Cell, FactorishState, Ore, OreValue, Position, CHUNK_SIZE,
+    apply_bounds, performance, Cell, FactorishState, Ore, OreValue, Position, Rotation, CHUNK_SIZE,
     CHUNK_SIZE_I, TILE_SIZE,
 };
-use cgmath::{Matrix3, Matrix4, Vector2, Vector3};
+use cgmath::{Matrix3, Matrix4, Rad, Vector2, Vector3};
 use wasm_bindgen::prelude::*;
 use web_sys::{WebGlRenderingContext as GL, WebGlTexture};
+
+pub(crate) fn draw_direction_arrow_gl(
+    (x, y): (f32, f32),
+    rotation: &Rotation,
+    state: &FactorishState,
+    gl: &GL,
+) -> Result<(), JsValue> {
+    let shader = state
+        .assets
+        .textured_shader
+        .as_ref()
+        .ok_or_else(|| js_str!("Shader not found"))?;
+    gl.use_program(Some(&shader.program));
+    gl.active_texture(GL::TEXTURE0);
+    gl.bind_texture(GL::TEXTURE_2D, Some(&state.assets.tex_direction));
+
+    gl.uniform_matrix3fv_with_f32_array(
+        shader.tex_transform_loc.as_ref(),
+        false,
+        <Matrix3<f32> as AsRef<[f32; 9]>>::as_ref(&(Matrix3::from_nonuniform_scale(1., 1.))),
+    );
+
+    gl.uniform_matrix4fv_with_f32_array(
+        shader.transform_loc.as_ref(),
+        false,
+        <Matrix4<f32> as AsRef<[f32; 16]>>::as_ref(
+            &(state.get_world_transform()?
+                * Matrix4::from_scale(2.)
+                * Matrix4::from_translation(Vector3::new(x + 0.5, y + 0.5, 0.))
+                * Matrix4::from_angle_z(Rad(rotation.angle_rad() as f32 + std::f32::consts::PI))
+                * Matrix4::from_nonuniform_scale(0.25, 0.5, 1.)
+                * Matrix4::from_translation(Vector3::new(-0.5, -0.5, 0.))),
+        ),
+    );
+
+    gl.draw_arrays(GL::TRIANGLE_FAN, 0, 4);
+
+    Ok(())
+}
 
 #[wasm_bindgen]
 impl FactorishState {
@@ -80,6 +119,8 @@ impl FactorishState {
         };
 
         draw_structures(0)?;
+        draw_structures(1)?;
+        draw_structures(2)?;
 
         if let Some((ref cursor, shader)) = self.cursor.zip(self.assets.flat_shader.as_ref()) {
             let (x, y) = (cursor[0] as f32, cursor[1] as f32);

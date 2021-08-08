@@ -35,6 +35,8 @@ mod gl {
     mod render_gl;
     mod shader_bundle;
     pub(crate) mod utils;
+
+    pub(crate) use render_gl::draw_direction_arrow_gl;
 }
 
 use crate::{

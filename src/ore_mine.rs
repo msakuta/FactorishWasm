@@ -1,7 +1,7 @@
 use super::{
     draw_direction_arrow,
     drop_items::hit_check,
-    gl::utils::enable_buffer,
+    gl::{draw_direction_arrow_gl, utils::enable_buffer},
     inventory::{Inventory, InventoryTrait},
     items::ItemType,
     structure::{RotateErr, Structure, StructureDynIter, StructureId},
@@ -121,51 +121,54 @@ impl Structure for OreMine {
         depth: i32,
         _is_toolbar: bool,
     ) -> Result<(), JsValue> {
-        if depth != 0 {
-            return Ok(());
-        };
-        let shader = state
-            .assets
-            .textured_shader
-            .as_ref()
-            .ok_or_else(|| js_str!("Shader not found"))?;
-        gl.use_program(Some(&shader.program));
         let (x, y) = (
             self.position.x as f32 + state.viewport.x as f32,
             self.position.y as f32 + state.viewport.y as f32,
         );
-        gl.active_texture(GL::TEXTURE0);
-        gl.bind_texture(GL::TEXTURE_2D, Some(&state.assets.tex_ore_mine));
-        let sx = if self.digging {
-            (((state.sim_time * 5.) as isize) % 2 + 1) as f32 / 3.
-        } else {
-            0.
-        };
-        gl.uniform_matrix3fv_with_f32_array(
-            shader.tex_transform_loc.as_ref(),
-            false,
-            <Matrix3<f32> as AsRef<[f32; 9]>>::as_ref(
-                &(Matrix3::from_translation(Vector2::new(sx, 0.))
-                    * Matrix3::from_nonuniform_scale(1. / 3., 1.)),
-            ),
-        );
+        match depth {
+            0 => {
+                let shader = state
+                    .assets
+                    .textured_shader
+                    .as_ref()
+                    .ok_or_else(|| js_str!("Shader not found"))?;
+                gl.use_program(Some(&shader.program));
+                gl.active_texture(GL::TEXTURE0);
+                gl.bind_texture(GL::TEXTURE_2D, Some(&state.assets.tex_ore_mine));
+                let sx = if self.digging {
+                    (((state.sim_time * 5.) as isize) % 2 + 1) as f32 / 3.
+                } else {
+                    0.
+                };
+                gl.uniform_matrix3fv_with_f32_array(
+                    shader.tex_transform_loc.as_ref(),
+                    false,
+                    <Matrix3<f32> as AsRef<[f32; 9]>>::as_ref(
+                        &(Matrix3::from_translation(Vector2::new(sx, 0.))
+                            * Matrix3::from_nonuniform_scale(1. / 3., 1.)),
+                    ),
+                );
 
-        enable_buffer(&gl, &state.assets.screen_buffer, 2, shader.vertex_position);
-        gl.uniform_matrix4fv_with_f32_array(
-            shader.transform_loc.as_ref(),
-            false,
-            <Matrix4<f32> as AsRef<[f32; 16]>>::as_ref(
-                &(state.get_world_transform()?
-                    * Matrix4::from_scale(2.)
-                    * Matrix4::from_translation(Vector3::new(x, y, 0.))),
-            ),
-        );
-        gl.draw_arrays(GL::TRIANGLE_FAN, 0, 4);
-
-        // if !is_toolbar {
-        //     crate::draw_fuel_alarm!(self, state, context);
-        // }
-
+                enable_buffer(&gl, &state.assets.screen_buffer, 2, shader.vertex_position);
+                gl.uniform_matrix4fv_with_f32_array(
+                    shader.transform_loc.as_ref(),
+                    false,
+                    <Matrix4<f32> as AsRef<[f32; 16]>>::as_ref(
+                        &(state.get_world_transform()?
+                            * Matrix4::from_scale(2.)
+                            * Matrix4::from_translation(Vector3::new(x, y, 0.))),
+                    ),
+                );
+                gl.draw_arrays(GL::TRIANGLE_FAN, 0, 4);
+            }
+            2 => {
+                draw_direction_arrow_gl((x, y), &self.rotation, state, gl)?;
+                // if !is_toolbar {
+                //     crate::draw_fuel_alarm!(self, state, context);
+                // }
+            }
+            _ => (),
+        }
         Ok(())
     }
 

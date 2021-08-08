@@ -248,10 +248,10 @@ pub(crate) trait Structure {
     ) -> Result<(), JsValue>;
     fn draw_gl(
         &self,
-        state: &FactorishState,
-        context: &web_sys::WebGlRenderingContext,
-        depth: i32,
-        is_toolbar: bool,
+        _state: &FactorishState,
+        _gl: &web_sys::WebGlRenderingContext,
+        _depth: i32,
+        _is_toolbar: bool,
     ) -> Result<(), JsValue> {
         Ok(())
     }
