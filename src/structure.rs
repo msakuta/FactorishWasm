@@ -246,6 +246,15 @@ pub(crate) trait Structure {
         depth: i32,
         is_tooptip: bool,
     ) -> Result<(), JsValue>;
+    fn draw_gl(
+        &self,
+        state: &FactorishState,
+        context: &web_sys::WebGlRenderingContext,
+        depth: i32,
+        is_toolbar: bool,
+    ) -> Result<(), JsValue> {
+        Ok(())
+    }
     fn desc(&self, _state: &FactorishState) -> String {
         String::from("")
     }

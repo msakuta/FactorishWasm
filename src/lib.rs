@@ -34,7 +34,7 @@ mod gl {
     pub(crate) mod assets;
     mod render_gl;
     mod shader_bundle;
-    mod utils;
+    pub(crate) mod utils;
 }
 
 use crate::{

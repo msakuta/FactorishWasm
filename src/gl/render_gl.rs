@@ -72,6 +72,15 @@ impl FactorishState {
             self.render_sprites_gl(&gl, shader)?;
         }
 
+        let draw_structures = |depth| -> Result<(), JsValue> {
+            for structure in self.structure_iter() {
+                structure.draw_gl(&self, &gl, depth, false)?;
+            }
+            Ok(())
+        };
+
+        draw_structures(0)?;
+
         if let Some((ref cursor, shader)) = self.cursor.zip(self.assets.flat_shader.as_ref()) {
             let (x, y) = (cursor[0] as f32, cursor[1] as f32);
             gl.use_program(Some(&shader.program));
@@ -97,7 +106,7 @@ impl FactorishState {
         Ok(())
     }
 
-    fn get_world_transform(&self) -> Result<Matrix4<f32>, JsValue> {
+    pub(crate) fn get_world_transform(&self) -> Result<Matrix4<f32>, JsValue> {
         (Matrix4::from_translation(Vector3::new(-1., 1., 0.))
             * Matrix4::from_nonuniform_scale(
                 TILE_SIZE / self.viewport_width,
