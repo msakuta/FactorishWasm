@@ -4,8 +4,9 @@ use super::{
     utils::{enable_buffer, vertex_buffer_sub_data, Flatten},
 };
 use crate::{
-    apply_bounds, elect_pole::draw_wire_gl, performance, Cell, FactorishState, Ore, OreValue,
-    Position, PowerWire, Rotation, CHUNK_SIZE, CHUNK_SIZE_I, TILE_SIZE,
+    apply_bounds, drop_item_iter, elect_pole::draw_wire_gl, items::render_drop_item_gl,
+    performance, Cell, FactorishState, Ore, OreValue, Position, PowerWire, Rotation, CHUNK_SIZE,
+    CHUNK_SIZE_I, TILE_SIZE,
 };
 use cgmath::{Matrix3, Matrix4, Rad, Vector2, Vector3};
 use wasm_bindgen::prelude::*;
@@ -117,6 +118,10 @@ impl FactorishState {
         };
 
         draw_structures(0)?;
+
+        for item in drop_item_iter(&self.drop_items) {
+            render_drop_item_gl(self, &gl, &item.type_, item.x, item.y)?;
+        }
 
         if let Some(shader) = self.assets.flat_shader.as_ref() {
             gl.use_program(Some(&shader.program));

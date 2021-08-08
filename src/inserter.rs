@@ -230,7 +230,7 @@ impl Structure for Inserter {
                     shader.transform_loc.as_ref(),
                     false,
                     (base_transform
-                        * Matrix4::from_angle_z(Rad(angles.0 as f32 + std::f32::consts::PI))
+                        * Matrix4::from_angle_z(Rad(angles.0 as f32))
                         * vertex_transform)
                         .flatten(),
                 );
@@ -250,7 +250,7 @@ impl Structure for Inserter {
                     shader.transform_loc.as_ref(),
                     false,
                     (base_transform
-                        * Matrix4::from_angle_z(Rad(angles.0 as f32 + std::f32::consts::PI))
+                        * Matrix4::from_angle_z(Rad(angles.0 as f32))
                         * Matrix4::from_translation(Vector3::new(
                             -JOINT_POS2.0,
                             -JOINT_POS2.1,
