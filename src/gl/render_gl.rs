@@ -142,7 +142,21 @@ impl FactorishState {
                 let first = self.get_structure(*first);
                 let second = self.get_structure(*second);
                 if let Some((first, second)) = first.zip(second) {
-                    draw_wire_gl(&gl, *first.position(), *second.position())?;
+                    let first = *first.position();
+                    let second = *second.position();
+                    let min = (first.x.min(second.x), first.y.min(second.y));
+                    let max = (first.x.max(second.x), first.y.max(second.y));
+                    if -self.viewport.x <= max.0 as f64
+                        && min.0 as f64
+                            <= -self.viewport.x
+                                + self.viewport_width / self.viewport.scale / TILE_SIZE
+                        && -self.viewport.y <= max.1 as f64
+                        && min.1 as f64
+                            <= -self.viewport.y
+                                + self.viewport_height / self.viewport.scale / TILE_SIZE
+                    {
+                        draw_wire_gl(&gl, first, second)?;
+                    }
                 }
             }
         }
