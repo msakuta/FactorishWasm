@@ -40,6 +40,7 @@ pub(crate) fn load_texture(gl: &GL, bitmap: ImageBitmap) -> Result<WebGlTexture,
 
     let gl = get_context()?;
 
+    // https://www.khronos.org/webgl/wiki/WebGL_and_OpenGL_Differences#Non-Power_of_Two_Texture_Support
     if is_power_of_2(bitmap.width()) && is_power_of_2(bitmap.height()) {
         // Yes, it's a power of 2. Generate mips.
         gl.generate_mipmap(GL::TEXTURE_2D);
