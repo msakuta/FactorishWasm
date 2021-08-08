@@ -366,7 +366,7 @@ impl Assets {
 
         self.wire_buffer = Some(gl.create_buffer().ok_or("failed to create buffer")?);
         gl.bind_buffer(GL::ARRAY_BUFFER, self.wire_buffer.as_ref());
-        gl.buffer_data_with_i32(GL::ARRAY_BUFFER, (WIRE_SEGMENTS + 1) * 2, GL::DYNAMIC_DRAW);
+        gl.buffer_data_with_i32(GL::ARRAY_BUFFER, (WIRE_SEGMENTS + 1) * 4, GL::DYNAMIC_DRAW);
 
         gl.clear_color(0.0, 0.0, 0.5, 0.5);
 
