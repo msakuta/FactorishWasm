@@ -66,6 +66,7 @@ impl Structure for OffshorePump {
         if depth != 0 {
             return Ok(());
         };
+        Pipe::draw_gl_int(self, state, gl, depth, false)?;
         let (x, y) = (
             self.position.x as f32 + state.viewport.x as f32,
             self.position.y as f32 + state.viewport.y as f32,

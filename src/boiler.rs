@@ -127,6 +127,7 @@ impl Structure for Boiler {
         depth: i32,
         _is_toolbar: bool,
     ) -> Result<(), JsValue> {
+        Pipe::draw_gl_int(self, state, gl, depth, false)?;
         let (x, y) = (
             self.position.x as f32 + state.viewport.x as f32,
             self.position.y as f32 + state.viewport.y as f32,
