@@ -391,7 +391,7 @@ impl FactorishState {
 
         self.render_repeat_gl_instancing(
             &gl,
-            1. / 7.,
+            1. / 8.,
             1.,
             &self.assets.tex_weeds,
             |x, y, cell, instance_buf| {
