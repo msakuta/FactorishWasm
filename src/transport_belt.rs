@@ -1,6 +1,6 @@
 use super::{
     drop_items::DropItem,
-    gl::utils::enable_buffer,
+    gl::utils::{enable_buffer, Flatten},
     structure::{ItemResponse, ItemResponseResult, Structure, StructureDynIter},
     FactorishState, Position, RotateErr, Rotation, TILE_SIZE,
 };
@@ -119,20 +119,18 @@ impl Structure for TransportBelt {
                 gl.uniform_matrix3fv_with_f32_array(
                     shader.tex_transform_loc.as_ref(),
                     false,
-                    <Matrix3<f32> as AsRef<[f32; 9]>>::as_ref(
-                        &(Matrix3::from_translation(Vector2::new(sx, 0.))
-                            * Matrix3::from_angle_z(Rad(-self.rotation.angle_rad() as f32))),
-                    ),
+                    (Matrix3::from_translation(Vector2::new(sx, 0.))
+                        * Matrix3::from_angle_z(Rad(-self.rotation.angle_rad() as f32)))
+                    .flatten(),
                 );
 
                 gl.uniform_matrix4fv_with_f32_array(
                     shader.transform_loc.as_ref(),
                     false,
-                    <Matrix4<f32> as AsRef<[f32; 16]>>::as_ref(
-                        &(state.get_world_transform()?
-                            * Matrix4::from_scale(2.)
-                            * Matrix4::from_translation(Vector3::new(x, y, 0.))),
-                    ),
+                    (state.get_world_transform()?
+                        * Matrix4::from_scale(2.)
+                        * Matrix4::from_translation(Vector3::new(x, y, 0.)))
+                    .flatten(),
                 );
                 gl.draw_arrays(GL::TRIANGLE_FAN, 0, 4);
             }

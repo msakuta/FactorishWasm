@@ -1,4 +1,5 @@
 use crate::document;
+use cgmath::{Matrix3, Matrix4};
 use wasm_bindgen::{JsCast, JsValue};
 use web_sys::{ImageBitmap, WebGlBuffer, WebGlRenderingContext as GL, WebGlTexture};
 
@@ -91,4 +92,27 @@ pub fn enable_buffer(gl: &GL, buffer: &Option<WebGlBuffer>, elements: i32, verte
     gl.bind_buffer(GL::ARRAY_BUFFER, buffer.as_ref());
     gl.vertex_attrib_pointer_with_i32(vertex_position, elements, GL::FLOAT, false, 0, 0);
     gl.enable_vertex_attrib_array(vertex_position);
+}
+
+/// An extension trait that returns flatten slice of a matrix from `cgmath`.
+pub(crate) trait Flatten {
+    /// Returns flattened slice `&[f32]` into the internal buffer of `&self`.
+    /// Convenient for passing data to WebGL API.
+    ///
+    /// We could do the same with `<Matrix3<f32> as AsRef<[f32; 9]>>::as_ref(matrix)`,
+    /// but it's repetitive and hard to read.
+    /// Also, we can use method chaining that sometimes reduces indentation.
+    fn flatten(&self) -> &[f32];
+}
+
+impl Flatten for Matrix3<f32> {
+    fn flatten(&self) -> &[f32] {
+        <Matrix3<f32> as AsRef<[f32; 9]>>::as_ref(self)
+    }
+}
+
+impl Flatten for Matrix4<f32> {
+    fn flatten(&self) -> &[f32] {
+        <Matrix4<f32> as AsRef<[f32; 16]>>::as_ref(self)
+    }
 }

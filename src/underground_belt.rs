@@ -1,6 +1,6 @@
 use super::{
     drop_items::DROP_ITEM_SIZE_I,
-    gl::utils::enable_buffer,
+    gl::utils::{enable_buffer, Flatten},
     inventory::InventoryTrait,
     items::ItemType,
     structure::{ItemResponse, ItemResponseResult, Structure, StructureDynIter, StructureId},
@@ -150,28 +150,26 @@ impl Structure for UndergroundBelt {
                 gl.uniform_matrix3fv_with_f32_array(
                     shader.tex_transform_loc.as_ref(),
                     false,
-                    <Matrix3<f32> as AsRef<[f32; 9]>>::as_ref(
-                        &(Matrix3::from_nonuniform_scale(1. / 4., 1. / 4.)
-                            * Matrix3::from_translation(Vector2::new(
-                                sx,
-                                match self.direction {
-                                    ToGround => 0.,
-                                    ToSurface => 1.,
-                                } + depth as f32 * 2.,
-                            ))),
-                    ),
+                    (Matrix3::from_nonuniform_scale(1. / 4., 1. / 4.)
+                        * Matrix3::from_translation(Vector2::new(
+                            sx,
+                            match self.direction {
+                                ToGround => 0.,
+                                ToSurface => 1.,
+                            } + depth as f32 * 2.,
+                        )))
+                    .flatten(),
                 );
 
                 enable_buffer(&gl, &state.assets.screen_buffer, 2, shader.vertex_position);
                 gl.uniform_matrix4fv_with_f32_array(
                     shader.transform_loc.as_ref(),
                     false,
-                    <Matrix4<f32> as AsRef<[f32; 16]>>::as_ref(
-                        &(state.get_world_transform()?
-                            * Matrix4::from_scale(2.)
-                            * Matrix4::from_translation(Vector3::new(x, y - 1., 0.))
-                            * Matrix4::from_nonuniform_scale(1., 2., 1.)),
-                    ),
+                    (state.get_world_transform()?
+                        * Matrix4::from_scale(2.)
+                        * Matrix4::from_translation(Vector3::new(x, y - 1., 0.))
+                        * Matrix4::from_nonuniform_scale(1., 2., 1.))
+                    .flatten(),
                 );
                 gl.draw_arrays(GL::TRIANGLE_FAN, 0, 4);
             }

@@ -1,7 +1,7 @@
 use super::{
     assets::{MAX_SPRITES, SPRITE_COMPONENTS},
     shader_bundle::ShaderBundle,
-    utils::{enable_buffer, vertex_buffer_sub_data},
+    utils::{enable_buffer, vertex_buffer_sub_data, Flatten},
 };
 use crate::{
     apply_bounds, performance, Cell, FactorishState, Ore, OreValue, Position, Rotation, CHUNK_SIZE,
@@ -29,20 +29,19 @@ pub(crate) fn draw_direction_arrow_gl(
     gl.uniform_matrix3fv_with_f32_array(
         shader.tex_transform_loc.as_ref(),
         false,
-        <Matrix3<f32> as AsRef<[f32; 9]>>::as_ref(&(Matrix3::from_nonuniform_scale(1., 1.))),
+        Matrix3::from_nonuniform_scale(1., 1.).flatten(),
     );
 
     gl.uniform_matrix4fv_with_f32_array(
         shader.transform_loc.as_ref(),
         false,
-        <Matrix4<f32> as AsRef<[f32; 16]>>::as_ref(
-            &(state.get_world_transform()?
-                * Matrix4::from_scale(2.)
-                * Matrix4::from_translation(Vector3::new(x + 0.5, y + 0.5, 0.))
-                * Matrix4::from_angle_z(Rad(rotation.angle_rad() as f32 + std::f32::consts::PI))
-                * Matrix4::from_nonuniform_scale(0.25, 0.5, 1.)
-                * Matrix4::from_translation(Vector3::new(-0.5, -0.5, 0.))),
-        ),
+        (state.get_world_transform()?
+            * Matrix4::from_scale(2.)
+            * Matrix4::from_translation(Vector3::new(x + 0.5, y + 0.5, 0.))
+            * Matrix4::from_angle_z(Rad(rotation.angle_rad() as f32 + std::f32::consts::PI))
+            * Matrix4::from_nonuniform_scale(0.25, 0.5, 1.)
+            * Matrix4::from_translation(Vector3::new(-0.5, -0.5, 0.)))
+        .flatten(),
     );
 
     gl.draw_arrays(GL::TRIANGLE_FAN, 0, 4);
@@ -92,16 +91,15 @@ impl FactorishState {
         gl.uniform_matrix3fv_with_f32_array(
             shader.tex_transform_loc.as_ref(),
             false,
-            <Matrix3<f32> as AsRef<[f32; 9]>>::as_ref(&back_texture_transform),
+            back_texture_transform.flatten(),
         );
         gl.bind_texture(GL::TEXTURE_2D, Some(&self.assets.tex_dirt));
         enable_buffer(&gl, &self.assets.screen_buffer, 2, shader.vertex_position);
         gl.uniform_matrix4fv_with_f32_array(
             shader.transform_loc.as_ref(),
             false,
-            <Matrix4<f32> as AsRef<[f32; 16]>>::as_ref(
-                &(Matrix4::from_translation(Vector3::new(-1., -1., 0.)) * Matrix4::from_scale(2.)),
-            ),
+            (Matrix4::from_translation(Vector3::new(-1., -1., 0.)) * Matrix4::from_scale(2.))
+                .flatten(),
         );
         gl.draw_arrays(GL::TRIANGLE_FAN, 0, 4);
 
@@ -128,14 +126,13 @@ impl FactorishState {
             gl.uniform_matrix4fv_with_f32_array(
                 shader.transform_loc.as_ref(),
                 false,
-                <Matrix4<f32> as AsRef<[f32; 16]>>::as_ref(
-                    &(self.get_world_transform()?
-                        * Matrix4::from_translation(Vector3::new(
-                            2. * (self.viewport.x as f32 + x) + 1.,
-                            2. * (self.viewport.y as f32 + y) + 1.,
-                            0.,
-                        ))),
-                ),
+                (self.get_world_transform()?
+                    * Matrix4::from_translation(Vector3::new(
+                        2. * (self.viewport.x as f32 + x) + 1.,
+                        2. * (self.viewport.y as f32 + y) + 1.,
+                        0.,
+                    )))
+                .flatten(),
             );
             gl.line_width(2.);
             enable_buffer(&gl, &self.assets.cursor_buffer, 2, shader.vertex_position);
@@ -187,19 +184,14 @@ impl FactorishState {
             context.uniform_matrix4fv_with_f32_array(
                 shader.transform_loc.as_ref(),
                 false,
-                <Matrix4<f32> as AsRef<[f32; 16]>>::as_ref(
-                    &(world_transform
-                        * Matrix4::from_scale(2.)
-                        * Matrix4::from_translation(
-                            Vector3::new(
-                                self.viewport.x + x as f64,
-                                self.viewport.y + y as f64,
-                                0.,
-                            )
+                (world_transform
+                    * Matrix4::from_scale(2.)
+                    * Matrix4::from_translation(
+                        Vector3::new(self.viewport.x + x as f64, self.viewport.y + y as f64, 0.)
                             .cast::<f32>()
                             .unwrap(),
-                        )),
-                ),
+                    ))
+                .flatten(),
             );
         };
 
@@ -207,10 +199,9 @@ impl FactorishState {
             context.uniform_matrix3fv_with_f32_array(
                 shader.tex_transform_loc.as_ref(),
                 false,
-                <Matrix3<f32> as AsRef<[f32; 9]>>::as_ref(
-                    &(Matrix3::from_nonuniform_scale(scale_x, scale_y)
-                        * Matrix3::from_translation(Vector2::new(trans_x, trans_y))),
-                ),
+                (Matrix3::from_nonuniform_scale(scale_x, scale_y)
+                    * Matrix3::from_translation(Vector2::new(trans_x, trans_y)))
+                .flatten(),
             );
         };
 
@@ -423,9 +414,7 @@ impl FactorishState {
         gl.uniform_matrix3fv_with_f32_array(
             shader.tex_transform_loc.as_ref(),
             false,
-            <Matrix3<f32> as AsRef<[f32; 9]>>::as_ref(
-                &(Matrix3::from_nonuniform_scale(scale_x, scale_y)),
-            ),
+            Matrix3::from_nonuniform_scale(scale_x, scale_y).flatten(),
         );
 
         gl.active_texture(GL::TEXTURE0);
@@ -486,7 +475,7 @@ impl FactorishState {
         gl.uniform_matrix4fv_with_f32_array(
             shader.transform_loc.as_ref(),
             false,
-            <Matrix4<f32> as AsRef<[f32; 16]>>::as_ref(&(world_transform)),
+            world_transform.flatten(),
         );
 
         enable_buffer(gl, &self.assets.screen_buffer, 2, shader.vertex_position);

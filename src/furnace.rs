@@ -1,5 +1,5 @@
 use super::{
-    gl::utils::enable_buffer,
+    gl::utils::{enable_buffer, Flatten},
     items::item_to_str,
     structure::{Structure, StructureDynIter, StructureId},
     DropItem, FactorishState, FrameProcResult, Inventory, InventoryTrait, ItemType, Position,
@@ -135,21 +135,19 @@ impl Structure for Furnace {
         gl.uniform_matrix3fv_with_f32_array(
             shader.tex_transform_loc.as_ref(),
             false,
-            <Matrix3<f32> as AsRef<[f32; 9]>>::as_ref(
-                &(Matrix3::from_translation(Vector2::new(sx, 0.))
-                    * Matrix3::from_nonuniform_scale(1. / 3., 1.)),
-            ),
+            (Matrix3::from_translation(Vector2::new(sx, 0.))
+                * Matrix3::from_nonuniform_scale(1. / 3., 1.))
+            .flatten(),
         );
 
         enable_buffer(&gl, &state.assets.screen_buffer, 2, shader.vertex_position);
         gl.uniform_matrix4fv_with_f32_array(
             shader.transform_loc.as_ref(),
             false,
-            <Matrix4<f32> as AsRef<[f32; 16]>>::as_ref(
-                &(state.get_world_transform()?
-                    * Matrix4::from_scale(2.)
-                    * Matrix4::from_translation(Vector3::new(x, y, 0.))),
-            ),
+            &(state.get_world_transform()?
+                * Matrix4::from_scale(2.)
+                * Matrix4::from_translation(Vector3::new(x, y, 0.)))
+            .flatten(),
         );
         gl.draw_arrays(GL::TRIANGLE_FAN, 0, 4);
 
