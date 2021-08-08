@@ -109,7 +109,7 @@ impl Structure for Furnace {
         state: &FactorishState,
         gl: &GL,
         depth: i32,
-        is_toolbar: bool,
+        _is_toolbar: bool,
     ) -> Result<(), JsValue> {
         if depth != 0 {
             return Ok(());

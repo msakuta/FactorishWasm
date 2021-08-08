@@ -57,6 +57,7 @@ pub(crate) struct Assets {
     pub tex_stone: WebGlTexture,
     pub tex_back: WebGlTexture,
     pub tex_weeds: WebGlTexture,
+    pub tex_ore_mine: WebGlTexture,
     pub tex_furnace: WebGlTexture,
 
     pub flat_shader: Option<ShaderBundle>,
@@ -107,6 +108,7 @@ impl Assets {
             tex_stone: load_texture_local("stone")?,
             tex_back: load_texture_local("backTiles")?,
             tex_weeds: load_texture_local("weeds")?,
+            tex_ore_mine: load_texture_local("mine")?,
             tex_furnace: load_texture_local("furnace")?,
             flat_shader: None,
             textured_shader: None,
