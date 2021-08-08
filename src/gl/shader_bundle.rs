@@ -11,6 +11,7 @@ pub(crate) struct ShaderBundle {
     pub attrib_position_loc: i32,
     #[allow(dead_code)] // May use later
     pub alpha_loc: Option<WebGlUniformLocation>,
+    pub color_loc: Option<WebGlUniformLocation>,
 }
 
 impl ShaderBundle {
@@ -36,6 +37,7 @@ impl ShaderBundle {
             transform_loc: get_uniform("transform"),
             tex_transform_loc: get_uniform("texTransform"),
             alpha_loc: get_uniform("alpha"),
+            color_loc: get_uniform("color"),
             attrib_position_loc,
             // Program has to be later than others
             program,

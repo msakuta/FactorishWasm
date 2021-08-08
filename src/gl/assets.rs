@@ -10,6 +10,7 @@ use web_sys::{
 
 pub(crate) const MAX_SPRITES: usize = 512;
 pub(crate) const SPRITE_COMPONENTS: usize = 4;
+pub(crate) const WIRE_SEGMENTS: i32 = 10;
 
 #[wasm_bindgen]
 extern "C" {
@@ -67,6 +68,7 @@ pub(crate) struct Assets {
     pub tex_water_well: WebGlTexture,
     pub tex_offshore_pump: WebGlTexture,
     pub tex_pipe: WebGlTexture,
+    pub tex_elect_pole: WebGlTexture,
     pub tex_inserter: WebGlTexture,
     pub tex_direction: WebGlTexture,
     pub tex_furnace: WebGlTexture,
@@ -78,6 +80,7 @@ pub(crate) struct Assets {
     pub screen_buffer: Option<WebGlBuffer>,
     pub rect_buffer: Option<WebGlBuffer>,
     pub cursor_buffer: Option<WebGlBuffer>,
+    pub wire_buffer: Option<WebGlBuffer>,
 
     pub sprites_buffer: Option<WebGlBuffer>,
 }
@@ -130,6 +133,7 @@ impl Assets {
             tex_water_well: load_texture_local("waterWell")?,
             tex_offshore_pump: load_texture_local("offshorePump")?,
             tex_pipe: load_texture_local("pipe")?,
+            tex_elect_pole: load_texture_local("electPole")?,
             tex_inserter: load_texture_local("inserter")?,
             tex_direction: load_texture_local("direction")?,
             flat_shader: None,
@@ -138,6 +142,7 @@ impl Assets {
             screen_buffer: None,
             rect_buffer: None,
             cursor_buffer: None,
+            wire_buffer: None,
             sprites_buffer: None,
         })
     }
@@ -215,9 +220,10 @@ impl Assets {
             GL::FRAGMENT_SHADER,
             r#"
             precision mediump float;
+            uniform vec4 color;
 
             void main() {
-                gl_FragColor = vec4(0, 0, 1, 1);
+                gl_FragColor = color;
             }
         "#,
         )?;
@@ -357,6 +363,10 @@ impl Assets {
             [1. - CURSOR_LINE_WIDTH, 1. - CURSOR_LINE_WIDTH],
         ];
         vertex_buffer_data(&gl, rect_vertices.flat());
+
+        self.wire_buffer = Some(gl.create_buffer().ok_or("failed to create buffer")?);
+        gl.bind_buffer(GL::ARRAY_BUFFER, self.wire_buffer.as_ref());
+        gl.buffer_data_with_i32(GL::ARRAY_BUFFER, (WIRE_SEGMENTS + 1) * 2, GL::DYNAMIC_DRAW);
 
         gl.clear_color(0.0, 0.0, 0.5, 0.5);
 

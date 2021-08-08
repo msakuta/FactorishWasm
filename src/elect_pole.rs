@@ -1,7 +1,16 @@
-use super::{structure::Structure, FactorishState, Position};
+use super::{
+    gl::{
+        assets::WIRE_SEGMENTS,
+        utils::{enable_buffer, vertex_buffer_data, Flatten},
+    },
+    structure::Structure,
+    FactorishState, Position, TILE_SIZE_F, WIRE_ATTACH_X, WIRE_ATTACH_Y, WIRE_HANG,
+};
+use cgmath::{Matrix3, Matrix4, Vector3};
 use serde::{Deserialize, Serialize};
+use slice_of_array::SliceFlatExt;
 use wasm_bindgen::prelude::*;
-use web_sys::CanvasRenderingContext2d;
+use web_sys::{CanvasRenderingContext2d, WebGlRenderingContext as GL};
 
 #[derive(Serialize, Deserialize)]
 pub(crate) struct ElectPole {
@@ -55,6 +64,48 @@ impl Structure for ElectPole {
         Ok(())
     }
 
+    fn draw_gl(
+        &self,
+        state: &FactorishState,
+        gl: &GL,
+        depth: i32,
+        _is_toolbar: bool,
+    ) -> Result<(), JsValue> {
+        if depth != 0 {
+            return Ok(());
+        }
+        let (x, y) = (
+            self.position.x as f32 + state.viewport.x as f32,
+            self.position.y as f32 + state.viewport.y as f32,
+        );
+        let shader = state
+            .assets
+            .textured_shader
+            .as_ref()
+            .ok_or_else(|| js_str!("Shader not found"))?;
+        gl.use_program(Some(&shader.program));
+        gl.active_texture(GL::TEXTURE0);
+        gl.bind_texture(GL::TEXTURE_2D, Some(&state.assets.tex_elect_pole));
+        gl.uniform_matrix3fv_with_f32_array(
+            shader.tex_transform_loc.as_ref(),
+            false,
+            Matrix3::from_scale(1.).flatten(),
+        );
+
+        enable_buffer(&gl, &state.assets.screen_buffer, 2, shader.vertex_position);
+        gl.uniform_matrix4fv_with_f32_array(
+            shader.transform_loc.as_ref(),
+            false,
+            (state.get_world_transform()?
+                * Matrix4::from_scale(2.)
+                * Matrix4::from_translation(Vector3::new(x, y, 0.)))
+            .flatten(),
+        );
+        gl.draw_arrays(GL::TRIANGLE_FAN, 0, 4);
+
+        Ok(())
+    }
+
     fn power_sink(&self) -> bool {
         true
     }
@@ -74,4 +125,37 @@ impl Structure for ElectPole {
     }
 
     crate::serialize_impl!();
+}
+
+pub(crate) fn draw_wire_gl(gl: &GL, start: Position, end: Position) -> Result<(), JsValue> {
+    let start_pos = (
+        start.x as f32 * TILE_SIZE_F + WIRE_ATTACH_X as f32,
+        start.y as f32 * TILE_SIZE_F + WIRE_ATTACH_Y as f32,
+    );
+    let end_pos = (
+        end.x as f32 * TILE_SIZE_F + WIRE_ATTACH_X as f32,
+        end.y as f32 * TILE_SIZE_F + WIRE_ATTACH_Y as f32,
+    );
+    let dx = end_pos.0 - start_pos.0;
+    let dy = end_pos.1 - start_pos.1;
+    let dist = (dx * dx + dy * dy).sqrt();
+    let len2 = (WIRE_SEGMENTS as f64 / 2.).sqrt() as f32;
+    let points = (0..=WIRE_SEGMENTS)
+        .map(|i| {
+            let fi = i as f32;
+            let fi2 = i as f32 - WIRE_SEGMENTS as f32 / 2.;
+            [
+                start_pos.0 * (1. - fi / WIRE_SEGMENTS as f32)
+                    + end_pos.0 * fi / WIRE_SEGMENTS as f32,
+                start_pos.1 * (1. - fi / WIRE_SEGMENTS as f32)
+                    + end_pos.1 * fi / WIRE_SEGMENTS as f32
+                    + (dist * (1. - fi2 * fi2 / len2) * WIRE_HANG as f32) as f32 / TILE_SIZE_F,
+            ]
+        })
+        .collect::<Vec<_>>();
+
+    vertex_buffer_data(&gl, &points.flat());
+
+    gl.draw_arrays(GL::LINE_STRIP, 0, WIRE_SEGMENTS + 1);
+    Ok(())
 }

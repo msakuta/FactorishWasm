@@ -4,8 +4,8 @@ use super::{
     utils::{enable_buffer, vertex_buffer_sub_data, Flatten},
 };
 use crate::{
-    apply_bounds, performance, Cell, FactorishState, Ore, OreValue, Position, Rotation, CHUNK_SIZE,
-    CHUNK_SIZE_I, TILE_SIZE,
+    apply_bounds, elect_pole::draw_wire_gl, performance, Cell, FactorishState, Ore, OreValue,
+    Position, PowerWire, Rotation, CHUNK_SIZE, CHUNK_SIZE_I, TILE_SIZE,
 };
 use cgmath::{Matrix3, Matrix4, Rad, Vector2, Vector3};
 use wasm_bindgen::prelude::*;
@@ -117,12 +117,43 @@ impl FactorishState {
         };
 
         draw_structures(0)?;
+
+        if let Some(shader) = self.assets.flat_shader.as_ref() {
+            gl.use_program(Some(&shader.program));
+            enable_buffer(&gl, &self.assets.wire_buffer, 2, shader.vertex_position);
+
+            gl.uniform4fv_with_f32_array(shader.color_loc.as_ref(), &[0.75, 0.5, 0., 1.]);
+
+            gl.uniform_matrix4fv_with_f32_array(
+                shader.transform_loc.as_ref(),
+                false,
+                (self.get_world_transform()?
+                    * Matrix4::from_scale(2.)
+                    * Matrix4::from_translation(Vector3::new(
+                        self.viewport.x as f32,
+                        self.viewport.y as f32,
+                        0.,
+                    ))
+                    * Matrix4::from_scale(1. / TILE_SIZE as f32))
+                .flatten(),
+            );
+
+            for PowerWire(first, second) in &self.power_wires {
+                let first = self.get_structure(*first);
+                let second = self.get_structure(*second);
+                if let Some((first, second)) = first.zip(second) {
+                    draw_wire_gl(&gl, *first.position(), *second.position())?;
+                }
+            }
+        }
+
         draw_structures(1)?;
         draw_structures(2)?;
 
         if let Some((ref cursor, shader)) = self.cursor.zip(self.assets.flat_shader.as_ref()) {
             let (x, y) = (cursor[0] as f32, cursor[1] as f32);
             gl.use_program(Some(&shader.program));
+            gl.uniform4fv_with_f32_array(shader.color_loc.as_ref(), &[0., 0., 1., 1.]);
             gl.uniform_matrix4fv_with_f32_array(
                 shader.transform_loc.as_ref(),
                 false,

@@ -138,12 +138,17 @@ fn performance() -> web_sys::Performance {
 }
 
 const TILE_SIZE: f64 = 32.;
+const TILE_SIZE_F: f32 = TILE_SIZE as f32;
 const TILE_SIZE_I: i32 = TILE_SIZE as i32;
 
 const COAL_POWER: f64 = 100.; // kilojoules
 const SAVE_VERSION: i64 = 5;
 const ORE_HARVEST_TIME: i32 = 20;
 const POPUP_TEXT_LIFE: i32 = 30;
+
+const WIRE_ATTACH_X: f64 = 28.;
+const WIRE_ATTACH_Y: f64 = 8.;
+const WIRE_HANG: f64 = 0.15;
 
 /// Event types that can be communicated to the JavaScript code.
 /// It is serialized into a JavaScript Object through serde.
@@ -2839,10 +2844,6 @@ impl FactorishState {
         for item in drop_item_iter(&self.drop_items) {
             render_drop_item(self, &context, &item.type_, item.x, item.y)?;
         }
-
-        const WIRE_ATTACH_X: f64 = 28.;
-        const WIRE_ATTACH_Y: f64 = 8.;
-        const WIRE_HANG: f64 = 0.15;
 
         let draw_wires = |wires: &[PowerWire]| {
             for PowerWire(first, second) in wires {
