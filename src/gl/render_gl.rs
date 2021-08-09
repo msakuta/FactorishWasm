@@ -5,9 +5,9 @@ use super::{
 };
 use crate::{
     apply_bounds, drop_item_iter, elect_pole::draw_wire_gl, items::render_drop_item_gl,
-    performance, Cell, FactorishState, FluidType, Ore, OreValue, Position, PowerWire, Rotation,
-    CHUNK_SIZE, CHUNK_SIZE_I, DROP_ITEM_SIZE, INDEX_CHUNK_SIZE, ORE_HARVEST_TIME, TILE_SIZE,
-    TILE_SIZE_F,
+    performance, structure::Structure, Cell, FactorishState, FluidType, Ore, OreValue, Position,
+    PowerWire, Rotation, CHUNK_SIZE, CHUNK_SIZE_I, DROP_ITEM_SIZE, INDEX_CHUNK_SIZE,
+    ORE_HARVEST_TIME, TILE_SIZE, TILE_SIZE_F,
 };
 use cgmath::{Matrix3, Matrix4, Rad, Vector2, Vector3};
 use slice_of_array::SliceFlatExt;
@@ -49,6 +49,54 @@ pub(crate) fn draw_direction_arrow_gl(
 
     gl.draw_arrays(GL::TRIANGLE_FAN, 0, 4);
 
+    Ok(())
+}
+
+#[macro_export]
+macro_rules! draw_fuel_alarm_gl_impl {
+    ($self_:expr, $state:expr, $gl:expr) => {
+        if $self_.recipe.is_some() && $self_.power == 0. {
+            crate::gl::draw_fuel_alarm_gl($self_, $state, $gl)?;
+        }
+    };
+}
+
+pub(crate) fn draw_fuel_alarm_gl(
+    this: &dyn Structure,
+    state: &FactorishState,
+    gl: &GL,
+) -> Result<(), JsValue> {
+    if state.sim_time % 1. < 0.5 {
+        let shader = state
+            .assets
+            .textured_shader
+            .as_ref()
+            .ok_or_else(|| js_str!("Shader not found"))?;
+        gl.use_program(Some(&shader.program));
+        gl.active_texture(GL::TEXTURE0);
+        gl.bind_texture(GL::TEXTURE_2D, Some(&state.assets.tex_fuel_alarm));
+        let position = this.position();
+        let (x, y) = (
+            position.x as f32 + state.viewport.x as f32,
+            position.y as f32 + state.viewport.y as f32,
+        );
+        gl.uniform_matrix3fv_with_f32_array(
+            shader.tex_transform_loc.as_ref(),
+            false,
+            Matrix3::from_scale(1.).flatten(),
+        );
+
+        enable_buffer(&gl, &state.assets.screen_buffer, 2, shader.vertex_position);
+        gl.uniform_matrix4fv_with_f32_array(
+            shader.transform_loc.as_ref(),
+            false,
+            (state.get_world_transform()?
+                * Matrix4::from_scale(2.)
+                * Matrix4::from_translation(Vector3::new(x, y, 0.)))
+            .flatten(),
+        );
+        gl.draw_arrays(GL::TRIANGLE_FAN, 0, 4);
+    }
     Ok(())
 }
 
