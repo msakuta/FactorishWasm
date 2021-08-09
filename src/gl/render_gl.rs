@@ -170,9 +170,10 @@ impl FactorishState {
         draw_structures(1)?;
         draw_structures(2)?;
 
+        // Smoke rendering
         if let Some(shader) = self.assets.textured_alpha_shader.as_ref() {
             for ent in &self.temp_ents {
-                let (x, y) = (ent.position.0 - 24., ent.position.1 - 24.);
+                let (x, y) = (ent.position.0, ent.position.1);
                 gl.use_program(Some(&shader.program));
                 gl.uniform1f(
                     shader.alpha_loc.as_ref(),
@@ -186,16 +187,18 @@ impl FactorishState {
                         .flatten(),
                 );
 
+                let scale = ((ent.max_life - ent.life) * 0.15).min(1.) as f32;
                 gl.uniform_matrix4fv_with_f32_array(
                     shader.transform_loc.as_ref(),
                     false,
                     (self.get_world_transform()?
                         * Matrix4::from_translation(Vector3::new(
-                            2. * (self.viewport.x + x / TILE_SIZE) as f32 + 1.,
-                            2. * (self.viewport.y + y / TILE_SIZE) as f32 + 1.,
+                            2. * (self.viewport.x + x / TILE_SIZE) as f32,
+                            2. * (self.viewport.y + y / TILE_SIZE) as f32,
                             0.,
                         ))
-                        * Matrix4::from_angle_z(Rad(ent.rotation as f32)))
+                        * Matrix4::from_angle_z(Rad(ent.rotation as f32))
+                        * Matrix4::from_scale(scale))
                     .flatten(),
                 );
 

@@ -359,6 +359,7 @@ impl<'a> From<&'a ImageBundle> for &'a ImageBitmap {
 
 struct TempEnt {
     position: (f64, f64),
+    velocity: (f64, f64),
     rotation: f64,
     life: f64,
     max_life: f64,
@@ -369,8 +370,12 @@ impl TempEnt {
         let life = rng.next() * 3. + 6.;
         TempEnt {
             position: (
-                (position.x as f64 + 0.5 + rng.next() * 0.5) * 32.,
-                (position.y as f64 + rng.next() * 0.5) * 32.,
+                (position.x as f64 + 0.5) * TILE_SIZE,
+                (position.y as f64 + 0.25 + rng.next() * 0.5) * TILE_SIZE,
+            ),
+            velocity: (
+                (rng.next() * 1.5 - 0.75 + 0.5), // A bit bias to the right
+                (4. + rng.next()),
             ),
             rotation: rng.next() * std::f64::consts::PI * 2.,
             life,
@@ -1360,8 +1365,8 @@ impl FactorishState {
         self.temp_ents = std::mem::take(&mut self.temp_ents)
             .into_iter()
             .map(|mut ent| {
-                ent.position.0 += delta_time * 1.5;
-                ent.position.1 -= delta_time * 4.2;
+                ent.position.0 += delta_time * ent.velocity.0;
+                ent.position.1 -= delta_time * ent.velocity.1;
                 ent.life -= delta_time;
                 ent
             })
