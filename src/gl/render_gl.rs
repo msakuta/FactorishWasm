@@ -1,14 +1,15 @@
 use super::{
-    assets::{MAX_SPRITES, SPRITE_COMPONENTS},
+    assets::{HARVESTING_SEGMENTS, HARVESTING_THICKNESS, MAX_SPRITES, SPRITE_COMPONENTS},
     shader_bundle::ShaderBundle,
     utils::{enable_buffer, vertex_buffer_sub_data, Flatten},
 };
 use crate::{
     apply_bounds, drop_item_iter, elect_pole::draw_wire_gl, items::render_drop_item_gl,
     performance, Cell, FactorishState, Ore, OreValue, Position, PowerWire, Rotation, CHUNK_SIZE,
-    CHUNK_SIZE_I, TILE_SIZE,
+    CHUNK_SIZE_I, ORE_HARVEST_TIME, TILE_SIZE,
 };
 use cgmath::{Matrix3, Matrix4, Rad, Vector2, Vector3};
+use slice_of_array::SliceFlatExt;
 use wasm_bindgen::prelude::*;
 use web_sys::{WebGlRenderingContext as GL, WebGlTexture};
 
@@ -184,9 +185,50 @@ impl FactorishState {
                     )))
                 .flatten(),
             );
-            gl.line_width(2.);
             enable_buffer(&gl, &self.assets.cursor_buffer, 2, shader.vertex_position);
             gl.draw_arrays(GL::TRIANGLE_STRIP, 0, 10);
+        }
+
+        if let Some((ore_harvesting, shader)) =
+            &self.ore_harvesting.zip(self.assets.flat_shader.as_ref())
+        {
+            gl.use_program(Some(&shader.program));
+            gl.uniform4fv_with_f32_array(shader.color_loc.as_ref(), &[1., 0.5, 1., 1.]);
+
+            gl.uniform_matrix4fv_with_f32_array(
+                shader.transform_loc.as_ref(),
+                false,
+                (self.get_world_transform()?
+                    * Matrix4::from_translation(Vector3::new(
+                        2. * (self.viewport.x as f32 + ore_harvesting.pos.x as f32) + 1.,
+                        2. * (self.viewport.y as f32 + ore_harvesting.pos.y as f32) + 1.,
+                        0.,
+                    )))
+                .flatten(),
+            );
+
+            let mut points = [[0.; 4]; HARVESTING_SEGMENTS];
+            let max_angle =
+                ore_harvesting.timer as f32 / ORE_HARVEST_TIME as f32 * 2. * std::f32::consts::PI;
+            for i in 0..HARVESTING_SEGMENTS {
+                let angle = i as f32 * max_angle / HARVESTING_SEGMENTS as f32;
+                points[i as usize] = [
+                    angle.sin() * (1. + HARVESTING_THICKNESS),
+                    -angle.cos() * (1. + HARVESTING_THICKNESS),
+                    angle.sin() * (1. - HARVESTING_THICKNESS),
+                    -angle.cos() * (1. - HARVESTING_THICKNESS),
+                ];
+            }
+            enable_buffer(
+                &gl,
+                &self.assets.harvesting_buffer,
+                2,
+                shader.vertex_position,
+            );
+
+            vertex_buffer_sub_data(&gl, &points.flat());
+
+            gl.draw_arrays(GL::TRIANGLE_STRIP, 0, points.len() as i32 * 2);
         }
 
         self.perf_render.add(performance().now() - start_render);
