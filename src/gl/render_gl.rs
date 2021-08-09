@@ -47,6 +47,8 @@ pub(crate) fn draw_direction_arrow_gl(
         .flatten(),
     );
 
+    enable_buffer(&gl, &state.assets.screen_buffer, 2, shader.vertex_position);
+
     gl.draw_arrays(GL::TRIANGLE_FAN, 0, 4);
 
     Ok(())
