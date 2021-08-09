@@ -12,11 +12,14 @@ use super::{
     power_network::build_power_networks,
     steam_engine::SteamEngine,
     structure::{StructureBundle, StructureDynIter, StructureEntry, StructureId},
-    terrain::{calculate_back_image, gen_terrain, TerrainParameters},
+    terrain::{
+        calculate_back_image, gen_terrain, Chunks, ChunksExt, TerrainParameters, CHUNK_SIZE_I,
+    },
     transport_belt::TransportBelt,
+    FactorishState, InventoryTrait, Position, PowerWire, Rotation,
     water_well::WaterWell,
-    Cell, FactorishState, InventoryTrait, Position, PowerWire, Rotation,
 };
+use std::collections::HashSet;
 use wasm_bindgen::prelude::*;
 
 fn wrap_structure(bundle: StructureBundle) -> StructureEntry {
@@ -29,48 +32,60 @@ fn wrap_structure(bundle: StructureBundle) -> StructureEntry {
 /// Avoid having water beneath a structure by filling water cells
 fn update_water(
     structures: &[StructureEntry],
-    terrain: &mut [Cell],
-    terrain_params: &TerrainParameters,
+    terrain: &mut Chunks,
+    _terrain_params: &TerrainParameters,
 ) {
+    let mut to_update = HashSet::new();
     for structure in structures {
         if let Some(position) = structure
             .bundle
             .as_ref()
             .and_then(|bundle| bundle.components.position)
         {
-            let Position { x, y } = position;
-            terrain
-                .get_mut((x + y * terrain_params.width as i32) as usize)
-                .map(|cell| cell.water = false);
+            if let Some(cell) = terrain.get_tile_mut(position) {
+                cell.water = false;
+            }
+            to_update.insert(Position::new(
+                position.x.div_euclid(CHUNK_SIZE_I),
+                position.y.div_euclid(CHUNK_SIZE_I),
+            ));
         }
     }
 
-    calculate_back_image(terrain, terrain_params.width, terrain_params.height);
+    // Update back image in only touched chunks
+    for chunk_pos in &to_update {
+        let mut cells = std::mem::take(&mut terrain.get_mut(chunk_pos).unwrap().cells);
+        calculate_back_image(terrain, &chunk_pos, &mut cells);
+        if let Some(c) = terrain.get_mut(chunk_pos) {
+            c.cells = cells;
+        }
+    }
 }
 
 fn default_scenario(
     terrain_params: &TerrainParameters,
-) -> (Vec<StructureEntry>, Vec<Cell>, Vec<DropItemEntry>) {
-    (
-        vec![
-            wrap_structure(TransportBelt::new(Position::new(10, 3), Rotation::Left)),
-            wrap_structure(TransportBelt::new(Position::new(11, 3), Rotation::Left)),
-            wrap_structure(TransportBelt::new(Position::new(12, 3), Rotation::Left)),
-            wrap_structure(OreMine::new(12, 2, Rotation::Bottom)),
-            wrap_structure(Furnace::new(&Position::new(8, 3))),
-            wrap_structure(Assembler::new(&Position::new(6, 3))),
-            wrap_structure(WaterWell::new(Position::new(14, 5))),
-            wrap_structure(Boiler::new(&Position::new(13, 5))),
-            wrap_structure(SteamEngine::new(Position::new(12, 5))),
-        ],
-        gen_terrain(terrain_params),
-        vec![],
-    )
+) -> (Vec<StructureEntry>, Chunks, Vec<DropItemEntry>) {
+    let structures = vec![
+        wrap_structure(TransportBelt::new(Position::new(10, 3), Rotation::Left)),
+        wrap_structure(TransportBelt::new(Position::new(11, 3), Rotation::Left)),
+        wrap_structure(TransportBelt::new(Position::new(12, 3), Rotation::Left)),
+        wrap_structure(OreMine::new(12, 2, Rotation::Bottom)),
+        wrap_structure(Furnace::new(&Position::new(8, 3))),
+        wrap_structure(Assembler::new(&Position::new(6, 3))),
+        wrap_structure(WaterWell::new(Position::new(14, 5))),
+        wrap_structure(Boiler::new(&Position::new(13, 5))),
+        wrap_structure(SteamEngine::new(Position::new(12, 5))),
+    ];
+    let mut terrain = gen_terrain(terrain_params);
+
+    update_water(&structures, &mut terrain, &terrain_params);
+
+    (structures, terrain, vec![])
 }
 
 fn pipe_bench(
     terrain_params: &TerrainParameters,
-) -> (Vec<StructureEntry>, Vec<Cell>, Vec<DropItemEntry>) {
+) -> (Vec<StructureEntry>, Chunks, Vec<DropItemEntry>) {
     let (mut structures, mut terrain, items) = default_scenario(terrain_params);
 
     structures.extend((11..=100).map(|x| wrap_structure(Pipe::new(Position::new(x, 10)))));
@@ -85,17 +100,16 @@ fn pipe_bench(
 
 fn inserter_bench(
     terrain_params: &TerrainParameters,
-) -> (Vec<StructureEntry>, Vec<Cell>, Vec<DropItemEntry>) {
+) -> (Vec<StructureEntry>, Chunks, Vec<DropItemEntry>) {
     let (mut structures, mut terrain, items) = default_scenario(terrain_params);
 
     structures.extend((10..=100).map(|x| {
         if x % 2 == 0 {
             wrap_structure({
                 let mut chest = Chest::new(Position::new(x, 10));
-                chest
-                    .dynamic
-                    .inventory_mut(true)
-                    .map(|inv| inv.add_item(&ItemType::IronOre));
+                if let Some(inv) = chest.inventory_mut(true) {
+                    inv.add_item(&ItemType::IronOre);
+                }
                 chest
             })
         } else {
@@ -105,10 +119,9 @@ fn inserter_bench(
     structures.extend((10..=100).map(|x| {
         wrap_structure(if x % 2 == 0 {
             let mut chest = Chest::new(Position::new(x, 100));
-            chest
-                .dynamic
-                .inventory_mut(true)
-                .map(|inv| inv.add_item(&ItemType::CoalOre));
+            if let Some(inv) = chest.inventory_mut(true) {
+                inv.add_item(&ItemType::CoalOre);
+            }
             chest
         } else {
             Inserter::new(Position::new(x, 100), Rotation::Left)
@@ -136,7 +149,7 @@ fn inserter_bench(
 
 fn transport_bench(
     terrain_params: &TerrainParameters,
-) -> (Vec<StructureEntry>, Vec<Cell>, Vec<DropItemEntry>) {
+) -> (Vec<StructureEntry>, Chunks, Vec<DropItemEntry>) {
     let (mut structures, mut terrain, mut items) = default_scenario(terrain_params);
 
     structures.extend(
@@ -168,14 +181,14 @@ fn transport_bench(
 
 fn electric_bench(
     terrain_params: &TerrainParameters,
-) -> (Vec<StructureEntry>, Vec<Cell>, Vec<DropItemEntry>) {
+) -> (Vec<StructureEntry>, Chunks, Vec<DropItemEntry>) {
     let (mut structures, mut terrain, items) = default_scenario(terrain_params);
 
-    structures.extend((10..=100).filter_map(|x| {
+    structures.extend((10..=100).map(|x| {
         if x % 2 == 0 {
-            Some(wrap_structure(Assembler::new(&Position::new(x, 10))))
+            wrap_structure(Assembler::new(&Position::new(x, 10)))
         } else {
-            Some(wrap_structure(ElectPole::new(Position::new(x, 10))))
+            wrap_structure(ElectPole::new(Position::new(x, 10)))
         }
     }));
     structures.extend((10..=100).map(|x| {
@@ -208,7 +221,7 @@ fn electric_bench(
 pub(crate) fn select_scenario(
     name: &str,
     terrain_params: &TerrainParameters,
-) -> Result<(Vec<StructureEntry>, Vec<Cell>, Vec<DropItemEntry>), JsValue> {
+) -> Result<(Vec<StructureEntry>, Chunks, Vec<DropItemEntry>), JsValue> {
     match name {
         "default" => Ok(default_scenario(terrain_params)),
         "pipe_bench" => Ok(pipe_bench(terrain_params)),

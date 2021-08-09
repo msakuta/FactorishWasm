@@ -16,12 +16,11 @@ pub(crate) struct DropItem {
 
 impl DropItem {
     pub(crate) fn new(type_: ItemType, c: i32, r: i32) -> Self {
-        let ret = DropItem {
+        DropItem {
             type_,
             x: c * TILE_SIZE_I + TILE_SIZE_I / 2,
             y: r * TILE_SIZE_I + TILE_SIZE_I / 2,
-        };
-        ret
+        }
     }
 }
 
@@ -76,9 +75,7 @@ pub(crate) fn drop_item_id_iter_mut(
 
 /// Returns an iterator over valid structures
 pub(crate) fn drop_item_iter(drop_items: &[DropItemEntry]) -> impl Iterator<Item = &DropItem> {
-    drop_items
-        .iter()
-        .filter_map(|item| Some(item.item.as_ref()?))
+    drop_items.iter().filter_map(|item| item.item.as_ref())
 }
 
 #[derive(Serialize, Deserialize, PartialEq, Clone, Copy, Debug)]
@@ -111,9 +108,12 @@ pub(crate) fn build_index(items: &[DropItemEntry]) -> DropItemIndex {
         .enumerate()
         .filter_map(|(i, item)| Some((GenId::new(i as u32, item.gen), item.item.as_ref()?)))
     {
-        ret.entry((item.x / INDEX_GRID_SIZE_I, item.y / INDEX_GRID_SIZE_I))
-            .or_default()
-            .push(id);
+        ret.entry((
+            item.x.div_euclid(INDEX_GRID_SIZE_I),
+            item.y.div_euclid(INDEX_GRID_SIZE_I),
+        ))
+        .or_default()
+        .push(id);
     }
     ret
 }
@@ -142,7 +142,10 @@ pub(crate) fn hit_check(
 }
 
 pub(crate) fn add_index(index: &mut DropItemIndex, id: GenId, x: i32, y: i32) {
-    let new_chunk = (x / INDEX_GRID_SIZE_I, y / INDEX_GRID_SIZE_I);
+    let new_chunk = (
+        x.div_euclid(INDEX_GRID_SIZE_I),
+        y.div_euclid(INDEX_GRID_SIZE_I),
+    );
     index.entry(new_chunk).or_default().push(id);
 }
 
@@ -154,8 +157,14 @@ pub(crate) fn update_index(
     x: i32,
     y: i32,
 ) {
-    let old_chunk = (old_x / INDEX_GRID_SIZE_I, old_y / INDEX_GRID_SIZE_I);
-    let new_chunk = (x / INDEX_GRID_SIZE_I, y / INDEX_GRID_SIZE_I);
+    let old_chunk = (
+        old_x.div_euclid(INDEX_GRID_SIZE_I),
+        old_y.div_euclid(INDEX_GRID_SIZE_I),
+    );
+    let new_chunk = (
+        x.div_euclid(INDEX_GRID_SIZE_I),
+        y.div_euclid(INDEX_GRID_SIZE_I),
+    );
     if old_chunk == new_chunk {
         return;
     }
@@ -164,7 +173,10 @@ pub(crate) fn update_index(
 }
 
 pub(crate) fn remove_index(index: &mut DropItemIndex, id: GenId, old_x: i32, old_y: i32) {
-    let old_chunk = (old_x / INDEX_GRID_SIZE_I, old_y / INDEX_GRID_SIZE_I);
+    let old_chunk = (
+        old_x.div_euclid(INDEX_GRID_SIZE_I),
+        old_y.div_euclid(INDEX_GRID_SIZE_I),
+    );
     if let Some(chunk) = index.get_mut(&old_chunk) {
         if let Some((remove_idx, _)) = chunk.iter().enumerate().find(|(_, item)| **item == id) {
             chunk.swap_remove(remove_idx);

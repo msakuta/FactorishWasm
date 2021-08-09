@@ -1,5 +1,9 @@
 use super::{
     factory::Factory,
+    gl::{
+        utils::{enable_buffer, Flatten},
+        ShaderBundle,
+    },
     inventory::InventoryTrait,
     items::get_item_image_url,
     serialize_impl,
@@ -8,9 +12,10 @@ use super::{
     },
     FactorishState, FrameProcResult, ItemType, Position, Recipe, TILE_SIZE,
 };
+use cgmath::{Matrix3, Matrix4, Vector2, Vector3};
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
-use web_sys::CanvasRenderingContext2d;
+use web_sys::{CanvasRenderingContext2d, WebGlRenderingContext as GL};
 
 fn generate_item_image(item_image: &str, icon_size: bool, count: usize) -> String {
     let size = 32;
@@ -21,25 +26,6 @@ fn generate_item_image(item_image: &str, icon_size: bool, count: usize) -> Strin
     } else {
         "".to_string()
     })
-}
-
-fn _recipe_html(state: &FactorishState, recipe: &Recipe) -> String {
-    let mut ret = String::from("");
-    ret += "<div class='recipe-box'>";
-    ret += &format!(
-        "<span style='display: inline-block; margin: 1px'>{}</span>",
-        &generate_item_image("time", true, recipe.recipe_time as usize)
-    );
-    ret += "<span style='display: inline-block; width: 50%'>";
-    for (key, value) in &recipe.input {
-        ret += &generate_item_image(get_item_image_url(state, &key), true, *value);
-    }
-    ret += "</span><img src='img/rightarrow.png' style='width: 20px; height: 32px'><span style='display: inline-block; width: 10%'>";
-    for (key, value) in &recipe.output {
-        ret += &generate_item_image(get_item_image_url(state, &key), true, *value);
-    }
-    ret += "</span></div>";
-    ret
 }
 
 #[derive(Serialize, Deserialize)]
@@ -73,7 +59,7 @@ impl Structure for Assembler {
         state: &FactorishState,
         context: &CanvasRenderingContext2d,
         depth: i32,
-        is_toolbar: bool,
+        _is_toolbar: bool,
     ) -> Result<(), JsValue> {
         let (x, y) = if let Some(position) = &components.position {
             (position.x as f64 * TILE_SIZE, position.y as f64 * TILE_SIZE)
@@ -111,23 +97,96 @@ impl Structure for Assembler {
             }
             return Ok(());
         }
-        if let Some((
-            energy,
-            Factory {
-                recipe: Some(_recipe),
-                ..
-            },
-        )) = components.energy.as_ref().zip(components.factory.as_ref())
-        {
-            if !is_toolbar && energy.value == 0. && state.sim_time % 1. < 0.5 {
-                if let Some(img) = state.image_electricity_alarm.as_ref() {
-                    context.draw_image_with_image_bitmap(&img.bitmap, x, y)?;
+        Ok(())
+    }
+
+    fn draw_gl(
+        &self,
+        components: &StructureComponents,
+        state: &FactorishState,
+        gl: &GL,
+        depth: i32,
+        is_ghost: bool,
+    ) -> Result<(), JsValue> {
+        let position = components.position.ok_or_else(|| js_str!("Assembler without Position"))?;
+        let factory = components.factory.as_ref().ok_or_else(|| js_str!("Assembler without Factory"))?;
+        let energy = components.energy.as_ref().ok_or_else(|| js_str!("Assembler without Energy"))?;
+        let (x, y) = (
+            position.x as f32 + state.viewport.x as f32,
+            position.y as f32 + state.viewport.y as f32,
+        );
+
+        let get_shader = || -> Result<&ShaderBundle, JsValue> {
+            let shader = state
+                .assets
+                .textured_shader
+                .as_ref()
+                .ok_or_else(|| js_str!("Shader not found"))?;
+            gl.use_program(Some(&shader.program));
+            gl.uniform1f(shader.alpha_loc.as_ref(), if is_ghost { 0.5 } else { 1. });
+            Ok(shader)
+        };
+
+        let shape = |shader: &ShaderBundle| -> Result<(), JsValue> {
+            enable_buffer(&gl, &state.assets.screen_buffer, 2, shader.vertex_position);
+            gl.uniform_matrix4fv_with_f32_array(
+                shader.transform_loc.as_ref(),
+                false,
+                (state.get_world_transform()?
+                    * Matrix4::from_scale(2.)
+                    * Matrix4::from_translation(Vector3::new(x, y, 0.)))
+                .flatten(),
+            );
+            Ok(())
+        };
+
+        match depth {
+            0 => {
+                let shader = get_shader()?;
+                gl.active_texture(GL::TEXTURE0);
+                gl.bind_texture(GL::TEXTURE_2D, Some(&state.assets.tex_assembler));
+                let sx = if factory.progress.is_some() && 0. < energy.value {
+                    (((state.sim_time * 5.) as isize) % 4 + 1) as f32
                 } else {
-                    return js_err!("electricity alarm image not available");
+                    0.
+                };
+                gl.uniform_matrix3fv_with_f32_array(
+                    shader.tex_transform_loc.as_ref(),
+                    false,
+                    (Matrix3::from_nonuniform_scale(1. / 4., 1.)
+                        * Matrix3::from_translation(Vector2::new(sx, 0.)))
+                    .flatten(),
+                );
+
+                shape(shader)?;
+                gl.draw_arrays(GL::TRIANGLE_FAN, 0, 4);
+            }
+            2 => {
+                if let Some((
+                    energy,
+                    Factory {
+                        recipe: Some(_recipe),
+                        ..
+                    },
+                )) = components.energy.as_ref().zip(components.factory.as_ref())
+                {
+                    if !is_ghost && energy.value == 0. && state.sim_time % 1. < 0.5 {
+                        let shader = get_shader()?;
+                        gl.active_texture(GL::TEXTURE0);
+                        gl.bind_texture(GL::TEXTURE_2D, Some(&state.assets.tex_electricity_alarm));
+                        gl.uniform_matrix3fv_with_f32_array(
+                            shader.tex_transform_loc.as_ref(),
+                            false,
+                            Matrix3::from_scale(1.).flatten(),
+                        );
+
+                        shape(shader)?;
+                        gl.draw_arrays(GL::TRIANGLE_FAN, 0, 4);
+                    }
                 }
             }
+            _ => (),
         }
-
         Ok(())
     }
 
@@ -212,99 +271,109 @@ impl Structure for Assembler {
         Ok(FrameProcResult::None)
     }
 
-    fn get_recipes(&self) -> Vec<Recipe> {
-        vec![
-            Recipe::new(
-                hash_map!(ItemType::IronPlate => 2usize),
-                hash_map!(ItemType::Gear => 1usize),
-                20.,
-                50.,
-            ),
-            Recipe::new(
-                hash_map!(ItemType::IronPlate => 1usize, ItemType::Gear => 1usize),
-                hash_map!(ItemType::TransportBelt => 1usize),
-                20.,
-                50.,
-            ),
-            Recipe::new(
-                hash_map!(ItemType::TransportBelt => 2, ItemType::Gear => 2),
-                hash_map!(ItemType::Splitter => 1),
-                25.,
-                40.,
-            ),
-            Recipe::new(
-                hash_map!(ItemType::IronPlate => 5usize),
-                hash_map!(ItemType::Chest => 1usize),
-                20.,
-                50.,
-            ),
-            Recipe::new(
-                hash_map!(ItemType::StoneOre => 5usize),
-                hash_map!(ItemType::Furnace => 1usize),
-                20.,
-                20.,
-            ),
-            Recipe::new(
-                hash_map!(ItemType::CopperPlate => 1usize),
-                hash_map!(ItemType::CopperWire => 2usize),
-                20.,
-                20.,
-            ),
-            Recipe::new(
-                hash_map!(ItemType::IronPlate => 1, ItemType::CopperWire => 3usize),
-                hash_map!(ItemType::Circuit => 1usize),
-                20.,
-                50.,
-            ),
-            Recipe::new(
-                hash_map!(ItemType::IronPlate => 5, ItemType::Gear => 5, ItemType::Circuit => 3),
-                hash_map!(ItemType::Assembler => 1),
-                20.,
-                120.,
-            ),
-            Recipe::new(
-                hash_map!(ItemType::IronPlate => 1, ItemType::Gear => 1, ItemType::Circuit => 1),
-                hash_map!(ItemType::Inserter => 1),
-                20.,
-                20.,
-            ),
-            Recipe::new(
-                hash_map!(ItemType::IronPlate => 1, ItemType::Gear => 5, ItemType::Circuit => 3),
-                hash_map!(ItemType::OreMine => 1),
-                100.,
-                100.,
-            ),
-            Recipe::new(
-                hash_map!(ItemType::IronPlate => 2),
-                hash_map!(ItemType::Pipe => 1),
-                20.,
-                20.,
-            ),
-            Recipe::new(
-                hash_map!(ItemType::IronPlate => 5, ItemType::Gear => 5),
-                hash_map!(ItemType::OffshorePump => 1),
-                150.,
-                150.,
-            ),
-            Recipe::new(
-                hash_map!(ItemType::IronPlate => 5, ItemType::CopperPlate => 5),
-                hash_map!(ItemType::Boiler => 1),
-                100.,
-                100.,
-            ),
-            Recipe::new(
-                hash_map!(ItemType::IronPlate => 5, ItemType::Gear => 5, ItemType::CopperPlate => 5),
-                hash_map!(ItemType::SteamEngine => 1),
-                200.,
-                200.,
-            ),
-            Recipe::new(
-                hash_map!(ItemType::IronPlate => 2, ItemType::CopperWire => 2),
-                hash_map!(ItemType::ElectPole => 1),
-                20.,
-                20.,
-            ),
-        ]
+    fn get_recipes(&self) -> std::borrow::Cow<[Recipe]> {
+        static RECIPES: once_cell::sync::Lazy<Vec<Recipe>> = once_cell::sync::Lazy::new(|| {
+            vec![
+                Recipe::new(
+                    hash_map!(ItemType::IronPlate => 2usize),
+                    hash_map!(ItemType::Gear => 1usize),
+                    20.,
+                    50.,
+                ),
+                Recipe::new(
+                    hash_map!(ItemType::IronPlate => 1usize, ItemType::Gear => 1usize),
+                    hash_map!(ItemType::TransportBelt => 1usize),
+                    20.,
+                    50.,
+                ),
+                Recipe::new(
+                    hash_map!(ItemType::TransportBelt => 1, ItemType::Gear => 2),
+                    hash_map!(ItemType::UndergroundBelt => 1usize),
+                    20.,
+                    50.,
+                ),
+                Recipe::new(
+                    hash_map!(ItemType::TransportBelt => 2, ItemType::Gear => 2),
+                    hash_map!(ItemType::Splitter => 1),
+                    25.,
+                    40.,
+                ),
+                Recipe::new(
+                    hash_map!(ItemType::IronPlate => 5usize),
+                    hash_map!(ItemType::Chest => 1usize),
+                    20.,
+                    50.,
+                ),
+                Recipe::new(
+                    hash_map!(ItemType::StoneOre => 5usize),
+                    hash_map!(ItemType::Furnace => 1usize),
+                    20.,
+                    20.,
+                ),
+                Recipe::new(
+                    hash_map!(ItemType::CopperPlate => 1usize),
+                    hash_map!(ItemType::CopperWire => 2usize),
+                    20.,
+                    20.,
+                ),
+                Recipe::new(
+                    hash_map!(ItemType::IronPlate => 1, ItemType::CopperWire => 3usize),
+                    hash_map!(ItemType::Circuit => 1usize),
+                    20.,
+                    50.,
+                ),
+                Recipe::new(
+                    hash_map!(ItemType::IronPlate => 5, ItemType::Gear => 5, ItemType::Circuit => 3),
+                    hash_map!(ItemType::Assembler => 1),
+                    20.,
+                    120.,
+                ),
+                Recipe::new(
+                    hash_map!(ItemType::IronPlate => 1, ItemType::Gear => 1, ItemType::Circuit => 1),
+                    hash_map!(ItemType::Inserter => 1),
+                    20.,
+                    20.,
+                ),
+                Recipe::new(
+                    hash_map!(ItemType::IronPlate => 1, ItemType::Gear => 5, ItemType::Circuit => 3),
+                    hash_map!(ItemType::OreMine => 1),
+                    100.,
+                    100.,
+                ),
+                Recipe::new(
+                    hash_map!(ItemType::IronPlate => 2),
+                    hash_map!(ItemType::Pipe => 1),
+                    20.,
+                    20.,
+                ),
+                Recipe::new(
+                    hash_map!(ItemType::IronPlate => 5, ItemType::Gear => 5),
+                    hash_map!(ItemType::OffshorePump => 1),
+                    150.,
+                    150.,
+                ),
+                Recipe::new(
+                    hash_map!(ItemType::IronPlate => 5, ItemType::CopperPlate => 5),
+                    hash_map!(ItemType::Boiler => 1),
+                    100.,
+                    100.,
+                ),
+                Recipe::new(
+                    hash_map!(ItemType::IronPlate => 5, ItemType::Gear => 5, ItemType::CopperPlate => 5),
+                    hash_map!(ItemType::SteamEngine => 1),
+                    200.,
+                    200.,
+                ),
+                Recipe::new(
+                    hash_map!(ItemType::IronPlate => 2, ItemType::CopperWire => 2),
+                    hash_map!(ItemType::ElectPole => 1),
+                    20.,
+                    20.,
+                ),
+            ]
+        });
+
+        std::borrow::Cow::from(&RECIPES[..])
     }
 
     fn select_recipe(&mut self, factory: &mut Factory, index: usize) -> Result<bool, JsValue> {

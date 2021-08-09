@@ -19,21 +19,21 @@ impl Burner {
         serde_json::to_value(self)
     }
 
-    pub fn draw(
+    pub fn _draw(
         &self,
         energy: Option<&Energy>,
-        position: &Position,
+        _position: &Position,
         state: &FactorishState,
-        context: &CanvasRenderingContext2d,
+        _context: &CanvasRenderingContext2d,
     ) -> Result<(), JsValue> {
         let energy = energy.ok_or_else(|| js_str!("Burner without Energy component"))?;
         if energy.value < 1e-3 && state.sim_time % 1. < 0.5 {
-            if let Some(img) = state.image_fuel_alarm.as_ref() {
-                let (x, y) = (position.x as f64 * 32., position.y as f64 * 32.);
-                context.draw_image_with_image_bitmap(&img.bitmap, x, y)?;
-            } else {
-                return js_err!("fuel alarm image not available");
-            }
+            // if let Some(img) = state.image_fuel_alarm.as_ref() {
+            //     let (x, y) = (position.x as f64 * 32., position.y as f64 * 32.);
+            //     context.draw_image_with_image_bitmap(&img.bitmap, x, y)?;
+            // } else {
+            //     return js_err!("fuel alarm image not available");
+            // }
         }
         Ok(())
     }

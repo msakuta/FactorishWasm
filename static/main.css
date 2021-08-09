@@ -32,6 +32,7 @@ body {
     height: 0.8em;
     background-color: #3f3f3f;
     border: #070707 solid 1px;
+    color: white;
 }
 
 .headerButton.open {
@@ -40,6 +41,8 @@ body {
 
 .headerButton:hover {
     background-color: yellow;
+    color: black;
+    cursor: pointer;
 }
 
 .footer {
@@ -201,6 +204,19 @@ div.closeButton{
     text-align: right;
     pointer-events:none;
     z-index: 100;
+}
+
+.popupText {
+    position: absolute;
+    color: rgb(0,0,0);
+    font-weight: bold;
+    text-shadow: 1px 1px #fff, -1px -1px 0 #fff, 1px -1px 0 #fff, -1px 1px 0 #fff;
+    width: 100%;
+}
+
+#popupContainer {
+    position: absolute;
+    pointer-events: none;
 }
 
 .burnerContainer {

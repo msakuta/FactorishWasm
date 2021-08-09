@@ -138,8 +138,8 @@ Most modern browser support it nowadays.
 
 Install
 
-* Cargo >1.40
-* npm >7.0.2
+* Cargo >1.51
+* npm >6.14.11
 
 Install npm packages
 

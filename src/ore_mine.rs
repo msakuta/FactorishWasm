@@ -2,18 +2,23 @@ use super::{
     burner::Burner,
     draw_direction_arrow,
     drop_items::hit_check,
-    inventory::Inventory,
     structure::{
         Energy, RotateErr, Structure, StructureBundle, StructureComponents, StructureDynIter,
         StructureId,
     },
     DropItem, FactorishState, FrameProcResult, Position, Recipe, Rotation, TempEnt, TILE_SIZE,
     TILE_SIZE_I,
+    gl::{
+        draw_direction_arrow_gl,
+        utils::{enable_buffer, Flatten},
+    },
+    inventory::Inventory,
 };
+use cgmath::{Matrix3, Matrix4, Vector2, Vector3};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use wasm_bindgen::prelude::*;
-use web_sys::CanvasRenderingContext2d;
+use web_sys::{CanvasRenderingContext2d, WebGlRenderingContext as GL};
 
 const FUEL_CAPACITY: usize = 10;
 
@@ -136,6 +141,69 @@ impl Structure for OreMine {
         Ok(())
     }
 
+    fn draw_gl(
+        &self,
+        components: &StructureComponents,
+        state: &FactorishState,
+        gl: &GL,
+        depth: i32,
+        is_ghost: bool,
+    ) -> Result<(), JsValue> {
+        let position = components.position.ok_or_else(|| js_str!("OreMine without Position"))?;
+        let rotation = components.rotation.ok_or_else(|| js_str!("OreMine without Rotation"))?;
+        let energy = components.energy.as_ref().ok_or_else(|| js_str!("OreMine without Energy"))?;
+        let (x, y) = (
+            position.x as f32 + state.viewport.x as f32,
+            position.y as f32 + state.viewport.y as f32,
+        );
+        match depth {
+            0 => {
+                let shader = state
+                    .assets
+                    .textured_shader
+                    .as_ref()
+                    .ok_or_else(|| js_str!("Shader not found"))?;
+                gl.use_program(Some(&shader.program));
+                gl.uniform1f(shader.alpha_loc.as_ref(), if is_ghost { 0.5 } else { 1. });
+                gl.active_texture(GL::TEXTURE0);
+                gl.bind_texture(GL::TEXTURE_2D, Some(&state.assets.tex_ore_mine));
+                let sx = if self.digging {
+                    (((state.sim_time * 5.) as isize) % 2 + 1) as f32 / 3.
+                } else {
+                    0.
+                };
+                gl.uniform_matrix3fv_with_f32_array(
+                    shader.tex_transform_loc.as_ref(),
+                    false,
+                    (Matrix3::from_translation(Vector2::new(sx, 0.))
+                        * Matrix3::from_nonuniform_scale(1. / 3., 1.))
+                    .flatten(),
+                );
+
+                enable_buffer(&gl, &state.assets.screen_buffer, 2, shader.vertex_position);
+                gl.uniform_matrix4fv_with_f32_array(
+                    shader.transform_loc.as_ref(),
+                    false,
+                    (state.get_world_transform()?
+                        * Matrix4::from_scale(2.)
+                        * Matrix4::from_translation(Vector3::new(x, y, 0.)))
+                    .flatten(),
+                );
+                gl.draw_arrays(GL::TRIANGLE_FAN, 0, 4);
+            }
+            2 => {
+                draw_direction_arrow_gl((x, y), &rotation, state, gl)?;
+                if !is_ghost {
+                    if self.recipe.is_some() && energy.value == 0. {
+                        crate::gl::draw_fuel_alarm_gl(components, state, gl)?;
+                    }
+                }
+            }
+            _ => (),
+        }
+        Ok(())
+    }
+
     fn desc(&self, components: &StructureComponents, state: &FactorishState) -> String {
         let (position, energy) =
             if let Some(energy) = components.position.as_ref().zip(components.energy.as_ref()) {
@@ -143,7 +211,11 @@ impl Structure for OreMine {
             } else {
                 return "Position or Energy not found".to_string();
             };
-        let tile = &state.board[position.x as usize + position.y as usize * state.width as usize];
+        let tile = if let Some(tile) = state.tile_at(position) {
+            tile
+        } else {
+            return "Cell not found".to_string();
+        };
         if let Some(_recipe) = &self.recipe {
             // Progress bar
             format!("{}{}{}{}{}",
@@ -310,6 +382,7 @@ impl Structure for OreMine {
     fn rotate(
         &mut self,
         components: &mut StructureComponents,
+        _state: &mut FactorishState,
         others: &StructureDynIter,
     ) -> Result<(), RotateErr> {
         if let Some(ref mut rotation) = components.rotation {
@@ -341,6 +414,7 @@ impl Structure for OreMine {
         components: &mut StructureComponents,
         other_id: StructureId,
         other: &StructureBundle,
+        _others: &StructureDynIter,
         construct: bool,
     ) -> Result<(), JsValue> {
         self.on_construction_common(components, other_id, other, construct)

@@ -1,16 +1,38 @@
 use super::{
+    COAL_POWER,
     burner::Burner,
     factory::Factory,
+    gl::utils::{enable_buffer, Flatten},
     items::item_to_str,
     serialize_impl,
-    structure::{Energy, Structure, StructureBundle, StructureComponents},
+    structure::{StructureId, Energy, Structure, StructureBundle, StructureComponents, StructureDynIter, FrameProcResult},
     DropItem, FactorishState, Inventory, InventoryTrait, ItemType, Position, Recipe,
 };
+use cgmath::{Matrix3, Matrix4, Vector2, Vector3};
+use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
-use web_sys::CanvasRenderingContext2d;
+use web_sys::{CanvasRenderingContext2d, WebGlRenderingContext as GL};
 
 const FUEL_CAPACITY: usize = 10;
+
+/// A list of fixed recipes, because dynamic get_recipes() can only return a Vec.
+static RECIPES: Lazy<[Recipe; 2]> = Lazy::new(|| {
+    [
+        Recipe::new(
+            hash_map!(ItemType::IronOre => 1usize),
+            hash_map!(ItemType::IronPlate => 1usize),
+            20.,
+            50.,
+        ),
+        Recipe::new(
+            hash_map!(ItemType::CopperOre => 1usize),
+            hash_map!(ItemType::CopperPlate => 1usize),
+            20.,
+            50.,
+        ),
+    ]
+});
 
 #[derive(Serialize, Deserialize)]
 pub(crate) struct Furnace {}
@@ -46,7 +68,7 @@ impl Structure for Furnace {
         state: &FactorishState,
         context: &CanvasRenderingContext2d,
         depth: i32,
-        is_toolbar: bool,
+        _is_toolbar: bool,
     ) -> Result<(), JsValue> {
         if depth != 0 {
             return Ok(());
@@ -84,8 +106,66 @@ impl Structure for Furnace {
             }
             None => return Err(JsValue::from_str("furnace image not available")),
         }
-        if !is_toolbar {
-            // crate::draw_fuel_alarm!(self, state, context);
+
+        Ok(())
+    }
+
+    fn draw_gl(
+        &self,
+        components: &StructureComponents,
+        state: &FactorishState,
+        gl: &GL,
+        depth: i32,
+        is_ghost: bool,
+    ) -> Result<(), JsValue> {
+        if depth != 0 {
+            return Ok(());
+        };
+        let position = components.position.ok_or_else(|| js_str!("Furnace without Position"))?;
+        let factory = components.factory.as_ref().ok_or_else(|| js_str!("Furnace without Factory"))?;
+        let energy = components.energy.as_ref().ok_or_else(|| js_str!("Furnace without Energy"))?;
+        let shader = state
+            .assets
+            .textured_shader
+            .as_ref()
+            .ok_or_else(|| js_str!("Shader not found"))?;
+        gl.use_program(Some(&shader.program));
+        gl.uniform1f(shader.alpha_loc.as_ref(), if is_ghost { 0.5 } else { 1. });
+        let (x, y) = (
+            position.x as f32 + state.viewport.x as f32,
+            position.y as f32 + state.viewport.y as f32,
+        );
+        let texture = &state.assets.tex_furnace;
+        gl.active_texture(GL::TEXTURE0);
+        gl.bind_texture(GL::TEXTURE_2D, Some(texture));
+        let sx = if factory.progress.is_some() && 0. < energy.value {
+            (((state.sim_time * 5.) as isize) % 2 + 1) as f32 / 3.
+        } else {
+            0.
+        };
+        gl.uniform_matrix3fv_with_f32_array(
+            shader.tex_transform_loc.as_ref(),
+            false,
+            (Matrix3::from_translation(Vector2::new(sx, 0.))
+                * Matrix3::from_nonuniform_scale(1. / 3., 1.))
+            .flatten(),
+        );
+
+        enable_buffer(&gl, &state.assets.screen_buffer, 2, shader.vertex_position);
+        gl.uniform_matrix4fv_with_f32_array(
+            shader.transform_loc.as_ref(),
+            false,
+            &(state.get_world_transform()?
+                * Matrix4::from_scale(2.)
+                * Matrix4::from_translation(Vector3::new(x, y, 0.)))
+            .flatten(),
+        );
+        gl.draw_arrays(GL::TRIANGLE_FAN, 0, 4);
+
+        if !is_ghost {
+            if factory.recipe.is_some() && energy.value == 0. {
+                crate::gl::draw_fuel_alarm_gl(components, state, gl)?;
+            }
         }
 
         Ok(())
@@ -123,11 +203,57 @@ impl Structure for Furnace {
         )
     }
 
+    fn frame_proc(
+        &mut self,
+        _me: StructureId,
+        components: &mut StructureComponents,
+        _state: &mut FactorishState,
+        _structures: &mut StructureDynIter,
+    ) -> Result<FrameProcResult, ()> {
+        let position = components.position.ok_or_else(|| ())?;
+        let factory = components.factory.as_mut().ok_or_else(|| ())?;
+        let energy = components.energy.as_mut().ok_or_else(|| ())?;
+        if factory.recipe.is_none() {
+            factory.recipe = RECIPES
+                .iter()
+                .find(|recipe| {
+                    recipe
+                        .input
+                        .iter()
+                        .all(|(type_, count)| *count <= factory.input_inventory.count_item(&type_))
+                })
+                .cloned();
+        }
+        if let Some(recipe) = &factory.recipe {
+            let mut ret = FrameProcResult::None;
+            // First, check if we need to refill the energy buffer in order to continue the current work.
+            if factory.input_inventory.get(&ItemType::CoalOre).is_some() {
+                // Refill the energy from the fuel
+                if energy.value < recipe.power_cost {
+                    energy.value += COAL_POWER;
+                    energy.max = energy.value;
+                    factory.input_inventory.remove_item(&ItemType::CoalOre);
+                    ret = FrameProcResult::InventoryChanged(position);
+                }
+            }
+
+            return Ok(ret);
+        }
+        Ok(FrameProcResult::None)
+    }
+
     fn input(&mut self, components: &mut StructureComponents, o: &DropItem) -> Result<(), JsValue> {
         let factory = components
             .factory
             .as_mut()
             .ok_or_else(|| js_str!("Furnace without Factory component"))?;
+        if o.type_ == ItemType::CoalOre
+            && factory.input_inventory.count_item(&ItemType::CoalOre) < FUEL_CAPACITY
+        {
+            factory.input_inventory.add_item(&ItemType::CoalOre);
+            return Ok(());
+        }
+
         if factory.recipe.is_none() {
             match o.type_ {
                 ItemType::IronOre => {
@@ -155,31 +281,43 @@ impl Structure for Furnace {
             }
         }
 
+        if let Some(recipe) = &factory.recipe {
+            if 0 < recipe.input.count_item(&o.type_) || 0 < recipe.output.count_item(&o.type_) {
+                factory.input_inventory.add_item(&o.type_);
+                return Ok(());
+            } else {
+                return Err(JsValue::from_str("Item is not part of recipe"));
+            }
+        }
         Err(JsValue::from_str("Recipe is not initialized"))
     }
 
-    fn can_input(&self, item_type: &ItemType) -> bool {
-        match *item_type {
-            ItemType::IronOre | ItemType::CopperOre => true,
-            _ => false,
+    fn can_input(&self, components: &StructureComponents, item_type: &ItemType) -> bool {
+        let factory = if let Some(factory) = components
+            .factory
+            .as_ref() {
+                factory
+            } else {
+                return false;
+            };
+        // match *item_type {
+        //     ItemType::IronOre | ItemType::CopperOre => true,
+        //     _ => false,
+        // }
+        if *item_type == ItemType::CoalOre
+            && factory.input_inventory.count_item(item_type) < FUEL_CAPACITY
+        {
+            return true;
+        }
+        if let Some(recipe) = &factory.recipe {
+            recipe.input.get(item_type).is_some()
+        } else {
+            matches!(item_type, ItemType::IronOre | ItemType::CopperOre)
         }
     }
 
-    fn get_recipes(&self) -> Vec<Recipe> {
-        vec![
-            Recipe::new(
-                hash_map!(ItemType::IronOre => 1usize),
-                hash_map!(ItemType::IronPlate => 1usize),
-                20.,
-                50.,
-            ),
-            Recipe::new(
-                hash_map!(ItemType::CopperOre => 1usize),
-                hash_map!(ItemType::CopperPlate => 1usize),
-                20.,
-                50.,
-            ),
-        ]
+    fn get_recipes(&self) -> std::borrow::Cow<[Recipe]> {
+        std::borrow::Cow::from(&RECIPES[..])
     }
 
     serialize_impl!();
