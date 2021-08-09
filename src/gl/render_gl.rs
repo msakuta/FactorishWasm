@@ -626,7 +626,9 @@ impl FactorishState {
             (Ore::Copper, &self.assets.tex_copper),
             (Ore::Coal, &self.assets.tex_coal),
             (Ore::Stone, &self.assets.tex_stone),
-        ].iter() {
+        ]
+        .iter()
+        {
             self.render_repeat_gl_instancing(
                 &gl,
                 1. / 4.,

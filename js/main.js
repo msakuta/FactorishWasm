@@ -512,7 +512,7 @@ let unlimited = true;
         for(var i = 0; i < toolBarCanvases.length; i++){
             var canvasElem = toolBarCanvases[i];
             var context = canvasElem.getContext('2d');
-            // sim.render_tool(i, context);
+            sim.render_tool(i, context);
         }
     }
 
