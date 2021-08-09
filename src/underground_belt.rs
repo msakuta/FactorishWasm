@@ -130,7 +130,7 @@ impl Structure for UndergroundBelt {
         state: &FactorishState,
         gl: &GL,
         depth: i32,
-        _is_toolbar: bool,
+        is_ghost: bool,
     ) -> Result<(), JsValue> {
         let (x, y) = (
             self.position.x as f32 + state.viewport.x as f32,
@@ -144,6 +144,7 @@ impl Structure for UndergroundBelt {
                     .as_ref()
                     .ok_or_else(|| js_str!("Shader not found"))?;
                 gl.use_program(Some(&shader.program));
+                gl.uniform1f(shader.alpha_loc.as_ref(), if is_ghost { 0.5 } else { 1. });
                 gl.active_texture(GL::TEXTURE0);
                 gl.bind_texture(GL::TEXTURE_2D, Some(&state.assets.tex_underground_belt));
                 let sx = ((self.rotation.angle_4() + 2) % 4) as f32;

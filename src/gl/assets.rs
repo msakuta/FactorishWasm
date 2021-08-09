@@ -299,10 +299,11 @@ impl Assets {
             varying vec2 texCoords;
 
             uniform sampler2D texture;
+            uniform float alpha;
 
             void main() {
                 vec4 texColor = texture2D( texture, texCoords.xy );
-                gl_FragColor = texColor;
+                gl_FragColor = vec4(texColor.rgb, texColor.a * alpha);
                 if(gl_FragColor.a < 0.5)
                     discard;
             }
@@ -311,6 +312,13 @@ impl Assets {
         let program = link_program(&gl, &vert_shader, &frag_shader)?;
         gl.use_program(Some(&program));
         self.textured_shader = Some(ShaderBundle::new(&gl, program));
+
+        gl.uniform1f(
+            self.textured_shader
+                .as_ref()
+                .and_then(|s| s.alpha_loc.as_ref()),
+            1.,
+        );
 
         gl.active_texture(GL::TEXTURE0);
         gl.uniform1i(

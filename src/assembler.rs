@@ -105,19 +105,22 @@ impl Structure for Assembler {
         state: &FactorishState,
         gl: &GL,
         depth: i32,
-        is_toolbar: bool,
+        is_ghost: bool,
     ) -> Result<(), JsValue> {
         let (x, y) = (
             self.position.x as f32 + state.viewport.x as f32,
             self.position.y as f32 + state.viewport.y as f32,
         );
 
-        let get_shader = || {
-            state
+        let get_shader = || -> Result<&ShaderBundle, JsValue> {
+            let shader = state
                 .assets
                 .textured_shader
                 .as_ref()
-                .ok_or_else(|| js_str!("Shader not found"))
+                .ok_or_else(|| js_str!("Shader not found"))?;
+            gl.use_program(Some(&shader.program));
+            gl.uniform1f(shader.alpha_loc.as_ref(), if is_ghost { 0.5 } else { 1. });
+            Ok(shader)
         };
 
         let shape = |shader: &ShaderBundle| -> Result<(), JsValue> {
@@ -136,7 +139,6 @@ impl Structure for Assembler {
         match depth {
             0 => {
                 let shader = get_shader()?;
-                gl.use_program(Some(&shader.program));
                 gl.active_texture(GL::TEXTURE0);
                 gl.bind_texture(GL::TEXTURE_2D, Some(&state.assets.tex_assembler));
                 let sx = if self.progress.is_some() && 0. < self.power {
@@ -156,7 +158,7 @@ impl Structure for Assembler {
                 gl.draw_arrays(GL::TRIANGLE_FAN, 0, 4);
             }
             2 => {
-                if !is_toolbar
+                if !is_ghost
                     && self.recipe.is_some()
                     && self.power == 0.
                     && state.sim_time % 1. < 0.5

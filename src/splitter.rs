@@ -146,12 +146,23 @@ impl Structure for Splitter {
         state: &FactorishState,
         gl: &GL,
         depth: i32,
-        _is_toolbar: bool,
+        is_ghost: bool,
     ) -> Result<(), JsValue> {
         let (x, y) = (
             self.position.x as f32 + state.viewport.x as f32,
             self.position.y as f32 + state.viewport.y as f32,
         );
+
+        let get_shader = || -> Result<&ShaderBundle, JsValue> {
+            let shader = state
+                .assets
+                .textured_shader
+                .as_ref()
+                .ok_or_else(|| js_str!("Shader not found"))?;
+            gl.use_program(Some(&shader.program));
+            gl.uniform1f(shader.alpha_loc.as_ref(), if is_ghost { 0.5 } else { 1. });
+            Ok(shader)
+        };
 
         let shape = |shader: &ShaderBundle| -> Result<(), JsValue> {
             gl.uniform_matrix4fv_with_f32_array(
@@ -170,12 +181,7 @@ impl Structure for Splitter {
 
         match depth {
             0 => {
-                let shader = state
-                    .assets
-                    .textured_shader
-                    .as_ref()
-                    .ok_or_else(|| js_str!("Shader not found"))?;
-                gl.use_program(Some(&shader.program));
+                let shader = get_shader()?;
                 gl.active_texture(GL::TEXTURE0);
                 gl.bind_texture(GL::TEXTURE_2D, Some(&state.assets.tex_belt));
                 enable_buffer(&gl, &state.assets.screen_buffer, 2, shader.vertex_position);
@@ -193,12 +199,7 @@ impl Structure for Splitter {
                 gl.draw_arrays(GL::TRIANGLE_FAN, 0, 4);
             }
             1 => {
-                let shader = state
-                    .assets
-                    .textured_shader
-                    .as_ref()
-                    .ok_or_else(|| js_str!("Shader not found"))?;
-                gl.use_program(Some(&shader.program));
+                let shader = get_shader()?;
                 gl.active_texture(GL::TEXTURE0);
                 gl.bind_texture(GL::TEXTURE_2D, Some(&state.assets.tex_splitter));
                 enable_buffer(&gl, &state.assets.screen_buffer, 2, shader.vertex_position);

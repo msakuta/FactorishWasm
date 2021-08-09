@@ -119,7 +119,7 @@ impl Structure for OreMine {
         state: &FactorishState,
         gl: &GL,
         depth: i32,
-        is_toolbar: bool,
+        is_ghost: bool,
     ) -> Result<(), JsValue> {
         let (x, y) = (
             self.position.x as f32 + state.viewport.x as f32,
@@ -133,6 +133,7 @@ impl Structure for OreMine {
                     .as_ref()
                     .ok_or_else(|| js_str!("Shader not found"))?;
                 gl.use_program(Some(&shader.program));
+                gl.uniform1f(shader.alpha_loc.as_ref(), if is_ghost { 0.5 } else { 1. });
                 gl.active_texture(GL::TEXTURE0);
                 gl.bind_texture(GL::TEXTURE_2D, Some(&state.assets.tex_ore_mine));
                 let sx = if self.digging {
@@ -161,7 +162,7 @@ impl Structure for OreMine {
             }
             2 => {
                 draw_direction_arrow_gl((x, y), &self.rotation, state, gl)?;
-                if !is_toolbar {
+                if !is_ghost {
                     crate::draw_fuel_alarm_gl_impl!(self, state, gl);
                 }
             }

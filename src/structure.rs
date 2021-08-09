@@ -283,7 +283,7 @@ pub(crate) trait Structure {
         _state: &FactorishState,
         _gl: &web_sys::WebGlRenderingContext,
         _depth: i32,
-        _is_toolbar: bool,
+        _is_ghost: bool,
     ) -> Result<(), JsValue> {
         Ok(())
     }

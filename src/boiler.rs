@@ -122,9 +122,9 @@ impl Structure for Boiler {
         state: &FactorishState,
         gl: &GL,
         depth: i32,
-        _is_toolbar: bool,
+        is_ghost: bool,
     ) -> Result<(), JsValue> {
-        Pipe::draw_gl_int(self, state, gl, depth, false)?;
+        Pipe::draw_gl_int(self, state, gl, depth, false, is_ghost)?;
         let (x, y) = (
             self.position.x as f32 + state.viewport.x as f32,
             self.position.y as f32 + state.viewport.y as f32,
@@ -137,6 +137,7 @@ impl Structure for Boiler {
                     .as_ref()
                     .ok_or_else(|| js_str!("Shader not found"))?;
                 gl.use_program(Some(&shader.program));
+                gl.uniform1f(shader.alpha_loc.as_ref(), if is_ghost { 0.5 } else { 1. });
                 gl.active_texture(GL::TEXTURE0);
                 gl.bind_texture(GL::TEXTURE_2D, Some(&state.assets.tex_boiler));
                 let sx = if self.progress.is_some()
@@ -165,7 +166,11 @@ impl Structure for Boiler {
                 );
                 gl.draw_arrays(GL::TRIANGLE_FAN, 0, 4);
             }
-            2 => crate::draw_fuel_alarm_gl_impl!(self, state, gl),
+            2 => {
+                if !is_ghost {
+                    crate::draw_fuel_alarm_gl_impl!(self, state, gl)
+                }
+            }
             _ => (),
         }
         Ok(())

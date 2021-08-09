@@ -87,6 +87,8 @@ impl FactorishState {
             .as_ref()
             .ok_or_else(|| js_str!("Shader bundle not found!"))?;
         gl.use_program(Some(&shader.program));
+        gl.uniform1f(shader.alpha_loc.as_ref(), 1.);
+
         gl.active_texture(GL::TEXTURE0);
 
         gl.uniform1i(shader.texture_loc.as_ref(), 0);
@@ -343,6 +345,15 @@ impl FactorishState {
 
         if let Some((ref cursor, shader)) = self.cursor.zip(self.assets.flat_shader.as_ref()) {
             let (x, y) = (cursor[0] as f32, cursor[1] as f32);
+
+            if let Some(selected_tool) = self.get_selected_tool_or_item_opt() {
+                let mut tool = self.new_structure(&selected_tool, &Position::from(cursor))?;
+                tool.set_rotation(&self.tool_rotation).ok();
+                for depth in 0..3 {
+                    tool.draw_gl(self, &gl, depth, true)?;
+                }
+            }
+
             gl.use_program(Some(&shader.program));
             gl.uniform4fv_with_f32_array(shader.color_loc.as_ref(), &[0., 0., 1., 1.]);
             gl.uniform_matrix4fv_with_f32_array(

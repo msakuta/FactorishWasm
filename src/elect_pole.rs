@@ -71,7 +71,7 @@ impl Structure for ElectPole {
         state: &FactorishState,
         gl: &GL,
         depth: i32,
-        _is_toolbar: bool,
+        is_ghost: bool,
     ) -> Result<(), JsValue> {
         if depth != 0 {
             return Ok(());
@@ -86,6 +86,7 @@ impl Structure for ElectPole {
             .as_ref()
             .ok_or_else(|| js_str!("Shader not found"))?;
         gl.use_program(Some(&shader.program));
+        gl.uniform1f(shader.alpha_loc.as_ref(), if is_ghost { 0.5 } else { 1. });
         gl.active_texture(GL::TEXTURE0);
         gl.bind_texture(GL::TEXTURE_2D, Some(&state.assets.tex_elect_pole));
         gl.uniform_matrix3fv_with_f32_array(
