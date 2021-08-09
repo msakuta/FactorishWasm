@@ -1,14 +1,19 @@
 use super::{
     drop_items::DropItem,
+    gl::{
+        utils::{enable_buffer, Flatten},
+        ShaderBundle,
+    },
     inventory::{Inventory, InventoryTrait},
     items::get_item_image_url,
     serialize_impl,
     structure::{Structure, StructureDynIter, StructureId},
     FactorishState, FrameProcResult, ItemType, Position, Recipe, TILE_SIZE,
 };
+use cgmath::{Matrix3, Matrix4, Vector2, Vector3};
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
-use web_sys::CanvasRenderingContext2d;
+use web_sys::{CanvasRenderingContext2d, WebGlRenderingContext as GL};
 
 fn generate_item_image(item_image: &str, icon_size: bool, count: usize) -> String {
     let size = 32;
@@ -19,25 +24,6 @@ fn generate_item_image(item_image: &str, icon_size: bool, count: usize) -> Strin
     } else {
         "".to_string()
     })
-}
-
-fn _recipe_html(state: &FactorishState, recipe: &Recipe) -> String {
-    let mut ret = String::from("");
-    ret += "<div class='recipe-box'>";
-    ret += &format!(
-        "<span style='display: inline-block; margin: 1px'>{}</span>",
-        &generate_item_image("time", true, recipe.recipe_time as usize)
-    );
-    ret += "<span style='display: inline-block; width: 50%'>";
-    for (key, value) in &recipe.input {
-        ret += &generate_item_image(get_item_image_url(state, &key), true, *value);
-    }
-    ret += "</span><img src='img/rightarrow.png' style='width: 20px; height: 32px'><span style='display: inline-block; width: 10%'>";
-    for (key, value) in &recipe.output {
-        ret += &generate_item_image(get_item_image_url(state, &key), true, *value);
-    }
-    ret += "</span></div>";
-    ret
 }
 
 #[derive(Serialize, Deserialize)]
@@ -79,7 +65,7 @@ impl Structure for Assembler {
         state: &FactorishState,
         context: &CanvasRenderingContext2d,
         depth: i32,
-        is_toolbar: bool,
+        _is_toolbar: bool,
     ) -> Result<(), JsValue> {
         if depth == 0 {
             let (x, y) = (
@@ -110,15 +96,88 @@ impl Structure for Assembler {
             }
             return Ok(());
         }
-        if !is_toolbar && self.recipe.is_some() && self.power == 0. && state.sim_time % 1. < 0.5 {
-            if let Some(img) = state.image_electricity_alarm.as_ref() {
-                let (x, y) = (self.position.x as f64 * 32., self.position.y as f64 * 32.);
-                context.draw_image_with_image_bitmap(&img.bitmap, x, y)?;
-            } else {
-                return js_err!("electricity alarm image not available");
-            }
-        }
 
+        Ok(())
+    }
+
+    fn draw_gl(
+        &self,
+        state: &FactorishState,
+        gl: &GL,
+        depth: i32,
+        is_ghost: bool,
+    ) -> Result<(), JsValue> {
+        let (x, y) = (
+            self.position.x as f32 + state.viewport.x as f32,
+            self.position.y as f32 + state.viewport.y as f32,
+        );
+
+        let get_shader = || -> Result<&ShaderBundle, JsValue> {
+            let shader = state
+                .assets
+                .textured_shader
+                .as_ref()
+                .ok_or_else(|| js_str!("Shader not found"))?;
+            gl.use_program(Some(&shader.program));
+            gl.uniform1f(shader.alpha_loc.as_ref(), if is_ghost { 0.5 } else { 1. });
+            Ok(shader)
+        };
+
+        let shape = |shader: &ShaderBundle| -> Result<(), JsValue> {
+            enable_buffer(&gl, &state.assets.screen_buffer, 2, shader.vertex_position);
+            gl.uniform_matrix4fv_with_f32_array(
+                shader.transform_loc.as_ref(),
+                false,
+                (state.get_world_transform()?
+                    * Matrix4::from_scale(2.)
+                    * Matrix4::from_translation(Vector3::new(x, y, 0.)))
+                .flatten(),
+            );
+            Ok(())
+        };
+
+        match depth {
+            0 => {
+                let shader = get_shader()?;
+                gl.active_texture(GL::TEXTURE0);
+                gl.bind_texture(GL::TEXTURE_2D, Some(&state.assets.tex_assembler));
+                let sx = if self.progress.is_some() && 0. < self.power {
+                    (((state.sim_time * 5.) as isize) % 4 + 1) as f32
+                } else {
+                    0.
+                };
+                gl.uniform_matrix3fv_with_f32_array(
+                    shader.tex_transform_loc.as_ref(),
+                    false,
+                    (Matrix3::from_nonuniform_scale(1. / 4., 1.)
+                        * Matrix3::from_translation(Vector2::new(sx, 0.)))
+                    .flatten(),
+                );
+
+                shape(shader)?;
+                gl.draw_arrays(GL::TRIANGLE_FAN, 0, 4);
+            }
+            2 => {
+                if !is_ghost
+                    && self.recipe.is_some()
+                    && self.power == 0.
+                    && state.sim_time % 1. < 0.5
+                {
+                    let shader = get_shader()?;
+                    gl.active_texture(GL::TEXTURE0);
+                    gl.bind_texture(GL::TEXTURE_2D, Some(&state.assets.tex_electricity_alarm));
+                    gl.uniform_matrix3fv_with_f32_array(
+                        shader.tex_transform_loc.as_ref(),
+                        false,
+                        Matrix3::from_scale(1.).flatten(),
+                    );
+
+                    shape(shader)?;
+                    gl.draw_arrays(GL::TRIANGLE_FAN, 0, 4);
+                }
+            }
+            _ => (),
+        }
         Ok(())
     }
 

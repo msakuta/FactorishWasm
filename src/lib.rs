@@ -30,6 +30,15 @@ mod transport_belt;
 mod underground_belt;
 mod utils;
 mod water_well;
+mod gl {
+    pub(crate) mod assets;
+    mod render_gl;
+    mod shader_bundle;
+    pub(crate) mod utils;
+
+    pub(crate) use render_gl::{draw_direction_arrow_gl, draw_fuel_alarm_gl};
+    pub(crate) use shader_bundle::ShaderBundle;
+}
 
 use crate::{
     drop_items::{
@@ -37,6 +46,7 @@ use crate::{
         remove_index, update_index, DropItem, DropItemEntry, DropItemId, DropItemIndex,
         DROP_ITEM_SIZE, INDEX_CHUNK_SIZE,
     },
+    gl::assets::Assets,
     perf::PerfStats,
     scenarios::select_scenario,
     terrain::{
@@ -52,7 +62,7 @@ use elect_pole::ElectPole;
 use furnace::Furnace;
 use inserter::Inserter;
 use inventory::{Inventory, InventoryTrait, InventoryType};
-use items::{item_to_str, render_drop_item, str_to_item, ItemType};
+use items::{item_to_str, str_to_item, ItemType};
 use offshore_pump::OffshorePump;
 use ore_mine::OreMine;
 use perlin_noise::Xor128;
@@ -73,7 +83,9 @@ use std::hash::Hash;
 use std::{collections::HashMap, convert::TryFrom};
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
-use web_sys::{CanvasRenderingContext2d, HtmlCanvasElement, HtmlDivElement, ImageBitmap};
+use web_sys::{
+    CanvasRenderingContext2d, HtmlCanvasElement, HtmlDivElement, ImageBitmap, WebGlRenderingContext,
+};
 
 #[wasm_bindgen]
 extern "C" {
@@ -127,12 +139,16 @@ fn performance() -> web_sys::Performance {
 }
 
 const TILE_SIZE: f64 = 32.;
+const TILE_SIZE_F: f32 = TILE_SIZE as f32;
 const TILE_SIZE_I: i32 = TILE_SIZE as i32;
 
 const COAL_POWER: f64 = 100.; // kilojoules
 const SAVE_VERSION: i64 = 5;
 const ORE_HARVEST_TIME: i32 = 20;
-const POPUP_TEXT_LIFE: i32 = 30;
+
+const WIRE_ATTACH_X: f64 = 28.;
+const WIRE_ATTACH_Y: f64 = 8.;
+const WIRE_HANG: f64 = 0.15;
 
 /// Event types that can be communicated to the JavaScript code.
 /// It is serialized into a JavaScript Object through serde.
@@ -343,6 +359,7 @@ impl<'a> From<&'a ImageBundle> for &'a ImageBitmap {
 
 struct TempEnt {
     position: (f64, f64),
+    velocity: (f64, f64),
     rotation: f64,
     life: f64,
     max_life: f64,
@@ -353,8 +370,12 @@ impl TempEnt {
         let life = rng.next() * 3. + 6.;
         TempEnt {
             position: (
-                (position.x as f64 + 0.5 + rng.next() * 0.5) * 32.,
-                (position.y as f64 + rng.next() * 0.5) * 32.,
+                (position.x as f64 + 0.5) * TILE_SIZE,
+                (position.y as f64 + 0.25 + rng.next() * 0.5) * TILE_SIZE,
+            ),
+            velocity: (
+                (rng.next() * 1.5 - 0.75 + 0.5), // A bit bias to the right
+                (4. + rng.next()),
             ),
             rotation: rng.next() * std::f64::consts::PI * 2.,
             life,
@@ -365,13 +386,6 @@ impl TempEnt {
 
 #[derive(Eq, PartialEq, Hash, Copy, Clone, Serialize, Deserialize, Debug)]
 struct PowerWire(StructureId, StructureId);
-
-struct PopupText {
-    text: String,
-    x: f64,
-    y: f64,
-    life: i32,
-}
 
 #[derive(Eq, PartialEq, Copy, Clone, Debug)]
 enum SelectedItem {
@@ -482,12 +496,13 @@ pub struct FactorishState {
     cursor: Option<[i32; 2]>,
     info_elem: Option<HtmlDivElement>,
     on_player_update: js_sys::Function,
+    on_popup_text: js_sys::Function,
     minimap_buffer: Vec<u8>,
     power_wires: Vec<PowerWire>,
-    popup_texts: Vec<PopupText>,
     debug_bbox: bool,
     debug_fluidbox: bool,
     debug_power_network: bool,
+    use_webgl_instancing: bool,
 
     // Performance measurements
     perf_structures: PerfStats,
@@ -497,13 +512,6 @@ pub struct FactorishState {
     perf_render: PerfStats,
 
     // on_show_inventory: js_sys::Function,
-    image_dirt: Option<ImageBundle>,
-    image_back_tiles: Option<ImageBundle>,
-    image_weeds: Option<ImageBundle>,
-    image_ore: Option<ImageBundle>,
-    image_coal: Option<ImageBundle>,
-    image_copper: Option<ImageBundle>,
-    image_stone: Option<ImageBundle>,
     image_belt: Option<ImageBundle>,
     image_underground_belt: Option<ImageBundle>,
     image_chest: Option<ImageBundle>,
@@ -529,10 +537,9 @@ pub struct FactorishState {
     image_copper_wire: Option<ImageBundle>,
     image_circuit: Option<ImageBundle>,
     image_time: Option<ImageBundle>,
-    image_smoke: Option<ImageBundle>,
-    image_fuel_alarm: Option<ImageBundle>,
-    image_electricity_alarm: Option<ImageBundle>,
     image_underground_belt_item: Option<ImageBundle>,
+
+    assets: Assets,
 }
 
 #[derive(Debug)]
@@ -549,8 +556,11 @@ impl FactorishState {
     pub fn new(
         terrain_params: JsValue,
         on_player_update: js_sys::Function,
+        on_popup_text: js_sys::Function,
         // on_show_inventory: js_sys::Function,
         scenario: &str,
+        context: WebGlRenderingContext,
+        assets: js_sys::Array,
     ) -> Result<FactorishState, JsValue> {
         console_log!("FactorishState constructor");
 
@@ -610,22 +620,15 @@ impl FactorishState {
             minimap_buffer: vec![],
             power_wires: vec![],
             power_networks: vec![],
-            popup_texts: vec![],
             debug_bbox: false,
             debug_fluidbox: false,
             debug_power_network: false,
+            use_webgl_instancing: true,
             perf_structures: PerfStats::default(),
             perf_drop_items: PerfStats::default(),
             perf_simulate: PerfStats::default(),
             perf_minimap: PerfStats::default(),
             perf_render: PerfStats::default(),
-            image_dirt: None,
-            image_back_tiles: None,
-            image_weeds: None,
-            image_ore: None,
-            image_coal: None,
-            image_stone: None,
-            image_copper: None,
             image_belt: None,
             image_underground_belt: None,
             image_chest: None,
@@ -651,9 +654,6 @@ impl FactorishState {
             image_copper_wire: None,
             image_circuit: None,
             image_time: None,
-            image_smoke: None,
-            image_fuel_alarm: None,
-            image_electricity_alarm: None,
             image_underground_belt_item: None,
             board,
             terrain_params,
@@ -663,9 +663,11 @@ impl FactorishState {
             drop_items,
             drop_items_index: DropItemIndex::default(),
             on_player_update,
+            on_popup_text,
             temp_ents: vec![],
             rng: Xor128::new(3142125),
             // on_show_inventory,
+            assets: Assets::new(&context, assets)?,
         };
 
         ret.update_cache()?;
@@ -1221,11 +1223,13 @@ impl FactorishState {
                     self.on_player_update
                         .call1(&window(), &JsValue::from(self.get_player_inventory().ok()?))
                         .unwrap_or_else(|_| JsValue::from(true));
-                    self.new_popup_text(
+                    if let Err(e) = self.new_popup_text(
                         format!("+1 {:?}", ore_harvesting.ore_type),
                         ore_harvesting.pos.x as f64 * TILE_SIZE,
                         ore_harvesting.pos.y as f64 * TILE_SIZE,
-                    );
+                    ) {
+                        console_log!("Add text error: {:?}", e);
+                    }
                 } else {
                     ret = false;
                 }
@@ -1237,20 +1241,6 @@ impl FactorishState {
                 None
             }
         })();
-
-        let mut delete_me = vec![];
-        for (i, item) in self.popup_texts.iter_mut().enumerate() {
-            if item.life <= 0 {
-                delete_me.push(i);
-            } else {
-                item.y -= 1.;
-                item.life -= 1;
-            }
-        }
-
-        for i in delete_me.iter().rev() {
-            self.popup_texts.remove(*i);
-        }
 
         let start_structures = performance().now();
         // This is silly way to avoid borrow checker that temporarily move the structures
@@ -1355,8 +1345,8 @@ impl FactorishState {
         self.temp_ents = std::mem::take(&mut self.temp_ents)
             .into_iter()
             .map(|mut ent| {
-                ent.position.0 += delta_time * 1.5;
-                ent.position.1 -= delta_time * 4.2;
+                ent.position.0 += delta_time * ent.velocity.0;
+                ent.position.1 -= delta_time * ent.velocity.1;
                 ent.life -= delta_time;
                 ent
             })
@@ -1658,7 +1648,7 @@ impl FactorishState {
                 popup_text,
                 position.x as f64 * TILE_SIZE,
                 position.y as f64 * TILE_SIZE,
-            );
+            )?;
         }
         Ok(harvested_structure || harvested_items)
     }
@@ -1866,6 +1856,10 @@ impl FactorishState {
 
     pub fn set_debug_power_network(&mut self, value: bool) {
         self.debug_power_network = value;
+    }
+
+    pub fn set_use_webgl_instancing(&mut self, value: bool) {
+        self.use_webgl_instancing = value;
     }
 
     /// Move inventory items between structure and player
@@ -2425,13 +2419,6 @@ impl FactorishState {
                 Err(JsValue::from_str(&format!("Image not found: {:?}", path)))
             }
         };
-        self.image_dirt = Some(load_image("dirt")?);
-        self.image_back_tiles = Some(load_image("backTiles")?);
-        self.image_weeds = Some(load_image("weeds")?);
-        self.image_ore = Some(load_image("iron")?);
-        self.image_coal = Some(load_image("coal")?);
-        self.image_copper = Some(load_image("copper")?);
-        self.image_stone = Some(load_image("stone")?);
         self.image_belt = Some(load_image("transport")?);
         self.image_underground_belt = Some(load_image("undergroundBelt")?);
         self.image_chest = Some(load_image("chest")?);
@@ -2457,9 +2444,6 @@ impl FactorishState {
         self.image_copper_wire = Some(load_image("copperWire")?);
         self.image_circuit = Some(load_image("circuit")?);
         self.image_time = Some(load_image("time")?);
-        self.image_smoke = Some(load_image("smoke")?);
-        self.image_fuel_alarm = Some(load_image("fuelAlarm")?);
-        self.image_electricity_alarm = Some(load_image("electricityAlarm")?);
         self.image_underground_belt_item = Some(load_image("undergroundBeltItem")?);
         Ok(())
     }
@@ -2519,6 +2503,10 @@ impl FactorishState {
     ) -> Result<(), JsValue> {
         context.clear_rect(0., 0., 32., 32.);
         if let Some(item) = self.tool_belt.get(tool_index).unwrap_or(&None) {
+            if Some(SelectedItem::ToolBelt(tool_index)) == self.selected_item {
+                context.set_fill_style(&js_str!("#00ffff"));
+                context.fill_rect(0., 0., 32., 32.);
+            }
             let mut tool = self.new_structure(item, &Position { x: 0, y: 0 })?;
             tool.set_rotation(&self.tool_rotation).ok();
             for depth in 0..3 {
@@ -2707,306 +2695,25 @@ impl FactorishState {
 
     /// Add a new popup text that will show for a moment and automatically disappears
     ///
-    /// @param text Is given as owned string because the text is most likely dynamic.
-    fn new_popup_text(&mut self, text: String, x: f64, y: f64) {
-        let pop = PopupText {
-            text,
-            x: (x + self.viewport.x * TILE_SIZE) * self.viewport.scale,
-            y: (y + self.viewport.y * TILE_SIZE) * self.viewport.scale,
-            life: POPUP_TEXT_LIFE,
-        };
-        self.popup_texts.push(pop);
+    /// It delegates actual HTML element creation to JavaScript code via a callback
+    /// since it is too cumbersome to handle HTML elements directly in Rust code.
+    /// While it's possible, it can be slower than JavaScript code due to many runtime
+    /// calls.
+    ///
+    /// Also, we don't want to render text in WebGL directly. We know how painful it is to
+    /// support text rendering in raw WebGL...
+    fn new_popup_text(&mut self, text: String, x: f64, y: f64) -> Result<(), JsValue> {
+        self.on_popup_text.call3(
+            &window(),
+            &JsValue::from_str(&text),
+            &JsValue::from_f64((x + self.viewport.x * TILE_SIZE) * self.viewport.scale),
+            &JsValue::from_f64((y + self.viewport.y * TILE_SIZE) * self.viewport.scale),
+        )?;
+        Ok(())
     }
 
     /// Returns an iterator over valid structures
     fn structure_iter(&self) -> impl Iterator<Item = &dyn Structure> {
         self.structures.iter().filter_map(|s| s.dynamic.as_deref())
-    }
-
-    pub fn render(&mut self, context: CanvasRenderingContext2d) -> Result<(), JsValue> {
-        use std::f64;
-
-        let start_render = performance().now();
-
-        context.clear_rect(0., 0., self.viewport_width, self.viewport_height);
-
-        context.save();
-        context.scale(self.viewport.scale, self.viewport.scale)?;
-        context.translate(self.viewport.x * 32., self.viewport.y * 32.)?;
-
-        (|| {
-            fn unwrap_img(img: &Option<ImageBundle>) -> Result<&ImageBundle, JsValue> {
-                img.as_ref().ok_or_else(|| js_str!("Image not available"))
-            }
-            let img = unwrap_img(&self.image_dirt)?;
-            let back_tiles = unwrap_img(&self.image_back_tiles)?;
-            let img_ore = unwrap_img(&self.image_ore)?;
-            let img_coal = unwrap_img(&self.image_coal)?;
-            let img_copper = unwrap_img(&self.image_copper)?;
-            let img_stone = unwrap_img(&self.image_stone)?;
-            // let mut cell_draws = 0;
-            let (left, top, right, bottom) = apply_bounds(&self.bounds, &self.viewport, self.viewport_width, self.viewport_height);
-
-            for y in top..=bottom {
-                for x in left..=right {
-                    let chunk_pos = Position::new(x.div_euclid(CHUNK_SIZE_I), y.div_euclid(CHUNK_SIZE_I));
-                    let chunk = self.board.get(&chunk_pos);
-                    let chunk = if let Some(chunk) = chunk {
-                        chunk
-                    } else {
-                        continue;
-                    };
-                    let (mx, my) = (x as usize % CHUNK_SIZE, y as usize % CHUNK_SIZE);
-                    let cell = &chunk.cells[(mx + my * CHUNK_SIZE) as usize];
-                    let (dx, dy) = (x as f64 * 32., y as f64 * 32.);
-                    if cell.water || cell.image != 0 {
-                        let srcx = cell.image % 4;
-                        let srcy = cell.image / 4;
-                        context.draw_image_with_image_bitmap_and_sw_and_sh_and_dx_and_dy_and_dw_and_dh(
-                            &back_tiles.bitmap, (srcx * 32) as f64, (srcy * 32) as f64, 32., 32., dx, dy, 32., 32.)?;
-                    } else {
-                        context.draw_image_with_image_bitmap(&img.bitmap, dx, dy)?;
-                        if let Some(weeds) = &self.image_weeds {
-                            if 0 < cell.grass_image {
-                                context.draw_image_with_image_bitmap_and_sw_and_sh_and_dx_and_dy_and_dw_and_dh(
-                                    &weeds.bitmap,
-                                    (cell.grass_image * 32) as f64, 0., 32., 32., dx, dy, 32., 32.)?;
-                            }
-                        } else {
-                            console_log!("Weed image not found");
-                        }
-                    }
-                    let draw_ore = |ore: u32, img: &ImageBitmap| -> Result<(), JsValue> {
-                        if 0 < ore {
-                            let idx = (ore / 10).min(3);
-                            // console_log!("x: {}, y: {}, idx: {}, ore: {}", x, y, idx, ore);
-                            context.draw_image_with_image_bitmap_and_sw_and_sh_and_dx_and_dy_and_dw_and_dh(
-                                img, (idx * 32) as f64, 0., 32., 32., x as f64 * 32., y as f64 * 32., 32., 32.)?;
-                        }
-                        Ok(())
-                    };
-                    match cell.ore {
-                        Some(OreValue(Ore::Iron, v)) => draw_ore(v, &img_ore.bitmap)?,
-                        Some(OreValue(Ore::Coal, v)) => draw_ore(v, &img_coal.bitmap)?,
-                        Some(OreValue(Ore::Copper, v)) => draw_ore(v, &img_copper.bitmap)?,
-                        Some(OreValue(Ore::Stone, v)) => draw_ore(v, &img_stone.bitmap)?,
-                        _ => (),
-                    }
-                    // cell_draws += 1;
-                }
-            }
-            // console_log!(
-            //     "size: {:?}, scale: {:?}, cell_draws: {} []: {:?}",
-            //     self.get_viewport(),
-            //     self.view_scale,
-            //     cell_draws,
-            //     [left, top, right, bottom] // self.board.iter().fold(0, |accum, val| accum + val.iron_ore)
-            // );
-            Ok(())
-        })().map_err(|e: JsValue| js_str!("image not available: {:?}", e))?;
-
-        let draw_structures = |depth| -> Result<(), JsValue> {
-            for structure in self.structure_iter() {
-                structure.draw(&self, &context, depth, false)?;
-            }
-            Ok(())
-        };
-
-        draw_structures(0)?;
-
-        for item in drop_item_iter(&self.drop_items) {
-            render_drop_item(self, &context, &item.type_, item.x, item.y)?;
-        }
-
-        const WIRE_ATTACH_X: f64 = 28.;
-        const WIRE_ATTACH_Y: f64 = 8.;
-        const WIRE_HANG: f64 = 0.15;
-
-        let draw_wires = |wires: &[PowerWire]| {
-            for PowerWire(first, second) in wires {
-                context.begin_path();
-                let first = if let Some(d) = self.get_structure(*first) {
-                    d.position()
-                } else {
-                    continue;
-                };
-                context.move_to(
-                    first.x as f64 * TILE_SIZE + WIRE_ATTACH_X,
-                    first.y as f64 * TILE_SIZE + WIRE_ATTACH_Y,
-                );
-                let second = if let Some(d) = self.get_structure(*second) {
-                    d.position()
-                } else {
-                    continue;
-                };
-                let dx = (first.x - second.x) as f64;
-                let dy = (first.y - second.y) as f64;
-                let dist = (dx * dx + dy * dy).sqrt();
-                context.quadratic_curve_to(
-                    (first.x + second.x) as f64 / 2. * TILE_SIZE + WIRE_ATTACH_X,
-                    ((first.y + second.y) as f64 / 2. + dist * WIRE_HANG) * TILE_SIZE
-                        + WIRE_ATTACH_Y,
-                    second.x as f64 * TILE_SIZE + WIRE_ATTACH_X,
-                    second.y as f64 * TILE_SIZE + WIRE_ATTACH_Y,
-                );
-                context.stroke();
-            }
-        };
-
-        if self.debug_power_network {
-            for (i, nw) in self.power_networks.iter().enumerate() {
-                context.set_stroke_style(&js_str!(
-                    ["rgb(255,0,0)", "rgb(0,0,255)", "rgb(0,255,0)"][i % 3]
-                ));
-                context.set_line_width(3.);
-                draw_wires(&nw.wires);
-            }
-        }
-
-        context.set_stroke_style(&js_str!("rgb(191,127,0)"));
-        context.set_line_width(1.);
-        draw_wires(&self.power_wires);
-
-        draw_structures(1)?;
-        draw_structures(2)?;
-
-        if self.debug_bbox {
-            context.save();
-            context.set_stroke_style(&js_str!("red"));
-            context.set_line_width(1.);
-            for structure in self.structure_iter() {
-                let bb = structure.bounding_box();
-                context.stroke_rect(
-                    bb.x0 as f64 * TILE_SIZE,
-                    bb.y0 as f64 * TILE_SIZE,
-                    (bb.x1 - bb.x0) as f64 * TILE_SIZE,
-                    (bb.y1 - bb.y0) as f64 * TILE_SIZE,
-                );
-            }
-            context.set_stroke_style(&js_str!("purple"));
-            for item in drop_item_iter(&self.drop_items) {
-                context.stroke_rect(
-                    item.x as f64 - DROP_ITEM_SIZE / 2.,
-                    item.y as f64 - DROP_ITEM_SIZE / 2.,
-                    DROP_ITEM_SIZE,
-                    DROP_ITEM_SIZE,
-                );
-            }
-            context.set_stroke_style(&js_str!("black"));
-            for chunk in self.board.keys() {
-                context.stroke_rect(
-                    chunk.x as f64 * TILE_SIZE * INDEX_CHUNK_SIZE as f64,
-                    chunk.y as f64 * TILE_SIZE * INDEX_CHUNK_SIZE as f64,
-                    TILE_SIZE * INDEX_CHUNK_SIZE as f64,
-                    TILE_SIZE * INDEX_CHUNK_SIZE as f64,
-                );
-            }
-            context.restore();
-        }
-
-        if self.debug_fluidbox {
-            context.save();
-            for structure in self.structure_iter() {
-                if let Some(fluid_boxes) = structure.fluid_box() {
-                    let bb = structure.bounding_box();
-                    for (i, fb) in fluid_boxes.iter().enumerate() {
-                        const BAR_MARGIN: f64 = 4.;
-                        const BAR_WIDTH: f64 = 4.;
-                        context.set_stroke_style(&js_str!("red"));
-                        context.set_fill_style(&js_str!("black"));
-                        context.fill_rect(
-                            bb.x0 as f64 * TILE_SIZE + BAR_MARGIN + 6. * i as f64,
-                            bb.y0 as f64 * TILE_SIZE + BAR_MARGIN,
-                            BAR_WIDTH,
-                            (bb.y1 - bb.y0) as f64 * TILE_SIZE - BAR_MARGIN * 2.,
-                        );
-                        context.stroke_rect(
-                            bb.x0 as f64 * TILE_SIZE + BAR_MARGIN + 6. * i as f64,
-                            bb.y0 as f64 * TILE_SIZE + BAR_MARGIN,
-                            BAR_WIDTH,
-                            (bb.y1 - bb.y0) as f64 * TILE_SIZE - BAR_MARGIN * 2.,
-                        );
-                        context.set_fill_style(&js_str!(match fb.type_ {
-                            Some(FluidType::Water) => "#00ffff",
-                            Some(FluidType::Steam) => "#afafaf",
-                            _ => "#7f7f7f",
-                        }));
-                        let bar_height = fb.amount / fb.max_amount
-                            * ((bb.y1 - bb.y0) as f64 * TILE_SIZE - BAR_MARGIN * 2.);
-                        context.fill_rect(
-                            bb.x0 as f64 * TILE_SIZE + BAR_MARGIN + 6. * i as f64,
-                            bb.y1 as f64 * TILE_SIZE - BAR_MARGIN - bar_height,
-                            4.,
-                            bar_height,
-                        );
-                    }
-                }
-            }
-            context.restore();
-        }
-
-        for ent in &self.temp_ents {
-            if let Some(img) = &self.image_smoke {
-                let (x, y) = (ent.position.0 - 24., ent.position.1 - 24.);
-                context.save();
-                context
-                    .set_global_alpha(((ent.max_life - ent.life).min(ent.life) * 0.15).min(0.35));
-                context.translate(x + 16., y + 16.)?;
-                context.rotate(ent.rotation)?;
-                context.draw_image_with_image_bitmap_and_dw_and_dh(
-                    &img.bitmap,
-                    -16.,
-                    -16.,
-                    32.,
-                    32.,
-                )?;
-                context.restore();
-            }
-        }
-
-        if let Some(ref cursor) = self.cursor {
-            let (x, y) = ((cursor[0] * 32) as f64, (cursor[1] * 32) as f64);
-            if let Some(selected_tool) = self.get_selected_tool_or_item_opt() {
-                context.save();
-                context.set_global_alpha(0.5);
-                let mut tool = self.new_structure(&selected_tool, &Position::from(cursor))?;
-                tool.set_rotation(&self.tool_rotation).ok();
-                for depth in 0..3 {
-                    tool.draw(self, &context, depth, false)?;
-                }
-                context.restore();
-            }
-            context.set_stroke_style(&JsValue::from_str("blue"));
-            context.set_line_width(2.);
-            context.stroke_rect(x, y, 32., 32.);
-        }
-
-        if let Some(ore_harvesting) = &self.ore_harvesting {
-            context.set_stroke_style(&js_str!("rgb(255,127,255)"));
-            context.set_line_width(4.);
-            context.begin_path();
-            context.arc(
-                (ore_harvesting.pos.x as f64 + 0.5) * TILE_SIZE,
-                (ore_harvesting.pos.y as f64 + 0.5) * TILE_SIZE,
-                TILE_SIZE / 2. + 2.,
-                0.,
-                ore_harvesting.timer as f64 / ORE_HARVEST_TIME as f64 * 2. * f64::consts::PI,
-            )?;
-            context.stroke();
-        }
-
-        context.restore();
-
-        context.set_font("bold 14px sans-serif");
-        context.set_stroke_style(&js_str!("white"));
-        context.set_line_width(2.);
-        context.set_fill_style(&js_str!("rgb(0,0,0)"));
-        for item in &self.popup_texts {
-            context.stroke_text(&item.text, item.x, item.y)?;
-            context.fill_text(&item.text, item.x, item.y)?;
-        }
-
-        self.perf_render.add(performance().now() - start_render);
-        Ok(())
     }
 }

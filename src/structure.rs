@@ -23,23 +23,6 @@ macro_rules! serialize_impl {
     };
 }
 
-#[macro_export]
-macro_rules! draw_fuel_alarm {
-    ($self_:expr, $state:expr, $context:expr) => {
-        if $self_.recipe.is_some() && $self_.power == 0. && $state.sim_time % 1. < 0.5 {
-            if let Some(img) = $state.image_fuel_alarm.as_ref() {
-                let (x, y) = (
-                    $self_.position.x as f64 * 32.,
-                    $self_.position.y as f64 * 32.,
-                );
-                $context.draw_image_with_image_bitmap(&img.bitmap, x, y)?;
-            } else {
-                return js_err!("fuel alarm image not available");
-            }
-        }
-    };
-}
-
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) struct StructureId {
     pub id: u32,
@@ -246,6 +229,15 @@ pub(crate) trait Structure {
         depth: i32,
         is_tooptip: bool,
     ) -> Result<(), JsValue>;
+    fn draw_gl(
+        &self,
+        _state: &FactorishState,
+        _gl: &web_sys::WebGlRenderingContext,
+        _depth: i32,
+        _is_ghost: bool,
+    ) -> Result<(), JsValue> {
+        Ok(())
+    }
     fn desc(&self, _state: &FactorishState) -> String {
         String::from("")
     }

@@ -1,7 +1,8 @@
-use super::{FactorishState, ImageBundle};
+use super::{gl::utils::Flatten, FactorishState, ImageBundle, TILE_SIZE_F};
+use cgmath::{Matrix3, Matrix4, Vector3};
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
-use web_sys::CanvasRenderingContext2d;
+use web_sys::{CanvasRenderingContext2d, WebGlRenderingContext as GL, WebGlTexture};
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug, Hash, Serialize, Deserialize)]
 pub(crate) enum ItemType {
@@ -152,6 +153,84 @@ pub(crate) fn render_drop_item(
         ItemType::Splitter => render16(&state.image_splitter),
         ItemType::UndergroundBelt => render16(&state.image_underground_belt_item),
     }
+}
+
+pub(crate) fn render_drop_item_mat_gl(
+    state: &FactorishState,
+    gl: &GL,
+    item_type: &ItemType,
+    transform: Matrix4<f32>,
+) -> Result<(), JsValue> {
+    let shader = state
+        .assets
+        .textured_shader
+        .as_ref()
+        .ok_or_else(|| js_str!("Shader not found"))?;
+    let render_gen = |img: &WebGlTexture, scale_x: f32| -> Result<(), JsValue> {
+        gl.bind_texture(GL::TEXTURE_2D, Some(&img));
+        gl.uniform_matrix3fv_with_f32_array(
+            shader.tex_transform_loc.as_ref(),
+            false,
+            Matrix3::from_nonuniform_scale(scale_x, 1.).flatten(),
+        );
+
+        gl.uniform_matrix4fv_with_f32_array(
+            shader.transform_loc.as_ref(),
+            false,
+            (transform * Matrix4::from_scale(0.5)).flatten(),
+        );
+
+        gl.draw_arrays(GL::TRIANGLE_FAN, 0, 4);
+        Ok(())
+    };
+    let render16 = |img| render_gen(img, 1.);
+    match item_type {
+        ItemType::IronOre => render16(&state.assets.tex_iron_ore),
+        ItemType::CoalOre => render16(&state.assets.tex_coal_ore),
+        ItemType::CopperOre => render16(&state.assets.tex_copper_ore),
+        ItemType::StoneOre => render16(&state.assets.tex_stone_ore),
+        ItemType::IronPlate => render16(&state.assets.tex_iron_plate),
+        ItemType::CopperPlate => render16(&state.assets.tex_copper_plate),
+        ItemType::Gear => render16(&state.assets.tex_gear),
+        ItemType::CopperWire => render16(&state.assets.tex_copper_wire),
+        ItemType::Circuit => render16(&state.assets.tex_circuit),
+
+        ItemType::TransportBelt => render16(&state.assets.tex_belt),
+        ItemType::Chest => render16(&state.assets.tex_chest),
+        ItemType::Inserter => render_gen(&state.assets.tex_inserter, 1. / 2.),
+        ItemType::OreMine => render_gen(&state.assets.tex_ore_mine, 1. / 3.),
+        ItemType::Furnace => render_gen(&state.assets.tex_furnace, 1. / 3.),
+        ItemType::Assembler => render_gen(&state.assets.tex_assembler, 1. / 4.),
+        ItemType::Boiler => render_gen(&state.assets.tex_boiler, 1. / 3.),
+        ItemType::WaterWell => render16(&state.assets.tex_water_well),
+        ItemType::OffshorePump => render16(&state.assets.tex_offshore_pump),
+        ItemType::Pipe => render16(&state.assets.tex_pipe),
+        ItemType::SteamEngine => render_gen(&state.assets.tex_steam_engine, 1. / 3.),
+        ItemType::ElectPole => render16(&state.assets.tex_elect_pole),
+        ItemType::Splitter => render16(&state.assets.tex_splitter),
+        ItemType::UndergroundBelt => render16(&state.assets.tex_underground_belt_item),
+    }
+}
+
+pub(crate) fn render_drop_item_gl(
+    state: &FactorishState,
+    gl: &GL,
+    item_type: &ItemType,
+    x: i32,
+    y: i32,
+) -> Result<(), JsValue> {
+    render_drop_item_mat_gl(
+        state,
+        gl,
+        item_type,
+        state.get_world_transform()?
+            * Matrix4::from_scale(2.)
+            * Matrix4::from_translation(Vector3::new(
+                x as f32 / TILE_SIZE_F + state.viewport.x as f32 - 0.25,
+                y as f32 / TILE_SIZE_F + state.viewport.y as f32 - 0.25,
+                0.,
+            )),
+    )
 }
 
 pub(crate) fn get_item_image_url<'a>(state: &'a FactorishState, item_type: &ItemType) -> &'a str {

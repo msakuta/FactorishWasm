@@ -1,13 +1,18 @@
 use super::{
     draw_direction_arrow,
     drop_items::DropItem,
-    items::{render_drop_item, ItemType},
+    gl::{
+        draw_direction_arrow_gl,
+        utils::{enable_buffer, Flatten},
+    },
+    items::{render_drop_item, render_drop_item_mat_gl, ItemType},
     structure::{RotateErr, Structure, StructureDynIter, StructureId},
     FactorishState, FrameProcResult, Inventory, InventoryTrait, Position, Rotation,
 };
+use cgmath::{Matrix3, Matrix4, Rad, Vector2, Vector3};
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
-use web_sys::CanvasRenderingContext2d;
+use web_sys::{CanvasRenderingContext2d, WebGlRenderingContext as GL};
 
 #[derive(Serialize, Deserialize)]
 pub(crate) struct Inserter {
@@ -146,6 +151,130 @@ impl Structure for Inserter {
             },
             2 => draw_direction_arrow((x, y), &self.rotation, state, context)?,
             _ => panic!(),
+        }
+
+        Ok(())
+    }
+
+    fn draw_gl(
+        &self,
+        state: &FactorishState,
+        gl: &GL,
+        depth: i32,
+        is_ghost: bool,
+    ) -> Result<(), JsValue> {
+        let (x, y) = (
+            self.position.x as f32 + state.viewport.x as f32,
+            self.position.y as f32 + state.viewport.y as f32,
+        );
+        match depth {
+            0 => {
+                let shader = state
+                    .assets
+                    .textured_shader
+                    .as_ref()
+                    .ok_or_else(|| js_str!("Shader not found"))?;
+                gl.use_program(Some(&shader.program));
+                gl.uniform1f(shader.alpha_loc.as_ref(), if is_ghost { 0.5 } else { 1. });
+                gl.active_texture(GL::TEXTURE0);
+                gl.bind_texture(GL::TEXTURE_2D, Some(&state.assets.tex_inserter));
+
+                gl.uniform_matrix3fv_with_f32_array(
+                    shader.tex_transform_loc.as_ref(),
+                    false,
+                    Matrix3::from_nonuniform_scale(0.5, 1.).flatten(),
+                );
+
+                enable_buffer(&gl, &state.assets.screen_buffer, 2, shader.vertex_position);
+                gl.uniform_matrix4fv_with_f32_array(
+                    shader.transform_loc.as_ref(),
+                    false,
+                    (state.get_world_transform()?
+                        * Matrix4::from_scale(2.)
+                        * Matrix4::from_translation(Vector3::new(x, y, 0.)))
+                    .flatten(),
+                );
+                gl.draw_arrays(GL::TRIANGLE_FAN, 0, 4);
+            }
+            1 => {
+                let shader = state
+                    .assets
+                    .textured_shader
+                    .as_ref()
+                    .ok_or_else(|| js_str!("Shader not found"))?;
+                gl.use_program(Some(&shader.program));
+                gl.active_texture(GL::TEXTURE0);
+                gl.bind_texture(GL::TEXTURE_2D, Some(&state.assets.tex_inserter));
+
+                enable_buffer(&gl, &state.assets.screen_buffer, 2, shader.vertex_position);
+
+                let angles = self.get_arm_angles();
+
+                const JOINT_POS: (f32, f32) = (0.5, 0.625);
+
+                let origin_transform = state.get_world_transform()?
+                    * Matrix4::from_scale(2.)
+                    * Matrix4::from_translation(Vector3::new(x + 0.5, y + 0.5, 0.));
+
+                let base_rotation = Matrix4::from_angle_z(Rad(angles.0 as f32));
+
+                let base_transform = origin_transform * base_rotation;
+
+                let vertex_transform = Matrix4::from_nonuniform_scale(0.5, 1., 1.)
+                    * Matrix4::from_translation(Vector3::new(-JOINT_POS.0, -JOINT_POS.1, 0.));
+
+                gl.uniform_matrix3fv_with_f32_array(
+                    shader.tex_transform_loc.as_ref(),
+                    false,
+                    (Matrix3::from_translation(Vector2::new(0.75, 0.))
+                        * Matrix3::from_nonuniform_scale(0.25, 1.))
+                    .flatten(),
+                );
+
+                gl.uniform_matrix4fv_with_f32_array(
+                    shader.transform_loc.as_ref(),
+                    false,
+                    (base_transform * vertex_transform).flatten(),
+                );
+                gl.draw_arrays(GL::TRIANGLE_FAN, 0, 4);
+
+                const JOINT_POS2: (f32, f32) = (0., 0.375);
+
+                gl.uniform_matrix3fv_with_f32_array(
+                    shader.tex_transform_loc.as_ref(),
+                    false,
+                    (Matrix3::from_translation(Vector2::new(0.5, 0.))
+                        * Matrix3::from_nonuniform_scale(0.25, 1.))
+                    .flatten(),
+                );
+
+                let middle_transform =
+                    Matrix4::from_translation(Vector3::new(-JOINT_POS2.0, -JOINT_POS2.1, 0.))
+                        * Matrix4::from_angle_z(Rad((angles.1 - angles.0) as f32));
+
+                gl.uniform_matrix4fv_with_f32_array(
+                    shader.transform_loc.as_ref(),
+                    false,
+                    (base_transform * middle_transform * vertex_transform).flatten(),
+                );
+                gl.draw_arrays(GL::TRIANGLE_FAN, 0, 4);
+
+                if let Some(item) = self.hold_item {
+                    render_drop_item_mat_gl(
+                        state,
+                        gl,
+                        &item,
+                        origin_transform
+                            * Matrix4::from_translation(Vector3::new(-0.25, -0.25, 0.))
+                            * base_rotation
+                            * middle_transform
+                            * Matrix4::from_translation(Vector3::new(0., -0.5, 0.))
+                            * Matrix4::from_angle_z(Rad(-angles.1 as f32)),
+                    )?;
+                }
+            }
+            2 => draw_direction_arrow_gl((x, y), &self.rotation, state, gl)?,
+            _ => panic!("render depth not covered: {}", depth),
         }
 
         Ok(())
