@@ -5,8 +5,9 @@ use super::{
 };
 use crate::{
     apply_bounds, drop_item_iter, elect_pole::draw_wire_gl, items::render_drop_item_gl,
-    performance, Cell, FactorishState, Ore, OreValue, Position, PowerWire, Rotation, CHUNK_SIZE,
-    CHUNK_SIZE_I, DROP_ITEM_SIZE, INDEX_CHUNK_SIZE, ORE_HARVEST_TIME, TILE_SIZE, TILE_SIZE_F,
+    performance, Cell, FactorishState, FluidType, Ore, OreValue, Position, PowerWire, Rotation,
+    CHUNK_SIZE, CHUNK_SIZE_I, DROP_ITEM_SIZE, INDEX_CHUNK_SIZE, ORE_HARVEST_TIME, TILE_SIZE,
+    TILE_SIZE_F,
 };
 use cgmath::{Matrix3, Matrix4, Rad, Vector2, Vector3};
 use slice_of_array::SliceFlatExt;
@@ -228,8 +229,8 @@ impl FactorishState {
         if self.debug_bbox {
             if let Some(shader) = &self.assets.flat_shader {
                 gl.use_program(Some(&shader.program));
-                gl.uniform4fv_with_f32_array(shader.color_loc.as_ref(), &[1., 0., 0., 1.]);
                 enable_buffer(&gl, &self.assets.screen_buffer, 2, shader.vertex_position);
+                gl.uniform4fv_with_f32_array(shader.color_loc.as_ref(), &[1., 0., 0., 1.]);
                 for structure in self.structure_iter() {
                     let bb = structure.bounding_box();
                     set_transform(
@@ -265,6 +266,60 @@ impl FactorishState {
                         (INDEX_CHUNK_SIZE as f32, INDEX_CHUNK_SIZE as f32),
                     )?;
                     gl.draw_arrays(GL::LINE_LOOP, 0, 4);
+                }
+            }
+        }
+
+        if self.debug_fluidbox {
+            if let Some(shader) = &self.assets.flat_shader {
+                gl.use_program(Some(&shader.program));
+                enable_buffer(&gl, &self.assets.screen_buffer, 2, shader.vertex_position);
+
+                for structure in self.structure_iter() {
+                    if let Some(fluid_boxes) = structure.fluid_box() {
+                        let bb = structure.bounding_box();
+                        for (i, fb) in fluid_boxes.iter().enumerate() {
+                            const BAR_MARGIN: f32 = 0.15;
+                            const BAR_WIDTH: f32 = 0.15;
+
+                            let frame_trans = (
+                                bb.x0 as f32 + 0.2 * i as f32 + BAR_MARGIN,
+                                bb.y0 as f32 + BAR_MARGIN,
+                            );
+                            let frame_size = (BAR_WIDTH, (bb.y1 - bb.y0) as f32 - BAR_MARGIN * 2.);
+
+                            set_transform(shader, frame_trans, frame_size)?;
+                            gl.uniform4fv_with_f32_array(
+                                shader.color_loc.as_ref(),
+                                &[0., 0., 0., 1.],
+                            );
+                            gl.draw_arrays(GL::TRIANGLE_FAN, 0, 4);
+
+                            let bar_height = (fb.amount / fb.max_amount) as f32
+                                * ((bb.y1 - bb.y0) as f32 - BAR_MARGIN * 2.);
+                            set_transform(
+                                shader,
+                                (frame_trans.0, frame_trans.1 + frame_size.1 - bar_height),
+                                (BAR_WIDTH, bar_height),
+                            )?;
+                            gl.uniform4fv_with_f32_array(
+                                shader.color_loc.as_ref(),
+                                match fb.type_ {
+                                    Some(FluidType::Water) => &[0., 1., 1., 1.],
+                                    Some(FluidType::Steam) => &[0.75, 0.75, 0.75, 1.],
+                                    _ => &[0.5, 0.5, 0.5, 1.],
+                                },
+                            );
+                            gl.draw_arrays(GL::TRIANGLE_FAN, 0, 4);
+
+                            set_transform(shader, frame_trans, frame_size)?;
+                            gl.uniform4fv_with_f32_array(
+                                shader.color_loc.as_ref(),
+                                &[1., 0., 0., 1.],
+                            );
+                            gl.draw_arrays(GL::LINE_LOOP, 0, 4);
+                        }
+                    }
                 }
             }
         }
