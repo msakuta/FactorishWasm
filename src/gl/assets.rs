@@ -62,6 +62,7 @@ pub(crate) struct Assets {
     pub tex_underground_belt: WebGlTexture,
     pub tex_chest: WebGlTexture,
     pub tex_ore_mine: WebGlTexture,
+    pub tex_furnace: WebGlTexture,
     pub tex_assembler: WebGlTexture,
     pub tex_boiler: WebGlTexture,
     pub tex_steam_engine: WebGlTexture,
@@ -72,7 +73,7 @@ pub(crate) struct Assets {
     pub tex_splitter: WebGlTexture,
     pub tex_inserter: WebGlTexture,
     pub tex_direction: WebGlTexture,
-    pub tex_furnace: WebGlTexture,
+    pub tex_fuel_alarm: WebGlTexture,
 
     pub tex_iron_ore: WebGlTexture,
     pub tex_coal_ore: WebGlTexture,
@@ -149,6 +150,7 @@ impl Assets {
             tex_splitter: load_texture_local("splitter")?,
             tex_inserter: load_texture_local("inserter")?,
             tex_direction: load_texture_local("direction")?,
+            tex_fuel_alarm: load_texture_local("fuelAlarm")?,
 
             tex_iron_ore: load_texture_local("ore")?,
             tex_coal_ore: load_texture_local("coalOre")?,

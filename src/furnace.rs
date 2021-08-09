@@ -109,7 +109,7 @@ impl Structure for Furnace {
         state: &FactorishState,
         gl: &GL,
         depth: i32,
-        _is_toolbar: bool,
+        is_toolbar: bool,
     ) -> Result<(), JsValue> {
         if depth != 0 {
             return Ok(());
@@ -151,9 +151,9 @@ impl Structure for Furnace {
         );
         gl.draw_arrays(GL::TRIANGLE_FAN, 0, 4);
 
-        // if !is_toolbar {
-        //     crate::draw_fuel_alarm!(self, state, context);
-        // }
+        if !is_toolbar {
+            crate::draw_fuel_alarm_gl_impl!(self, state, gl);
+        }
 
         Ok(())
     }

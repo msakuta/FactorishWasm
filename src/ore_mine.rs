@@ -7,7 +7,7 @@ use super::{
     },
     inventory::{Inventory, InventoryTrait},
     items::ItemType,
-    structure::{RotateErr, Structure, StructureDynIter, StructureId},
+    structure::{draw_fuel_alarm_gl, RotateErr, Structure, StructureDynIter, StructureId},
     DropItem, FactorishState, FrameProcResult, Position, Recipe, Rotation, TempEnt, COAL_POWER,
     TILE_SIZE, TILE_SIZE_I,
 };
@@ -122,7 +122,7 @@ impl Structure for OreMine {
         state: &FactorishState,
         gl: &GL,
         depth: i32,
-        _is_toolbar: bool,
+        is_toolbar: bool,
     ) -> Result<(), JsValue> {
         let (x, y) = (
             self.position.x as f32 + state.viewport.x as f32,
@@ -164,9 +164,9 @@ impl Structure for OreMine {
             }
             2 => {
                 draw_direction_arrow_gl((x, y), &self.rotation, state, gl)?;
-                // if !is_toolbar {
-                //     crate::draw_fuel_alarm!(self, state, context);
-                // }
+                if !is_toolbar {
+                    crate::draw_fuel_alarm_gl_impl!(self, state, gl);
+                }
             }
             _ => (),
         }

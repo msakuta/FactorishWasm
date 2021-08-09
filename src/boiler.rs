@@ -168,6 +168,7 @@ impl Structure for Boiler {
                 );
                 gl.draw_arrays(GL::TRIANGLE_FAN, 0, 4);
             }
+            2 => crate::draw_fuel_alarm_gl_impl!(self, state, gl),
             _ => (),
         }
         Ok(())
