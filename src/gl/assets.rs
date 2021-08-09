@@ -74,6 +74,7 @@ pub(crate) struct Assets {
     pub tex_inserter: WebGlTexture,
     pub tex_direction: WebGlTexture,
     pub tex_fuel_alarm: WebGlTexture,
+    pub tex_electricity_alarm: WebGlTexture,
 
     pub tex_iron_ore: WebGlTexture,
     pub tex_coal_ore: WebGlTexture,
@@ -151,6 +152,7 @@ impl Assets {
             tex_inserter: load_texture_local("inserter")?,
             tex_direction: load_texture_local("direction")?,
             tex_fuel_alarm: load_texture_local("fuelAlarm")?,
+            tex_electricity_alarm: load_texture_local("electricityAlarm")?,
 
             tex_iron_ore: load_texture_local("ore")?,
             tex_coal_ore: load_texture_local("coalOre")?,

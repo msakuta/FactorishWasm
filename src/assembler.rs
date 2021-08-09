@@ -1,6 +1,9 @@
 use super::{
     drop_items::DropItem,
-    gl::utils::{enable_buffer, Flatten},
+    gl::{
+        utils::{enable_buffer, Flatten},
+        ShaderBundle,
+    },
     inventory::{Inventory, InventoryTrait},
     items::get_item_image_url,
     serialize_impl,
@@ -129,19 +132,37 @@ impl Structure for Assembler {
         state: &FactorishState,
         gl: &GL,
         depth: i32,
-        _is_toolbar: bool,
+        is_toolbar: bool,
     ) -> Result<(), JsValue> {
         let (x, y) = (
             self.position.x as f32 + state.viewport.x as f32,
             self.position.y as f32 + state.viewport.y as f32,
         );
+
+        let get_shader = || {
+            state
+                .assets
+                .textured_shader
+                .as_ref()
+                .ok_or_else(|| js_str!("Shader not found"))
+        };
+
+        let shape = |shader: &ShaderBundle| -> Result<(), JsValue> {
+            enable_buffer(&gl, &state.assets.screen_buffer, 2, shader.vertex_position);
+            gl.uniform_matrix4fv_with_f32_array(
+                shader.transform_loc.as_ref(),
+                false,
+                (state.get_world_transform()?
+                    * Matrix4::from_scale(2.)
+                    * Matrix4::from_translation(Vector3::new(x, y, 0.)))
+                .flatten(),
+            );
+            Ok(())
+        };
+
         match depth {
             0 => {
-                let shader = state
-                    .assets
-                    .textured_shader
-                    .as_ref()
-                    .ok_or_else(|| js_str!("Shader not found"))?;
+                let shader = get_shader()?;
                 gl.use_program(Some(&shader.program));
                 gl.active_texture(GL::TEXTURE0);
                 gl.bind_texture(GL::TEXTURE_2D, Some(&state.assets.tex_assembler));
@@ -158,16 +179,21 @@ impl Structure for Assembler {
                     .flatten(),
                 );
 
-                enable_buffer(&gl, &state.assets.screen_buffer, 2, shader.vertex_position);
-                gl.uniform_matrix4fv_with_f32_array(
-                    shader.transform_loc.as_ref(),
-                    false,
-                    (state.get_world_transform()?
-                        * Matrix4::from_scale(2.)
-                        * Matrix4::from_translation(Vector3::new(x, y, 0.)))
-                    .flatten(),
-                );
+                shape(shader)?;
                 gl.draw_arrays(GL::TRIANGLE_FAN, 0, 4);
+            }
+            2 => {
+                if !is_toolbar
+                    && self.recipe.is_some()
+                    && self.power == 0.
+                    && state.sim_time % 1. < 0.5
+                {
+                    let shader = get_shader()?;
+                    gl.active_texture(GL::TEXTURE0);
+                    gl.bind_texture(GL::TEXTURE_2D, Some(&state.assets.tex_electricity_alarm));
+                    shape(shader)?;
+                    gl.draw_arrays(GL::TRIANGLE_FAN, 0, 4);
+                }
             }
             _ => (),
         }
