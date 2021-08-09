@@ -141,9 +141,8 @@ impl Structure for Boiler {
         is_ghost: bool,
     ) -> Result<(), JsValue> {
         Pipe::draw_gl_int(components, state, gl, depth, false, is_ghost)?;
-        let position = components.position.ok_or_else(|| js_str!("OreMine without Position"))?;
-        let factory = components.factory.as_ref().ok_or_else(|| js_str!("OreMine without Factory"))?;
-        let energy = components.energy.as_ref().ok_or_else(|| js_str!("OreMine without Energy"))?;
+        let position = components.position.ok_or_else(|| js_str!("Boiler without Position"))?;
+        let energy = components.energy.as_ref().ok_or_else(|| js_str!("Boiler without Energy"))?;
         let (x, y) = (
             position.x as f32 + state.viewport.x as f32,
             position.y as f32 + state.viewport.y as f32,
@@ -187,7 +186,7 @@ impl Structure for Boiler {
             }
             2 => {
                 if !is_ghost {
-                    if factory.recipe.is_some() && energy.value == 0. {
+                    if energy.value == 0. {
                         crate::gl::draw_fuel_alarm_gl(components, state, gl)?;
                     }
                 }
