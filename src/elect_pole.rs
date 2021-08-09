@@ -129,7 +129,12 @@ impl Structure for ElectPole {
     crate::serialize_impl!();
 }
 
-pub(crate) fn draw_wire_gl(gl: &GL, start: Position, end: Position) -> Result<(), JsValue> {
+pub(crate) fn draw_wire_gl(
+    gl: &GL,
+    start: Position,
+    end: Position,
+    width: f32,
+) -> Result<(), JsValue> {
     let start_pos = (
         start.x as f32 * TILE_SIZE_F + WIRE_ATTACH_X as f32,
         start.y as f32 * TILE_SIZE_F + WIRE_ATTACH_Y as f32,
@@ -164,7 +169,7 @@ pub(crate) fn draw_wire_gl(gl: &GL, start: Position, end: Position) -> Result<()
         .map(|(prev, next)| {
             let diff = [next[0] - prev[0], next[1] - prev[1]];
             let len = (diff[0] * diff[0] + diff[1] * diff[1]).sqrt();
-            let factor = WIRE_WIDTH / len;
+            let factor = WIRE_WIDTH * width / len;
             perp = [diff[1] * factor, -diff[0] * factor];
             [
                 prev[0] + perp[0],

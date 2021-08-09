@@ -129,8 +129,6 @@ impl FactorishState {
             gl.use_program(Some(&shader.program));
             enable_buffer(&gl, &self.assets.wire_buffer, 2, shader.vertex_position);
 
-            gl.uniform4fv_with_f32_array(shader.color_loc.as_ref(), &[0.75, 0.5, 0., 1.]);
-
             gl.uniform_matrix4fv_with_f32_array(
                 shader.transform_loc.as_ref(),
                 false,
@@ -145,27 +143,46 @@ impl FactorishState {
                 .flatten(),
             );
 
-            for PowerWire(first, second) in &self.power_wires {
-                let first = self.get_structure(*first);
-                let second = self.get_structure(*second);
-                if let Some((first, second)) = first.zip(second) {
-                    let first = *first.position();
-                    let second = *second.position();
-                    let min = (first.x.min(second.x), first.y.min(second.y));
-                    let max = (first.x.max(second.x), first.y.max(second.y));
-                    if -self.viewport.x <= max.0 as f64
-                        && min.0 as f64
-                            <= -self.viewport.x
-                                + self.viewport_width / self.viewport.scale / TILE_SIZE
-                        && -self.viewport.y <= max.1 as f64
-                        && min.1 as f64
-                            <= -self.viewport.y
-                                + self.viewport_height / self.viewport.scale / TILE_SIZE
-                    {
-                        draw_wire_gl(&gl, first, second)?;
+            let draw_wires = |wires: &[PowerWire], width: f32| -> Result<(), JsValue> {
+                for PowerWire(first, second) in wires {
+                    let first = self.get_structure(*first);
+                    let second = self.get_structure(*second);
+                    if let Some((first, second)) = first.zip(second) {
+                        let first = *first.position();
+                        let second = *second.position();
+                        let min = (first.x.min(second.x), first.y.min(second.y));
+                        let max = (first.x.max(second.x), first.y.max(second.y));
+                        if -self.viewport.x <= max.0 as f64
+                            && min.0 as f64
+                                <= -self.viewport.x
+                                    + self.viewport_width / self.viewport.scale / TILE_SIZE
+                            && -self.viewport.y <= max.1 as f64
+                            && min.1 as f64
+                                <= -self.viewport.y
+                                    + self.viewport_height / self.viewport.scale / TILE_SIZE
+                        {
+                            draw_wire_gl(&gl, first, second, width)?;
+                        }
                     }
                 }
+                Ok(())
+            };
+
+            if self.debug_power_network {
+                let colors = [[1., 0., 0., 1.], [0., 0., 1., 1.], [0., 1., 0., 1.]];
+                for (i, nw) in self.power_networks.iter().enumerate() {
+                    gl.uniform4fv_with_f32_array(
+                        shader.color_loc.as_ref(),
+                        &colors[i % colors.len()],
+                    );
+
+                    draw_wires(&nw.wires, 2.)?;
+                }
             }
+
+            gl.uniform4fv_with_f32_array(shader.color_loc.as_ref(), &[0.75, 0.5, 0., 1.]);
+
+            draw_wires(&self.power_wires, 1.)?;
         }
 
         draw_structures(1)?;
