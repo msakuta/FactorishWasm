@@ -6,7 +6,7 @@ use super::{
 use crate::{
     apply_bounds, drop_item_iter, elect_pole::draw_wire_gl, items::render_drop_item_gl,
     performance, Cell, FactorishState, Ore, OreValue, Position, PowerWire, Rotation, CHUNK_SIZE,
-    CHUNK_SIZE_I, ORE_HARVEST_TIME, TILE_SIZE,
+    CHUNK_SIZE_I, DROP_ITEM_SIZE, INDEX_CHUNK_SIZE, ORE_HARVEST_TIME, TILE_SIZE, TILE_SIZE_F,
 };
 use cgmath::{Matrix3, Matrix4, Rad, Vector2, Vector3};
 use slice_of_array::SliceFlatExt;
@@ -205,6 +205,67 @@ impl FactorishState {
                 gl.bind_texture(GL::TEXTURE_2D, Some(&self.assets.tex_smoke));
                 enable_buffer(&gl, &self.assets.rect_buffer, 2, shader.vertex_position);
                 gl.draw_arrays(GL::TRIANGLE_FAN, 0, 4);
+            }
+        }
+
+        let set_transform =
+            |shader: &ShaderBundle, trans: (f32, f32), scale: (f32, f32)| -> Result<(), JsValue> {
+                gl.uniform_matrix4fv_with_f32_array(
+                    shader.transform_loc.as_ref(),
+                    false,
+                    (self.get_world_transform()?
+                        * Matrix4::from_translation(Vector3::new(
+                            2. * (self.viewport.x as f32 + trans.0),
+                            2. * (self.viewport.y as f32 + trans.1),
+                            0.,
+                        ))
+                        * Matrix4::from_nonuniform_scale(2. * scale.0, 2. * scale.1, 1.))
+                    .flatten(),
+                );
+                Ok(())
+            };
+
+        if self.debug_bbox {
+            if let Some(shader) = &self.assets.flat_shader {
+                gl.use_program(Some(&shader.program));
+                gl.uniform4fv_with_f32_array(shader.color_loc.as_ref(), &[1., 0., 0., 1.]);
+                enable_buffer(&gl, &self.assets.screen_buffer, 2, shader.vertex_position);
+                for structure in self.structure_iter() {
+                    let bb = structure.bounding_box();
+                    set_transform(
+                        shader,
+                        (bb.x0 as f32, bb.y0 as f32),
+                        ((bb.x1 - bb.x0) as f32, (bb.y1 - bb.y0) as f32),
+                    )?;
+                    gl.draw_arrays(GL::LINE_LOOP, 0, 4);
+                }
+                gl.uniform4fv_with_f32_array(shader.color_loc.as_ref(), &[1., 0., 1., 1.]);
+                for item in drop_item_iter(&self.drop_items) {
+                    set_transform(
+                        shader,
+                        (
+                            (item.x as f32 - DROP_ITEM_SIZE as f32 / 2.) / TILE_SIZE_F,
+                            (item.y as f32 - DROP_ITEM_SIZE as f32 / 2.) / TILE_SIZE_F,
+                        ),
+                        (
+                            DROP_ITEM_SIZE as f32 / TILE_SIZE_F,
+                            DROP_ITEM_SIZE as f32 / TILE_SIZE_F,
+                        ),
+                    )?;
+                    gl.draw_arrays(GL::LINE_LOOP, 0, 4);
+                }
+                gl.uniform4fv_with_f32_array(shader.color_loc.as_ref(), &[0., 0., 0., 1.]);
+                for chunk in self.board.keys() {
+                    set_transform(
+                        shader,
+                        (
+                            chunk.x as f32 * INDEX_CHUNK_SIZE as f32,
+                            chunk.y as f32 * INDEX_CHUNK_SIZE as f32,
+                        ),
+                        (INDEX_CHUNK_SIZE as f32, INDEX_CHUNK_SIZE as f32),
+                    )?;
+                    gl.draw_arrays(GL::LINE_LOOP, 0, 4);
+                }
             }
         }
 
