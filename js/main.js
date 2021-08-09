@@ -459,7 +459,7 @@ let unlimited = true;
             if(result === "ShowInventory"){
                 showInventory();
             }
-            else if(result){
+            else{
                 updateToolBarImage();
                 updateToolBar();
                 renderToolTip(this, currentTool);

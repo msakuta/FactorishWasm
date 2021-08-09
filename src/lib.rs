@@ -2503,6 +2503,10 @@ impl FactorishState {
     ) -> Result<(), JsValue> {
         context.clear_rect(0., 0., 32., 32.);
         if let Some(item) = self.tool_belt.get(tool_index).unwrap_or(&None) {
+            if Some(SelectedItem::ToolBelt(tool_index)) == self.selected_item {
+                context.set_fill_style(&js_str!("#00ffff"));
+                context.fill_rect(0., 0., 32., 32.);
+            }
             let mut tool = self.new_structure(item, &Position { x: 0, y: 0 })?;
             tool.set_rotation(&self.tool_rotation).ok();
             for depth in 0..3 {
