@@ -512,13 +512,6 @@ pub struct FactorishState {
     perf_render: PerfStats,
 
     // on_show_inventory: js_sys::Function,
-    image_dirt: Option<ImageBundle>,
-    image_back_tiles: Option<ImageBundle>,
-    image_weeds: Option<ImageBundle>,
-    image_ore: Option<ImageBundle>,
-    image_coal: Option<ImageBundle>,
-    image_copper: Option<ImageBundle>,
-    image_stone: Option<ImageBundle>,
     image_belt: Option<ImageBundle>,
     image_underground_belt: Option<ImageBundle>,
     image_chest: Option<ImageBundle>,
@@ -544,9 +537,6 @@ pub struct FactorishState {
     image_copper_wire: Option<ImageBundle>,
     image_circuit: Option<ImageBundle>,
     image_time: Option<ImageBundle>,
-    image_smoke: Option<ImageBundle>,
-    image_fuel_alarm: Option<ImageBundle>,
-    image_electricity_alarm: Option<ImageBundle>,
     image_underground_belt_item: Option<ImageBundle>,
 
     assets: Assets,
@@ -639,13 +629,6 @@ impl FactorishState {
             perf_simulate: PerfStats::default(),
             perf_minimap: PerfStats::default(),
             perf_render: PerfStats::default(),
-            image_dirt: None,
-            image_back_tiles: None,
-            image_weeds: None,
-            image_ore: None,
-            image_coal: None,
-            image_stone: None,
-            image_copper: None,
             image_belt: None,
             image_underground_belt: None,
             image_chest: None,
@@ -671,9 +654,6 @@ impl FactorishState {
             image_copper_wire: None,
             image_circuit: None,
             image_time: None,
-            image_smoke: None,
-            image_fuel_alarm: None,
-            image_electricity_alarm: None,
             image_underground_belt_item: None,
             board,
             terrain_params,
@@ -2439,13 +2419,6 @@ impl FactorishState {
                 Err(JsValue::from_str(&format!("Image not found: {:?}", path)))
             }
         };
-        self.image_dirt = Some(load_image("dirt")?);
-        self.image_back_tiles = Some(load_image("backTiles")?);
-        self.image_weeds = Some(load_image("weeds")?);
-        self.image_ore = Some(load_image("iron")?);
-        self.image_coal = Some(load_image("coal")?);
-        self.image_copper = Some(load_image("copper")?);
-        self.image_stone = Some(load_image("stone")?);
         self.image_belt = Some(load_image("transport")?);
         self.image_underground_belt = Some(load_image("undergroundBelt")?);
         self.image_chest = Some(load_image("chest")?);
@@ -2471,9 +2444,6 @@ impl FactorishState {
         self.image_copper_wire = Some(load_image("copperWire")?);
         self.image_circuit = Some(load_image("circuit")?);
         self.image_time = Some(load_image("time")?);
-        self.image_smoke = Some(load_image("smoke")?);
-        self.image_fuel_alarm = Some(load_image("fuelAlarm")?);
-        self.image_electricity_alarm = Some(load_image("electricityAlarm")?);
         self.image_underground_belt_item = Some(load_image("undergroundBeltItem")?);
         Ok(())
     }

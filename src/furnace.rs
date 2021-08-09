@@ -70,7 +70,7 @@ impl Structure for Furnace {
         state: &FactorishState,
         context: &CanvasRenderingContext2d,
         depth: i32,
-        is_toolbar: bool,
+        _is_toolbar: bool,
     ) -> Result<(), JsValue> {
         if depth != 0 {
             return Ok(());
@@ -96,9 +96,6 @@ impl Structure for Furnace {
                 )?;
             }
             None => return Err(JsValue::from_str("furnace image not available")),
-        }
-        if !is_toolbar {
-            crate::draw_fuel_alarm!(self, state, context);
         }
 
         Ok(())

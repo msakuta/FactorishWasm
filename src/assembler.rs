@@ -26,25 +26,6 @@ fn generate_item_image(item_image: &str, icon_size: bool, count: usize) -> Strin
     })
 }
 
-fn _recipe_html(state: &FactorishState, recipe: &Recipe) -> String {
-    let mut ret = String::from("");
-    ret += "<div class='recipe-box'>";
-    ret += &format!(
-        "<span style='display: inline-block; margin: 1px'>{}</span>",
-        &generate_item_image("time", true, recipe.recipe_time as usize)
-    );
-    ret += "<span style='display: inline-block; width: 50%'>";
-    for (key, value) in &recipe.input {
-        ret += &generate_item_image(get_item_image_url(state, &key), true, *value);
-    }
-    ret += "</span><img src='img/rightarrow.png' style='width: 20px; height: 32px'><span style='display: inline-block; width: 10%'>";
-    for (key, value) in &recipe.output {
-        ret += &generate_item_image(get_item_image_url(state, &key), true, *value);
-    }
-    ret += "</span></div>";
-    ret
-}
-
 #[derive(Serialize, Deserialize)]
 pub(crate) struct Assembler {
     position: Position,
@@ -84,7 +65,7 @@ impl Structure for Assembler {
         state: &FactorishState,
         context: &CanvasRenderingContext2d,
         depth: i32,
-        is_toolbar: bool,
+        _is_toolbar: bool,
     ) -> Result<(), JsValue> {
         if depth == 0 {
             let (x, y) = (
@@ -114,14 +95,6 @@ impl Structure for Assembler {
                 None => return Err(JsValue::from_str("assembler image not available")),
             }
             return Ok(());
-        }
-        if !is_toolbar && self.recipe.is_some() && self.power == 0. && state.sim_time % 1. < 0.5 {
-            if let Some(img) = state.image_electricity_alarm.as_ref() {
-                let (x, y) = (self.position.x as f64 * 32., self.position.y as f64 * 32.);
-                context.draw_image_with_image_bitmap(&img.bitmap, x, y)?;
-            } else {
-                return js_err!("electricity alarm image not available");
-            }
         }
 
         Ok(())
