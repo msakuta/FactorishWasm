@@ -9,7 +9,7 @@ use super::{
     water_well::FluidBox,
     FactorishState, Inventory, InventoryTrait, Recipe,
 };
-use cgmath::{Matrix3, Matrix4, Vector2, Vector3};
+use cgmath::{Matrix3, Matrix4, Vector3};
 use rotate_enum::RotateEnum;
 use serde::{Deserialize, Serialize};
 use std::borrow::Cow;

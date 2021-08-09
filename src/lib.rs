@@ -145,7 +145,6 @@ const TILE_SIZE_I: i32 = TILE_SIZE as i32;
 const COAL_POWER: f64 = 100.; // kilojoules
 const SAVE_VERSION: i64 = 5;
 const ORE_HARVEST_TIME: i32 = 20;
-const POPUP_TEXT_LIFE: i32 = 30;
 
 const WIRE_ATTACH_X: f64 = 28.;
 const WIRE_ATTACH_Y: f64 = 8.;
@@ -383,13 +382,6 @@ impl TempEnt {
 #[derive(Eq, PartialEq, Hash, Copy, Clone, Serialize, Deserialize, Debug)]
 struct PowerWire(StructureId, StructureId);
 
-struct PopupText {
-    text: String,
-    x: f64,
-    y: f64,
-    life: i32,
-}
-
 #[derive(Eq, PartialEq, Copy, Clone, Debug)]
 enum SelectedItem {
     /// This is index into `tool_belt`. It is kind of duplicate of `player.selected_item`,
@@ -499,9 +491,9 @@ pub struct FactorishState {
     cursor: Option<[i32; 2]>,
     info_elem: Option<HtmlDivElement>,
     on_player_update: js_sys::Function,
+    on_popup_text: js_sys::Function,
     minimap_buffer: Vec<u8>,
     power_wires: Vec<PowerWire>,
-    popup_texts: Vec<PopupText>,
     debug_bbox: bool,
     debug_fluidbox: bool,
     debug_power_network: bool,
@@ -569,6 +561,7 @@ impl FactorishState {
     pub fn new(
         terrain_params: JsValue,
         on_player_update: js_sys::Function,
+        on_popup_text: js_sys::Function,
         // on_show_inventory: js_sys::Function,
         scenario: &str,
         context: WebGlRenderingContext,
@@ -632,7 +625,6 @@ impl FactorishState {
             minimap_buffer: vec![],
             power_wires: vec![],
             power_networks: vec![],
-            popup_texts: vec![],
             debug_bbox: false,
             debug_fluidbox: false,
             debug_power_network: false,
@@ -686,6 +678,7 @@ impl FactorishState {
             drop_items,
             drop_items_index: DropItemIndex::default(),
             on_player_update,
+            on_popup_text,
             temp_ents: vec![],
             rng: Xor128::new(3142125),
             // on_show_inventory,
@@ -1245,11 +1238,13 @@ impl FactorishState {
                     self.on_player_update
                         .call1(&window(), &JsValue::from(self.get_player_inventory().ok()?))
                         .unwrap_or_else(|_| JsValue::from(true));
-                    self.new_popup_text(
+                    if let Err(e) = self.new_popup_text(
                         format!("+1 {:?}", ore_harvesting.ore_type),
                         ore_harvesting.pos.x as f64 * TILE_SIZE,
                         ore_harvesting.pos.y as f64 * TILE_SIZE,
-                    );
+                    ) {
+                        console_log!("Add text error: {:?}", e);
+                    }
                 } else {
                     ret = false;
                 }
@@ -1261,20 +1256,6 @@ impl FactorishState {
                 None
             }
         })();
-
-        let mut delete_me = vec![];
-        for (i, item) in self.popup_texts.iter_mut().enumerate() {
-            if item.life <= 0 {
-                delete_me.push(i);
-            } else {
-                item.y -= 1.;
-                item.life -= 1;
-            }
-        }
-
-        for i in delete_me.iter().rev() {
-            self.popup_texts.remove(*i);
-        }
 
         let start_structures = performance().now();
         // This is silly way to avoid borrow checker that temporarily move the structures
@@ -1682,7 +1663,7 @@ impl FactorishState {
                 popup_text,
                 position.x as f64 * TILE_SIZE,
                 position.y as f64 * TILE_SIZE,
-            );
+            )?;
         }
         Ok(harvested_structure || harvested_items)
     }
@@ -2735,15 +2716,21 @@ impl FactorishState {
 
     /// Add a new popup text that will show for a moment and automatically disappears
     ///
-    /// @param text Is given as owned string because the text is most likely dynamic.
-    fn new_popup_text(&mut self, text: String, x: f64, y: f64) {
-        let pop = PopupText {
-            text,
-            x: (x + self.viewport.x * TILE_SIZE) * self.viewport.scale,
-            y: (y + self.viewport.y * TILE_SIZE) * self.viewport.scale,
-            life: POPUP_TEXT_LIFE,
-        };
-        self.popup_texts.push(pop);
+    /// It delegates actual HTML element creation to JavaScript code via a callback
+    /// since it is too cumbersome to handle HTML elements directly in Rust code.
+    /// While it's possible, it can be slower than JavaScript code due to many runtime
+    /// calls.
+    ///
+    /// Also, we don't want to render text in WebGL directly. We know how painful it is to
+    /// support text rendering in raw WebGL...
+    fn new_popup_text(&mut self, text: String, x: f64, y: f64) -> Result<(), JsValue> {
+        self.on_popup_text.call3(
+            &window(),
+            &JsValue::from_str(&text),
+            &JsValue::from_f64((x + self.viewport.x * TILE_SIZE) * self.viewport.scale),
+            &JsValue::from_f64((y + self.viewport.y * TILE_SIZE) * self.viewport.scale),
+        )?;
+        Ok(())
     }
 
     /// Returns an iterator over valid structures
@@ -3025,10 +3012,6 @@ impl FactorishState {
         context.set_stroke_style(&js_str!("white"));
         context.set_line_width(2.);
         context.set_fill_style(&js_str!("rgb(0,0,0)"));
-        for item in &self.popup_texts {
-            context.stroke_text(&item.text, item.x, item.y)?;
-            context.fill_text(&item.text, item.x, item.y)?;
-        }
 
         self.perf_render.add(performance().now() - start_render);
         Ok(())

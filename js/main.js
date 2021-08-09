@@ -192,6 +192,7 @@ let unlimited = true;
     let paused = false;
 
     const canvas = document.getElementById('canvas');
+    const popupContainer = document.getElementById("popupContainer");
     let canvasSize = canvas.getBoundingClientRect();
     const context = canvas.getContext('webgl');
 
@@ -233,6 +234,7 @@ let unlimited = true;
             noise_octaves: noiseOctaves,
         },
         updateInventory,
+        popupText,
         scenarioSelectElem.value,
         context,
         loadedImages,
@@ -248,6 +250,8 @@ let unlimited = true;
         canvasSize = canvas.getBoundingClientRect();
         canvas.width = canvasSize.width;
         canvas.height = canvasSize.height;
+        popupContainer.style.width = `${canvasSize.width}px`;
+        popupContainer.style.height = `${canvasSize.height}px`;
         context.viewport(0, 0, canvas.width, canvas.height);
         infoElem.style.height = (canvasSize.height - mrect.height - tableMargin * 3) + 'px';
         sim.reset_viewport(canvas);
@@ -577,6 +581,37 @@ let unlimited = true;
             return electPole;
         default:
             return "";
+        }
+    }
+
+    const POPUP_LIFE = 30;
+    const popupTexts = [];
+    function popupText(text, x, y){
+        const elem = document.createElement("div");
+        elem.className = "popupText";
+        elem.style.left = `${x}px`;
+        elem.style.top = `${y}px`;
+        elem.innerHTML = text;
+        popupContainer.appendChild(elem);
+        popupTexts.push({
+            elem,
+            y,
+            life: POPUP_LIFE,
+        });
+    }
+
+    function animatePopupTexts(){
+        for(let i = 0; i < popupTexts.length;) {
+            const popup = popupTexts[i];
+            popup.y -= 1;
+            popup.elem.style.top = `${popup.y}px`;
+            if(--popup.life <= 0){
+                popupContainer.removeChild(popup.elem);
+                popupTexts.splice(i, 1);
+            }
+            else{
+                i++;
+            }
         }
     }
 
@@ -1261,6 +1296,7 @@ let unlimited = true;
                 noise_octaves: noiseOctaves,
             },
             updateInventory,
+            popupText,
             scenarioSelectElem.value,
             context,
             loadedImages);
@@ -1321,6 +1357,8 @@ let unlimited = true;
                 );
             })()
         }
+
+        animatePopupTexts();
 
         if(showPerfGraph.checked){
             const colors = ["#fff", "#ff3f3f", "#7f7fff", "#00ff00", "#ff00ff", "#fff"];
