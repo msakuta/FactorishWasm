@@ -626,7 +626,7 @@ impl FactorishState {
             (Ore::Copper, &self.assets.tex_copper),
             (Ore::Coal, &self.assets.tex_coal),
             (Ore::Stone, &self.assets.tex_stone),
-        ] {
+        ].iter() {
             self.render_repeat_gl_instancing(
                 &gl,
                 1. / 4.,
@@ -634,7 +634,7 @@ impl FactorishState {
                 tex,
                 |x, y, cell, instance_buf| {
                     if let Some(OreValue(ot, ore)) = cell.ore {
-                        if ot == ore_type {
+                        if ot == *ore_type {
                             let idx = (ore / 10).min(3);
                             instance_buf.push(x as f32);
                             instance_buf.push(y as f32);
