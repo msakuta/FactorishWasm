@@ -282,7 +282,7 @@ impl FactorishState {
                 }
 
                 apply_transform(x, y);
-                apply_texture_transform(1. / 7., 1., cell.grass_image as f32 + 1., 0.);
+                apply_texture_transform(1. / 8., 1., cell.grass_image as f32 + 1., 0.);
                 context.draw_arrays(GL::TRIANGLE_FAN, 0, 4);
                 draws += 1;
                 // cell_draws += 1;
