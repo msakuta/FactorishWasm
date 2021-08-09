@@ -194,7 +194,7 @@ let unlimited = true;
     const canvas = document.getElementById('canvas');
     const popupContainer = document.getElementById("popupContainer");
     let canvasSize = canvas.getBoundingClientRect();
-    const context = canvas.getContext('webgl');
+    const context = canvas.getContext('webgl', { alpha: false });
 
     const container = document.getElementById('container2');
     const containerRect = container.getBoundingClientRect();

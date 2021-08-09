@@ -89,9 +89,12 @@ pub(crate) struct Assets {
     pub tex_circuit: WebGlTexture,
     pub tex_underground_belt_item: WebGlTexture,
 
+    pub tex_smoke: WebGlTexture,
+
     pub flat_shader: Option<ShaderBundle>,
     pub textured_shader: Option<ShaderBundle>,
     pub textured_instancing_shader: Option<ShaderBundle>,
+    pub textured_alpha_shader: Option<ShaderBundle>,
 
     pub screen_buffer: Option<WebGlBuffer>,
     pub rect_buffer: Option<WebGlBuffer>,
@@ -168,9 +171,12 @@ impl Assets {
             tex_circuit: load_texture_local("circuit")?,
             tex_underground_belt_item: load_texture_local("undergroundBeltItem")?,
 
+            tex_smoke: load_texture_local("smoke")?,
+
             flat_shader: None,
             textured_shader: None,
             textured_instancing_shader: None,
+            textured_alpha_shader: None,
             screen_buffer: None,
             rect_buffer: None,
             cursor_buffer: None,
@@ -362,6 +368,51 @@ impl Assets {
         let shader = ShaderBundle::new(&gl, program);
         self.textured_instancing_shader = Some(shader);
 
+        let vert_shader = compile_shader(
+            &gl,
+            GL::VERTEX_SHADER,
+            r#"
+            attribute vec2 vertexData;
+            uniform mat4 transform;
+            uniform mat3 texTransform;
+            varying vec2 texCoords;
+            void main() {
+                gl_Position = transform * vec4(vertexData.xy, 0., 1.0);
+
+                texCoords = (texTransform * vec3(vertexData.xy, 1.)).xy;
+            }
+        "#,
+        )?;
+        let frag_shader = compile_shader(
+            &gl,
+            GL::FRAGMENT_SHADER,
+            r#"
+            precision mediump float;
+
+            varying vec2 texCoords;
+
+            uniform float alpha;
+            uniform sampler2D texture;
+
+            void main() {
+                vec4 texColor = texture2D( texture, texCoords.xy );
+                float prodAlpha = texColor.a * alpha;
+                gl_FragColor = vec4(texColor.rgb, prodAlpha);
+            }
+        "#,
+        )?;
+        let program = link_program(&gl, &vert_shader, &frag_shader)?;
+        gl.use_program(Some(&program));
+        self.textured_alpha_shader = Some(ShaderBundle::new(&gl, program));
+
+        gl.active_texture(GL::TEXTURE0);
+        gl.uniform1i(
+            self.textured_alpha_shader
+                .as_ref()
+                .and_then(|s| s.texture_loc.as_ref()),
+            0,
+        );
+
         self.rect_buffer = Some(gl.create_buffer().ok_or("failed to create buffer")?);
         gl.bind_buffer(GL::ARRAY_BUFFER, self.rect_buffer.as_ref());
         let rect_vertices: [f32; 8] = [1., 1., -1., 1., -1., -1., 1., -1.];
@@ -409,7 +460,7 @@ impl Assets {
             GL::DYNAMIC_DRAW,
         );
 
-        gl.clear_color(0.0, 0.0, 0.5, 0.5);
+        gl.clear_color(0.0, 0.0, 0.5, 1.);
 
         Ok(())
     }

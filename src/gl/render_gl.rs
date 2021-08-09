@@ -170,6 +170,41 @@ impl FactorishState {
         draw_structures(1)?;
         draw_structures(2)?;
 
+        if let Some(shader) = self.assets.textured_alpha_shader.as_ref() {
+            for ent in &self.temp_ents {
+                let (x, y) = (ent.position.0 - 24., ent.position.1 - 24.);
+                gl.use_program(Some(&shader.program));
+                gl.uniform1f(
+                    shader.alpha_loc.as_ref(),
+                    ((ent.max_life - ent.life).min(ent.life) * 0.15).min(0.35) as f32,
+                );
+
+                gl.uniform_matrix3fv_with_f32_array(
+                    shader.tex_transform_loc.as_ref(),
+                    false,
+                    (Matrix3::from_scale(0.5) * Matrix3::from_translation(Vector2::new(-1., -1.)))
+                        .flatten(),
+                );
+
+                gl.uniform_matrix4fv_with_f32_array(
+                    shader.transform_loc.as_ref(),
+                    false,
+                    (self.get_world_transform()?
+                        * Matrix4::from_translation(Vector3::new(
+                            2. * (self.viewport.x + x / TILE_SIZE) as f32 + 1.,
+                            2. * (self.viewport.y + y / TILE_SIZE) as f32 + 1.,
+                            0.,
+                        ))
+                        * Matrix4::from_angle_z(Rad(ent.rotation as f32)))
+                    .flatten(),
+                );
+
+                gl.bind_texture(GL::TEXTURE_2D, Some(&self.assets.tex_smoke));
+                enable_buffer(&gl, &self.assets.rect_buffer, 2, shader.vertex_position);
+                gl.draw_arrays(GL::TRIANGLE_FAN, 0, 4);
+            }
+        }
+
         if let Some((ref cursor, shader)) = self.cursor.zip(self.assets.flat_shader.as_ref()) {
             let (x, y) = (cursor[0] as f32, cursor[1] as f32);
             gl.use_program(Some(&shader.program));
