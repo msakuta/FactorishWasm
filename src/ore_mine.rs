@@ -2,17 +2,17 @@ use super::{
     burner::Burner,
     draw_direction_arrow,
     drop_items::hit_check,
+    gl::{
+        draw_direction_arrow_gl,
+        utils::{enable_buffer, Flatten},
+    },
+    inventory::Inventory,
     structure::{
         Energy, RotateErr, Structure, StructureBundle, StructureComponents, StructureDynIter,
         StructureId,
     },
     DropItem, FactorishState, FrameProcResult, Position, Recipe, Rotation, TempEnt, TILE_SIZE,
     TILE_SIZE_I,
-    gl::{
-        draw_direction_arrow_gl,
-        utils::{enable_buffer, Flatten},
-    },
-    inventory::Inventory,
 };
 use cgmath::{Matrix3, Matrix4, Vector2, Vector3};
 use serde::{Deserialize, Serialize};
@@ -149,9 +149,16 @@ impl Structure for OreMine {
         depth: i32,
         is_ghost: bool,
     ) -> Result<(), JsValue> {
-        let position = components.position.ok_or_else(|| js_str!("OreMine without Position"))?;
-        let rotation = components.rotation.ok_or_else(|| js_str!("OreMine without Rotation"))?;
-        let energy = components.energy.as_ref().ok_or_else(|| js_str!("OreMine without Energy"))?;
+        let position = components
+            .position
+            .ok_or_else(|| js_str!("OreMine without Position"))?;
+        let rotation = components
+            .rotation
+            .ok_or_else(|| js_str!("OreMine without Rotation"))?;
+        let energy = components
+            .energy
+            .as_ref()
+            .ok_or_else(|| js_str!("OreMine without Energy"))?;
         let (x, y) = (
             position.x as f32 + state.viewport.x as f32,
             position.y as f32 + state.viewport.y as f32,

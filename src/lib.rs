@@ -1451,12 +1451,20 @@ impl FactorishState {
                 .iter_mut()
                 .filter_map(|s| s.bundle.as_mut())
                 .find(|s| {
-                    s.dynamic.contains(&s.components, &Position {
-                        x: item.x.div_euclid(TILE_SIZE_I),
-                        y: item.y.div_euclid(TILE_SIZE_I),
-                    })
+                    s.dynamic.contains(
+                        &s.components,
+                        &Position {
+                            x: item.x.div_euclid(TILE_SIZE_I),
+                            y: item.y.div_euclid(TILE_SIZE_I),
+                        },
+                    )
                 })
-                .and_then(|bundle| bundle.dynamic.item_response(&mut bundle.components, item).ok())
+                .and_then(|bundle| {
+                    bundle
+                        .dynamic
+                        .item_response(&mut bundle.components, item)
+                        .ok()
+                })
             {
                 match item_response_result.0 {
                     ItemResponse::Move(moved_x, moved_y) => {
@@ -1634,7 +1642,11 @@ impl FactorishState {
             if let Some(ref elem) = self.info_elem {
                 elem.set_inner_html(
                     &if let Some(structure) = self.find_structure_tile(&cursor) {
-                        format!(r#"Type: {}<br>{}"#, structure.dynamic.name(), structure.dynamic.desc(&structure.components, &self))
+                        format!(
+                            r#"Type: {}<br>{}"#,
+                            structure.dynamic.name(),
+                            structure.dynamic.desc(&structure.components, &self)
+                        )
                     } else {
                         let (chunk_pos, mp) =
                             Position::new(cursor[0], cursor[1]).div_mod(CHUNK_SIZE as i32);
@@ -1679,7 +1691,6 @@ impl FactorishState {
                     drop(others);
                     self.structures = structures;
                     return Ok(false);
-
                 }
             }
             Err(RotateErr::NotFound)
@@ -2165,8 +2176,10 @@ impl FactorishState {
                         // console_log!("moving {:?}", item_name);
                         if let Some(item_name) = item_name {
                             if FactorishState::move_inventory_item(src, dst, &item_name) {
-                                self.on_player_update
-                                    .call1(&window(), &JsValue::from(self.get_player_inventory()?))?;
+                                self.on_player_update.call1(
+                                    &window(),
+                                    &JsValue::from(self.get_player_inventory()?),
+                                )?;
                                 return Ok(true);
                             }
                         }
@@ -2208,11 +2221,13 @@ impl FactorishState {
             ItemType::Pipe => return Ok(Pipe::new(*cursor)),
             ItemType::SteamEngine => return Ok(SteamEngine::new(*cursor)),
             ItemType::ElectPole => return Ok(ElectPole::new(*cursor)),
-            ItemType::UndergroundBelt => return Ok(UndergroundBelt::new(
-                *cursor,
-                self.tool_rotation,
-                UnderDirection::ToGround,
-            )),
+            ItemType::UndergroundBelt => {
+                return Ok(UndergroundBelt::new(
+                    *cursor,
+                    self.tool_rotation,
+                    UnderDirection::ToGround,
+                ))
+            }
             _ => return js_err!("Can't make a structure from {:?}", tool),
         }
     }
@@ -2488,7 +2503,13 @@ impl FactorishState {
                         for i in 0..structures.len() {
                             let (structure, others) = StructureDynIter::new(&mut structures, i)?;
                             if let Some(s) = structure.bundle.as_mut() {
-                                s.dynamic.on_construction(&mut s.components, id, &new_s, &others, true)?;
+                                s.dynamic.on_construction(
+                                    &mut s.components,
+                                    id,
+                                    &new_s,
+                                    &others,
+                                    true,
+                                )?;
                             }
                         }
                         self.structures = structures;

@@ -1,14 +1,14 @@
 use super::{
     draw_direction_arrow,
     drop_items::DropItem,
-    structure::{
-        RotateErr, Structure, StructureBundle, StructureComponents, StructureDynIter, StructureId,
-    },
     gl::{
         draw_direction_arrow_gl,
         utils::{enable_buffer, Flatten},
     },
     items::{render_drop_item, render_drop_item_mat_gl, ItemType},
+    structure::{
+        RotateErr, Structure, StructureBundle, StructureComponents, StructureDynIter, StructureId,
+    },
     FactorishState, FrameProcResult, Inventory, InventoryTrait, Position, Rotation,
 };
 use cgmath::{Matrix3, Matrix4, Rad, Vector2, Vector3};
@@ -198,8 +198,12 @@ impl Structure for Inserter {
         depth: i32,
         is_ghost: bool,
     ) -> Result<(), JsValue> {
-        let position = components.position.ok_or_else(|| js_str!("Inserter without Position"))?;
-        let rotation = components.rotation.ok_or_else(|| js_str!("Inserter without Rotation"))?;
+        let position = components
+            .position
+            .ok_or_else(|| js_str!("Inserter without Position"))?;
+        let rotation = components
+            .rotation
+            .ok_or_else(|| js_str!("Inserter without Rotation"))?;
         let (x, y) = (
             position.x as f32 + state.viewport.x as f32,
             position.y as f32 + state.viewport.y as f32,

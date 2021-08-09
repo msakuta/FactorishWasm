@@ -1,12 +1,14 @@
 use super::{
-    COAL_POWER,
     burner::Burner,
     factory::Factory,
     gl::utils::{enable_buffer, Flatten},
     items::item_to_str,
     serialize_impl,
-    structure::{StructureId, Energy, Structure, StructureBundle, StructureComponents, StructureDynIter, FrameProcResult},
-    DropItem, FactorishState, Inventory, InventoryTrait, ItemType, Position, Recipe,
+    structure::{
+        Energy, FrameProcResult, Structure, StructureBundle, StructureComponents, StructureDynIter,
+        StructureId,
+    },
+    DropItem, FactorishState, Inventory, InventoryTrait, ItemType, Position, Recipe, COAL_POWER,
 };
 use cgmath::{Matrix3, Matrix4, Vector2, Vector3};
 use once_cell::sync::Lazy;
@@ -121,9 +123,17 @@ impl Structure for Furnace {
         if depth != 0 {
             return Ok(());
         };
-        let position = components.position.ok_or_else(|| js_str!("Furnace without Position"))?;
-        let factory = components.factory.as_ref().ok_or_else(|| js_str!("Furnace without Factory"))?;
-        let energy = components.energy.as_ref().ok_or_else(|| js_str!("Furnace without Energy"))?;
+        let position = components
+            .position
+            .ok_or_else(|| js_str!("Furnace without Position"))?;
+        let factory = components
+            .factory
+            .as_ref()
+            .ok_or_else(|| js_str!("Furnace without Factory"))?;
+        let energy = components
+            .energy
+            .as_ref()
+            .ok_or_else(|| js_str!("Furnace without Energy"))?;
         let shader = state
             .assets
             .textured_shader
@@ -293,13 +303,11 @@ impl Structure for Furnace {
     }
 
     fn can_input(&self, components: &StructureComponents, item_type: &ItemType) -> bool {
-        let factory = if let Some(factory) = components
-            .factory
-            .as_ref() {
-                factory
-            } else {
-                return false;
-            };
+        let factory = if let Some(factory) = components.factory.as_ref() {
+            factory
+        } else {
+            return false;
+        };
         // match *item_type {
         //     ItemType::IronOre | ItemType::CopperOre => true,
         //     _ => false,

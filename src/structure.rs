@@ -318,7 +318,11 @@ pub(crate) trait Structure {
     }
     /// Query a set of items that this structure can output. Actual output would not happen until `output()`, thus
     /// this method is immutable. It should return empty Inventory if it cannot output anything.
-    fn can_output(&self, _components: &StructureComponents, _structures: &StructureDynIter) -> Inventory {
+    fn can_output(
+        &self,
+        _components: &StructureComponents,
+        _structures: &StructureDynIter,
+    ) -> Inventory {
         Inventory::new()
     }
     /// Perform actual output. The operation should always succeed since the output-tability is checked beforehand
@@ -578,7 +582,11 @@ impl StructureBundle {
         }
     }
 
-    pub(crate) fn rotate(&mut self, state: &mut FactorishState, others: &StructureDynIter) -> Result<(), RotateErr> {
+    pub(crate) fn rotate(
+        &mut self,
+        state: &mut FactorishState,
+        others: &StructureDynIter,
+    ) -> Result<(), RotateErr> {
         let result = self.dynamic.rotate(&mut self.components, state, others);
         if result.is_ok() {
             return Ok(());

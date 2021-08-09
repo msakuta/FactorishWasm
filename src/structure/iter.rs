@@ -1,4 +1,4 @@
-use super::{StructureEntry, StructureId, StructureBundle};
+use super::{StructureBundle, StructureEntry, StructureId};
 use crate::dyn_iter::{DynIter, DynIterMut};
 use smallvec::{smallvec, SmallVec};
 use wasm_bindgen::prelude::*;
@@ -110,13 +110,7 @@ impl<'a> StructureDynIter<'a> {
     pub(crate) fn exclude_id<'b>(
         &'b mut self,
         id: StructureId,
-    ) -> Result<
-        (
-            Option<&'b mut StructureBundle>,
-            StructureDynIter<'b>,
-        ),
-        JsValue,
-    >
+    ) -> Result<(Option<&'b mut StructureBundle>, StructureDynIter<'b>), JsValue>
     where
         'a: 'b,
     {
@@ -260,12 +254,11 @@ impl<'a> DynIter for StructureDynIter<'a> {
 
 impl<'a> DynIterMut for StructureDynIter<'a> {
     fn dyn_iter_mut(&mut self) -> Box<dyn Iterator<Item = &mut Self::Item> + '_> {
-        Box::new(self.0.iter_mut().flat_map(|slice| {
-            slice
-                .slice
+        Box::new(
+            self.0
                 .iter_mut()
-                .filter_map(|s| s.bundle.as_mut())
-        }))
+                .flat_map(|slice| slice.slice.iter_mut().filter_map(|s| s.bundle.as_mut())),
+        )
     }
 }
 

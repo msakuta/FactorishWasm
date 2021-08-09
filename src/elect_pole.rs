@@ -1,9 +1,9 @@
 use super::{
-    structure::{Structure, StructureBundle, StructureComponents},
     gl::{
         assets::WIRE_SEGMENTS,
         utils::{enable_buffer, vertex_buffer_data, Flatten},
     },
+    structure::{Structure, StructureBundle, StructureComponents},
     FactorishState, Position, TILE_SIZE_F, WIRE_ATTACH_X, WIRE_ATTACH_Y, WIRE_HANG,
 };
 use cgmath::{Matrix3, Matrix4, Vector3};
@@ -76,7 +76,9 @@ impl Structure for ElectPole {
         if depth != 0 {
             return Ok(());
         }
-        let position = components.position.ok_or_else(|| js_str!("OreMine without Position"))?;
+        let position = components
+            .position
+            .ok_or_else(|| js_str!("OreMine without Position"))?;
         let (x, y) = (
             position.x as f32 + state.viewport.x as f32,
             position.y as f32 + state.viewport.y as f32,

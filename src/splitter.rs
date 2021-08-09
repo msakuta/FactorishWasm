@@ -157,8 +157,12 @@ impl Structure for Splitter {
         depth: i32,
         is_ghost: bool,
     ) -> Result<(), JsValue> {
-        let position = components.position.ok_or_else(|| js_str!("Splitter without Position"))?;
-        let rotation = components.rotation.ok_or_else(|| js_str!("Splitter without Rotation"))?;
+        let position = components
+            .position
+            .ok_or_else(|| js_str!("Splitter without Position"))?;
+        let rotation = components
+            .rotation
+            .ok_or_else(|| js_str!("Splitter without Rotation"))?;
 
         let (x, y) = (
             position.x as f32 + state.viewport.x as f32,

@@ -69,7 +69,9 @@ impl Structure for OffshorePump {
         if depth != 0 {
             return Ok(());
         };
-        let position = components.position.ok_or_else(|| js_str!("OffshorePump without Position"))?;
+        let position = components
+            .position
+            .ok_or_else(|| js_str!("OffshorePump without Position"))?;
         Pipe::draw_gl_int(components, state, gl, depth, false, is_ghost)?;
         let (x, y) = (
             position.x as f32 + state.viewport.x as f32,
@@ -103,10 +105,14 @@ impl Structure for OffshorePump {
         Ok(())
     }
 
-    fn desc(&self, components: &StructureComponents,  _state: &FactorishState) -> String {
+    fn desc(&self, components: &StructureComponents, _state: &FactorishState) -> String {
         format!(
             "{}<br>{}",
-            components.fluid_boxes.iter().map(|fb| fb.desc()).fold(String::new(), |s, desc| s + "<br>" + &desc),
+            components
+                .fluid_boxes
+                .iter()
+                .map(|fb| fb.desc())
+                .fold(String::new(), |s, desc| s + "<br>" + &desc),
             "Outputs: Water<br>",
         )
     }

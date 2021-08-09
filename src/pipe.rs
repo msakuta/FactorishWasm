@@ -1,6 +1,6 @@
 use super::{
-    structure::{Position, Structure, StructureBundle, StructureComponents},
     gl::utils::{enable_buffer, Flatten},
+    structure::{Position, Structure, StructureBundle, StructureComponents},
     water_well::FluidBox,
     FactorishState,
 };
@@ -90,24 +90,23 @@ impl Pipe {
         if depth != 0 {
             return Ok(());
         }
-        let position = components.position.ok_or_else(|| js_str!("Pipe without Position"))?;
+        let position = components
+            .position
+            .ok_or_else(|| js_str!("Pipe without Position"))?;
 
         let (x, y) = (
             position.x as f32 + state.viewport.x as f32,
             position.y as f32 + state.viewport.y as f32,
         );
 
-        let connections = components
-            .fluid_boxes
-            .iter()
-            .fold(0, |con, fluid_box| {
-                con | fluid_box
-                    .connect_to
-                    .iter()
-                    .enumerate()
-                    .filter(|(_, b)| b.is_some())
-                    .fold(0, |acc, (i, _)| acc | (1 << i))
-            });
+        let connections = components.fluid_boxes.iter().fold(0, |con, fluid_box| {
+            con | fluid_box
+                .connect_to
+                .iter()
+                .enumerate()
+                .filter(|(_, b)| b.is_some())
+                .fold(0, |acc, (i, _)| acc | (1 << i))
+        });
         // Skip drawing center dot? if there are no connections
         if !draw_center && connections == 0 {
             return Ok(());

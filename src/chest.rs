@@ -3,7 +3,8 @@ use super::{
     gl::utils::{enable_buffer, Flatten},
     items::ItemType,
     structure::{
-        ItemResponse, ItemResponseResult, Structure, StructureBundle, StructureComponents, StructureDynIter
+        ItemResponse, ItemResponseResult, Structure, StructureBundle, StructureComponents,
+        StructureDynIter,
     },
     FactorishState, FrameProcResult, Inventory, InventoryTrait, Position,
 };
@@ -71,7 +72,9 @@ impl Structure for Chest {
         if depth != 0 {
             return Ok(());
         }
-        let position = components.position.ok_or_else(|| js_str!("OreMine without Position"))?;
+        let position = components
+            .position
+            .ok_or_else(|| js_str!("OreMine without Position"))?;
         let (x, y) = (
             position.x as f32 + state.viewport.x as f32,
             position.y as f32 + state.viewport.y as f32,
@@ -146,7 +149,11 @@ impl Structure for Chest {
         self.inventory.len() < CHEST_CAPACITY
     }
 
-    fn can_output(&self, _components: &StructureComponents, _structures: &StructureDynIter) -> Inventory {
+    fn can_output(
+        &self,
+        _components: &StructureComponents,
+        _structures: &StructureDynIter,
+    ) -> Inventory {
         self.inventory.clone()
     }
 

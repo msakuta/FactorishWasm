@@ -3,7 +3,10 @@ use super::{
     gl::utils::{enable_buffer, Flatten},
     inventory::InventoryTrait,
     items::ItemType,
-    structure::{ItemResponse, ItemResponseResult, Structure, StructureDynIter, StructureId, StructureBundle, StructureComponents},
+    structure::{
+        ItemResponse, ItemResponseResult, Structure, StructureBundle, StructureComponents,
+        StructureDynIter, StructureId,
+    },
     transport_belt::TransportBelt,
     window, DropItem, FactorishState, FrameProcResult, Inventory, Position, RotateErr, Rotation,
     TILE_SIZE, TILE_SIZE_I,
@@ -36,17 +39,18 @@ pub(crate) struct UndergroundBelt {
 }
 
 impl UndergroundBelt {
-    pub(crate) fn new(position: Position, rotation: Rotation, direction: UnderDirection) -> StructureBundle {
+    pub(crate) fn new(
+        position: Position,
+        rotation: Rotation,
+        direction: UnderDirection,
+    ) -> StructureBundle {
         StructureBundle {
             dynamic: Box::new(Self {
                 direction,
                 target: None,
                 items: VecDeque::new(),
             }),
-            components: StructureComponents::new_with_position_and_rotation(
-                position,
-                rotation,
-            )
+            components: StructureComponents::new_with_position_and_rotation(position, rotation),
         }
     }
 
@@ -90,8 +94,12 @@ impl Structure for UndergroundBelt {
         if depth != 0 && depth != 1 {
             return Ok(());
         };
-        let position = components.position.ok_or_else(|| js_str!("Underground belt without Position"))?;
-        let rotation = components.rotation.ok_or_else(|| js_str!("Underground belt without Rotation"))?;
+        let position = components
+            .position
+            .ok_or_else(|| js_str!("Underground belt without Position"))?;
+        let rotation = components
+            .rotation
+            .ok_or_else(|| js_str!("Underground belt without Rotation"))?;
         match state.image_underground_belt.as_ref() {
             Some(img) => {
                 context.save();
@@ -130,8 +138,12 @@ impl Structure for UndergroundBelt {
         depth: i32,
         is_ghost: bool,
     ) -> Result<(), JsValue> {
-        let position = components.position.ok_or_else(|| js_str!("Underground belt without Position"))?;
-        let rotation = components.rotation.ok_or_else(|| js_str!("Underground belt without Rotation"))?;
+        let position = components
+            .position
+            .ok_or_else(|| js_str!("Underground belt without Position"))?;
+        let rotation = components
+            .rotation
+            .ok_or_else(|| js_str!("Underground belt without Rotation"))?;
         let (x, y) = (
             position.x as f32 + state.viewport.x as f32,
             position.y as f32 + state.viewport.y as f32,
@@ -262,17 +274,22 @@ impl Structure for UndergroundBelt {
         Ok(())
     }
 
-    fn set_rotation(&mut self,         components: &mut StructureComponents,
-        rotation: &Rotation) -> Result<(), ()> {
+    fn set_rotation(
+        &mut self,
+        components: &mut StructureComponents,
+        rotation: &Rotation,
+    ) -> Result<(), ()> {
         if let Some(ref mut my_rotation) = components.rotation {
             *my_rotation = *rotation;
         }
         Ok(())
     }
 
-    fn item_response(&mut self,
+    fn item_response(
+        &mut self,
         components: &mut StructureComponents,
-        item: &DropItem) -> Result<ItemResponseResult, JsValue> {
+        item: &DropItem,
+    ) -> Result<ItemResponseResult, JsValue> {
         if self.direction == ToGround {
             if self.target.is_some() {
                 if let Some(first_item) = self.items.front() {
@@ -288,8 +305,13 @@ impl Structure for UndergroundBelt {
             }
         } else {
             TransportBelt::transport_item(
-                components.rotation.ok_or_else(
-                    || js_str!("Transport belt without rotation"))?.next().next(), item)
+                components
+                    .rotation
+                    .ok_or_else(|| js_str!("Transport belt without rotation"))?
+                    .next()
+                    .next(),
+                item,
+            )
         }
     }
 
@@ -297,7 +319,11 @@ impl Structure for UndergroundBelt {
         self.direction == ToGround
     }
 
-    fn can_output(&self, components: &StructureComponents, structures: &StructureDynIter) -> Inventory {
+    fn can_output(
+        &self,
+        components: &StructureComponents,
+        structures: &StructureDynIter,
+    ) -> Inventory {
         if self.direction == ToSurface {
             if let Some(distance) = self
                 .target
@@ -340,11 +366,18 @@ impl Structure for UndergroundBelt {
             }
             return Ok(());
         }
-        let rotation = components.rotation.ok_or_else(|| js_str!("UndergroundBelt without Rotation"))?;
-        if other.dynamic.name() != self.name() || other.components.rotation != Some(rotation.next().next()) {
+        let rotation = components
+            .rotation
+            .ok_or_else(|| js_str!("UndergroundBelt without Rotation"))?;
+        if other.dynamic.name() != self.name()
+            || other.components.rotation != Some(rotation.next().next())
+        {
             return Ok(());
         }
-        let opos = other.components.position.ok_or_else(|| js_str!("UndergroundBelt target without Position"))?;
+        let opos = other
+            .components
+            .position
+            .ok_or_else(|| js_str!("UndergroundBelt target without Position"))?;
         let d = if let Some(d) = self.distance(components, &opos) {
             d
         } else {
@@ -357,7 +390,11 @@ impl Structure for UndergroundBelt {
 
         // If there is already an underground belt with shorter distance, don't connect to the new one.
         if let Some(target) = self.target.and_then(|target| others.get(target)) {
-            if let Some(target_d) = target.components.position.and_then(|tpos| self.distance(components, &tpos)) {
+            if let Some(target_d) = target
+                .components
+                .position
+                .and_then(|tpos| self.distance(components, &tpos))
+            {
                 if target_d < d {
                     return Ok(());
                 }
@@ -376,9 +413,12 @@ impl Structure for UndergroundBelt {
         others: &StructureDynIter,
         _construct: bool,
     ) -> Result<(), JsValue> {
-        let rotation = components.rotation.ok_or_else(|| js_str!("UndergroundBelt without Rotation"))?;
+        let rotation = components
+            .rotation
+            .ok_or_else(|| js_str!("UndergroundBelt without Rotation"))?;
         if let Some((id, _)) = others.dyn_iter_id().find(|(_, other)| {
-            if other.dynamic.name() != self.name() || other.components.rotation != Some(rotation.next().next())
+            if other.dynamic.name() != self.name()
+                || other.components.rotation != Some(rotation.next().next())
             {
                 return false;
             }
@@ -400,7 +440,11 @@ impl Structure for UndergroundBelt {
 
             // If there is already an underground belt with shorter distance, don't connect to the new one.
             if let Some(target) = self.target.and_then(|target| others.get(target)) {
-                if let Some(target_d) = target.components.position.and_then(|pos| self.distance(components, &pos)) {
+                if let Some(target_d) = target
+                    .components
+                    .position
+                    .and_then(|pos| self.distance(components, &pos))
+                {
                     if target_d < d {
                         return false;
                     }

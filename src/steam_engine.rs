@@ -123,7 +123,9 @@ impl Structure for SteamEngine {
         depth: i32,
         is_ghost: bool,
     ) -> Result<(), JsValue> {
-        let position = components.position.ok_or_else(|| js_str!("SteamEngine without Position"))?;
+        let position = components
+            .position
+            .ok_or_else(|| js_str!("SteamEngine without Position"))?;
 
         Pipe::draw_gl_int(components, state, gl, depth, false, is_ghost)?;
         let (x, y) = (
@@ -142,7 +144,9 @@ impl Structure for SteamEngine {
         gl.uniform1f(shader.alpha_loc.as_ref(), if is_ghost { 0.5 } else { 1. });
         gl.active_texture(GL::TEXTURE0);
         gl.bind_texture(GL::TEXTURE_2D, Some(&state.assets.tex_steam_engine));
-        let sx = if self.progress.is_some() && Self::COMBUSTION_EPSILON < self.combustion_rate(components) {
+        let sx = if self.progress.is_some()
+            && Self::COMBUSTION_EPSILON < self.combustion_rate(components)
+        {
             (((state.sim_time * 5.) as isize) % 2 + 1) as f32
         } else {
             0.

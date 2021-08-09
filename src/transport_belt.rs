@@ -1,10 +1,10 @@
 use super::{
     drop_items::DropItem,
+    gl::utils::{enable_buffer, Flatten},
     structure::{
         ItemResponse, ItemResponseResult, Structure, StructureBundle, StructureComponents,
         StructureDynIter,
     },
-    gl::utils::{enable_buffer, Flatten},
     FactorishState, Position, RotateErr, Rotation, TILE_SIZE,
 };
 use cgmath::{Matrix3, Matrix4, Rad, Vector2, Vector3};
@@ -104,8 +104,12 @@ impl Structure for TransportBelt {
         depth: i32,
         is_ghost: bool,
     ) -> Result<(), JsValue> {
-        let position = components.position.ok_or_else(|| js_str!("TransportBelt without Position"))?;
-        let rotation = components.rotation.ok_or_else(|| js_str!("TransportBelt without Rotation"))?;
+        let position = components
+            .position
+            .ok_or_else(|| js_str!("TransportBelt without Position"))?;
+        let rotation = components
+            .rotation
+            .ok_or_else(|| js_str!("TransportBelt without Rotation"))?;
 
         let (x, y) = (
             position.x as f32 + state.viewport.x as f32,
@@ -180,9 +184,12 @@ impl Structure for TransportBelt {
         components: &mut StructureComponents,
         item: &DropItem,
     ) -> Result<ItemResponseResult, JsValue> {
-        Self::transport_item(components
-            .rotation
-            .ok_or_else(|| js_str!("TransportBelt without Rotation component"))?, item)
+        Self::transport_item(
+            components
+                .rotation
+                .ok_or_else(|| js_str!("TransportBelt without Rotation component"))?,
+            item,
+        )
     }
 
     crate::serialize_impl!();

@@ -5,8 +5,8 @@ use super::{
 };
 use crate::{
     apply_bounds, drop_item_iter, elect_pole::draw_wire_gl, items::render_drop_item_gl,
-    performance, structure::StructureComponents, Cell, FactorishState, FluidType, Ore, OreValue, Position,
-    PowerWire, Rotation, CHUNK_SIZE, CHUNK_SIZE_I, DROP_ITEM_SIZE, INDEX_CHUNK_SIZE,
+    performance, structure::StructureComponents, Cell, FactorishState, FluidType, Ore, OreValue,
+    Position, PowerWire, Rotation, CHUNK_SIZE, CHUNK_SIZE_I, DROP_ITEM_SIZE, INDEX_CHUNK_SIZE,
     ORE_HARVEST_TIME, TILE_SIZE, TILE_SIZE_F,
 };
 use cgmath::{Matrix3, Matrix4, Rad, Vector2, Vector3};
@@ -166,7 +166,9 @@ impl FactorishState {
 
         let draw_structures = |depth| -> Result<(), JsValue> {
             for structure in self.structure_iter() {
-                structure.dynamic.draw_gl(&structure.components, &self, &gl, depth, false)?;
+                structure
+                    .dynamic
+                    .draw_gl(&structure.components, &self, &gl, depth, false)?;
             }
             Ok(())
         };
@@ -199,7 +201,10 @@ impl FactorishState {
                 for PowerWire(first, second) in wires {
                     let first = self.get_structure(*first);
                     let second = self.get_structure(*second);
-                    if let Some((first, second)) = first.and_then(|b| b.components.position).zip(second.and_then(|b| b.components.position)) {
+                    if let Some((first, second)) = first
+                        .and_then(|b| b.components.position)
+                        .zip(second.and_then(|b| b.components.position))
+                    {
                         let min = (first.x.min(second.x), first.y.min(second.y));
                         let max = (first.x.max(second.x), first.y.max(second.y));
                         if -self.viewport.x <= max.0 as f64
@@ -355,10 +360,7 @@ impl FactorishState {
                         let frame_size = (BAR_WIDTH, (bb.y1 - bb.y0) as f32 - BAR_MARGIN * 2.);
 
                         set_transform(shader, frame_trans, frame_size)?;
-                        gl.uniform4fv_with_f32_array(
-                            shader.color_loc.as_ref(),
-                            &[0., 0., 0., 1.],
-                        );
+                        gl.uniform4fv_with_f32_array(shader.color_loc.as_ref(), &[0., 0., 0., 1.]);
                         gl.draw_arrays(GL::TRIANGLE_FAN, 0, 4);
 
                         let bar_height = (fb.amount / fb.max_amount) as f32
@@ -379,10 +381,7 @@ impl FactorishState {
                         gl.draw_arrays(GL::TRIANGLE_FAN, 0, 4);
 
                         set_transform(shader, frame_trans, frame_size)?;
-                        gl.uniform4fv_with_f32_array(
-                            shader.color_loc.as_ref(),
-                            &[1., 0., 0., 1.],
-                        );
+                        gl.uniform4fv_with_f32_array(shader.color_loc.as_ref(), &[1., 0., 0., 1.]);
                         gl.draw_arrays(GL::LINE_LOOP, 0, 4);
                     }
                 }
@@ -396,7 +395,8 @@ impl FactorishState {
                 let mut tool = self.new_structure(&selected_tool, &Position::from(cursor))?;
                 tool.set_rotation(&self.tool_rotation).ok();
                 for depth in 0..3 {
-                    tool.dynamic.draw_gl(&tool.components, self, &gl, depth, true)?;
+                    tool.dynamic
+                        .draw_gl(&tool.components, self, &gl, depth, true)?;
                 }
             }
 

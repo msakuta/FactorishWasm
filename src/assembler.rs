@@ -108,9 +108,17 @@ impl Structure for Assembler {
         depth: i32,
         is_ghost: bool,
     ) -> Result<(), JsValue> {
-        let position = components.position.ok_or_else(|| js_str!("Assembler without Position"))?;
-        let factory = components.factory.as_ref().ok_or_else(|| js_str!("Assembler without Factory"))?;
-        let energy = components.energy.as_ref().ok_or_else(|| js_str!("Assembler without Energy"))?;
+        let position = components
+            .position
+            .ok_or_else(|| js_str!("Assembler without Position"))?;
+        let factory = components
+            .factory
+            .as_ref()
+            .ok_or_else(|| js_str!("Assembler without Factory"))?;
+        let energy = components
+            .energy
+            .as_ref()
+            .ok_or_else(|| js_str!("Assembler without Energy"))?;
         let (x, y) = (
             position.x as f32 + state.viewport.x as f32,
             position.y as f32 + state.viewport.y as f32,

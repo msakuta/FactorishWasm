@@ -1,10 +1,10 @@
 use super::{
     burner::Burner,
+    gl::utils::{enable_buffer, Flatten},
     pipe::Pipe,
     structure::{
         Energy, Structure, StructureBundle, StructureComponents, StructureDynIter, StructureId,
     },
-    gl::utils::{enable_buffer, Flatten},
     water_well::{FluidBox, FluidType},
     FactorishState, FrameProcResult, Inventory, ItemType, Position, Recipe, TempEnt,
 };
@@ -141,8 +141,13 @@ impl Structure for Boiler {
         is_ghost: bool,
     ) -> Result<(), JsValue> {
         Pipe::draw_gl_int(components, state, gl, depth, false, is_ghost)?;
-        let position = components.position.ok_or_else(|| js_str!("Boiler without Position"))?;
-        let energy = components.energy.as_ref().ok_or_else(|| js_str!("Boiler without Energy"))?;
+        let position = components
+            .position
+            .ok_or_else(|| js_str!("Boiler without Position"))?;
+        let energy = components
+            .energy
+            .as_ref()
+            .ok_or_else(|| js_str!("Boiler without Energy"))?;
         let (x, y) = (
             position.x as f32 + state.viewport.x as f32,
             position.y as f32 + state.viewport.y as f32,
@@ -159,7 +164,8 @@ impl Structure for Boiler {
                 gl.active_texture(GL::TEXTURE0);
                 gl.bind_texture(GL::TEXTURE_2D, Some(&state.assets.tex_boiler));
                 let sx = if self.progress.is_some()
-                    && Self::COMBUSTION_EPSILON < self.combustion_rate(&energy, &components.fluid_boxes)
+                    && Self::COMBUSTION_EPSILON
+                        < self.combustion_rate(&energy, &components.fluid_boxes)
                 {
                     (((state.sim_time * 5.) as isize) % 2 + 1) as f32
                 } else {

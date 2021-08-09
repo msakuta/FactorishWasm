@@ -197,7 +197,9 @@ impl Structure for WaterWell {
         if depth != 0 {
             return Ok(());
         };
-        let position = components.position.ok_or_else(|| js_str!("Furnace without Position"))?;
+        let position = components
+            .position
+            .ok_or_else(|| js_str!("Furnace without Position"))?;
         Pipe::draw_gl_int(components, state, gl, depth, false, is_ghost)?;
         let (x, y) = (
             position.x as f32 + state.viewport.x as f32,
