@@ -83,7 +83,7 @@ export let loadImages = [
 });
 
 
-export function getImageFile(type){
+function getImageFileInt(type){
     switch(type){
     case 'time':
         return time;
@@ -138,4 +138,26 @@ export function getImageFile(type){
     default:
         return "";
     }
+}
+
+class Image {
+    constructor() {
+        this.url = "";
+        this.widthFactor = 1;
+        this.heightFactor = 1;
+    }
+}
+
+export function getImageFile(type){
+    const image = getImageFileInt(type);
+    const ret = new Image();
+    if(image instanceof Array){
+        ret.url = image[0];
+        ret.widthFactor = image[1];
+        if(2 < image.length)
+            ret.heightFactor = image[2];
+    }
+    else
+        ret.url = image;
+    return ret;
 }

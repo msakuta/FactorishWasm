@@ -293,9 +293,7 @@ let unlimited = true;
         if(item){
             mouseIcon.style.display = "block";
             let imageFile = getImageFile(item);
-            if(imageFile instanceof Array)
-                imageFile = imageFile[0];
-            mouseIcon.style.backgroundImage = `url(${imageFile})`;
+            mouseIcon.style.backgroundImage = `url(${imageFile.url})`;
         }
         else
             mouseIcon.style.display = "none";
@@ -502,16 +500,12 @@ let unlimited = true;
     function generateItemImage(i, iconSize, count){
         var img = document.createElement('div');
         var imageFile = getImageFile(i);
-        img.style.backgroundImage = 'url(' + (imageFile instanceof Array ?
-            imageFile[0] : imageFile) + ')';
+        img.style.backgroundImage = `url(${imageFile.url})`;
         var size = iconSize ? 32 : objViewSize;
         img.style.width = size + 'px';
         img.style.height = size + 'px';
         img.style.display = 'inline-block';
-        if(imageFile instanceof Array)
-            img.style.backgroundSize = size * imageFile[1] + 'px ' + size + 'px';
-        else
-            img.style.backgroundSize = size + 'px ' + size + 'px';
+        img.style.backgroundSize = size * imageFile.widthFactor + 'px ' + size * imageFile.heightFactor + 'px';
         img.setAttribute('draggable', 'false');
         if(iconSize && count){
             var container = document.createElement('span');
@@ -742,8 +736,7 @@ let unlimited = true;
                 }
                 else{
                     const imageFile = getImageFile(i);
-                    burnerItemElem.src = 'url(' + (imageFile instanceof Array ?
-                        imageFile[0] : imageFile) + ')';
+                    burnerItemElem.src = `url(${imageFile.url})`;
                     burnerItemElem.children[1].innerHTML = v;
                 }
                 burnerItemElem.ondragstart = function(ev){
