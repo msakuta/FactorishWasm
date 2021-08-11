@@ -2149,7 +2149,14 @@ impl FactorishState {
                         for i in 0..structures.len() {
                             let (structure, others) = StructureDynIter::new(&mut structures, i)?;
                             if let Some(s) = structure.dynamic.as_deref_mut() {
-                                s.on_construction(id, new_s.as_mut(), &others, true)?;
+                                match s.on_construction(id, new_s.as_mut(), &others, true) {
+                                    Ok(()) => (),
+                                    Err(s) => {
+                                        drop(others);
+                                        self.structures = structures;
+                                        return Err(s);
+                                    }
+                                }
                             }
                         }
                         self.structures = structures;
