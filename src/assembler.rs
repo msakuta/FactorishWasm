@@ -410,6 +410,12 @@ impl Structure for Assembler {
                     20.,
                 ),
                 Recipe::new(
+                    hash_map!(ItemType::Pipe => 10),
+                    hash_map!(ItemType::UndergroundPipe => 2),
+                    20.,
+                    20.,
+                ),
+                Recipe::new(
                     hash_map!(ItemType::IronPlate => 5, ItemType::Gear => 5),
                     hash_map!(ItemType::OffshorePump => 1),
                     150.,

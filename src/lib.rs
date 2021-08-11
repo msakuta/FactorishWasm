@@ -28,6 +28,7 @@ mod structure;
 mod terrain;
 mod transport_belt;
 mod underground_belt;
+mod underground_pipe;
 mod utils;
 mod water_well;
 mod gl {
@@ -76,6 +77,7 @@ use structure::{
 };
 use transport_belt::TransportBelt;
 use underground_belt::{UnderDirection, UndergroundBelt};
+use underground_pipe::UndergroundPipe;
 use water_well::{FluidType, WaterWell};
 
 use serde::{Deserialize, Serialize};
@@ -196,7 +198,7 @@ struct ToolDef {
     item_type: ItemType,
     desc: &'static str,
 }
-const tool_defs: [ToolDef; 14] = [
+const tool_defs: [ToolDef; 15] = [
     ToolDef {
         item_type: ItemType::TransportBelt,
         desc: "Transports items on ground",
@@ -240,6 +242,10 @@ const tool_defs: [ToolDef; 14] = [
     ToolDef {
         item_type: ItemType::Pipe,
         desc: "Conveys fluid such as water or steam.",
+    },
+    ToolDef {
+        item_type: ItemType::UndergroundPipe,
+        desc: "Transport fluid beyond obstacles.",
     },
     ToolDef {
         item_type: ItemType::SteamEngine,
@@ -1120,9 +1126,12 @@ impl FactorishState {
                 if i != j {
                     if let (Some(a), Some(b)) = self.get_pair_mut(i, j) {
                         let (aid, bid) = (a.0, b.0);
+                        let a_con = a.1.fluid_connections();
+                        let b_con = b.1.fluid_connections();
                         if let Some(((idx, mut av), mut bv)) =
                             a.1.position()
                                 .neighbor_index(b.1.position())
+                                .filter(|f| a_con[*f as usize] && b_con[(*f as usize + 2) % 4])
                                 .zip(a.1.fluid_box_mut())
                                 .zip(b.1.fluid_box_mut())
                         {
@@ -1944,6 +1953,11 @@ impl FactorishState {
             ItemType::WaterWell => Box::new(WaterWell::new(cursor)),
             ItemType::OffshorePump => Box::new(OffshorePump::new(cursor)),
             ItemType::Pipe => Box::new(Pipe::new(cursor)),
+            ItemType::UndergroundPipe => Box::new(UndergroundPipe::new(
+                *cursor,
+                self.tool_rotation,
+                UnderDirection::ToGround,
+            )),
             ItemType::SteamEngine => Box::new(SteamEngine::new(cursor)),
             ItemType::ElectPole => Box::new(ElectPole::new(cursor)),
             ItemType::UndergroundBelt => Box::new(UndergroundBelt::new(
@@ -1996,6 +2010,9 @@ impl FactorishState {
                 Box::new(map_err(serde_json::from_value::<OffshorePump>(payload))?)
             }
             ItemType::Pipe => Box::new(map_err(serde_json::from_value::<Pipe>(payload))?),
+            ItemType::UndergroundPipe => {
+                Box::new(map_err(serde_json::from_value::<UndergroundPipe>(payload))?)
+            }
             ItemType::SteamEngine => {
                 Box::new(map_err(serde_json::from_value::<SteamEngine>(payload))?)
             }

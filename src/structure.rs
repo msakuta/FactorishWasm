@@ -347,6 +347,9 @@ pub(crate) trait Structure {
     fn get_selected_recipe(&self) -> Option<&Recipe> {
         None
     }
+    fn fluid_connections(&self) -> [bool; 4] {
+        [true; 4]
+    }
     fn fluid_box(&self) -> Option<Vec<&FluidBox>> {
         None
     }

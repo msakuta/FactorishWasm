@@ -30,6 +30,7 @@ import copperWire from "../img/copper-wire.png";
 import circuit from "../img/circuit.png";
 import gear from "../img/gear.png";
 import pipeItem from "../img/pipe-item.png";
+import undergroundPipeItem from "../img/underground-pipe-item.png";
 import steamEngine from "../img/steam-engine.png";
 import electPole from "../img/elect-pole.png";
 import smoke from "../img/smoke.png";
@@ -131,6 +132,8 @@ function getImageFileInt(type){
         return [boiler, 3];
     case 'Pipe':
         return pipeItem;
+    case 'Underground Pipe':
+        return undergroundPipeItem;
     case 'Steam Engine':
         return [steamEngine, 3];
     case 'Electric Pole':
