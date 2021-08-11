@@ -1481,10 +1481,16 @@ impl FactorishState {
                     let mut structures = std::mem::take(&mut self.structures);
                     let (s, others) = StructureDynIter::new(&mut structures, idx)
                         .map_err(|_| RotateErr::NotFound)?;
-                    s.dynamic
+                    match s
+                        .dynamic
                         .as_deref_mut()
                         .ok_or(RotateErr::NotFound)?
-                        .rotate(self, &others)?;
+                        .rotate(self, &others)
+                    {
+                        Ok(()) => (),
+                        // Rotation error is not a hard error; gracefully ignore
+                        Err(s) => console_log!("rotate returned err: {:?}", s),
+                    }
                     drop(others);
                     self.structures = structures;
                     return Ok(false);
