@@ -1959,11 +1959,9 @@ impl FactorishState {
             ItemType::WaterWell => Box::new(WaterWell::new(cursor)),
             ItemType::OffshorePump => Box::new(OffshorePump::new(cursor)),
             ItemType::Pipe => Box::new(Pipe::new(cursor)),
-            ItemType::UndergroundPipe => Box::new(UndergroundPipe::new(
-                *cursor,
-                self.tool_rotation,
-                UnderDirection::ToGround,
-            )),
+            ItemType::UndergroundPipe => {
+                Box::new(UndergroundPipe::new(*cursor, self.tool_rotation))
+            }
             ItemType::SteamEngine => Box::new(SteamEngine::new(cursor)),
             ItemType::ElectPole => Box::new(ElectPole::new(cursor)),
             ItemType::UndergroundBelt => Box::new(UndergroundBelt::new(

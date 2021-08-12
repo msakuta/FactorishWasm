@@ -350,6 +350,10 @@ pub(crate) trait Structure {
     fn fluid_connections(&self) -> [bool; 4] {
         [true; 4]
     }
+    /// Method to return underground pipe reach length.
+    fn under_pipe_reach(&self) -> Option<i32> {
+        None
+    }
     fn fluid_box(&self) -> Option<Vec<&FluidBox>> {
         None
     }

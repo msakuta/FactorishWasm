@@ -1,32 +1,20 @@
 use super::{
-    drop_items::DROP_ITEM_SIZE_I,
     gl::utils::{enable_buffer, Flatten},
-    inventory::InventoryTrait,
-    items::ItemType,
-    structure::{ItemResponse, ItemResponseResult, Structure, StructureDynIter, StructureId},
-    transport_belt::TransportBelt,
-    underground_belt::UnderDirection,
+    structure::{Structure, StructureDynIter, StructureId},
     water_well::FluidBox,
-    window, DropItem, FactorishState, FrameProcResult, Inventory, Position, RotateErr, Rotation,
-    TILE_SIZE, TILE_SIZE_I,
+    FactorishState, FrameProcResult, Position, Rotation, TILE_SIZE,
 };
 use cgmath::{Matrix3, Matrix4, Vector2, Vector3};
-use rotate_enum::RotateEnum;
 use serde::{Deserialize, Serialize};
-use std::collections::VecDeque;
 use wasm_bindgen::prelude::*;
 use web_sys::{CanvasRenderingContext2d, WebGlRenderingContext as GL};
 
 const UNDERGROUND_REACH: i32 = 10;
 
-use UnderDirection::*;
-
 #[derive(Serialize, Deserialize)]
 pub(crate) struct UndergroundPipe {
     position: Position,
     rotation: Rotation,
-    direction: UnderDirection,
-    target: Option<StructureId>,
 
     /// Items in the underground belt. First value is the absolute position in the underground belt
     /// from the entrance.
@@ -34,12 +22,10 @@ pub(crate) struct UndergroundPipe {
 }
 
 impl UndergroundPipe {
-    pub(crate) fn new(position: Position, rotation: Rotation, direction: UnderDirection) -> Self {
+    pub(crate) fn new(position: Position, rotation: Rotation) -> Self {
         Self {
             position,
             rotation,
-            direction,
-            target: None,
             fluid_box: FluidBox::new(true, true),
         }
     }
@@ -56,10 +42,10 @@ impl UndergroundPipe {
         let dx = target.x - src.x;
         let dy = target.y - src.y;
         Some(match self.rotation {
-            Rotation::Left => -dx,
-            Rotation::Right => dx,
-            Rotation::Top => -dy,
-            Rotation::Bottom => dy,
+            Rotation::Left => dx,
+            Rotation::Right => -dx,
+            Rotation::Top => dy,
+            Rotation::Bottom => -dy,
         })
     }
 }
@@ -75,10 +61,6 @@ impl Structure for UndergroundPipe {
 
     fn rotation(&self) -> Option<Rotation> {
         Some(self.rotation)
-    }
-
-    fn under_direction(&self) -> Option<UnderDirection> {
-        Some(self.direction)
     }
 
     fn draw(
@@ -175,32 +157,13 @@ impl Structure for UndergroundPipe {
         Ok(FrameProcResult::None)
     }
 
-    fn rotate(
-        &mut self,
-        state: &mut FactorishState,
-        _others: &StructureDynIter,
-    ) -> Result<(), RotateErr> {
-        self.direction = self.direction.next();
-        if self.direction == ToSurface {
-            state.player.inventory.merge(self.destroy_inventory());
-            state
-                .on_player_update
-                .call1(
-                    &window(),
-                    &JsValue::from(state.get_player_inventory().map_err(RotateErr::Other)?),
-                )
-                .unwrap_or_else(|_| JsValue::from(true));
-        }
-        Ok(())
-    }
-
     fn set_rotation(&mut self, rotation: &Rotation) -> Result<(), ()> {
         self.rotation = *rotation;
         Ok(())
     }
 
     fn desc(&self, _state: &FactorishState) -> String {
-        format!("{}<br>Connection: {:?}", self.fluid_box.desc(), self.target)
+        self.fluid_box.desc()
     }
 
     fn on_construction(
@@ -211,15 +174,19 @@ impl Structure for UndergroundPipe {
         construct: bool,
     ) -> Result<(), JsValue> {
         if !construct {
-            // This resetting is not strictly necessary with generational id
-            if self.target == Some(other_id) {
-                self.target = None;
-            }
             return Ok(());
         }
-        if other.name() != self.name() || other.rotation() != Some(self.rotation.next().next()) {
+
+        if other.rotation() != Some(self.rotation.next().next()) {
             return Ok(());
         }
+
+        let underground_reach = if let Some(reach) = other.under_pipe_reach() {
+            reach.min(UNDERGROUND_REACH)
+        } else {
+            return Ok(());
+        };
+
         let opos = *other.position();
         let d = if let Some(d) = self.distance(&opos) {
             d
@@ -227,21 +194,25 @@ impl Structure for UndergroundPipe {
             return Ok(());
         };
 
-        if d < 1 || UNDERGROUND_REACH < d {
+        if d < 1 || underground_reach < d {
             return Ok(());
         }
 
+        let connect_index = self.rotation.angle_4() as usize;
+
         // If there is already an underground belt with shorter distance, don't connect to the new one.
-        if let Some(target) = self.target.and_then(|target| others.get(target)) {
+        if let Some(target) =
+            self.fluid_box.connect_to[connect_index].and_then(|target| others.get(target))
+        {
             let target_pos = target.position();
             if let Some(target_d) = self.distance(target_pos) {
-                if target_d < d {
+                if 0 < target_d && target_d < d {
                     return Ok(());
                 }
             }
         }
 
-        self.target = Some(other_id);
+        self.fluid_box.connect_to[connect_index] = Some(other_id);
 
         Ok(())
     }
@@ -252,11 +223,18 @@ impl Structure for UndergroundPipe {
         others: &StructureDynIter,
         _construct: bool,
     ) -> Result<(), JsValue> {
+        let connect_index = self.rotation.angle_4() as usize;
+
         if let Some((id, _)) = others.dyn_iter_id().find(|(_, other)| {
-            if other.name() != self.name() || other.rotation() != Some(self.rotation.next().next())
-            {
+            if other.rotation() != Some(self.rotation.next().next()) {
                 return false;
             }
+
+            let underground_reach = if let Some(reach) = other.under_pipe_reach() {
+                reach.min(UNDERGROUND_REACH)
+            } else {
+                return false;
+            };
 
             let opos = *other.position();
             let d = if let Some(d) = self.distance(&opos) {
@@ -265,15 +243,17 @@ impl Structure for UndergroundPipe {
                 return false;
             };
 
-            if d < 1 || UNDERGROUND_REACH < d {
+            if d < 1 || underground_reach < d {
                 return false;
             }
 
             // If there is already an underground belt with shorter distance, don't connect to the new one.
-            if let Some(target) = self.target.and_then(|target| others.get(target)) {
+            if let Some(target) =
+                self.fluid_box.connect_to[connect_index].and_then(|target| others.get(target))
+            {
                 let target_pos = target.position();
                 if let Some(target_d) = self.distance(target_pos) {
-                    if target_d < d {
+                    if 0 < target_d && target_d < d {
                         return false;
                     }
                 }
@@ -281,7 +261,7 @@ impl Structure for UndergroundPipe {
 
             true
         }) {
-            self.target = Some(id);
+            self.fluid_box.connect_to[connect_index] = Some(id);
         }
         Ok(())
     }
@@ -289,8 +269,11 @@ impl Structure for UndergroundPipe {
     fn fluid_connections(&self) -> [bool; 4] {
         let mut ret = [false; 4];
         ret[self.rotation.angle_4() as usize] = true;
-        console_log!("UndergroundPipe has {:?} connections", ret);
         ret
+    }
+
+    fn under_pipe_reach(&self) -> Option<i32> {
+        Some(UNDERGROUND_REACH)
     }
 
     fn fluid_box(&self) -> Option<Vec<&FluidBox>> {
