@@ -1016,6 +1016,12 @@ let unlimited = true;
     });
 
     function onKeyDown(event){
+        if(event.keyCode === 18){ // Alt key
+            altModeBox.checked = !altModeBox.checked;
+            sim.set_alt_mode(altModeBox.checked);
+            event.preventDefault();
+            return;
+        }
         const result = sim.on_key_down(event.keyCode);
         if(result){
             if(result[0] === "ShowInventory"){
@@ -1163,6 +1169,8 @@ let unlimited = true;
         }
     });
 
+    const altModeBox = document.getElementById("altModeBox");
+    altModeBox.addEventListener("click", () => sim.set_alt_mode(altModeBox.checked));
     const showDebugBBox = document.getElementById("showDebugBBox");
     showDebugBBox.addEventListener("click", () => sim.set_debug_bbox(showDebugBBox.checked));
     const showDebugFluidBox = document.getElementById("showDebugFluidBox");

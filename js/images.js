@@ -19,6 +19,7 @@ import boiler from "../img/boiler.png";
 import pipe from "../img/pipe.png";
 import inserter from "../img/inserter-base.png";
 import direction from "../img/direction.png";
+import connectOverlay from "../img/connect-overlay.png";
 import ore from "../img/ore.png";
 import coalOre from "../img/coal-ore.png";
 import copperOre from "../img/copper-ore.png";
@@ -64,6 +65,7 @@ export let loadImages = [
     ["pipe", pipe],
     ["inserter", inserter],
     ["direction", direction],
+    ["connectOverlay", connectOverlay],
     ["ore", ore],
     ["coalOre", coalOre],
     ["ironPlate", ironPlate],

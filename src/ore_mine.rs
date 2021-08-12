@@ -161,7 +161,9 @@ impl Structure for OreMine {
                 gl.draw_arrays(GL::TRIANGLE_FAN, 0, 4);
             }
             2 => {
-                draw_direction_arrow_gl((x, y), &self.rotation, state, gl)?;
+                if state.alt_mode {
+                    draw_direction_arrow_gl((x, y), &self.rotation, state, gl)?;
+                }
                 if !is_ghost {
                     crate::draw_fuel_alarm_gl_impl!(self, state, gl);
                 }

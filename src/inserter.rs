@@ -273,7 +273,11 @@ impl Structure for Inserter {
                     )?;
                 }
             }
-            2 => draw_direction_arrow_gl((x, y), &self.rotation, state, gl)?,
+            2 => {
+                if state.alt_mode {
+                    draw_direction_arrow_gl((x, y), &self.rotation, state, gl)?
+                }
+            }
             _ => panic!("render depth not covered: {}", depth),
         }
 

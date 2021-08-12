@@ -489,6 +489,7 @@ pub struct FactorishState {
     on_popup_text: js_sys::Function,
     minimap_buffer: Vec<u8>,
     power_wires: Vec<PowerWire>,
+    alt_mode: bool,
     debug_bbox: bool,
     debug_fluidbox: bool,
     debug_power_network: bool,
@@ -610,6 +611,7 @@ impl FactorishState {
             minimap_buffer: vec![],
             power_wires: vec![],
             power_networks: vec![],
+            alt_mode: false,
             debug_bbox: false,
             debug_fluidbox: false,
             debug_power_network: false,
@@ -1843,6 +1845,10 @@ impl FactorishState {
         } else {
             false
         }
+    }
+
+    pub fn set_alt_mode(&mut self, value: bool) {
+        self.alt_mode = value;
     }
 
     pub fn set_debug_bbox(&mut self, value: bool) {
