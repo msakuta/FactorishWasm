@@ -112,7 +112,7 @@ impl Structure for UndergroundPipe {
             self.position.y as f32 + state.viewport.y as f32,
         );
         match depth {
-            0 | 1 => {
+            0 => {
                 let shader = state
                     .assets
                     .textured_shader
