@@ -170,6 +170,7 @@ pub(crate) fn render_drop_item_mat_gl(
         .textured_shader
         .as_ref()
         .ok_or_else(|| js_str!("Shader not found"))?;
+    gl.use_program(Some(&shader.program));
     let render_gen = |img: &WebGlTexture, scale_x: f32| -> Result<(), JsValue> {
         gl.bind_texture(GL::TEXTURE_2D, Some(&img));
         gl.uniform_matrix3fv_with_f32_array(
