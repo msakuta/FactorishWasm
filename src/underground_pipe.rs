@@ -143,7 +143,10 @@ impl Structure for UndergroundPipe {
                 gl.draw_arrays(GL::TRIANGLE_FAN, 0, 4);
             }
             2 => {
-                if state.alt_mode && matches!(self.rotation, Rotation::Left | Rotation::Top) {
+                let on_cursor = state.cursor == Some([self.position.x, self.position.y]);
+                if state.alt_mode && matches!(self.rotation, Rotation::Left | Rotation::Top)
+                    || on_cursor
+                {
                     if let Some(dist) = self.fluid_box.connect_to[self.rotation.angle_4() as usize]
                         .and_then(|id| state.get_structure(id))
                         .and_then(|s| self.distance(s.position()))
@@ -163,6 +166,17 @@ impl Structure for UndergroundPipe {
                         } else {
                             (scales.1, scales.0)
                         };
+                        let x = if self.rotation == Rotation::Right {
+                            x - dist as f32
+                        } else {
+                            x
+                        };
+                        let y = if self.rotation == Rotation::Bottom {
+                            y - dist as f32
+                        } else {
+                            y
+                        };
+
                         gl.uniform_matrix3fv_with_f32_array(
                             shader.tex_transform_loc.as_ref(),
                             false,

@@ -8,7 +8,7 @@ use super::{
     window, DropItem, FactorishState, FrameProcResult, Inventory, Position, RotateErr, Rotation,
     TILE_SIZE, TILE_SIZE_I,
 };
-use cgmath::{Matrix3, Matrix4, Rad, Vector2, Vector3};
+use cgmath::{Deg, Matrix3, Matrix4, Rad, Vector2, Vector3};
 use rotate_enum::RotateEnum;
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
@@ -175,7 +175,8 @@ impl Structure for UndergroundBelt {
                 gl.draw_arrays(GL::TRIANGLE_FAN, 0, 4);
             }
             2 => {
-                if state.alt_mode && self.direction == UnderDirection::ToGround {
+                let on_cursor = state.cursor == Some([self.position.x, self.position.y]);
+                if state.alt_mode && self.direction == UnderDirection::ToGround || on_cursor {
                     if let Some(dist) = self
                         .target
                         .and_then(|id| state.get_structure(id))
@@ -207,10 +208,15 @@ impl Structure for UndergroundBelt {
                             y
                         };
 
+                        let mut arrow_rotation = self.rotation;
+                        if self.direction == UnderDirection::ToGround {
+                            arrow_rotation = arrow_rotation.next().next();
+                        }
+
                         gl.uniform_matrix3fv_with_f32_array(
                             shader.tex_transform_loc.as_ref(),
                             false,
-                            (Matrix3::from_angle_z(Rad(-self.rotation.angle_rad() as f32))
+                            (Matrix3::from_angle_z(Rad(self.rotation.angle_rad() as f32))
                                 * Matrix3::from_nonuniform_scale(scale_x, scale_y))
                             .flatten(),
                         );
@@ -222,20 +228,19 @@ impl Structure for UndergroundBelt {
                             (state.get_world_transform()?
                                 * Matrix4::from_scale(2.)
                                 * Matrix4::from_translation(Vector3::new(x, y, 0.))
-                                // * Matrix4::from_angle_z(theta)
                                 * Matrix4::from_nonuniform_scale(scale_x, scale_y, 1.))
                             .flatten(),
                         );
 
                         gl.draw_arrays(GL::TRIANGLE_FAN, 0, 4);
 
-                        gl.bind_texture(GL::TEXTURE_2D, Some(&state.assets.tex_direction));
+                        gl.bind_texture(GL::TEXTURE_2D, Some(&state.assets.tex_sparse_direction));
 
                         gl.uniform_matrix3fv_with_f32_array(
                             shader.tex_transform_loc.as_ref(),
                             false,
-                            (Matrix3::from_nonuniform_scale(scale * 4., 1.)
-                                * Matrix3::from_angle_z(Rad(self.rotation.angle_rad() as f32)))
+                            (Matrix3::from_nonuniform_scale(scale * 2., 1.)
+                                * Matrix3::from_angle_z(Rad(-arrow_rotation.angle_rad() as f32)))
                             .flatten(),
                         );
 
