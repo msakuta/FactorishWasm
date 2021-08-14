@@ -534,6 +534,7 @@ pub struct FactorishState {
     image_gear: Option<ImageBundle>,
     image_copper_wire: Option<ImageBundle>,
     image_circuit: Option<ImageBundle>,
+    image_steel_plate: Option<ImageBundle>,
     image_time: Option<ImageBundle>,
     image_underground_belt_item: Option<ImageBundle>,
 
@@ -653,6 +654,7 @@ impl FactorishState {
             image_gear: None,
             image_copper_wire: None,
             image_circuit: None,
+            image_steel_plate: None,
             image_time: None,
             image_underground_belt_item: None,
             board,
@@ -2480,6 +2482,7 @@ impl FactorishState {
         self.image_gear = Some(load_image("gear")?);
         self.image_copper_wire = Some(load_image("copperWire")?);
         self.image_circuit = Some(load_image("circuit")?);
+        self.image_steel_plate = Some(load_image("steelPlate")?);
         self.image_time = Some(load_image("time")?);
         self.image_underground_belt_item = Some(load_image("undergroundBeltItem")?);
         Ok(())

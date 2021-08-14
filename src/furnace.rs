@@ -14,7 +14,7 @@ use web_sys::{CanvasRenderingContext2d, WebGlRenderingContext as GL};
 const FUEL_CAPACITY: usize = 10;
 
 /// A list of fixed recipes, because dynamic get_recipes() can only return a Vec.
-static RECIPES: Lazy<[Recipe; 2]> = Lazy::new(|| {
+pub(crate) static RECIPES: Lazy<[Recipe; 3]> = Lazy::new(|| {
     [
         Recipe::new(
             hash_map!(ItemType::IronOre => 1usize),
@@ -27,6 +27,12 @@ static RECIPES: Lazy<[Recipe; 2]> = Lazy::new(|| {
             hash_map!(ItemType::CopperPlate => 1usize),
             20.,
             50.,
+        ),
+        Recipe::new(
+            hash_map!(ItemType::IronPlate => 5usize),
+            hash_map!(ItemType::SteelPlate => 1usize),
+            100.,
+            250.,
         ),
     ]
 });
@@ -272,29 +278,16 @@ impl Structure for Furnace {
         }
 
         if self.recipe.is_none() {
-            match o.type_ {
-                ItemType::IronOre => {
-                    self.recipe = Some(Recipe::new(
-                        hash_map!(ItemType::IronOre => 1usize),
-                        hash_map!(ItemType::IronPlate => 1usize),
-                        20.,
-                        50.,
-                    ));
-                }
-                ItemType::CopperOre => {
-                    self.recipe = Some(Recipe::new(
-                        hash_map!(ItemType::CopperOre => 1usize),
-                        hash_map!(ItemType::CopperPlate => 1usize),
-                        20.,
-                        50.,
-                    ));
-                }
-                _ => {
-                    return Err(JsValue::from_str(&format!(
-                        "Cannot smelt {}",
-                        item_to_str(&o.type_)
-                    )))
-                }
+            if let Some(recipe) = RECIPES
+                .iter()
+                .find(|recipe| recipe.input.contains_key(&o.type_))
+            {
+                self.recipe = Some(recipe.clone());
+            } else {
+                return Err(JsValue::from_str(&format!(
+                    "Cannot smelt {}",
+                    item_to_str(&o.type_)
+                )));
             }
         }
 
@@ -318,7 +311,9 @@ impl Structure for Furnace {
         if let Some(recipe) = &self.recipe {
             recipe.input.get(item_type).is_some()
         } else {
-            matches!(item_type, ItemType::IronOre | ItemType::CopperOre)
+            RECIPES
+                .iter()
+                .any(|recipe| recipe.input.contains_key(item_type))
         }
     }
 

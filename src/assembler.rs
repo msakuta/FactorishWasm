@@ -374,7 +374,7 @@ impl Structure for Assembler {
                     20.,
                 ),
                 Recipe::new(
-                    hash_map!(ItemType::StoneOre => 5usize, ItemType::Furnace => 1),
+                    hash_map!(ItemType::SteelPlate => 5usize, ItemType::Furnace => 1),
                     hash_map!(ItemType::ElectricFurnace => 1usize),
                     20.,
                     20.,

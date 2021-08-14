@@ -1,36 +1,16 @@
 use super::{
+    furnace::RECIPES,
     gl::utils::{enable_buffer, Flatten},
     items::item_to_str,
     serialize_impl,
     structure::{Structure, StructureDynIter, StructureId},
     DropItem, FactorishState, FrameProcResult, Inventory, InventoryTrait, ItemType, Position,
-    Recipe, COAL_POWER, TILE_SIZE,
+    Recipe, TILE_SIZE,
 };
 use cgmath::{Matrix3, Matrix4, Vector2, Vector3};
-use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 use web_sys::{CanvasRenderingContext2d, WebGlRenderingContext as GL};
-
-const FUEL_CAPACITY: usize = 10;
-
-/// A list of fixed recipes, because dynamic get_recipes() can only return a Vec.
-static RECIPES: Lazy<[Recipe; 2]> = Lazy::new(|| {
-    [
-        Recipe::new(
-            hash_map!(ItemType::IronOre => 1usize),
-            hash_map!(ItemType::IronPlate => 1usize),
-            20.,
-            50.,
-        ),
-        Recipe::new(
-            hash_map!(ItemType::CopperOre => 1usize),
-            hash_map!(ItemType::CopperPlate => 1usize),
-            20.,
-            50.,
-        ),
-    ]
-});
 
 #[derive(Serialize, Deserialize)]
 pub(crate) struct ElectricFurnace {
@@ -225,16 +205,6 @@ impl Structure for ElectricFurnace {
             }
 
             let mut ret = FrameProcResult::None;
-            // First, check if we need to refill the energy buffer in order to continue the current work.
-            if self.input_inventory.get(&ItemType::CoalOre).is_some() {
-                // Refill the energy from the fuel
-                if self.power < recipe.power_cost {
-                    self.power += COAL_POWER;
-                    self.max_power = self.power;
-                    self.input_inventory.remove_item(&ItemType::CoalOre);
-                    ret = FrameProcResult::InventoryChanged(self.position);
-                }
-            }
 
             if self.progress.is_none() {
                 // First, check if we have enough ingredients to finish this recipe.
@@ -282,38 +252,17 @@ impl Structure for ElectricFurnace {
     }
 
     fn input(&mut self, o: &DropItem) -> Result<(), JsValue> {
-        // Fuels are always welcome.
-        if o.type_ == ItemType::CoalOre
-            && self.input_inventory.count_item(&ItemType::CoalOre) < FUEL_CAPACITY
-        {
-            self.input_inventory.add_item(&ItemType::CoalOre);
-            return Ok(());
-        }
-
         if self.recipe.is_none() {
-            match o.type_ {
-                ItemType::IronOre => {
-                    self.recipe = Some(Recipe::new(
-                        hash_map!(ItemType::IronOre => 1usize),
-                        hash_map!(ItemType::IronPlate => 1usize),
-                        20.,
-                        50.,
-                    ));
-                }
-                ItemType::CopperOre => {
-                    self.recipe = Some(Recipe::new(
-                        hash_map!(ItemType::CopperOre => 1usize),
-                        hash_map!(ItemType::CopperPlate => 1usize),
-                        20.,
-                        50.,
-                    ));
-                }
-                _ => {
-                    return Err(JsValue::from_str(&format!(
-                        "Cannot smelt {}",
-                        item_to_str(&o.type_)
-                    )))
-                }
+            if let Some(recipe) = RECIPES
+                .iter()
+                .find(|recipe| recipe.input.contains_key(&o.type_))
+            {
+                self.recipe = Some(recipe.clone());
+            } else {
+                return Err(JsValue::from_str(&format!(
+                    "Cannot smelt {}",
+                    item_to_str(&o.type_)
+                )));
             }
         }
 
@@ -329,15 +278,12 @@ impl Structure for ElectricFurnace {
     }
 
     fn can_input(&self, item_type: &ItemType) -> bool {
-        if *item_type == ItemType::CoalOre
-            && self.input_inventory.count_item(item_type) < FUEL_CAPACITY
-        {
-            return true;
-        }
         if let Some(recipe) = &self.recipe {
             recipe.input.get(item_type).is_some()
         } else {
-            matches!(item_type, ItemType::IronOre | ItemType::CopperOre)
+            RECIPES
+                .iter()
+                .any(|recipe| recipe.input.contains_key(item_type))
         }
     }
 

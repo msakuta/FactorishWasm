@@ -49,6 +49,7 @@ export let loadImages = [
     ["backTiles", backTiles],
     ["weeds", weeds],
     ["iron", iron],
+    ["steelPlate", steelPlate],
     ["coal", coal],
     ["copper", copper],
     ["stone", stone],

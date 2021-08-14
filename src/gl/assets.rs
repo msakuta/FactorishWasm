@@ -90,6 +90,7 @@ pub(crate) struct Assets {
     pub tex_gear: WebGlTexture,
     pub tex_copper_wire: WebGlTexture,
     pub tex_circuit: WebGlTexture,
+    pub tex_steel_plate: WebGlTexture,
     pub tex_underground_belt_item: WebGlTexture,
 
     pub tex_smoke: WebGlTexture,
@@ -175,6 +176,7 @@ impl Assets {
             tex_gear: load_texture_local("gear")?,
             tex_copper_wire: load_texture_local("copperWire")?,
             tex_circuit: load_texture_local("circuit")?,
+            tex_steel_plate: load_texture_local("steelPlate")?,
             tex_underground_belt_item: load_texture_local("undergroundBeltItem")?,
 
             tex_smoke: load_texture_local("smoke")?,
