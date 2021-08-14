@@ -1497,8 +1497,8 @@ impl FactorishState {
                         match s
                             .dynamic
                             .as_deref_mut()
-                            .ok_or(RotateErr::NotFound)?
-                            .rotate(self, &others)
+                            .ok_or(RotateErr::NotFound)
+                            .and_then(|s| s.rotate(self, &others))
                         {
                             Ok(()) => (),
                             // Rotation error is not a hard error; gracefully ignore
