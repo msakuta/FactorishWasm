@@ -40,6 +40,7 @@ mod structure;
 mod terrain;
 mod transport_belt;
 mod underground_belt;
+mod underground_pipe;
 mod utils;
 mod water_well;
 mod gl {
@@ -88,6 +89,7 @@ use structure::{
 };
 use transport_belt::TransportBelt;
 use underground_belt::{UnderDirection, UndergroundBelt};
+use underground_pipe::UndergroundPipe;
 use water_well::{FluidType, WaterWell};
 
 use serde::{Deserialize, Serialize};
@@ -99,27 +101,11 @@ use web_sys::{
     CanvasRenderingContext2d, HtmlCanvasElement, HtmlDivElement, ImageBitmap, WebGlRenderingContext,
 };
 
-#[wasm_bindgen]
-extern "C" {
-    #[wasm_bindgen(js_namespace = console)]
-    pub(crate) fn log(s: &str);
-}
-
 // When the `wee_alloc` feature is enabled, use `wee_alloc` as the global
 // allocator.
 #[cfg(feature = "wee_alloc")]
 #[global_allocator]
 static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
-
-#[wasm_bindgen]
-extern "C" {
-    fn alert(s: &str);
-}
-
-#[wasm_bindgen]
-pub fn greet() {
-    alert("Hello, factorish-js!");
-}
 
 fn window() -> web_sys::Window {
     web_sys::window().expect("no global `window` exists")
@@ -224,7 +210,7 @@ struct ToolDef {
     item_type: ItemType,
     desc: &'static str,
 }
-const tool_defs: [ToolDef; 14] = [
+const tool_defs: [ToolDef; 15] = [
     ToolDef {
         item_type: ItemType::TransportBelt,
         desc: "Transports items on ground",
@@ -268,6 +254,10 @@ const tool_defs: [ToolDef; 14] = [
     ToolDef {
         item_type: ItemType::Pipe,
         desc: "Conveys fluid such as water or steam.",
+    },
+    ToolDef {
+        item_type: ItemType::UndergroundPipe,
+        desc: "Transport fluid beyond obstacles.",
     },
     ToolDef {
         item_type: ItemType::SteamEngine,
@@ -511,6 +501,7 @@ pub struct FactorishState {
     on_popup_text: js_sys::Function,
     minimap_buffer: Vec<u8>,
     power_wires: Vec<PowerWire>,
+    alt_mode: bool,
     debug_bbox: bool,
     debug_fluidbox: bool,
     debug_power_network: bool,
@@ -632,6 +623,7 @@ impl FactorishState {
             minimap_buffer: vec![],
             power_wires: vec![],
             power_networks: vec![],
+            alt_mode: false,
             debug_bbox: false,
             debug_fluidbox: false,
             debug_power_network: false,
@@ -1231,8 +1223,11 @@ impl FactorishState {
                 if i != j {
                     if let (Some(a), Some(b)) = self.get_pair_mut(i, j) {
                         let (aid, bid) = (a.0, b.0);
+                        let a_con = a.1.dynamic.fluid_connections(&a.1.components);
+                        let b_con = b.1.dynamic.fluid_connections(&b.1.components);
                         if let Some(idx) = try_continue!(a.1.components.position)
                             .neighbor_index(try_continue!(&b.1.components.position))
+                            .filter(|f| a_con[*f as usize] && b_con[(*f as usize + 2) % 4])
                         {
                             a.1.components
                                 .fluid_boxes
@@ -1684,11 +1679,20 @@ impl FactorishState {
                     y: cursor[1],
                 }) {
                     let mut structures = std::mem::take(&mut self.structures);
-                    let (s, others) = StructureDynIter::new(&mut structures, idx)
-                        .map_err(|_| RotateErr::NotFound)?;
-                    let bundle = s.bundle.as_mut().ok_or(RotateErr::NotFound)?;
-                    bundle.rotate(self, &others)?;
-                    drop(others);
+                    if let Ok((
+                        StructureEntry {
+                            bundle: Some(ref mut bundle),
+                            ..
+                        },
+                        others,
+                    )) = StructureDynIter::new(&mut structures, idx)
+                    {
+                        match bundle.rotate(self, &others) {
+                            Ok(()) => (),
+                            // Rotation error is not a hard error; gracefully ignore
+                            Err(s) => console_log!("rotate returned err: {:?}", s),
+                        }
+                    }
                     self.structures = structures;
                     return Ok(false);
                 }
@@ -2079,6 +2083,10 @@ impl FactorishState {
         }
     }
 
+    pub fn set_alt_mode(&mut self, value: bool) {
+        self.alt_mode = value;
+    }
+
     pub fn set_debug_bbox(&mut self, value: bool) {
         self.debug_bbox = value;
     }
@@ -2272,6 +2280,9 @@ impl FactorishState {
                 Box::new(map_err(serde_json::from_value::<OffshorePump>(payload))?)
             }
             ItemType::Pipe => Box::new(map_err(serde_json::from_value::<Pipe>(payload))?),
+            ItemType::UndergroundPipe => {
+                Box::new(map_err(serde_json::from_value::<UndergroundPipe>(payload))?)
+            }
             ItemType::SteamEngine => {
                 Box::new(map_err(serde_json::from_value::<SteamEngine>(payload))?)
             }
@@ -2503,13 +2514,20 @@ impl FactorishState {
                         for i in 0..structures.len() {
                             let (structure, others) = StructureDynIter::new(&mut structures, i)?;
                             if let Some(s) = structure.bundle.as_mut() {
-                                s.dynamic.on_construction(
+                                match s.dynamic.on_construction(
                                     &mut s.components,
                                     id,
                                     &new_s,
                                     &others,
                                     true,
-                                )?;
+                                ) {
+                                    Ok(()) => (),
+                                    Err(s) => {
+                                        drop(others);
+                                        self.structures = structures;
+                                        return Err(s);
+                                    }
+                                }
                             }
                         }
                         self.structures = structures;

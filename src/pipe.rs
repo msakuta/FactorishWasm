@@ -1,3 +1,5 @@
+use crate::{TILE_SIZE, TILE_SIZE_I};
+
 use super::{
     gl::utils::{enable_buffer, Flatten},
     structure::{Position, Structure, StructureBundle, StructureComponents},
@@ -37,7 +39,7 @@ impl Pipe {
             return Ok(());
         };
         let (x, y) = if let Some(position) = components.position.as_ref() {
-            (position.x as f64 * 32., position.y as f64 * 32.)
+            (position.x as f64 * TILE_SIZE, position.y as f64 * TILE_SIZE)
         } else {
             (0., 0.)
         };
@@ -59,8 +61,8 @@ impl Pipe {
                 if !draw_center && connections == 0 {
                     return Ok(());
                 }
-                let sx = (connections % 4 * 32) as f64;
-                let sy = ((connections / 4) * 32) as f64;
+                let sx = (connections % 4 * TILE_SIZE_I) as f64;
+                let sy = ((connections / 4) * TILE_SIZE_I) as f64;
                 context.draw_image_with_image_bitmap_and_sw_and_sh_and_dx_and_dy_and_dw_and_dh(
                     &img.bitmap,
                     sx,
@@ -125,7 +127,7 @@ impl Pipe {
         gl.uniform_matrix3fv_with_f32_array(
             shader.tex_transform_loc.as_ref(),
             false,
-            (Matrix3::from_nonuniform_scale(1. / 4., 1. / 4.)
+            (Matrix3::from_nonuniform_scale(1. / 4., 1. / 8.)
                 * Matrix3::from_translation(Vector2::new(sx, sy)))
             .flatten(),
         );

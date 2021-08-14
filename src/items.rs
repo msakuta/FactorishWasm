@@ -26,6 +26,7 @@ pub(crate) enum ItemType {
     WaterWell,
     OffshorePump,
     Pipe,
+    UndergroundPipe,
     SteamEngine,
     ElectPole,
     Splitter,
@@ -54,6 +55,7 @@ pub(crate) fn item_to_str(type_: &ItemType) -> String {
         ItemType::WaterWell => "Water Well".to_string(),
         ItemType::OffshorePump => "Offshore Pump".to_string(),
         ItemType::Pipe => "Pipe".to_string(),
+        ItemType::UndergroundPipe => "Underground Pipe".to_string(),
         ItemType::SteamEngine => "Steam Engine".to_string(),
         ItemType::ElectPole => "Electric Pole".to_string(),
         ItemType::Splitter => "Splitter".to_string(),
@@ -83,6 +85,7 @@ pub(crate) fn str_to_item(name: &str) -> Option<ItemType> {
         "Water Well" => Some(ItemType::WaterWell),
         "Offshore Pump" => Some(ItemType::OffshorePump),
         "Pipe" => Some(ItemType::Pipe),
+        "Underground Pipe" => Some(ItemType::UndergroundPipe),
         "Steam Engine" => Some(ItemType::SteamEngine),
         "Electric Pole" => Some(ItemType::ElectPole),
         "Splitter" => Some(ItemType::Splitter),
@@ -148,6 +151,7 @@ pub(crate) fn render_drop_item(
         ItemType::WaterWell => render16(&state.image_water_well),
         ItemType::OffshorePump => render16(&state.image_offshore_pump),
         ItemType::Pipe => render16(&state.image_pipe),
+        ItemType::UndergroundPipe => render16(&state.image_pipe),
         ItemType::SteamEngine => render16(&state.image_steam_engine),
         ItemType::ElectPole => render16(&state.image_elect_pole),
         ItemType::Splitter => render16(&state.image_splitter),
@@ -166,6 +170,7 @@ pub(crate) fn render_drop_item_mat_gl(
         .textured_shader
         .as_ref()
         .ok_or_else(|| js_str!("Shader not found"))?;
+    gl.use_program(Some(&shader.program));
     let render_gen = |img: &WebGlTexture, scale_x: f32| -> Result<(), JsValue> {
         gl.bind_texture(GL::TEXTURE_2D, Some(&img));
         gl.uniform_matrix3fv_with_f32_array(
@@ -205,6 +210,7 @@ pub(crate) fn render_drop_item_mat_gl(
         ItemType::WaterWell => render16(&state.assets.tex_water_well),
         ItemType::OffshorePump => render16(&state.assets.tex_offshore_pump),
         ItemType::Pipe => render16(&state.assets.tex_pipe),
+        ItemType::UndergroundPipe => render16(&state.assets.tex_pipe),
         ItemType::SteamEngine => render_gen(&state.assets.tex_steam_engine, 1. / 3.),
         ItemType::ElectPole => render16(&state.assets.tex_elect_pole),
         ItemType::Splitter => render16(&state.assets.tex_splitter),
@@ -255,6 +261,7 @@ pub(crate) fn get_item_image_url<'a>(state: &'a FactorishState, item_type: &Item
         ItemType::WaterWell => &state.image_water_well.as_ref().unwrap().url,
         ItemType::OffshorePump => &state.image_offshore_pump.as_ref().unwrap().url,
         ItemType::Pipe => &state.image_pipe.as_ref().unwrap().url,
+        ItemType::UndergroundPipe => &state.image_pipe.as_ref().unwrap().url,
         ItemType::SteamEngine => &state.image_steam_engine.as_ref().unwrap().url,
         ItemType::ElectPole => &state.image_elect_pole.as_ref().unwrap().url,
         ItemType::Splitter => &state.image_splitter.as_ref().unwrap().url,

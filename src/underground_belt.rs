@@ -11,7 +11,7 @@ use super::{
     window, DropItem, FactorishState, FrameProcResult, Inventory, Position, RotateErr, Rotation,
     TILE_SIZE, TILE_SIZE_I,
 };
-use cgmath::{Matrix3, Matrix4, Vector2, Vector3};
+use cgmath::{Deg, Matrix3, Matrix4, Rad, Vector2, Vector3};
 use rotate_enum::RotateEnum;
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
@@ -185,6 +185,96 @@ impl Structure for UndergroundBelt {
                     .flatten(),
                 );
                 gl.draw_arrays(GL::TRIANGLE_FAN, 0, 4);
+            }
+            2 => {
+                let on_cursor = state.cursor == Some([position.x, position.y]);
+                if state.alt_mode && self.direction == UnderDirection::ToGround || on_cursor {
+                    if let Some(dist) = self
+                        .target
+                        .and_then(|id| state.get_structure(id))
+                        .and_then(|s| self.distance(components, &s.components.position?))
+                    {
+                        let shader = state
+                            .assets
+                            .textured_shader
+                            .as_ref()
+                            .ok_or_else(|| js_str!("Shader not found"))?;
+                        gl.use_program(Some(&shader.program));
+                        gl.active_texture(GL::TEXTURE0);
+                        gl.bind_texture(GL::TEXTURE_2D, Some(&state.assets.tex_connect_overlay));
+
+                        let scale = (dist + 1) as f32;
+                        let (scale_x, scale_y) = if rotation.is_horizontal() {
+                            (scale, 1.)
+                        } else {
+                            (1., scale)
+                        };
+                        let x = if rotation == Rotation::Left {
+                            x - dist as f32
+                        } else {
+                            x
+                        };
+                        let y = if rotation == Rotation::Top {
+                            y - dist as f32
+                        } else {
+                            y
+                        };
+
+                        let mut arrow_rotation = rotation;
+                        if self.direction == UnderDirection::ToGround {
+                            arrow_rotation = arrow_rotation.next().next();
+                        }
+
+                        gl.uniform_matrix3fv_with_f32_array(
+                            shader.tex_transform_loc.as_ref(),
+                            false,
+                            (Matrix3::from_angle_z(Rad(rotation.angle_rad() as f32))
+                                * Matrix3::from_nonuniform_scale(scale_x, scale_y))
+                            .flatten(),
+                        );
+
+                        enable_buffer(&gl, &state.assets.screen_buffer, 2, shader.vertex_position);
+                        gl.uniform_matrix4fv_with_f32_array(
+                            shader.transform_loc.as_ref(),
+                            false,
+                            (state.get_world_transform()?
+                                * Matrix4::from_scale(2.)
+                                * Matrix4::from_translation(Vector3::new(x, y, 0.))
+                                * Matrix4::from_nonuniform_scale(scale_x, scale_y, 1.))
+                            .flatten(),
+                        );
+
+                        gl.draw_arrays(GL::TRIANGLE_FAN, 0, 4);
+
+                        gl.bind_texture(GL::TEXTURE_2D, Some(&state.assets.tex_sparse_direction));
+
+                        gl.uniform_matrix3fv_with_f32_array(
+                            shader.tex_transform_loc.as_ref(),
+                            false,
+                            (Matrix3::from_nonuniform_scale(scale * 2., 1.)
+                                * Matrix3::from_angle_z(Rad(-arrow_rotation.angle_rad() as f32)))
+                            .flatten(),
+                        );
+
+                        let (x, y, scale_x, scale_y) = if rotation.is_horizontal() {
+                            (x, y + 0.25, scale, 0.5)
+                        } else {
+                            (x + 0.25, y, 0.5, scale)
+                        };
+
+                        gl.uniform_matrix4fv_with_f32_array(
+                            shader.transform_loc.as_ref(),
+                            false,
+                            (state.get_world_transform()?
+                                * Matrix4::from_scale(2.)
+                                * Matrix4::from_translation(Vector3::new(x, y, 0.))
+                                * Matrix4::from_nonuniform_scale(scale_x, scale_y, 1.))
+                            .flatten(),
+                        );
+
+                        gl.draw_arrays(GL::TRIANGLE_FAN, 0, 4);
+                    }
+                }
             }
             _ => (),
         }

@@ -1,48 +1,10 @@
-import time from "../img/time.png";
-import dirt from "../img/dirt.png";
-import backTiles from "../img/back32.png";
-import weeds from "../img/weeds.png";
-import iron from "../img/iron.png";
-import coal from "../img/coal.png";
-import copper from "../img/copper.png";
-import stone from "../img/stone.png";
-import transport from "../img/transport.png";
-import undergroundBelt from "../img/underbelt.png";
-import splitter from "../img/splitter.png";
-import chest from "../img/chest.png";
-import mine from "../img/mine.png";
-import assembler from "../img/assembler.png";
-import furnace from "../img/furnace.png";
-import waterWell from "../img/waterwell.png";
-import offshorePump from "../img/offshore-pump.png";
-import boiler from "../img/boiler.png";
-import pipe from "../img/pipe.png";
-import inserter from "../img/inserter-base.png";
-import direction from "../img/direction.png";
-import ore from "../img/ore.png";
-import coalOre from "../img/coal-ore.png";
-import copperOre from "../img/copper-ore.png";
-import stoneOre from "../img/stone-ore.png";
-import ironPlate from "../img/metal.png";
-import steelPlate from "../img/steel-plate.png";
-import copperPlate from "../img/copper-plate.png";
-import copperWire from "../img/copper-wire.png";
-import circuit from "../img/circuit.png";
-import gear from "../img/gear.png";
-import pipeItem from "../img/pipe-item.png";
-import steamEngine from "../img/steam-engine.png";
-import electPole from "../img/elect-pole.png";
-import smoke from "../img/smoke.png";
-import undergroundBeltItem from "../img/underground-belt-item.png";
-import fuelAlarm from '../img/fuel-alarm.png';
-import electricityAlarm from '../img/electricity-alarm.png';
 import rotateImage from "../img/rotate.png";
 import closeImage from "../img/close.png";
 import rightarrow from "../img/rightarrow.png";
 import fuelBack from "../img/fuel-back.png";
 import inventory from "../img/inventory.png";
 
-
+import { loadImages, getImageFile } from "./images.js";
 import { FactorishState } from "../pkg/index.js";
 
 /// We may no longer need support for IE, since WebAssembly is not supported by IE anyway.
@@ -59,50 +21,6 @@ let ysize = 128;
 let unlimited = true;
 
 (async function(){
-    // We could fetch and await in Rust code, but it's far easier to do in JavaScript runtime.
-    // We initiate promises at the very beginning of the initialization, and by the time we initialize everything
-    // we should have bitmaps ready.
-    let loadImages = [
-        ["dirt", dirt],
-        ["backTiles", backTiles],
-        ["weeds", weeds],
-        ["iron", iron],
-        ["coal", coal],
-        ["copper", copper],
-        ["stone", stone],
-        ["transport", transport],
-        ["undergroundBelt", undergroundBelt],
-        ["chest", chest],
-        ["mine", mine],
-        ["furnace", furnace],
-        ["assembler", assembler],
-        ["boiler", boiler],
-        ["steamEngine", steamEngine],
-        ["electPole", electPole],
-        ["splitter", splitter],
-        ["waterWell", waterWell],
-        ["offshorePump", offshorePump],
-        ["pipe", pipe],
-        ["inserter", inserter],
-        ["direction", direction],
-        ["ore", ore],
-        ["coalOre", coalOre],
-        ["ironPlate", ironPlate],
-        ["copperOre", copperOre],
-        ["stoneOre", stoneOre],
-        ["copperPlate", copperPlate],
-        ["gear", gear],
-        ["copperWire", copperWire],
-        ["circuit", circuit],
-        ["undergroundBeltItem", undergroundBeltItem],
-        ["time", time],
-        ["smoke", smoke],
-        ["fuelAlarm", fuelAlarm],
-        ["electricityAlarm", electricityAlarm],
-    ].map(async ([name, src]) => {
-        const res = await fetch(src);
-        return [name, src, await createImageBitmap(await res.blob())];
-    });
 
     function sliderInit(sliderId, labelId, writer, logarithmic=false){
         const slider = document.getElementById(sliderId);
@@ -375,9 +293,7 @@ let unlimited = true;
         if(item){
             mouseIcon.style.display = "block";
             let imageFile = getImageFile(item);
-            if(imageFile instanceof Array)
-                imageFile = imageFile[0];
-            mouseIcon.style.backgroundImage = `url(${imageFile})`;
+            mouseIcon.style.backgroundImage = `url(${imageFile.url})`;
         }
         else
             mouseIcon.style.display = "none";
@@ -531,62 +447,6 @@ let unlimited = true;
             toolOverlays[i].innerHTML = inventory[i];
     }
 
-    function getImageFile(type){
-        switch(type){
-        case 'time':
-            return time;
-        case 'Iron Ore':
-            return ore;
-        case 'Iron Plate':
-            return ironPlate;
-        case 'Steel Plate':
-            return steelPlate;
-        case 'Copper Ore':
-            return copperOre;
-        case 'Copper Plate':
-            return copperPlate;
-        case 'Coal Ore':
-            return coalOre;
-        case 'Stone Ore':
-            return stoneOre;
-        case 'Gear':
-            return gear;
-        case 'Copper Wire':
-            return copperWire;
-        case 'Circuit':
-            return circuit;
-        case 'Transport Belt':
-            return transport;
-        case 'Underground Belt':
-            return undergroundBeltItem;
-        case 'Splitter':
-            return splitter;
-        case 'Inserter':
-            return [inserter, 2];
-        case 'Chest':
-            return chest;
-        case 'Ore Mine':
-            return [mine, 3];
-        case 'Furnace':
-            return [furnace, 3];
-        case 'Assembler':
-            return [assembler, 4];
-        case 'Water Well':
-            return waterWell;
-        case 'Offshore Pump':
-            return offshorePump;
-        case 'Boiler':
-            return [boiler, 3];
-        case 'Pipe':
-            return pipeItem;
-        case 'Steam Engine':
-            return [steamEngine, 3];
-        case 'Electric Pole':
-            return electPole;
-        default:
-            return "";
-        }
-    }
 
     const POPUP_LIFE = 30;
     const popupTexts = [];
@@ -644,16 +504,12 @@ let unlimited = true;
     function generateItemImage(i, iconSize, count){
         var img = document.createElement('div');
         var imageFile = getImageFile(i);
-        img.style.backgroundImage = 'url(' + (imageFile instanceof Array ?
-            imageFile[0] : imageFile) + ')';
+        img.style.backgroundImage = `url(${imageFile.url})`;
         var size = iconSize ? 32 : objViewSize;
         img.style.width = size + 'px';
         img.style.height = size + 'px';
         img.style.display = 'inline-block';
-        if(imageFile instanceof Array)
-            img.style.backgroundSize = size * imageFile[1] + 'px ' + size + 'px';
-        else
-            img.style.backgroundSize = size + 'px ' + size + 'px';
+        img.style.backgroundSize = size * imageFile.widthFactor + 'px ' + size * imageFile.heightFactor + 'px';
         img.setAttribute('draggable', 'false');
         if(iconSize){
             var container = document.createElement('span');
@@ -884,10 +740,8 @@ let unlimited = true;
                 }
                 else{
                     const imageFile = getImageFile(i);
-                    burnerItemElem.src = 'url(' + (imageFile instanceof Array ?
-                        imageFile[0] : imageFile) + ')';
-                    if(1 < burnerItemElem.children.length)
-                        burnerItemElem.children[1].innerHTML = v;
+                    burnerItemElem.src = `url(${imageFile.url})`;
+                    burnerItemElem.children[1].innerHTML = v;
                 }
                 burnerItemElem.ondragstart = function(ev){
                     console.log("dragStart");
@@ -1166,6 +1020,12 @@ let unlimited = true;
     });
 
     function onKeyDown(event){
+        if(event.keyCode === 18){ // Alt key
+            altModeBox.checked = !altModeBox.checked;
+            sim.set_alt_mode(altModeBox.checked);
+            event.preventDefault();
+            return;
+        }
         const result = sim.on_key_down(event.keyCode);
         if(result){
             if(result[0] === "ShowInventory"){
@@ -1313,6 +1173,8 @@ let unlimited = true;
         }
     });
 
+    const altModeBox = document.getElementById("altModeBox");
+    altModeBox.addEventListener("click", () => sim.set_alt_mode(altModeBox.checked));
     const showDebugBBox = document.getElementById("showDebugBBox");
     showDebugBBox.addEventListener("click", () => sim.set_debug_bbox(showDebugBBox.checked));
     const showDebugFluidBox = document.getElementById("showDebugFluidBox");

@@ -75,6 +75,8 @@ pub(crate) struct Assets {
     pub tex_splitter: WebGlTexture,
     pub tex_inserter: WebGlTexture,
     pub tex_direction: WebGlTexture,
+    pub tex_sparse_direction: WebGlTexture,
+    pub tex_connect_overlay: WebGlTexture,
     pub tex_fuel_alarm: WebGlTexture,
     pub tex_electricity_alarm: WebGlTexture,
 
@@ -157,6 +159,8 @@ impl Assets {
             tex_splitter: load_texture_local("splitter")?,
             tex_inserter: load_texture_local("inserter")?,
             tex_direction: load_texture_local("direction")?,
+            tex_sparse_direction: load_texture_local("sparseDirection")?,
+            tex_connect_overlay: load_texture_local("connectOverlay")?,
             tex_fuel_alarm: load_texture_local("fuelAlarm")?,
             tex_electricity_alarm: load_texture_local("electricityAlarm")?,
 
