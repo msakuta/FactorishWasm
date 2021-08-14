@@ -2,6 +2,7 @@ import rotateImage from "../img/rotate.png";
 import closeImage from "../img/close.png";
 import rightarrow from "../img/rightarrow.png";
 import fuelBack from "../img/fuel-back.png";
+import itemBack from "../img/item-back.png";
 import inventory from "../img/inventory.png";
 
 import { loadImages, getImageFile } from "./images.js";
@@ -500,6 +501,7 @@ let unlimited = true;
             ...position, "Input"));
         updateInventoryInt(outputInventoryContentElem, sim, false, sim.get_structure_inventory(
             ...position, "Output"));
+        updateVueInputInventory(sim.get_structure_inventory(...position, "Input"));
     }
 
     function setItemImageToElem(img, i, iconSize){
@@ -651,21 +653,22 @@ let unlimited = true;
             burnerItems: [],
             burnerEnergy: 0,
             fuelBack,
-            items: [],
+            hasInput: false,
+            itemBack,
+            inputItems: [],
 
             onClickFuel: (event) => {
                 console.log("onClickFuel");
-                const inventoryType = sim.get_selected_inventory_type();
-                if(inventoryType === null){
+                const itemType = sim.get_selected_item_type();
+                if(itemType === null){
                     const items = vueApp.burnerItems;
                     if(0 < items.length){
                         sim.select_structure_inventory(items[0].name, "Burner");
                         updateMouseIcon();
                         // updateInventorySelection(elem);
-       
                     }
                 }
-                if(inventoryType === "Player"){
+                else if("PlayerInventory" in itemType){
                     if(sim.move_selected_inventory_item(false, "Burner")){
                         deselectPlayerInventory();
                         updateInventory(sim.get_player_inventory());
@@ -674,8 +677,40 @@ let unlimited = true;
                     }
                 }
             },
+
+            onClickInput: (i) => {
+                console.log("onClickInput");
+                const itemType = sim.get_selected_item_type();
+                if(itemType !== null && "PlayerInventory" in itemType){
+                    if(sim.move_selected_inventory_item(false, "Input")){
+                        deselectPlayerInventory();
+                        updateInventory(sim.get_player_inventory());
+                        updateToolBar();
+                        updateStructureInventory();
+                    }
+                }
+                else if(itemType === null){
+                    const items = vueApp.inputItems;
+                    if(i < items.length){
+                        sim.select_structure_inventory(items[i].name, "Input");
+                        updateMouseIcon();
+                        // updateInventorySelection(elem);
+                    }
+                }
+            },
         }
     });
+
+    function updateVueInputInventory(inputInventory){
+        vueApp.inputItems = inputInventory.length !== 0 ? inputInventory[0].map(item => {
+            const image = getImageFile(item[0]);
+            return {
+                name: item[0],
+                count: item[1],
+                ...image
+            };
+        }) : [];
+    }
 
     const inventory2ClientElem = document.getElementById('inventory2Client');
     const inputInventoryTitleElem = document.getElementById('inputInventoryTitle');
@@ -864,9 +899,13 @@ let unlimited = true;
             updateInventoryInt(inventoryContentElem, sim, false, sim.get_structure_inventory(pos[0], pos[1], "Input"), inputInventoryTitleElem);
             updateInventoryInt(outputInventoryContentElem, sim, false, sim.get_structure_inventory(pos[0], pos[1], "Output"), outputInventoryTitleElem);
             const inputInventory = sim.get_structure_inventory(pos[0], pos[1], "Input");
-            vueApp.items = inputInventory.length !== 0 ? inputInventory[0].map(item => {
-                return getImageFile(item[0]).url;
-            }) : [];
+            if(inputInventory && inputInventory.length !== 0){
+                vueApp.hasInput = true;
+                updateVueInputInventory(inputInventory);
+            }
+            else{
+                vueApp.hasInput = false;
+            }
             showBurnerStatus(pos);
         }
         else{

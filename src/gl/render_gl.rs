@@ -434,10 +434,11 @@ impl FactorishState {
             let (x, y) = (cursor[0] as f32, cursor[1] as f32);
 
             if let Some(selected_tool) = self.get_selected_tool_or_item_opt() {
-                let mut tool = self.new_structure(&selected_tool, &Position::from(cursor))?;
-                tool.set_rotation(&self.tool_rotation).ok();
-                for depth in 0..3 {
-                    tool.draw_gl(self, &gl, depth, true)?;
+                if let Ok(mut tool) = self.new_structure(&selected_tool, &Position::from(cursor)) {
+                    tool.set_rotation(&self.tool_rotation).ok();
+                    for depth in 0..3 {
+                        tool.draw_gl(self, &gl, depth, true)?;
+                    }
                 }
             }
 

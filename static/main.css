@@ -236,6 +236,7 @@ div.closeButton{
 }
 
 .itemBack {
+    display: inline-block;
     position: relative;
     width: 32px;
     height: 32px;
