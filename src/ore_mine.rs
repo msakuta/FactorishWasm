@@ -134,7 +134,36 @@ impl Structure for OreMine {
                     .ok_or_else(|| js_str!("Shader not found"))?;
                 gl.use_program(Some(&shader.program));
                 gl.uniform1f(shader.alpha_loc.as_ref(), if is_ghost { 0.5 } else { 1. });
+
+                enable_buffer(&gl, &state.assets.screen_buffer, 2, shader.vertex_position);
+                gl.uniform_matrix4fv_with_f32_array(
+                    shader.transform_loc.as_ref(),
+                    false,
+                    (state.get_world_transform()?
+                        * Matrix4::from_scale(2.)
+                        * Matrix4::from_translation(Vector3::new(x, y, 0.)))
+                    .flatten(),
+                );
+
                 gl.active_texture(GL::TEXTURE0);
+
+                let draw_exit = || {
+                    gl.bind_texture(GL::TEXTURE_2D, Some(&state.assets.tex_ore_mine_exit));
+                    let sx = self.rotation.angle_4() as f32 / 4.;
+                    gl.uniform_matrix3fv_with_f32_array(
+                        shader.tex_transform_loc.as_ref(),
+                        false,
+                        (Matrix3::from_translation(Vector2::new(sx, 0.))
+                            * Matrix3::from_nonuniform_scale(1. / 4., 1.))
+                        .flatten(),
+                    );
+                    gl.draw_arrays(GL::TRIANGLE_FAN, 0, 4);
+                };
+
+                if self.rotation != Rotation::Bottom {
+                    draw_exit();
+                }
+
                 gl.bind_texture(GL::TEXTURE_2D, Some(&state.assets.tex_ore_mine));
                 let sx = if self.digging {
                     (((state.sim_time * 5.) as isize) % 2 + 1) as f32 / 3.
@@ -149,16 +178,11 @@ impl Structure for OreMine {
                     .flatten(),
                 );
 
-                enable_buffer(&gl, &state.assets.screen_buffer, 2, shader.vertex_position);
-                gl.uniform_matrix4fv_with_f32_array(
-                    shader.transform_loc.as_ref(),
-                    false,
-                    (state.get_world_transform()?
-                        * Matrix4::from_scale(2.)
-                        * Matrix4::from_translation(Vector3::new(x, y, 0.)))
-                    .flatten(),
-                );
                 gl.draw_arrays(GL::TRIANGLE_FAN, 0, 4);
+
+                if self.rotation == Rotation::Bottom {
+                    draw_exit();
+                }
             }
             2 => {
                 if state.alt_mode {

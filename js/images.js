@@ -11,6 +11,7 @@ import undergroundBelt from "../img/underbelt.png";
 import splitter from "../img/splitter.png";
 import chest from "../img/chest.png";
 import mine from "../img/mine.png";
+import mineExit from "../img/ore-mine-exit.png";
 import assembler from "../img/assembler.png";
 import furnace from "../img/furnace.png";
 import electricFurnace from "../img/electric-furnace.png";
@@ -57,6 +58,7 @@ export let loadImages = [
     ["undergroundBelt", undergroundBelt],
     ["chest", chest],
     ["mine", mine],
+    ["mineExit", mineExit],
     ["furnace", furnace],
     ["electricFurnace", electricFurnace],
     ["assembler", assembler],
