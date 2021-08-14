@@ -111,6 +111,10 @@ let unlimited = true;
 
     const canvas = document.getElementById('canvas');
     const popupContainer = document.getElementById("popupContainer");
+    const loadingContainer = document.getElementById("loadingContainer");
+    loadingContainer.style.marginLeft = `${-loadingContainer.getBoundingClientRect().width / 2}px`;
+    loadingContainer.style.height = `${-loadingContainer.getBoundingClientRect().height / 2}px`;
+
     let canvasSize = canvas.getBoundingClientRect();
     const context = canvas.getContext('webgl', { alpha: false });
 
@@ -163,6 +167,8 @@ let unlimited = true;
     } catch(e) {
         alert(`FactorishState.render_init failed: ${e}`);
     }
+
+    loadingContainer.style.display = "none";
 
     const refreshSize = (event) => {
         canvasSize = canvas.getBoundingClientRect();
