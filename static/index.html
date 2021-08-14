@@ -8,7 +8,11 @@
 		<script src="https://cdn.jsdelivr.net/npm/vue@2/dist/vue.js"></script>
 	</head>
 	<body>
-		<canvas id="canvas"></canvas>
+		<canvas id="canvas" width="800" height="800"></canvas>
+		<div id="popupContainer" width="100%" height="100%"></div>
+		<div id="loadingContainer" width="100%" height="100%">
+			Loading...
+		</div>
 		<div class="center">
 		<div class="header">
 			<div id="headerContainer">
@@ -72,10 +76,12 @@
 					</div>
 					<div id="viewContainer" class="params" style="display: none;">
 						<div style="font-size: 120%; font-weight: 700">View settings</div>
+						<div><label><input type="checkbox" id="altModeBox">Alt mode (alt key)</label></div>
 						<div><label><input type="checkbox" id="showDebugBBox">Show Debug Bounding Box</label></div>
 						<div><label><input type="checkbox" id="showDebugFluidBox">Show Debug Fluid Box</label></div>
 						<div><label><input type="checkbox" id="showDebugPowerNetwork">Show Debug Power Network</label></div>
 						<div><label><input type="checkbox" id="showPerfGraph">Show performance graph</label></div>
+						<div><label><input type="checkbox" id="useWebGLInstancing" checked>Use WebGL instancing</label></div>
 					</div>
 				</div>
 				<hr>
@@ -91,7 +97,7 @@
 		</div>
 		<div>
 			<div id="container2">
-				<div id="inventory2" class="noselect">
+				<div id="inventory2" class="noselect" style="display: none;">
 					<div id="inventory2Title">Inventory</div>
 					<div class="closeButton" id="inventory2CloseButton"></div>
 					<div id="inventoryButtons" class="inventoryButtons">

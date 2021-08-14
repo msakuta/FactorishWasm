@@ -206,6 +206,30 @@ div.closeButton{
     z-index: 100;
 }
 
+.popupText {
+    position: absolute;
+    color: rgb(0,0,0);
+    font-weight: bold;
+    text-shadow: 1px 1px #fff, -1px -1px 0 #fff, 1px -1px 0 #fff, -1px 1px 0 #fff;
+    width: 100%;
+}
+
+#popupContainer {
+    position: absolute;
+    pointer-events: none;
+}
+
+#loadingContainer {
+    position: absolute;
+    display: inline;
+    pointer-events: none;
+    font-size: 48px;
+    color: #ffffff;
+    text-align: center;
+    top: 50%;
+    left: 50%;
+}
+
 .burnerContainer {
     position: relative;
     left: 40px;

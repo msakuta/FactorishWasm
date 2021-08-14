@@ -1,13 +1,15 @@
 use super::{
+    gl::utils::{enable_buffer, Flatten},
     pipe::Pipe,
     serialize_impl,
     structure::{Structure, StructureDynIter, StructureId},
     water_well::{FluidBox, FluidType},
     FactorishState, FrameProcResult, Position, Recipe,
 };
+use cgmath::{Matrix3, Matrix4, Vector2, Vector3};
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
-use web_sys::CanvasRenderingContext2d;
+use web_sys::{CanvasRenderingContext2d, WebGlRenderingContext as GL};
 
 use std::collections::HashMap;
 
@@ -101,6 +103,56 @@ impl Structure for SteamEngine {
             None => return Err(JsValue::from_str("furnace image not available")),
         }
 
+        Ok(())
+    }
+
+    fn draw_gl(
+        &self,
+        state: &FactorishState,
+        gl: &GL,
+        depth: i32,
+        is_ghost: bool,
+    ) -> Result<(), JsValue> {
+        Pipe::draw_gl_int(self, state, gl, depth, false, is_ghost)?;
+        let (x, y) = (
+            self.position.x as f32 + state.viewport.x as f32,
+            self.position.y as f32 + state.viewport.y as f32,
+        );
+        if depth != 0 {
+            return Ok(());
+        }
+        let shader = state
+            .assets
+            .textured_shader
+            .as_ref()
+            .ok_or_else(|| js_str!("Shader not found"))?;
+        gl.use_program(Some(&shader.program));
+        gl.uniform1f(shader.alpha_loc.as_ref(), if is_ghost { 0.5 } else { 1. });
+        gl.active_texture(GL::TEXTURE0);
+        gl.bind_texture(GL::TEXTURE_2D, Some(&state.assets.tex_steam_engine));
+        let sx = if self.progress.is_some() && Self::COMBUSTION_EPSILON < self.combustion_rate() {
+            (((state.sim_time * 5.) as isize) % 2 + 1) as f32
+        } else {
+            0.
+        };
+        gl.uniform_matrix3fv_with_f32_array(
+            shader.tex_transform_loc.as_ref(),
+            false,
+            (Matrix3::from_nonuniform_scale(1. / 3., 1.)
+                * Matrix3::from_translation(Vector2::new(sx, 0.)))
+            .flatten(),
+        );
+
+        enable_buffer(&gl, &state.assets.screen_buffer, 2, shader.vertex_position);
+        gl.uniform_matrix4fv_with_f32_array(
+            shader.transform_loc.as_ref(),
+            false,
+            (state.get_world_transform()?
+                * Matrix4::from_scale(2.)
+                * Matrix4::from_translation(Vector3::new(x, y, 0.)))
+            .flatten(),
+        );
+        gl.draw_arrays(GL::TRIANGLE_FAN, 0, 4);
         Ok(())
     }
 

@@ -1,46 +1,10 @@
-import time from "../img/time.png";
-import dirt from "../img/dirt.png";
-import backTiles from "../img/back32.png";
-import weeds from "../img/weeds.png";
-import iron from "../img/iron.png";
-import coal from "../img/coal.png";
-import copper from "../img/copper.png";
-import stone from "../img/stone.png";
-import transport from "../img/transport.png";
-import splitter from "../img/splitter.png";
-import chest from "../img/chest.png";
-import mine from "../img/mine.png";
-import assembler from "../img/assembler.png";
-import furnace from "../img/furnace.png";
-import waterWell from "../img/waterwell.png";
-import offshorePump from "../img/offshore-pump.png";
-import boiler from "../img/boiler.png";
-import pipe from "../img/pipe.png";
-import inserter from "../img/inserter-base.png";
-import direction from "../img/direction.png";
-import ore from "../img/ore.png";
-import coalOre from "../img/coal-ore.png";
-import copperOre from "../img/copper-ore.png";
-import stoneOre from "../img/stone-ore.png";
-import ironPlate from "../img/metal.png";
-import steelPlate from "../img/steel-plate.png";
-import copperPlate from "../img/copper-plate.png";
-import copperWire from "../img/copper-wire.png";
-import circuit from "../img/circuit.png";
-import gear from "../img/gear.png";
-import pipeItem from "../img/pipe-item.png";
-import steamEngine from "../img/steam-engine.png";
-import electPole from "../img/elect-pole.png";
-import smoke from "../img/smoke.png";
-import fuelAlarm from '../img/fuel-alarm.png';
-import electricityAlarm from '../img/electricity-alarm.png';
 import rotateImage from "../img/rotate.png";
 import closeImage from "../img/close.png";
 import rightarrow from "../img/rightarrow.png";
 import fuelBack from "../img/fuel-back.png";
 import inventory from "../img/inventory.png";
 
-
+import { loadImages, getImageFile } from "./images.js";
 import { FactorishState } from "../pkg/index.js";
 
 /// We may no longer need support for IE, since WebAssembly is not supported by IE anyway.
@@ -57,48 +21,6 @@ let ysize = 128;
 let unlimited = true;
 
 (async function(){
-    // We could fetch and await in Rust code, but it's far easier to do in JavaScript runtime.
-    // We initiate promises at the very beginning of the initialization, and by the time we initialize everything
-    // we should have bitmaps ready.
-    let loadImages = [
-        ["dirt", dirt],
-        ["backTiles", backTiles],
-        ["weeds", weeds],
-        ["iron", iron],
-        ["coal", coal],
-        ["copper", copper],
-        ["stone", stone],
-        ["transport", transport],
-        ["chest", chest],
-        ["mine", mine],
-        ["furnace", furnace],
-        ["assembler", assembler],
-        ["boiler", boiler],
-        ["steamEngine", steamEngine],
-        ["electPole", electPole],
-        ["splitter", splitter],
-        ["waterWell", waterWell],
-        ["offshorePump", offshorePump],
-        ["pipe", pipe],
-        ["inserter", inserter],
-        ["direction", direction],
-        ["ore", ore],
-        ["coalOre", coalOre],
-        ["ironPlate", ironPlate],
-        ["copperOre", copperOre],
-        ["stoneOre", stoneOre],
-        ["copperPlate", copperPlate],
-        ["gear", gear],
-        ["copperWire", copperWire],
-        ["circuit", circuit],
-        ["time", time],
-        ["smoke", smoke],
-        ["fuelAlarm", fuelAlarm],
-        ["electricityAlarm", electricityAlarm],
-    ].map(async ([name, src]) => {
-        const res = await fetch(src);
-        return [name, src, await createImageBitmap(await res.blob())];
-    });
 
     function sliderInit(sliderId, labelId, writer, logarithmic=false){
         const slider = document.getElementById(sliderId);
@@ -187,32 +109,15 @@ let unlimited = true;
 
     let paused = false;
 
-    let sim = new FactorishState(
-        {
-            width: xsize,
-            height: ysize,
-            unlimited,
-            terrain_seed: terrainSeed,
-            water_noise_threshold: waterNoiseThreshold,
-            resource_amount: resourceAmount,
-            noise_scale: noiseScale,
-            noise_threshold: noiseThreshold,
-            noise_octaves: noiseOctaves,
-        },
-        updateInventory,
-        scenarioSelectElem.value);
-
     const canvas = document.getElementById('canvas');
+    const popupContainer = document.getElementById("popupContainer");
+    const loadingContainer = document.getElementById("loadingContainer");
+    loadingContainer.style.marginLeft = `${-loadingContainer.getBoundingClientRect().width / 2}px`;
+    loadingContainer.style.height = `${-loadingContainer.getBoundingClientRect().height / 2}px`;
+
     let canvasSize = canvas.getBoundingClientRect();
-    const refreshSize = (event) => {
-        canvasSize = canvas.getBoundingClientRect();
-        canvas.width = canvasSize.width;
-        canvas.height = canvasSize.height;
-        infoElem.style.height = (canvasSize.height - mrect.height - tableMargin * 3) + 'px';
-        sim.reset_viewport(canvas);
-    };
-    document.body.onresize = refreshSize;
-    const ctx = canvas.getContext('2d');
+    const context = canvas.getContext('webgl', { alpha: false });
+
     const container = document.getElementById('container2');
     const containerRect = container.getBoundingClientRect();
     const inventoryElem = document.getElementById('inventory2');
@@ -232,6 +137,50 @@ let unlimited = true;
     infoElem.style.border = '1px solid #00f';
     container.appendChild(infoElem);
 
+
+    let loadedImages;
+    let sim;
+    try{
+        loadedImages = await Promise.all(loadImages);
+
+        sim = new FactorishState(
+        {
+            width: xsize,
+            height: ysize,
+            unlimited,
+            terrain_seed: terrainSeed,
+            water_noise_threshold: waterNoiseThreshold,
+            resource_amount: resourceAmount,
+            noise_scale: noiseScale,
+            noise_threshold: noiseThreshold,
+            noise_octaves: noiseOctaves,
+        },
+        updateInventory,
+        popupText,
+        scenarioSelectElem.value,
+        context,
+        loadedImages,
+        );
+
+        sim.render_init(canvas, infoElem, loadedImages);
+        sim.render_gl_init(context);
+    } catch(e) {
+        alert(`FactorishState.render_init failed: ${e}`);
+    }
+
+    loadingContainer.style.display = "none";
+
+    const refreshSize = (event) => {
+        canvasSize = canvas.getBoundingClientRect();
+        canvas.width = canvasSize.width;
+        canvas.height = canvasSize.height;
+        popupContainer.style.width = `${canvasSize.width}px`;
+        popupContainer.style.height = `${canvasSize.height}px`;
+        context.viewport(0, 0, canvas.width, canvas.height);
+        infoElem.style.height = (canvasSize.height - mrect.height - tableMargin * 3) + 'px';
+        sim.reset_viewport(canvas);
+    };
+    document.body.onresize = refreshSize;
     const headerButton = document.getElementById("headerButton");
     const headerContainer = document.getElementById("headerContainer");
 
@@ -431,7 +380,7 @@ let unlimited = true;
             if(result === "ShowInventory"){
                 showInventory();
             }
-            else if(result){
+            else{
                 updateToolBarImage();
                 updateToolBar();
                 renderToolTip(this, currentTool);
@@ -480,14 +429,6 @@ let unlimited = true;
     inventoryButton.onmouseleave = () => toolTip.style.display = 'none';
     toolBarElem.appendChild(inventoryButton);
 
-    let loadedImages;
-    try{
-        loadedImages = await Promise.all(loadImages);
-        sim.render_init(canvas, infoElem, loadedImages);
-    } catch(e) {
-        alert(`FactorishState.render_init failed: ${e}`);
-    }
-
     function updateToolBarImage(){
         for(var i = 0; i < toolBarCanvases.length; i++){
             var canvasElem = toolBarCanvases[i];
@@ -497,8 +438,8 @@ let unlimited = true;
     }
 
     function rotate(){
-        var newRotation = sim.rotate_tool();
-        updateToolBarImage();
+        if(sim.rotate_tool())
+            updateToolBarImage();
     }
 
     function updateToolBar(){
@@ -507,58 +448,35 @@ let unlimited = true;
             toolOverlays[i].innerHTML = inventory[i];
     }
 
-    function getImageFile(type){
-        switch(type){
-        case 'time':
-            return time;
-        case 'Iron Ore':
-            return ore;
-        case 'Iron Plate':
-            return ironPlate;
-        case 'Steel Plate':
-            return steelPlate;
-        case 'Copper Ore':
-            return copperOre;
-        case 'Copper Plate':
-            return copperPlate;
-        case 'Coal Ore':
-            return coalOre;
-        case 'Stone Ore':
-            return stoneOre;
-        case 'Gear':
-            return gear;
-        case 'Copper Wire':
-            return copperWire;
-        case 'Circuit':
-            return circuit;
-        case 'Transport Belt':
-            return transport;
-        case 'Splitter':
-            return splitter;
-        case 'Inserter':
-            return [inserter, 2];
-        case 'Chest':
-            return chest;
-        case 'Ore Mine':
-            return [mine, 3];
-        case 'Furnace':
-            return [furnace, 3];
-        case 'Assembler':
-            return [assembler, 4];
-        case 'Water Well':
-            return waterWell;
-        case 'Offshore Pump':
-            return offshorePump;
-        case 'Boiler':
-            return [boiler, 3];
-        case 'Pipe':
-            return pipeItem;
-        case 'Steam Engine':
-            return [steamEngine, 3];
-        case 'Electric Pole':
-            return electPole;
-        default:
-            return "";
+
+    const POPUP_LIFE = 30;
+    const popupTexts = [];
+    function popupText(text, x, y){
+        const elem = document.createElement("div");
+        elem.className = "popupText";
+        elem.style.left = `${x}px`;
+        elem.style.top = `${y}px`;
+        elem.innerHTML = text;
+        popupContainer.appendChild(elem);
+        popupTexts.push({
+            elem,
+            y,
+            life: POPUP_LIFE,
+        });
+    }
+
+    function animatePopupTexts(){
+        for(let i = 0; i < popupTexts.length;) {
+            const popup = popupTexts[i];
+            popup.y -= 1;
+            popup.elem.style.top = `${popup.y}px`;
+            if(--popup.life <= 0){
+                popupContainer.removeChild(popup.elem);
+                popupTexts.splice(i, 1);
+            }
+            else{
+                i++;
+            }
         }
     }
 
@@ -586,15 +504,11 @@ let unlimited = true;
 
     function setItemImageToElem(img, i, iconSize){
         var imageFile = getImageFile(i);
-        img.style.backgroundImage = 'url(' + (imageFile instanceof Array ?
-            imageFile[0] : imageFile) + ')';
+        img.style.backgroundImage = `url(${imageFile.url})`;
         var size = iconSize ? 32 : objViewSize;
         img.style.width = size + 'px';
         img.style.height = size + 'px';
-        if(imageFile instanceof Array)
-            img.style.backgroundSize = size * imageFile[1] + 'px ' + size + 'px';
-        else
-            img.style.backgroundSize = size + 'px ' + size + 'px';
+        img.style.backgroundSize = size * imageFile.widthFactor + 'px ' + size * imageFile.heightFactor + 'px';
     }
 
     function generateItemImage(i, iconSize, count){
@@ -862,8 +776,7 @@ let unlimited = true;
                 }
                 else{
                     const imageFile = getImageFile(i);
-                    burnerItemElem.src = 'url(' + (imageFile instanceof Array ?
-                        imageFile[0] : imageFile) + ')';
+                    burnerItemElem.src = `url(${imageFile.url})`;
                     burnerItemElem.children[1].innerHTML = v;
                 }
                 burnerItemElem.ondragstart = function(ev){
@@ -1147,6 +1060,12 @@ let unlimited = true;
     });
 
     function onKeyDown(event){
+        if(event.keyCode === 18){ // Alt key
+            altModeBox.checked = !altModeBox.checked;
+            sim.set_alt_mode(altModeBox.checked);
+            event.preventDefault();
+            return;
+        }
         const result = sim.on_key_down(event.keyCode);
         if(result){
             if(result[0] === "ShowInventory"){
@@ -1282,14 +1201,20 @@ let unlimited = true;
                 noise_octaves: noiseOctaves,
             },
             updateInventory,
-            scenarioSelectElem.value);
+            popupText,
+            scenarioSelectElem.value,
+            context,
+            loadedImages);
         try{
             sim.render_init(canvas, infoElem, loadedImages);
+            sim.render_gl_init(context);
         } catch(e) {
             alert(`FactorishState.render_init failed: ${e}`);
         }
     });
 
+    const altModeBox = document.getElementById("altModeBox");
+    altModeBox.addEventListener("click", () => sim.set_alt_mode(altModeBox.checked));
     const showDebugBBox = document.getElementById("showDebugBBox");
     showDebugBBox.addEventListener("click", () => sim.set_debug_bbox(showDebugBBox.checked));
     const showDebugFluidBox = document.getElementById("showDebugFluidBox");
@@ -1298,6 +1223,8 @@ let unlimited = true;
     showDebugPowerNetwork.addEventListener("click", () => sim.set_debug_power_network(showDebugPowerNetwork.checked));
     const showPerfGraph = document.getElementById("showPerfGraph");
     showPerfGraph.addEventListener("click", updatePerfVisibility);
+    const useWebGLInstancing = document.getElementById("useWebGLInstancing");
+    useWebGLInstancing.addEventListener("click", () => sim.set_use_webgl_instancing(useWebGLInstancing.checked));
 
     function updatePerfVisibility() {
         perfElem.style.display = showPerfGraph.checked ? "block" : "none";
@@ -1309,7 +1236,8 @@ let unlimited = true;
     window.setInterval(function(){
         if(!paused)
             processEvents(sim.simulate(0.05));
-        let result = sim.render(ctx);
+        // let result = sim.render(ctx);
+        let result = sim.render_gl(context);
 
         const selPos = sim.get_selected_inventory();
         if(selPos){
@@ -1336,6 +1264,8 @@ let unlimited = true;
                 );
             })()
         }
+
+        animatePopupTexts();
 
         if(showPerfGraph.checked){
             const colors = ["#fff", "#ff3f3f", "#7f7fff", "#00ff00", "#ff00ff", "#fff"];

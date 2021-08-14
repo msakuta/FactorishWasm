@@ -16,12 +16,11 @@ pub(crate) struct DropItem {
 
 impl DropItem {
     pub(crate) fn new(type_: ItemType, c: i32, r: i32) -> Self {
-        let ret = DropItem {
+        DropItem {
             type_,
             x: c * TILE_SIZE_I + TILE_SIZE_I / 2,
             y: r * TILE_SIZE_I + TILE_SIZE_I / 2,
-        };
-        ret
+        }
     }
 }
 
@@ -76,9 +75,7 @@ pub(crate) fn drop_item_id_iter_mut(
 
 /// Returns an iterator over valid structures
 pub(crate) fn drop_item_iter(drop_items: &[DropItemEntry]) -> impl Iterator<Item = &DropItem> {
-    drop_items
-        .iter()
-        .filter_map(|item| Some(item.item.as_ref()?))
+    drop_items.iter().filter_map(|item| item.item.as_ref())
 }
 
 #[derive(Serialize, Deserialize, PartialEq, Clone, Copy, Debug)]

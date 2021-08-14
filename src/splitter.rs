@@ -1,13 +1,18 @@
 use super::{
     drop_items::DropItem,
+    gl::{
+        utils::{enable_buffer, Flatten},
+        ShaderBundle,
+    },
     structure::{
         BoundingBox, ItemResponse, ItemResponseResult, RotateErr, Size, Structure, StructureDynIter,
     },
     FactorishState, Position, Rotation, TILE_SIZE,
 };
+use cgmath::{Matrix3, Matrix4, Rad, Vector2, Vector3};
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
-use web_sys::CanvasRenderingContext2d;
+use web_sys::{CanvasRenderingContext2d, WebGlRenderingContext as GL};
 
 #[derive(Serialize, Deserialize)]
 pub(crate) struct Splitter {
@@ -136,11 +141,93 @@ impl Structure for Splitter {
         ret
     }
 
+    fn draw_gl(
+        &self,
+        state: &FactorishState,
+        gl: &GL,
+        depth: i32,
+        is_ghost: bool,
+    ) -> Result<(), JsValue> {
+        let (x, y) = (
+            self.position.x as f32 + state.viewport.x as f32,
+            self.position.y as f32 + state.viewport.y as f32,
+        );
+
+        let get_shader = || -> Result<&ShaderBundle, JsValue> {
+            let shader = state
+                .assets
+                .textured_shader
+                .as_ref()
+                .ok_or_else(|| js_str!("Shader not found"))?;
+            gl.use_program(Some(&shader.program));
+            gl.uniform1f(shader.alpha_loc.as_ref(), if is_ghost { 0.5 } else { 1. });
+            Ok(shader)
+        };
+
+        let shape = |shader: &ShaderBundle| -> Result<(), JsValue> {
+            gl.uniform_matrix4fv_with_f32_array(
+                shader.transform_loc.as_ref(),
+                false,
+                (state.get_world_transform()?
+                    * Matrix4::from_scale(2.)
+                    * Matrix4::from_translation(Vector3::new(x + 0.5, y + 0.5, 0.))
+                    * Matrix4::from_angle_z(Rad(self.rotation.angle_rad() as f32))
+                    * Matrix4::from_translation(Vector3::new(-0.5, -0.5, 0.))
+                    * Matrix4::from_nonuniform_scale(1., 2., 1.))
+                .flatten(),
+            );
+            Ok(())
+        };
+
+        match depth {
+            0 => {
+                let shader = get_shader()?;
+                gl.active_texture(GL::TEXTURE0);
+                gl.bind_texture(GL::TEXTURE_2D, Some(&state.assets.tex_belt));
+                enable_buffer(&gl, &state.assets.screen_buffer, 2, shader.vertex_position);
+                let sx = -((state.sim_time * 16.) % 32. / 32.) as f32;
+                gl.uniform_matrix3fv_with_f32_array(
+                    shader.tex_transform_loc.as_ref(),
+                    false,
+                    (Matrix3::from_nonuniform_scale(1., 2.)
+                        * Matrix3::from_translation(Vector2::new(sx, 0.)))
+                    .flatten(),
+                );
+
+                shape(shader)?;
+
+                gl.draw_arrays(GL::TRIANGLE_FAN, 0, 4);
+            }
+            1 => {
+                let shader = get_shader()?;
+                gl.active_texture(GL::TEXTURE0);
+                gl.bind_texture(GL::TEXTURE_2D, Some(&state.assets.tex_splitter));
+                enable_buffer(&gl, &state.assets.screen_buffer, 2, shader.vertex_position);
+                let sy = (if self.direction == 0 { 0.5 } else { 0. }) as f32;
+                gl.uniform_matrix3fv_with_f32_array(
+                    shader.tex_transform_loc.as_ref(),
+                    false,
+                    Matrix3::from_translation(Vector2::new(0., sy)).flatten(),
+                );
+
+                shape(shader)?;
+
+                gl.draw_arrays(GL::TRIANGLE_FAN, 0, 4);
+            }
+            _ => (),
+        }
+        Ok(())
+    }
+
     fn movable(&self) -> bool {
         true
     }
 
-    fn rotate(&mut self, _others: &StructureDynIter) -> Result<(), RotateErr> {
+    fn rotate(
+        &mut self,
+        _state: &mut FactorishState,
+        _others: &StructureDynIter,
+    ) -> Result<(), RotateErr> {
         self.rotation = self.rotation.next();
         Ok(())
     }
@@ -153,7 +240,7 @@ impl Structure for Splitter {
     fn item_response(&mut self, item: &DropItem) -> Result<ItemResponseResult, ()> {
         let vx = self.rotation.delta().0;
         let vy = self.rotation.delta().1;
-        let mut ax = if self.rotation.is_vertial() {
+        let mut ax = if self.rotation.is_vertcial() {
             (item.x as f64 / TILE_SIZE).floor() * TILE_SIZE + TILE_SIZE / 2.
         } else {
             item.x as f64

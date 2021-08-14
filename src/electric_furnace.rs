@@ -1,44 +1,22 @@
 use super::{
-    gl::utils::{enable_buffer, Flatten},
+    furnace::RECIPES,
+    gl::{
+        draw_electricity_alarm_gl,
+        utils::{enable_buffer, Flatten},
+    },
     items::item_to_str,
+    serialize_impl,
     structure::{Structure, StructureDynIter, StructureId},
     DropItem, FactorishState, FrameProcResult, Inventory, InventoryTrait, ItemType, Position,
-    Recipe, TempEnt, COAL_POWER,
+    Recipe, TILE_SIZE,
 };
 use cgmath::{Matrix3, Matrix4, Vector2, Vector3};
-use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 use web_sys::{CanvasRenderingContext2d, WebGlRenderingContext as GL};
 
-const FUEL_CAPACITY: usize = 10;
-
-/// A list of fixed recipes, because dynamic get_recipes() can only return a Vec.
-pub(crate) static RECIPES: Lazy<[Recipe; 3]> = Lazy::new(|| {
-    [
-        Recipe::new(
-            hash_map!(ItemType::IronOre => 1usize),
-            hash_map!(ItemType::IronPlate => 1usize),
-            20.,
-            50.,
-        ),
-        Recipe::new(
-            hash_map!(ItemType::CopperOre => 1usize),
-            hash_map!(ItemType::CopperPlate => 1usize),
-            20.,
-            50.,
-        ),
-        Recipe::new(
-            hash_map!(ItemType::IronPlate => 5usize),
-            hash_map!(ItemType::SteelPlate => 1usize),
-            100.,
-            250.,
-        ),
-    ]
-});
-
 #[derive(Serialize, Deserialize)]
-pub(crate) struct Furnace {
+pub(crate) struct ElectricFurnace {
     position: Position,
     input_inventory: Inventory,
     output_inventory: Inventory,
@@ -48,9 +26,9 @@ pub(crate) struct Furnace {
     recipe: Option<Recipe>,
 }
 
-impl Furnace {
+impl ElectricFurnace {
     pub(crate) fn new(position: &Position) -> Self {
-        Furnace {
+        ElectricFurnace {
             position: *position,
             input_inventory: Inventory::new(),
             output_inventory: Inventory::new(),
@@ -62,9 +40,9 @@ impl Furnace {
     }
 }
 
-impl Structure for Furnace {
+impl Structure for ElectricFurnace {
     fn name(&self) -> &str {
-        "Furnace"
+        "Electric Furnace"
     }
 
     fn position(&self) -> &Position {
@@ -81,11 +59,14 @@ impl Structure for Furnace {
         if depth != 0 {
             return Ok(());
         };
-        let (x, y) = (self.position.x as f64 * 32., self.position.y as f64 * 32.);
-        match state.image_furnace.as_ref() {
+        let (x, y) = (
+            self.position.x as f64 * TILE_SIZE,
+            self.position.y as f64 * TILE_SIZE,
+        );
+        match state.image_electric_furnace.as_ref() {
             Some(img) => {
                 let sx = if self.progress.is_some() && 0. < self.power {
-                    ((((state.sim_time * 5.) as isize) % 2 + 1) * 32) as f64
+                    (((state.sim_time * 5.) as isize) % 2 + 1) as f64 * TILE_SIZE
                 } else {
                     0.
                 };
@@ -114,6 +95,15 @@ impl Structure for Furnace {
         depth: i32,
         is_ghost: bool,
     ) -> Result<(), JsValue> {
+        let (x, y) = (
+            self.position.x as f32 + state.viewport.x as f32,
+            self.position.y as f32 + state.viewport.y as f32,
+        );
+        if depth == 2 {
+            if !is_ghost && self.recipe.is_some() && self.power == 0. {
+                draw_electricity_alarm_gl((x, y), state, gl)?;
+            }
+        }
         if depth != 0 {
             return Ok(());
         };
@@ -124,11 +114,7 @@ impl Structure for Furnace {
             .ok_or_else(|| js_str!("Shader not found"))?;
         gl.use_program(Some(&shader.program));
         gl.uniform1f(shader.alpha_loc.as_ref(), if is_ghost { 0.5 } else { 1. });
-        let (x, y) = (
-            self.position.x as f32 + state.viewport.x as f32,
-            self.position.y as f32 + state.viewport.y as f32,
-        );
-        let texture = &state.assets.tex_furnace;
+        let texture = &state.assets.tex_electric_furnace;
         gl.active_texture(GL::TEXTURE0);
         gl.bind_texture(GL::TEXTURE_2D, Some(texture));
         let sx = if self.progress.is_some() && 0. < self.power {
@@ -154,10 +140,6 @@ impl Structure for Furnace {
             .flatten(),
         );
         gl.draw_arrays(GL::TRIANGLE_FAN, 0, 4);
-
-        if !is_ghost {
-            crate::draw_fuel_alarm_gl_impl!(self, state, gl);
-        }
 
         Ok(())
     }
@@ -190,9 +172,9 @@ impl Structure for Furnace {
 
     fn frame_proc(
         &mut self,
-        _me: StructureId,
+        me: StructureId,
         state: &mut FactorishState,
-        _structures: &mut StructureDynIter,
+        structures: &mut StructureDynIter,
     ) -> Result<FrameProcResult, ()> {
         if self.recipe.is_none() {
             self.recipe = RECIPES
@@ -206,17 +188,27 @@ impl Structure for Furnace {
                 .cloned();
         }
         if let Some(recipe) = &self.recipe {
-            let mut ret = FrameProcResult::None;
-            // First, check if we need to refill the energy buffer in order to continue the current work.
-            if self.input_inventory.get(&ItemType::CoalOre).is_some() {
-                // Refill the energy from the fuel
-                if self.power < recipe.power_cost {
-                    self.power += COAL_POWER;
-                    self.max_power = self.power;
-                    self.input_inventory.remove_item(&ItemType::CoalOre);
-                    ret = FrameProcResult::InventoryChanged(self.position);
+            if self.power < recipe.power_cost {
+                let mut accumulated = 0.;
+                for network in &state
+                    .power_networks
+                    .iter()
+                    .find(|network| network.sinks.contains(&me))
+                {
+                    for id in network.sources.iter() {
+                        if let Some(source) = structures.get_mut(*id) {
+                            let demand = self.max_power - self.power - accumulated;
+                            if let Some(energy) = source.power_outlet(demand) {
+                                accumulated += energy;
+                                // console_log!("draining {:?}kJ of energy with {:?} demand, from {:?}, accumulated {:?}", energy, demand, structure.name(), accumulated);
+                            }
+                        }
+                    }
                 }
+                self.power += accumulated;
             }
+
+            let mut ret = FrameProcResult::None;
 
             if self.progress.is_none() {
                 // First, check if we have enough ingredients to finish this recipe.
@@ -245,11 +237,6 @@ impl Structure for Furnace {
                 let progress = (self.power / recipe.power_cost)
                     .min(1. / recipe.recipe_time)
                     .min(1.);
-                if state.rng.next() < progress * 10. {
-                    state
-                        .temp_ents
-                        .push(TempEnt::new(&mut state.rng, self.position));
-                }
                 if 1. <= prev_progress + progress {
                     self.progress = None;
 
@@ -269,14 +256,6 @@ impl Structure for Furnace {
     }
 
     fn input(&mut self, o: &DropItem) -> Result<(), JsValue> {
-        // Fuels are always welcome.
-        if o.type_ == ItemType::CoalOre
-            && self.input_inventory.count_item(&ItemType::CoalOre) < FUEL_CAPACITY
-        {
-            self.input_inventory.add_item(&ItemType::CoalOre);
-            return Ok(());
-        }
-
         if self.recipe.is_none() {
             if let Some(recipe) = RECIPES
                 .iter()
@@ -303,11 +282,6 @@ impl Structure for Furnace {
     }
 
     fn can_input(&self, item_type: &ItemType) -> bool {
-        if *item_type == ItemType::CoalOre
-            && self.input_inventory.count_item(item_type) < FUEL_CAPACITY
-        {
-            return true;
-        }
         if let Some(recipe) = &self.recipe {
             recipe.input.get(item_type).is_some()
         } else {
@@ -365,7 +339,9 @@ impl Structure for Furnace {
         self.recipe.as_ref()
     }
 
-    fn serialize(&self) -> serde_json::Result<serde_json::Value> {
-        serde_json::to_value(self)
+    fn power_sink(&self) -> bool {
+        true
     }
+
+    serialize_impl!();
 }

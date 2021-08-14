@@ -1,13 +1,18 @@
 use super::{
     draw_direction_arrow,
     drop_items::DropItem,
-    items::{render_drop_item, ItemType},
+    gl::{
+        draw_direction_arrow_gl,
+        utils::{enable_buffer, Flatten},
+    },
+    items::{render_drop_item, render_drop_item_mat_gl, ItemType},
     structure::{RotateErr, Structure, StructureDynIter, StructureId},
     FactorishState, FrameProcResult, Inventory, InventoryTrait, Position, Rotation,
 };
+use cgmath::{Matrix3, Matrix4, Rad, Vector2, Vector3};
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
-use web_sys::CanvasRenderingContext2d;
+use web_sys::{CanvasRenderingContext2d, WebGlRenderingContext as GL};
 
 #[derive(Serialize, Deserialize)]
 pub(crate) struct Inserter {
@@ -57,21 +62,9 @@ impl Inserter {
         let output_position = self.position.add(self.rotation.delta());
         if *other.position() == input_position {
             self.input_structure = if construct { Some(other_id) } else { None };
-            console_log!(
-                "Inserter{:?}: {} input_structure {:?}",
-                self.position,
-                if construct { "set" } else { "unset" },
-                other_id
-            );
         }
         if *other.position() == output_position {
             self.output_structure = if construct { Some(other_id) } else { None };
-            console_log!(
-                "Inserter{:?}: {} output_structure {:?}",
-                self.position,
-                if construct { "set" } else { "unset" },
-                other_id
-            );
         }
         Ok(())
     }
@@ -163,6 +156,134 @@ impl Structure for Inserter {
         Ok(())
     }
 
+    fn draw_gl(
+        &self,
+        state: &FactorishState,
+        gl: &GL,
+        depth: i32,
+        is_ghost: bool,
+    ) -> Result<(), JsValue> {
+        let (x, y) = (
+            self.position.x as f32 + state.viewport.x as f32,
+            self.position.y as f32 + state.viewport.y as f32,
+        );
+        match depth {
+            0 => {
+                let shader = state
+                    .assets
+                    .textured_shader
+                    .as_ref()
+                    .ok_or_else(|| js_str!("Shader not found"))?;
+                gl.use_program(Some(&shader.program));
+                gl.uniform1f(shader.alpha_loc.as_ref(), if is_ghost { 0.5 } else { 1. });
+                gl.active_texture(GL::TEXTURE0);
+                gl.bind_texture(GL::TEXTURE_2D, Some(&state.assets.tex_inserter));
+
+                gl.uniform_matrix3fv_with_f32_array(
+                    shader.tex_transform_loc.as_ref(),
+                    false,
+                    Matrix3::from_nonuniform_scale(0.5, 1.).flatten(),
+                );
+
+                enable_buffer(&gl, &state.assets.screen_buffer, 2, shader.vertex_position);
+                gl.uniform_matrix4fv_with_f32_array(
+                    shader.transform_loc.as_ref(),
+                    false,
+                    (state.get_world_transform()?
+                        * Matrix4::from_scale(2.)
+                        * Matrix4::from_translation(Vector3::new(x, y, 0.)))
+                    .flatten(),
+                );
+                gl.draw_arrays(GL::TRIANGLE_FAN, 0, 4);
+            }
+            1 => {
+                let shader = state
+                    .assets
+                    .textured_shader
+                    .as_ref()
+                    .ok_or_else(|| js_str!("Shader not found"))?;
+                gl.use_program(Some(&shader.program));
+                gl.active_texture(GL::TEXTURE0);
+                gl.bind_texture(GL::TEXTURE_2D, Some(&state.assets.tex_inserter));
+
+                enable_buffer(&gl, &state.assets.screen_buffer, 2, shader.vertex_position);
+
+                let angles = self.get_arm_angles();
+
+                const JOINT_POS: (f32, f32) = (0.5, 0.625);
+
+                let origin_transform = state.get_world_transform()?
+                    * Matrix4::from_scale(2.)
+                    * Matrix4::from_translation(Vector3::new(x + 0.5, y + 0.5, 0.));
+
+                let base_rotation = Matrix4::from_angle_z(Rad(angles.0 as f32));
+
+                let base_transform = origin_transform * base_rotation;
+
+                let vertex_transform = Matrix4::from_nonuniform_scale(0.5, 1., 1.)
+                    * Matrix4::from_translation(Vector3::new(-JOINT_POS.0, -JOINT_POS.1, 0.));
+
+                gl.uniform_matrix3fv_with_f32_array(
+                    shader.tex_transform_loc.as_ref(),
+                    false,
+                    (Matrix3::from_translation(Vector2::new(0.75, 0.))
+                        * Matrix3::from_nonuniform_scale(0.25, 1.))
+                    .flatten(),
+                );
+
+                gl.uniform_matrix4fv_with_f32_array(
+                    shader.transform_loc.as_ref(),
+                    false,
+                    (base_transform * vertex_transform).flatten(),
+                );
+                gl.draw_arrays(GL::TRIANGLE_FAN, 0, 4);
+
+                const JOINT_POS2: (f32, f32) = (0., 0.375);
+
+                gl.uniform_matrix3fv_with_f32_array(
+                    shader.tex_transform_loc.as_ref(),
+                    false,
+                    (Matrix3::from_translation(Vector2::new(0.5, 0.))
+                        * Matrix3::from_nonuniform_scale(0.25, 1.))
+                    .flatten(),
+                );
+
+                let middle_transform =
+                    Matrix4::from_translation(Vector3::new(-JOINT_POS2.0, -JOINT_POS2.1, 0.))
+                        * Matrix4::from_angle_z(Rad((angles.1 - angles.0) as f32));
+
+                gl.uniform_matrix4fv_with_f32_array(
+                    shader.transform_loc.as_ref(),
+                    false,
+                    (base_transform * middle_transform * vertex_transform).flatten(),
+                );
+                gl.draw_arrays(GL::TRIANGLE_FAN, 0, 4);
+
+                if let Some(item) = self.hold_item {
+                    render_drop_item_mat_gl(
+                        state,
+                        gl,
+                        &item,
+                        origin_transform
+                            * Matrix4::from_translation(Vector3::new(-0.25, -0.25, 0.))
+                            * base_rotation
+                            * middle_transform
+                            * Matrix4::from_translation(Vector3::new(0., -0.5, 0.))
+                            * Matrix4::from_angle_z(Rad(-angles.1 as f32)),
+                    )?;
+                }
+            }
+            2 => {
+                if state.alt_mode {
+                    draw_direction_arrow_gl((x, y), &self.rotation, state, gl)?
+                }
+            }
+            _ => panic!("render depth not covered: {}", depth),
+        }
+
+        Ok(())
+    }
+
     fn frame_proc(
         &mut self,
         _me: StructureId,
@@ -178,8 +299,7 @@ impl Structure for Inserter {
                 let ret = FrameProcResult::None;
 
                 let mut try_hold = |structures: &mut StructureDynIter, type_| -> bool {
-                    if let Some(structure) =
-                        self.output_structure.map(|id| structures.get(id)).flatten()
+                    if let Some(structure) = self.output_structure.and_then(|id| structures.get(id))
                     {
                         if structure.can_input(&type_) || structure.movable() {
                             // ret = FrameProcResult::InventoryChanged(output_position);
@@ -203,12 +323,11 @@ impl Structure for Inserter {
                     } else {
                         // console_log!("fail output_object: {:?}", type_);
                     }
-                } else if let Some(structure) = self
+                } else if let Some((Some(structure), structures)) = self
                     .input_structure
-                    .map(|id| structures.get_mut(id))
-                    .flatten()
+                    .and_then(|id| structures.exclude_id(id).ok())
                 {
-                    lets_try_hold = Some(structure.can_output());
+                    lets_try_hold = Some(structure.can_output(&structures));
                     // console_log!("outputting from a structure at {:?}", structure.position());
                     // if let Ok((item, callback)) = structure.output(state, &output_position) {
                     //     lets_try_hold = Some((item, callback));
@@ -221,7 +340,7 @@ impl Structure for Inserter {
                     if let Some(type_) = (|| {
                         // First, try matching the item that the structure at the output position can accept.
                         if let Some(structure) =
-                            self.output_structure.map(|id| structures.get(id)).flatten()
+                            self.output_structure.and_then(|id| structures.get(id))
                         {
                             // console_log!(
                             //     "found structure to output[{}]: {}, {}, {}",
@@ -246,16 +365,15 @@ impl Structure for Inserter {
                         }
                         None
                     })() {
-                        if let Some(structure) = self
-                            .input_structure
-                            .map(|id| structures.get_mut(id))
-                            .flatten()
+                        if let Some(structure) =
+                            self.input_structure.and_then(|id| structures.get_mut(id))
                         {
                             structure.output(state, &type_.0)?;
                             return Ok(FrameProcResult::InventoryChanged(input_position));
                         } else {
                             console_log!(
-                                "We have confirmed that there is input structure, right???"
+                                "We have confirmed that there is input structure {:?}, right???",
+                                self.input_structure
                             );
                             return Err(());
                         }
@@ -320,6 +438,7 @@ impl Structure for Inserter {
         &mut self,
         other_id: StructureId,
         other: &dyn Structure,
+        _others: &StructureDynIter,
         construct: bool,
     ) -> Result<(), JsValue> {
         self.on_construction_common(other_id, other, construct)
@@ -337,11 +456,28 @@ impl Structure for Inserter {
         Ok(())
     }
 
-    fn rotate(&mut self, others: &StructureDynIter) -> Result<(), RotateErr> {
+    fn desc(&self, state: &FactorishState) -> String {
+        format!(
+            "Input: {:?} {}<br>Output: {:?}",
+            self.input_structure,
+            self.input_structure
+                .and_then(|id| state.structures.get(id.id as usize))
+                .and_then(|s| s.dynamic.as_deref())
+                .map(|d| d.name())
+                .unwrap_or("Not found"),
+            self.output_structure
+        )
+    }
+
+    fn rotate(
+        &mut self,
+        _state: &mut FactorishState,
+        others: &StructureDynIter,
+    ) -> Result<(), RotateErr> {
         self.rotation = self.rotation.next();
         for (id, s) in others.dyn_iter_id() {
             self.on_construction_common(id, s, true)
-                .map_err(|e| RotateErr::Other(e))?;
+                .map_err(RotateErr::Other)?;
         }
         Ok(())
     }

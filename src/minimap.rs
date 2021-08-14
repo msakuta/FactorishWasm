@@ -170,6 +170,6 @@ impl FactorishState {
             minimap_height as u32,
         )?;
         self.perf_minimap.add(performance().now() - start_render);
-        return Ok(image_data);
+        Ok(image_data)
     }
 }
