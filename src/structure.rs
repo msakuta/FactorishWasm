@@ -361,7 +361,7 @@ pub(crate) trait Structure {
     fn get_selected_recipe(&self) -> Option<&Recipe> {
         None
     }
-    fn fluid_connections(&self, components: &StructureComponents) -> [bool; 4] {
+    fn fluid_connections(&self, _components: &StructureComponents) -> [bool; 4] {
         [true; 4]
     }
     /// Method to return underground pipe reach length.
@@ -428,6 +428,14 @@ pub(crate) struct Energy {
     pub max: f64,
 }
 
+pub(crate) struct ComponentError(&'static str);
+
+impl From<ComponentError> for JsValue {
+    fn from(ce: ComponentError) -> Self {
+        js_str!("UndergroundPipe without {}", ce.0)
+    }
+}
+
 pub(crate) struct StructureComponents {
     pub position: Option<Position>,
     pub rotation: Option<Rotation>,
@@ -458,6 +466,20 @@ impl StructureComponents {
             factory: None,
             fluid_boxes: vec![],
         }
+    }
+
+    pub fn get_position(&self) -> Result<Position, ComponentError> {
+        self.position.ok_or_else(|| ComponentError("Position"))
+    }
+
+    pub fn get_rotation(&self) -> Result<Rotation, ComponentError> {
+        self.rotation.ok_or_else(|| ComponentError("Rotation"))
+    }
+
+    pub fn get_fluid_box_first(&self) -> Result<&FluidBox, ComponentError> {
+        self.fluid_boxes
+            .first()
+            .ok_or_else(|| ComponentError("FluidBox"))
     }
 }
 

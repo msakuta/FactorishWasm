@@ -47,14 +47,6 @@ impl UndergroundPipe {
     }
 }
 
-struct ComponentError(&'static str);
-
-impl From<ComponentError> for JsValue {
-    fn from(ce: ComponentError) -> Self {
-        js_str!("UndergroundPipe without {}", ce.0)
-    }
-}
-
 impl Structure for UndergroundPipe {
     fn name(&self) -> &str {
         "Underground Pipe"
@@ -71,12 +63,8 @@ impl Structure for UndergroundPipe {
         if depth != 0 && depth != 1 {
             return Ok(());
         };
-        let position = components
-            .position
-            .ok_or_else(|| js_str!("Underground belt without Position"))?;
-        let rotation = components
-            .rotation
-            .ok_or_else(|| js_str!("Underground belt without Rotation"))?;
+        let position = components.get_position()?;
+        let rotation = components.get_rotation()?;
         match state.image_pipe.as_ref() {
             Some(img) => {
                 context.save();
@@ -155,10 +143,7 @@ impl Structure for UndergroundPipe {
                 gl.draw_arrays(GL::TRIANGLE_FAN, 0, 4);
             }
             2 => {
-                let fluid_box = components
-                    .fluid_boxes
-                    .first()
-                    .ok_or_else(|| ComponentError("FluidBox"))?;
+                let fluid_box = components.get_fluid_box_first()?;
                 let on_cursor = state.cursor == Some([position.x, position.y]);
                 if state.alt_mode && matches!(rotation, Rotation::Left | Rotation::Top) || on_cursor
                 {
@@ -245,13 +230,8 @@ impl Structure for UndergroundPipe {
             return Ok(());
         }
 
-        let other_rotation = other
-            .components
-            .rotation
-            .ok_or_else(|| ComponentError("Rotation"))?;
-        let rotation = components
-            .rotation
-            .ok_or_else(|| ComponentError("Rotation"))?;
+        let other_rotation = other.components.get_rotation()?;
+        let rotation = components.get_rotation()?;
         if other_rotation != rotation.next().next() {
             return Ok(());
         }
@@ -277,19 +257,13 @@ impl Structure for UndergroundPipe {
         }
 
         let connect_index = rotation.angle_4() as usize;
-        let fluid_box = components
-            .fluid_boxes
-            .first()
-            .ok_or_else(|| ComponentError("FluidBox"))?;
+        let fluid_box = components.get_fluid_box_first()?;
 
         // If there is already an underground belt with shorter distance, don't connect to the new one.
         if let Some(target) =
             fluid_box.connect_to[connect_index].and_then(|target| others.get(target))
         {
-            let target_pos = target
-                .components
-                .position
-                .ok_or_else(|| ComponentError("Position"))?;
+            let target_pos = target.components.get_position()?;
             if let Some(target_d) = self.distance(components, &target_pos) {
                 if 0 < target_d && target_d < d {
                     return Ok(());
@@ -311,12 +285,7 @@ impl Structure for UndergroundPipe {
         others: &StructureDynIter,
         _construct: bool,
     ) -> Result<(), JsValue> {
-        let position = components
-            .position
-            .ok_or_else(|| js_str!("OreMine without Position"))?;
-        let rotation = components
-            .rotation
-            .ok_or_else(|| js_str!("OreMine without Rotation"))?;
+        let rotation = components.get_rotation()?;
         let connect_index = rotation.angle_4() as usize;
 
         if let Some((id, _)) =

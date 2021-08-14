@@ -11,7 +11,7 @@ use super::{
     window, DropItem, FactorishState, FrameProcResult, Inventory, Position, RotateErr, Rotation,
     TILE_SIZE, TILE_SIZE_I,
 };
-use cgmath::{Deg, Matrix3, Matrix4, Rad, Vector2, Vector3};
+use cgmath::{Matrix3, Matrix4, Rad, Vector2, Vector3};
 use rotate_enum::RotateEnum;
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
