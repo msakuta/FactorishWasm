@@ -38,7 +38,9 @@ mod gl {
     mod shader_bundle;
     pub(crate) mod utils;
 
-    pub(crate) use render_gl::{draw_direction_arrow_gl, draw_fuel_alarm_gl};
+    pub(crate) use render_gl::{
+        draw_direction_arrow_gl, draw_electricity_alarm_gl, draw_fuel_alarm_gl,
+    };
     pub(crate) use shader_bundle::ShaderBundle;
 }
 

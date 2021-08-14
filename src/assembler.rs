@@ -1,6 +1,7 @@
 use super::{
     drop_items::DropItem,
     gl::{
+        draw_electricity_alarm_gl,
         utils::{enable_buffer, Flatten},
         ShaderBundle,
     },
@@ -158,22 +159,8 @@ impl Structure for Assembler {
                 gl.draw_arrays(GL::TRIANGLE_FAN, 0, 4);
             }
             2 => {
-                if !is_ghost
-                    && self.recipe.is_some()
-                    && self.power == 0.
-                    && state.sim_time % 1. < 0.5
-                {
-                    let shader = get_shader()?;
-                    gl.active_texture(GL::TEXTURE0);
-                    gl.bind_texture(GL::TEXTURE_2D, Some(&state.assets.tex_electricity_alarm));
-                    gl.uniform_matrix3fv_with_f32_array(
-                        shader.tex_transform_loc.as_ref(),
-                        false,
-                        Matrix3::from_scale(1.).flatten(),
-                    );
-
-                    shape(shader)?;
-                    gl.draw_arrays(GL::TRIANGLE_FAN, 0, 4);
+                if !is_ghost && self.recipe.is_some() && self.power == 0. {
+                    draw_electricity_alarm_gl((x, y), state, gl)?;
                 }
             }
             _ => (),

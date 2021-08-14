@@ -1,6 +1,9 @@
 use super::{
     furnace::RECIPES,
-    gl::utils::{enable_buffer, Flatten},
+    gl::{
+        draw_electricity_alarm_gl,
+        utils::{enable_buffer, Flatten},
+    },
     items::item_to_str,
     serialize_impl,
     structure::{Structure, StructureDynIter, StructureId},
@@ -92,6 +95,15 @@ impl Structure for ElectricFurnace {
         depth: i32,
         is_ghost: bool,
     ) -> Result<(), JsValue> {
+        let (x, y) = (
+            self.position.x as f32 + state.viewport.x as f32,
+            self.position.y as f32 + state.viewport.y as f32,
+        );
+        if depth == 2 {
+            if !is_ghost && self.recipe.is_some() && self.power == 0. {
+                draw_electricity_alarm_gl((x, y), state, gl)?;
+            }
+        }
         if depth != 0 {
             return Ok(());
         };
@@ -102,10 +114,6 @@ impl Structure for ElectricFurnace {
             .ok_or_else(|| js_str!("Shader not found"))?;
         gl.use_program(Some(&shader.program));
         gl.uniform1f(shader.alpha_loc.as_ref(), if is_ghost { 0.5 } else { 1. });
-        let (x, y) = (
-            self.position.x as f32 + state.viewport.x as f32,
-            self.position.y as f32 + state.viewport.y as f32,
-        );
         let texture = &state.assets.tex_electric_furnace;
         gl.active_texture(GL::TEXTURE0);
         gl.bind_texture(GL::TEXTURE_2D, Some(texture));
@@ -132,10 +140,6 @@ impl Structure for ElectricFurnace {
             .flatten(),
         );
         gl.draw_arrays(GL::TRIANGLE_FAN, 0, 4);
-
-        if !is_ghost {
-            crate::draw_fuel_alarm_gl_impl!(self, state, gl);
-        }
 
         Ok(())
     }
