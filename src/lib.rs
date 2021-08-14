@@ -1807,7 +1807,11 @@ impl FactorishState {
         })
     }
 
-    pub fn select_structure_inventory(&mut self, name: &str, inventory_type: JsValue) -> Result<(), JsValue> {
+    pub fn select_structure_inventory(
+        &mut self,
+        name: &str,
+        inventory_type: JsValue,
+    ) -> Result<(), JsValue> {
         self.selected_item = Some(SelectedItem::StructInventory(
             self.selected_structure_inventory
                 .ok_or_else(|| js_str!("Structure not selected"))?,
@@ -1906,54 +1910,63 @@ impl FactorishState {
             .filter_map(|entry| entry.dynamic.as_deref_mut())
             .find(|d| *d.position() == pos)
             .ok_or_else(|| js_str!("structure not found at position"))?;
-        match inventory_type {
-            InventoryType::Burner => {
-                if to_player {
-                    if let Some(burner_inventory) = structure.burner_inventory() {
-                        if let Some((&item, &count)) = burner_inventory.iter().next() {
-                            self.player.inventory.add_items(
-                                &item,
-                                -structure.add_burner_inventory(&item, -(count as isize)) as usize,
-                            );
-                            return Ok(true);
-                        }
-                    }
-                } else if let Some(SelectedItem::PlayerInventory(i)) = self.selected_item {
-                    self.player.inventory.remove_items(
-                        &i,
-                        structure
-                            .add_burner_inventory(&i, self.player.inventory.count_item(&i) as isize)
-                            .abs() as usize,
+        if to_player {
+            if let Some(SelectedItem::StructInventory(_, sel_inventory_type, item)) =
+                self.selected_item
+            {
+                if sel_inventory_type == InventoryType::Burner {
+                    self.player.inventory.add_items(
+                        &item,
+                        structure.add_burner_inventory(&item, std::isize::MIN).abs() as usize,
                     );
-                    return Ok(true);
+                } else if let Some(item_name) =
+                    self.selected_item.and_then(|item| item.map_struct(&pos))
+                {
+                    if FactorishState::move_inventory_item(
+                        structure
+                            .inventory_mut(sel_inventory_type == InventoryType::Input)
+                            .ok_or_else(|| js_str!("No inventory"))?,
+                        &mut self.player.inventory,
+                        &item_name,
+                    ) {
+                        self.on_player_update
+                            .call1(&window(), &JsValue::from(self.get_player_inventory()?))?;
+                        return Ok(true);
+                    }
                 }
             }
-            _ => {
-                if let Some(inventory) =
-                    structure.inventory_mut(inventory_type == InventoryType::Input)
-                {
-                    let (src, dst, item_name) = if to_player {
-                        (
-                            inventory,
-                            &mut self.player.inventory,
-                            self.selected_item.and_then(|item| item.map_struct(&pos)),
-                        )
-                    } else {
-                        (
-                            &mut self.player.inventory,
-                            inventory,
-                            self.selected_item.and_then(|item| {
-                                if let SelectedItem::PlayerInventory(i) = item {
-                                    Some(i)
-                                } else {
-                                    None
-                                }
-                            }),
-                        )
-                    };
+        } else {
+            match inventory_type {
+                InventoryType::Burner => {
+                    if let Some(SelectedItem::PlayerInventory(i)) = self.selected_item {
+                        self.player.inventory.remove_items(
+                            &i,
+                            structure
+                                .add_burner_inventory(
+                                    &i,
+                                    self.player.inventory.count_item(&i) as isize,
+                                )
+                                .abs() as usize,
+                        );
+                        return Ok(true);
+                    }
+                }
+                _ => {
                     // console_log!("moving {:?}", item_name);
-                    if let Some(item_name) = item_name {
-                        if FactorishState::move_inventory_item(src, dst, &item_name) {
+                    if let Some(item_name) = self.selected_item.and_then(|item| {
+                        if let SelectedItem::PlayerInventory(i) = item {
+                            Some(i)
+                        } else {
+                            None
+                        }
+                    }) {
+                        if FactorishState::move_inventory_item(
+                            &mut self.player.inventory,
+                            structure
+                                .inventory_mut(inventory_type == InventoryType::Input)
+                                .ok_or_else(|| js_str!("No inventory"))?,
+                            &item_name,
+                        ) {
                             self.on_player_update
                                 .call1(&window(), &JsValue::from(self.get_player_inventory()?))?;
                             return Ok(true);
@@ -2615,7 +2628,9 @@ impl FactorishState {
     }
 
     pub fn get_selected_item_type(&self) -> JsValue {
-        self.selected_item.and_then(|i| JsValue::from_serde(&i).ok()).unwrap_or(JsValue::NULL)
+        self.selected_item
+            .and_then(|i| JsValue::from_serde(&i).ok())
+            .unwrap_or(JsValue::NULL)
     }
 
     /// Returns either "Input", "Output" or "Burner" for the selected inventory

@@ -502,6 +502,7 @@ let unlimited = true;
         updateInventoryInt(outputInventoryContentElem, sim, false, sim.get_structure_inventory(
             ...position, "Output"));
         updateVueInputInventory(sim.get_structure_inventory(...position, "Input"));
+        updateVueOutputInventory(sim.get_structure_inventory(...position, "Output"));
     }
 
     function setItemImageToElem(img, i, iconSize){
@@ -656,6 +657,8 @@ let unlimited = true;
             hasInput: false,
             itemBack,
             inputItems: [],
+            hasOutput: false,
+            outputItems: [],
 
             onClickFuel: (event) => {
                 console.log("onClickFuel");
@@ -698,11 +701,43 @@ let unlimited = true;
                     }
                 }
             },
+
+            onClickOutput: (i) => {
+                console.log("onClickOutput");
+                const itemType = sim.get_selected_item_type();
+                if(itemType !== null && "PlayerInventory" in itemType){
+                    if(sim.move_selected_inventory_item(false, "Output")){
+                        deselectPlayerInventory();
+                        updateInventory(sim.get_player_inventory());
+                        updateToolBar();
+                        updateStructureInventory();
+                    }
+                }
+                else if(itemType === null){
+                    const items = vueApp.outputItems;
+                    if(i < items.length){
+                        sim.select_structure_inventory(items[i].name, "Output");
+                        updateMouseIcon();
+                        // updateInventorySelection(elem);
+                    }
+                }
+            },
         }
     });
 
     function updateVueInputInventory(inputInventory){
         vueApp.inputItems = inputInventory.length !== 0 ? inputInventory[0].map(item => {
+            const image = getImageFile(item[0]);
+            return {
+                name: item[0],
+                count: item[1],
+                ...image
+            };
+        }) : [];
+    }
+
+    function updateVueOutputInventory(inventory){
+        vueApp.outputItems = inventory.length !== 0 ? inventory[0].map(item => {
             const image = getImageFile(item[0]);
             return {
                 name: item[0],
@@ -902,6 +937,14 @@ let unlimited = true;
             if(inputInventory && inputInventory.length !== 0){
                 vueApp.hasInput = true;
                 updateVueInputInventory(inputInventory);
+            }
+            else{
+                vueApp.hasInput = false;
+            }
+            const outputInventory = sim.get_structure_inventory(pos[0], pos[1], "Output");
+            if(outputInventory && outputInventory.length !== 0){
+                vueApp.hasOutput = true;
+                updateVueOutputInventory(outputInventory);
             }
             else{
                 vueApp.hasInput = false;
