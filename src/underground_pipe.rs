@@ -204,6 +204,17 @@ impl Structure for UndergroundPipe {
         Ok(())
     }
 
+    fn desc(&self, components: &StructureComponents, _state: &FactorishState) -> String {
+        components
+            .fluid_boxes
+            .iter()
+            .map(|p| p.desc())
+            .fold("".to_string(), |acc, s| acc + &s)
+        // getHTML(generateItemImage("time", true, this.recipe.time), true) + "<br>" +
+        // "Outputs: <br>" +
+        // getHTML(generateItemImage(this.recipe.output, true, 1), true) + "<br>";
+    }
+
     fn frame_proc(
         &mut self,
         _me: StructureId,

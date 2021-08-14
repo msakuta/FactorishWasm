@@ -93,8 +93,7 @@ impl Pipe {
             return Ok(());
         }
         let position = components
-            .position
-            .ok_or_else(|| js_str!("Pipe without Position"))?;
+            .get_position()?;
 
         let (x, y) = (
             position.x as f32 + state.viewport.x as f32,

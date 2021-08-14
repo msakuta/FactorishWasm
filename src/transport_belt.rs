@@ -104,12 +104,8 @@ impl Structure for TransportBelt {
         depth: i32,
         is_ghost: bool,
     ) -> Result<(), JsValue> {
-        let position = components
-            .position
-            .ok_or_else(|| js_str!("TransportBelt without Position"))?;
-        let rotation = components
-            .rotation
-            .ok_or_else(|| js_str!("TransportBelt without Rotation"))?;
+        let position = components.get_position()?;
+        let rotation = components.get_rotation()?;
 
         let (x, y) = (
             position.x as f32 + state.viewport.x as f32,
