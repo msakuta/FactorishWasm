@@ -655,11 +655,23 @@ let unlimited = true;
 
             onClickFuel: (event) => {
                 console.log("onClickFuel");
-                if(sim.move_selected_inventory_item(false, "Burner")){
-                    deselectPlayerInventory();
-                    updateInventory(sim.get_player_inventory());
-                    updateToolBar();
-                    updateStructureInventory();
+                const inventoryType = sim.get_selected_inventory_type();
+                if(inventoryType === null){
+                    const items = vueApp.burnerItems;
+                    if(0 < items.length){
+                        sim.select_structure_inventory(items[0].name, "Burner");
+                        updateMouseIcon();
+                        // updateInventorySelection(elem);
+       
+                    }
+                }
+                if(inventoryType === "Player"){
+                    if(sim.move_selected_inventory_item(false, "Burner")){
+                        deselectPlayerInventory();
+                        updateInventory(sim.get_player_inventory());
+                        updateToolBar();
+                        updateStructureInventory();
+                    }
                 }
             },
         }
@@ -777,6 +789,7 @@ let unlimited = true;
             vueApp.hasBurner = true;
             vueApp.burnerItems = burnerInventory.map(item => {
                 return {
+                    name: item[0],
                     url: getImageFile(item[0]).url,
                     count: item[1],
                 };
