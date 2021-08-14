@@ -1772,9 +1772,7 @@ impl FactorishState {
                     }
                 }
                 _ => {
-                    if let Some(inventory) =
-                        structure.inventory(inventory_type == InventoryType::Input)
-                    {
+                    if let Some(inventory) = structure.inventory(inventory_type) {
                         let mut inventory = std::borrow::Cow::Borrowed(inventory);
                         if inventory_type == InventoryType::Input {
                             if let Some(recipe) = structure.get_selected_recipe() {
@@ -1806,6 +1804,11 @@ impl FactorishState {
         // Err(JsValue::from_str(
         //     "structure is not found or doesn't have inventory",
         // ))
+    }
+
+    pub fn get_structure_progress(&self, x: i32, y: i32) -> Option<f64> {
+        self.find_structure_tile(&[x, y])
+            .and_then(|structure| structure.get_progress())
     }
 
     pub fn get_structure_burner_energy(&self, c: i32, r: i32) -> Option<js_sys::Array> {
@@ -1945,7 +1948,7 @@ impl FactorishState {
                 {
                     if FactorishState::move_inventory_item(
                         structure
-                            .inventory_mut(sel_inventory_type == InventoryType::Input)
+                            .inventory_mut(sel_inventory_type)
                             .ok_or_else(|| js_str!("No inventory"))?,
                         &mut self.player.inventory,
                         &item_name,
@@ -1984,7 +1987,7 @@ impl FactorishState {
                         if FactorishState::move_inventory_item(
                             &mut self.player.inventory,
                             structure
-                                .inventory_mut(inventory_type == InventoryType::Input)
+                                .inventory_mut(inventory_type)
                                 .ok_or_else(|| js_str!("No inventory"))?,
                             &item_name,
                         ) {
@@ -2274,8 +2277,9 @@ impl FactorishState {
                     }
                 }
             } else if let Some(structure) = self.find_structure_tile(&[cursor.x, cursor.y]) {
-                if structure.inventory(true).is_some()
-                    || structure.inventory(false).is_some()
+                if structure.inventory(InventoryType::Input).is_some()
+                    || structure.inventory(InventoryType::Output).is_some()
+                    || structure.inventory(InventoryType::Storage).is_some()
                     || structure.burner_inventory().is_some()
                 {
                     // Select clicked structure
@@ -2638,9 +2642,8 @@ impl FactorishState {
                 .structure_iter()
                 .find(|s| *s.position() == pos)
                 .and_then(|s| match inventory_type {
-                    InventoryType::Input => s.inventory(true),
-                    InventoryType::Output => s.inventory(false),
                     InventoryType::Burner => s.burner_inventory(),
+                    _ => s.inventory(inventory_type),
                 })
                 .and_then(|inventory| inventory.get(&item))
                 .and(Some(item)),

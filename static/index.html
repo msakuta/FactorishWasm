@@ -116,30 +116,48 @@
 									<div id="burnerEnergy" class="burnerEnergy" :style="{width: `${burnerEnergy * 100}%`}"></div>
 								</div>
 							</div>
-							<div v-if="hasInput">
-								<div class="inventoryTitle">Input inventory</div>
-								<div v-for="i in Math.max(1, inputItems.length)"
-									class="itemBack"
-									@click="onClickInput(i-1)"
-									:style="{backgroundColor: `#ffffff`, backgroundImage: `url(${itemBack})`}"
-								>
-									<div v-if="i-1 < inputItems.length"
-										:class="['burnerItem', inputItems[i-1].count === 0 ? 'transparent' : '']"
-										:style="{backgroundImage: `url(${inputItems[i-1].url})`, backgroundSize: 32 * inputItems[i-1].widthFactor + 'px ' + 32 * inputItems[i-1].heightFactor + 'px'}">
-										<div v-if="i-1 < inputItems.length && 0 < inputItems[i-1].count" class="overlay"> {{ inputItems[i-1].count }} </div>
+							<div style="vertical-align: middle;">
+								<span v-if="hasInput">
+									<div v-for="i in Math.max(1, inputItems.length)"
+										class="itemBack"
+										@click="onClickInput(i-1)"
+										:style="{backgroundColor: `#ffffff`, backgroundImage: `url(${itemBack})`}"
+									>
+										<div v-if="i-1 < inputItems.length"
+											:class="['burnerItem', inputItems[i-1].count === 0 ? 'transparent' : '']"
+											:style="{backgroundImage: `url(${inputItems[i-1].url})`, backgroundSize: 32 * inputItems[i-1].widthFactor + 'px ' + 32 * inputItems[i-1].heightFactor + 'px'}">
+											<div v-if="i-1 < inputItems.length && 0 < inputItems[i-1].count" class="overlay"> {{ inputItems[i-1].count }} </div>
+										</div>
 									</div>
-								</div>
+								</span>
+								<span v-if="hasInput || hasOutput" style="position: relative; width: 100px;">
+									<div class="progressBarBack">
+										<div id="burnerEnergy" class="burnerEnergy" :style="{width: `${burnerEnergy * 100}%`}"></div>
+									</div>
+								</span>
+								<span v-if="hasOutput" style="position: relative">
+									<div v-for="i in Math.max(1 + outputItems.length)"
+										class="itemBack"
+										@click="onClickOutput(i-1)"
+										:style="{backgroundColor: `#ffffff`, backgroundImage: `url(${itemBack})`}"
+									>
+										<div v-if="i-1 < outputItems.length" class="burnerItem"
+											:style="{backgroundImage: `url(${outputItems[i-1].url})`, backgroundSize: 32 * outputItems[i-1].widthFactor + 'px ' + 32 * outputItems[i-1].heightFactor + 'px'}">
+											<div v-if="i-1 < outputItems.length" class="overlay"> {{ outputItems[i-1].count }} </div>
+										</div>
+									</div>
+								</span>
 							</div>
-							<div v-if="hasOutput">
-								<div class="inventoryTitle">Output inventory</div>
-								<div v-for="i in Math.ceil((1 + outputItems.length) / 10) * 10"
+							<div v-if="hasStorage">
+								<div class="inventoryTitle">Storage inventory</div>
+								<div v-for="i in Math.ceil((1 + storageItems.length) / 10) * 10"
 									class="itemBack"
 									@click="onClickOutput(i-1)"
 									:style="{backgroundColor: `#ffffff`, backgroundImage: `url(${itemBack})`}"
 								>
-									<div v-if="i-1 < outputItems.length" class="burnerItem"
-										:style="{backgroundImage: `url(${outputItems[i-1].url})`, backgroundSize: 32 * outputItems[i-1].widthFactor + 'px ' + 32 * outputItems[i-1].heightFactor + 'px'}">
-										<div v-if="i-1 < outputItems.length" class="overlay"> {{ outputItems[i-1].count }} </div>
+									<div v-if="i-1 < storageItems.length" class="burnerItem"
+										:style="{backgroundImage: `url(${storageItems[i-1].url})`, backgroundSize: 32 * storageItems[i-1].widthFactor + 'px ' + 32 * storageItems[i-1].heightFactor + 'px'}">
+										<div v-if="i-1 < storageItems.length" class="overlay"> {{ storageItems[i-1].count }} </div>
 									</div>
 								</div>
 							</div>

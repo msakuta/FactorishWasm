@@ -3,6 +3,7 @@ mod iter;
 use super::{
     drop_items::DropItem,
     dyn_iter::{DynIter, DynIterMut},
+    inventory::InventoryType,
     items::ItemType,
     underground_belt::UnderDirection,
     water_well::FluidBox,
@@ -319,10 +320,10 @@ pub(crate) trait Structure {
     fn burner_energy(&self) -> Option<(f64, f64)> {
         None
     }
-    fn inventory(&self, _is_input: bool) -> Option<&Inventory> {
+    fn inventory(&self, _inventory_type: InventoryType) -> Option<&Inventory> {
         None
     }
-    fn inventory_mut(&mut self, _is_input: bool) -> Option<&mut Inventory> {
+    fn inventory_mut(&mut self, _inventory_type: InventoryType) -> Option<&mut Inventory> {
         None
     }
     /// Some structures don't have an inventory, but still can have some item, e.g. inserter hands.
@@ -330,12 +331,14 @@ pub(crate) trait Structure {
     /// It will take away the inventory by default, destroying the instance's inventory.
     fn destroy_inventory(&mut self) -> Inventory {
         let mut ret = self
-            .inventory_mut(true)
+            .inventory_mut(InventoryType::Input)
             .map_or(Inventory::new(), |inventory| std::mem::take(inventory));
-        ret.merge(
-            self.inventory_mut(false)
-                .map_or(Inventory::new(), |inventory| std::mem::take(inventory)),
-        );
+        if let Some(inv) = self.inventory_mut(InventoryType::Output) {
+            ret.merge(std::mem::take(inv));
+        }
+        if let Some(inv) = self.inventory_mut(InventoryType::Storage) {
+            ret.merge(std::mem::take(inv));
+        }
         ret
     }
     /// Returns a list of recipes. The return value is wrapped in a Cow because some
@@ -348,6 +351,9 @@ pub(crate) trait Structure {
         Err(JsValue::from_str("recipes not available"))
     }
     fn get_selected_recipe(&self) -> Option<&Recipe> {
+        None
+    }
+    fn get_progress(&self) -> Option<f64> {
         None
     }
     fn fluid_connections(&self) -> [bool; 4] {

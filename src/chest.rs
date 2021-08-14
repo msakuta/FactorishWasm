@@ -1,6 +1,7 @@
 use super::{
     drop_items::DropItem,
     gl::utils::{enable_buffer, Flatten},
+    inventory::InventoryType,
     items::ItemType,
     structure::{ItemResponse, ItemResponseResult, Structure, StructureDynIter},
     FactorishState, FrameProcResult, Inventory, InventoryTrait, Position,
@@ -144,19 +145,17 @@ impl Structure for Chest {
         }
     }
 
-    fn inventory(&self, is_input: bool) -> Option<&Inventory> {
-        if is_input {
-            Some(&self.inventory)
-        } else {
-            None
+    fn inventory(&self, invtype: InventoryType) -> Option<&Inventory> {
+        match invtype {
+            InventoryType::Storage => Some(&self.inventory),
+            _ => None,
         }
     }
 
-    fn inventory_mut(&mut self, is_input: bool) -> Option<&mut Inventory> {
-        if is_input {
-            Some(&mut self.inventory)
-        } else {
-            None
+    fn inventory_mut(&mut self, invtype: InventoryType) -> Option<&mut Inventory> {
+        match invtype {
+            InventoryType::Storage => Some(&mut self.inventory),
+            _ => None,
         }
     }
 

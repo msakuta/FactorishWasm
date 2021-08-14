@@ -66,6 +66,7 @@ impl InventoryTrait for Inventory {
 pub(crate) enum InventoryType {
     Input,
     Output,
+    Storage,
     Burner,
 }
 

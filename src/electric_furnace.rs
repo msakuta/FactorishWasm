@@ -4,6 +4,7 @@ use super::{
         draw_electricity_alarm_gl,
         utils::{enable_buffer, Flatten},
     },
+    inventory::InventoryType,
     items::item_to_str,
     serialize_impl,
     structure::{Structure, StructureDynIter, StructureId},
@@ -303,19 +304,19 @@ impl Structure for ElectricFurnace {
         }
     }
 
-    fn inventory(&self, is_input: bool) -> Option<&Inventory> {
-        Some(if is_input {
-            &self.input_inventory
-        } else {
-            &self.output_inventory
+    fn inventory(&self, invtype: InventoryType) -> Option<&Inventory> {
+        Some(match invtype {
+            InventoryType::Input => &self.input_inventory,
+            InventoryType::Output => &self.output_inventory,
+            _ => return None,
         })
     }
 
-    fn inventory_mut(&mut self, is_input: bool) -> Option<&mut Inventory> {
-        Some(if is_input {
-            &mut self.input_inventory
-        } else {
-            &mut self.output_inventory
+    fn inventory_mut(&mut self, invtype: InventoryType) -> Option<&mut Inventory> {
+        Some(match invtype {
+            InventoryType::Input => &mut self.input_inventory,
+            InventoryType::Output => &mut self.output_inventory,
+            _ => return None,
         })
     }
 

@@ -659,6 +659,8 @@ let unlimited = true;
             inputItems: [],
             hasOutput: false,
             outputItems: [],
+            hasStorage: false,
+            storageItems: [],
 
             onClickFuel: (event) => {
                 console.log("onClickFuel");
@@ -722,6 +724,27 @@ let unlimited = true;
                     }
                 }
             },
+
+            onClickStorage: (i) => {
+                console.log("onClickStorage");
+                const itemType = sim.get_selected_item_type();
+                if(itemType !== null && "PlayerInventory" in itemType){
+                    if(sim.move_selected_inventory_item(false, "Storage")){
+                        deselectPlayerInventory();
+                        updateInventory(sim.get_player_inventory());
+                        updateToolBar();
+                        updateStructureInventory();
+                    }
+                }
+                else if(itemType === null){
+                    const items = vueApp.storageItems;
+                    if(i < items.length){
+                        sim.select_structure_inventory(items[i].name, "Storage");
+                        updateMouseIcon();
+                        // updateInventorySelection(elem);
+                    }
+                }
+            },
         }
     });
 
@@ -738,6 +761,17 @@ let unlimited = true;
 
     function updateVueOutputInventory(inventory){
         vueApp.outputItems = inventory.length !== 0 ? inventory[0].map(item => {
+            const image = getImageFile(item[0]);
+            return {
+                name: item[0],
+                count: item[1],
+                ...image
+            };
+        }) : [];
+    }
+
+    function updateVueStorageInventory(inventory){
+        vueApp.storageItems = inventory.length !== 0 ? inventory[0].map(item => {
             const image = getImageFile(item[0]);
             return {
                 name: item[0],
@@ -872,6 +906,13 @@ let unlimited = true;
         }
     }
 
+    function updateStructureProgress(pos){
+        const progress = sim.get_structure_progress(pos);
+        if(progress !== null){
+            vueApp.progress = progress;
+        }
+    }
+
     function showInventory(event){
         if(inventoryElem.style.display !== "none"){
             inventoryElem.style.display = "none";
@@ -906,6 +947,14 @@ let unlimited = true;
             }
             else{
                 vueApp.hasOutput = false;
+            }
+            const storageInventory = sim.get_structure_inventory(pos[0], pos[1], "Storage");
+            if(storageInventory && storageInventory.length !== 0){
+                vueApp.hasStorage = true;
+                updateVueStorageInventory(storageInventory);
+            }
+            else{
+                vueApp.hasStorage = false;
             }
             showBurnerStatus(pos);
         }
