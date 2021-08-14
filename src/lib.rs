@@ -1775,8 +1775,19 @@ impl FactorishState {
                     if let Some(inventory) =
                         structure.inventory(inventory_type == InventoryType::Input)
                     {
+                        let mut inventory = std::borrow::Cow::Borrowed(inventory);
+                        if inventory_type == InventoryType::Input {
+                            if let Some(recipe) = structure.get_selected_recipe() {
+                                let inventory = inventory.to_mut();
+                                for key in recipe.input.keys() {
+                                    if !inventory.contains_key(key) {
+                                        inventory.insert(*key, 0);
+                                    }
+                                }
+                            }
+                        }
                         return self.get_inventory(
-                            inventory,
+                            &inventory,
                             &self
                                 .selected_item
                                 .and_then(|item| item.map_struct(&Position { x: c, y: r })),
@@ -1917,10 +1928,15 @@ impl FactorishState {
                 if sel_inventory_type == InventoryType::Burner {
                     self.player.inventory.add_items(
                         &item,
-                        structure.add_burner_inventory(&item, -structure.burner_inventory()
-                            .map(|i| i.count_item(&item) as isize)
-                            .unwrap_or(0),
-                        ).abs() as usize
+                        structure
+                            .add_burner_inventory(
+                                &item,
+                                -structure
+                                    .burner_inventory()
+                                    .map(|i| i.count_item(&item) as isize)
+                                    .unwrap_or(0),
+                            )
+                            .abs() as usize,
                     );
                     self.on_player_update
                         .call1(&window(), &JsValue::from(self.get_player_inventory()?))?;

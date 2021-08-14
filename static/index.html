@@ -118,14 +118,15 @@
 							</div>
 							<div v-if="hasInput">
 								<div class="inventoryTitle">Input inventory</div>
-								<div v-for="i in Math.ceil((1 + inputItems.length) / 10) * 10"
+								<div v-for="i in Math.max(1, inputItems.length)"
 									class="itemBack"
 									@click="onClickInput(i-1)"
 									:style="{backgroundColor: `#ffffff`, backgroundImage: `url(${itemBack})`}"
 								>
-									<div v-if="i-1 < inputItems.length" class="burnerItem"
+									<div v-if="i-1 < inputItems.length"
+										:class="['burnerItem', inputItems[i-1].count === 0 ? 'transparent' : '']"
 										:style="{backgroundImage: `url(${inputItems[i-1].url})`, backgroundSize: 32 * inputItems[i-1].widthFactor + 'px ' + 32 * inputItems[i-1].heightFactor + 'px'}">
-										<div v-if="i-1 < inputItems.length" class="overlay"> {{ inputItems[i-1].count }} </div>
+										<div v-if="i-1 < inputItems.length && 0 < inputItems[i-1].count" class="overlay"> {{ inputItems[i-1].count }} </div>
 									</div>
 								</div>
 							</div>

@@ -242,6 +242,10 @@ div.closeButton{
     height: 32px;
 }
 
+.transparent {
+    opacity: 0.5;
+}
+
 .burnerItem {
     width: 32px;
     height: 32px;
