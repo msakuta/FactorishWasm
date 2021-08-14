@@ -107,12 +107,20 @@
 					</div>
 					<div id="inventory2Client">
 						<div id="vueApp">
-							{{ message }}
+							<div v-if="hasBurner">
+								<div class="itemBack" @click="onClickFuel" :style="{backgroundColor: `#ffffff`, backgroundImage: `url(${fuelBack})`}">
+									<img v-if="0 < burnerItems.length" class="burnerItem" :src="burnerItems[0].url">
+									<div v-if="0 < burnerItems.length" class="overlay"> {{ burnerItems[0].count }} </div>
+								</div>
+								<div class="burnerEnergyBack">
+									<div id="burnerEnergy" class="burnerEnergy" :style="{width: `${burnerEnergy * 100}%`}"></div>
+								</div>
+							</div>
 						</div>
 						<div id="burnerContainer" class="burnerContainer">
 							<div id="inputFuel" class="fuelBackground"></div>
 							<div class="burnerEnergyBack">
-								<div id="burnerEnergy" class="burnerEnergy" :style="`width: ${burnerEnergy};`"></div>
+								<div id="burnerEnergy" class="burnerEnergy"></div>
 							</div>
 						</div>
 						<div id="inputInventoryTitle" class="inventoryTitle">Input inventory</div>

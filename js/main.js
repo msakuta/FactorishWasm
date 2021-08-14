@@ -647,9 +647,21 @@ let unlimited = true;
     const vueApp = new Vue({
         el: '#vueApp',
         data: {
-            message: 'Hello Vue!',
             hasBurner: false,
+            burnerItems: [],
             burnerEnergy: 0,
+            fuelBack,
+            items: [],
+
+            onClickFuel: (event) => {
+                console.log("onClickFuel");
+                if(sim.move_selected_inventory_item(false, "Burner")){
+                    deselectPlayerInventory();
+                    updateInventory(sim.get_player_inventory());
+                    updateToolBar();
+                    updateStructureInventory();
+                }
+            },
         }
     });
 
@@ -763,6 +775,12 @@ let unlimited = true;
         if(burnerInventory){
             burnerContainer.style.display = "block";
             vueApp.hasBurner = true;
+            vueApp.burnerItems = burnerInventory.map(item => {
+                return {
+                    url: getImageFile(item[0]).url,
+                    count: item[1],
+                };
+            });
             const elem = inputFuelElem;
             // Clear the elements first
             // while(elem.firstChild)
@@ -804,6 +822,7 @@ let unlimited = true;
             if(burnerEnergy){
                 const burnerEnergyElem = document.getElementById('burnerEnergy');
                 burnerEnergyElem.style.width = `${burnerEnergy[0] / burnerEnergy[1] * 80}px`;
+                vueApp.burnerEnergy = burnerEnergy[0] / burnerEnergy[1];
             }
         }
         else{
@@ -831,6 +850,10 @@ let unlimited = true;
             const pos = event.pos;
             updateInventoryInt(inventoryContentElem, sim, false, sim.get_structure_inventory(pos[0], pos[1], "Input"), inputInventoryTitleElem);
             updateInventoryInt(outputInventoryContentElem, sim, false, sim.get_structure_inventory(pos[0], pos[1], "Output"), outputInventoryTitleElem);
+            const inputInventory = sim.get_structure_inventory(pos[0], pos[1], "Input");
+            vueApp.items = inputInventory.length !== 0 ? inputInventory[0].map(item => {
+                return getImageFile(item[0]).url;
+            }) : [];
             showBurnerStatus(pos);
         }
         else{
@@ -840,7 +863,6 @@ let unlimited = true;
             recipeSelectButtonElem.style.display = "none";
             playerElem.style.left = "40px";
         }
-        vueApp.message = "Inventory shown";
     }
 
     let recipeTarget = null;

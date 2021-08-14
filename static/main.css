@@ -235,6 +235,17 @@ div.closeButton{
     left: 40px;
 }
 
+.itemBack {
+    position: relative;
+    width: 32px;
+    height: 32px;
+}
+
+.burnerItem {
+    width: 32px;
+    height: 32px;
+}
+
 .fuelBackground {
     left: 0px;
     width: 32px;
