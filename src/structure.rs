@@ -310,6 +310,9 @@ pub(crate) trait Structure {
     fn burner_inventory(&self) -> Option<&Inventory> {
         None
     }
+    /// Attempt to add or remove items from a burner inventory and returns actual item count moved.
+    /// Positive amount means adding items to the burner, otherwise remove.
+    /// If it has limited capacity, positive amount may return less value than given.
     fn add_burner_inventory(&mut self, _item_type: &ItemType, _amount: isize) -> isize {
         0
     }

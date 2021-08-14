@@ -1917,8 +1917,13 @@ impl FactorishState {
                 if sel_inventory_type == InventoryType::Burner {
                     self.player.inventory.add_items(
                         &item,
-                        structure.add_burner_inventory(&item, std::isize::MIN).abs() as usize,
+                        structure.add_burner_inventory(&item, -structure.burner_inventory()
+                            .map(|i| i.count_item(&item) as isize)
+                            .unwrap_or(0),
+                        ).abs() as usize
                     );
+                    self.on_player_update
+                        .call1(&window(), &JsValue::from(self.get_player_inventory()?))?;
                 } else if let Some(item_name) =
                     self.selected_item.and_then(|item| item.map_struct(&pos))
                 {

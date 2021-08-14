@@ -754,11 +754,8 @@ let unlimited = true;
     const outputInventoryContentElem = document.getElementById('outputInventoryContent');
     outputInventoryContentElem.onclick = () => onInventoryClick(false, false);
     const outputInventoryTitleElem = document.getElementById('outputInventoryTitle');
-    const burnerContainer = document.getElementById('burnerContainer');
-    const inputFuelElem = document.getElementById('inputFuel');
-    inputFuelElem.style.backgroundImage = `url(${fuelBack})`;
 
-    [inventoryContentElem, outputInventoryContentElem, inputFuelElem].forEach((elem, idx) => {
+    [inventoryContentElem, outputInventoryContentElem].forEach((elem, idx) => {
         // elem.ondragover = function(ev){
         //     var ok = false;
         //     for(var i = 0; i < ev.dataTransfer.types.length; i++){
@@ -851,11 +848,9 @@ let unlimited = true;
         mousecaptorElem.style.zIndex = i + windowZIndex; // The mouse capture element comes on top of all other windows
     }
 
-    let burnerItemElem = null;
     function showBurnerStatus([c, r]){
         const [burnerInventory, _] = sim.get_structure_inventory(c, r, "Burner");
         if(burnerInventory){
-            burnerContainer.style.display = "block";
             vueApp.hasBurner = true;
             vueApp.burnerItems = burnerInventory.map(item => {
                 return {
@@ -864,53 +859,16 @@ let unlimited = true;
                     count: item[1],
                 };
             });
-            const elem = inputFuelElem;
-            // Clear the elements first
-            // while(elem.firstChild)
-            //     elem.removeChild(elem.firstChild);
-
-            if(0 < burnerInventory.length){
-                const [name, v] = burnerInventory[0];
-                if(burnerItemElem === null){
-                    burnerItemElem = generateItemImage(name, true, v);
-                    burnerItemElem.setAttribute('draggable', 'true');
-                }
-                else{
-                    const imageFile = getImageFile(i);
-                    burnerItemElem.src = `url(${imageFile.url})`;
-                    burnerItemElem.children[1].innerHTML = v;
-                }
-                burnerItemElem.ondragstart = function(ev){
-                    console.log("dragStart");
-                    // selectThisItem(this.itemName);
-                    ev.dataTransfer.dropEffect = 'move';
-                    // Encode information to determine item to drop into a JSON
-                    ev.dataTransfer.setData(textType, JSON.stringify({
-                        type: name,
-                        fromPlayer: false,
-                        inventoryType: "Burner",
-                    }));
-                };
-                burnerItemElem.setAttribute('class', 'noselect');
-                elem.appendChild(burnerItemElem);
-            }
-            else if(burnerItemElem){
-                elem.removeChild(burnerItemElem);
-                burnerItemElem = null;
-            }
 
             const burnerEnergy = sim.get_structure_burner_energy(c, r, true);
             // if(burnerEnergy)
             //     vueApp.burnerEnergy = burnerEnergy[0] / burnerEnergy[1] * 80;
             if(burnerEnergy){
-                const burnerEnergyElem = document.getElementById('burnerEnergy');
-                burnerEnergyElem.style.width = `${burnerEnergy[0] / burnerEnergy[1] * 80}px`;
                 vueApp.burnerEnergy = burnerEnergy[0] / burnerEnergy[1];
             }
         }
         else{
             vueApp.hasBurner = false;
-            burnerContainer.style.display = "none";
         }
     }
 
@@ -947,7 +905,7 @@ let unlimited = true;
                 updateVueOutputInventory(outputInventory);
             }
             else{
-                vueApp.hasInput = false;
+                vueApp.hasOutput = false;
             }
             showBurnerStatus(pos);
         }
@@ -1096,30 +1054,30 @@ let unlimited = true;
     playerInventoryElem.style.width = '100%';
     playerInventoryElem.style.height = '100%';
     playerInventoryElem.style.textAlign = 'left';
-    playerInventoryElem.ondragover = function(ev){
-        var ok = false;
-        for(var i = 0; i < ev.dataTransfer.types.length; i++){
-            if(ev.dataTransfer.types[i].toUpperCase() === textType.toUpperCase())
-                ok = true;
-        }
-        if(ok){
-            ev.preventDefault();
-            // Set the dropEffect to move
-            ev.dataTransfer.dropEffect = "move";
-        }
-    }
-    playerInventoryElem.ondrop = function(ev){
-        ev.preventDefault();
-        var data = JSON.parse(ev.dataTransfer.getData(textType));
-        if(!data.fromPlayer){
-            if(sim.move_selected_inventory_item(!data.fromPlayer, data.inventoryType)){
-                deselectPlayerInventory();
-                updateInventory(sim.get_player_inventory());
-                updateToolBar();
-                updateStructureInventory();
-            }
-        }
-    }
+    // playerInventoryElem.ondragover = function(ev){
+    //     var ok = false;
+    //     for(var i = 0; i < ev.dataTransfer.types.length; i++){
+    //         if(ev.dataTransfer.types[i].toUpperCase() === textType.toUpperCase())
+    //             ok = true;
+    //     }
+    //     if(ok){
+    //         ev.preventDefault();
+    //         // Set the dropEffect to move
+    //         ev.dataTransfer.dropEffect = "move";
+    //     }
+    // }
+    // playerInventoryElem.ondrop = function(ev){
+    //     ev.preventDefault();
+    //     var data = JSON.parse(ev.dataTransfer.getData(textType));
+    //     if(!data.fromPlayer){
+    //         if(sim.move_selected_inventory_item(!data.fromPlayer, data.inventoryType)){
+    //             deselectPlayerInventory();
+    //             updateInventory(sim.get_player_inventory());
+    //             updateToolBar();
+    //             updateStructureInventory();
+    //         }
+    //     }
+    // }
     playerInventoryElem.onclick = function(){onInventoryClick(true, true)};
     playerInventoryContainerElem.appendChild(playerInventoryElem);
 
