@@ -2236,6 +2236,9 @@ impl FactorishState {
                     UnderDirection::ToGround,
                 ))
             }
+            ItemType::UndergroundPipe => {
+                return Ok(UndergroundPipe::new(*cursor, self.tool_rotation))
+            }
             _ => return js_err!("Can't make a structure from {:?}", tool),
         }
     }
