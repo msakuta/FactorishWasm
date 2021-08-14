@@ -219,6 +219,17 @@ div.closeButton{
     pointer-events: none;
 }
 
+#loadingContainer {
+    position: absolute;
+    display: inline;
+    pointer-events: none;
+    font-size: 48px;
+    color: #ffffff;
+    text-align: center;
+    top: 50%;
+    left: 50%;
+}
+
 .burnerContainer {
     position: relative;
     left: 40px;
