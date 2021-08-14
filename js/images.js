@@ -13,6 +13,7 @@ import chest from "../img/chest.png";
 import mine from "../img/mine.png";
 import assembler from "../img/assembler.png";
 import furnace from "../img/furnace.png";
+import electricFurnace from "../img/electric-furnace.png";
 import waterWell from "../img/waterwell.png";
 import offshorePump from "../img/offshore-pump.png";
 import boiler from "../img/boiler.png";
@@ -56,6 +57,7 @@ export let loadImages = [
     ["chest", chest],
     ["mine", mine],
     ["furnace", furnace],
+    ["electricFurnace", electricFurnace],
     ["assembler", assembler],
     ["boiler", boiler],
     ["steamEngine", steamEngine],
@@ -126,6 +128,8 @@ function getImageFileInt(type){
         return [mine, 3];
     case 'Furnace':
         return [furnace, 3];
+    case 'Electric Furnace':
+        return [electricFurnace, 3];
     case 'Assembler':
         return [assembler, 4];
     case 'Water Well':

@@ -10,6 +10,7 @@ mod chest;
 mod drop_items;
 mod dyn_iter;
 mod elect_pole;
+mod electric_furnace;
 mod furnace;
 mod inserter;
 mod inventory;
@@ -60,6 +61,7 @@ use boiler::Boiler;
 use chest::Chest;
 use dyn_iter::{Chained, DynIterMut, MutRef};
 use elect_pole::ElectPole;
+use electric_furnace::ElectricFurnace;
 use furnace::Furnace;
 use inserter::Inserter;
 use inventory::{Inventory, InventoryTrait, InventoryType};
@@ -198,7 +200,7 @@ struct ToolDef {
     item_type: ItemType,
     desc: &'static str,
 }
-const tool_defs: [ToolDef; 15] = [
+const tool_defs: [ToolDef; 16] = [
     ToolDef {
         item_type: ItemType::TransportBelt,
         desc: "Transports items on ground",
@@ -222,6 +224,10 @@ const tool_defs: [ToolDef; 15] = [
     ToolDef {
         item_type: ItemType::Furnace,
         desc: "Smelts metal ores into metal bars.<br>Requires coal ores to operate.",
+    },
+    ToolDef {
+        item_type: ItemType::ElectricFurnace,
+        desc: "Smelts metal ores into metal bars.<br>Uses electricity to operate.",
     },
     ToolDef {
         item_type: ItemType::Assembler,
@@ -508,6 +514,7 @@ pub struct FactorishState {
     image_chest: Option<ImageBundle>,
     image_mine: Option<ImageBundle>,
     image_furnace: Option<ImageBundle>,
+    image_electric_furnace: Option<ImageBundle>,
     image_assembler: Option<ImageBundle>,
     image_boiler: Option<ImageBundle>,
     image_steam_engine: Option<ImageBundle>,
@@ -626,6 +633,7 @@ impl FactorishState {
             image_chest: None,
             image_mine: None,
             image_furnace: None,
+            image_electric_furnace: None,
             image_assembler: None,
             image_boiler: None,
             image_steam_engine: None,
@@ -1966,6 +1974,7 @@ impl FactorishState {
             ItemType::OreMine => Box::new(OreMine::new(cursor.x, cursor.y, self.tool_rotation)),
             ItemType::Chest => Box::new(Chest::new(cursor)),
             ItemType::Furnace => Box::new(Furnace::new(cursor)),
+            ItemType::ElectricFurnace => Box::new(ElectricFurnace::new(cursor)),
             ItemType::Assembler => Box::new(Assembler::new(cursor)),
             ItemType::Boiler => Box::new(Boiler::new(cursor)),
             ItemType::WaterWell => Box::new(WaterWell::new(cursor)),
@@ -2019,6 +2028,9 @@ impl FactorishState {
             ItemType::OreMine => Box::new(map_err(serde_json::from_value::<OreMine>(payload))?),
             ItemType::Chest => Box::new(map_err(serde_json::from_value::<Chest>(payload))?),
             ItemType::Furnace => Box::new(map_err(serde_json::from_value::<Furnace>(payload))?),
+            ItemType::ElectricFurnace => {
+                Box::new(map_err(serde_json::from_value::<ElectricFurnace>(payload))?)
+            }
             ItemType::Assembler => Box::new(map_err(serde_json::from_value::<Assembler>(payload))?),
             ItemType::Boiler => Box::new(map_err(serde_json::from_value::<Boiler>(payload))?),
             ItemType::WaterWell => Box::new(map_err(serde_json::from_value::<WaterWell>(payload))?),
@@ -2448,6 +2460,7 @@ impl FactorishState {
         self.image_chest = Some(load_image("chest")?);
         self.image_mine = Some(load_image("mine")?);
         self.image_furnace = Some(load_image("furnace")?);
+        self.image_electric_furnace = Some(load_image("electricFurnace")?);
         self.image_assembler = Some(load_image("assembler")?);
         self.image_boiler = Some(load_image("boiler")?);
         self.image_steam_engine = Some(load_image("steamEngine")?);
