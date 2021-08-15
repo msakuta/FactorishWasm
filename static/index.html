@@ -95,17 +95,26 @@
 			<div class="headerButton open" id="headerButton">^</div>
 		</div>
 		<div>
-			<div id="container2">
-				<div id="inventory2" class="noselect" style="display: none;">
-					<div id="inventory2Title">Inventory</div>
-					<div class="closeButton" id="inventory2CloseButton"></div>
-					<div id="inventoryButtons" class="inventoryButtons">
-						<img id="inventory2List" draggable="false" src="../img/list.png" style="position: absolute">
-						<img id="inventory2Icons" draggable="false" src="../img/icons.png" style="position: absolute; left: 0px; top: 32px">
-						<img id="recipeSelectButton" draggable="false" src="../img/recipe-select.png" alt="Recipe select" style="position: absolute; left: 0px; top: 80px; border: 1px solid #7f7f7f">
-					</div>
-					<div id="inventory2Client">
-						<div id="vueApp">
+			<div id="container2" style="display: none;">
+				<div id="vueApp">
+					<div v-if="inventoryVisible" ref="inventory"
+						:class="['noselect', 'inventory', hasPosition ? 'inventoryWide' : 'inventoryNarrow']"
+						:style="{left: `${left}px`, top: `${top}px`}"
+					>
+						<div id="inventory2Title" @mousedown="dragWindow">Inventory</div>
+						<div class="closeButton" id="inventory2CloseButton"
+							:style="{backgroundImage: `url(${closeImage})`}"
+							@click="close"
+						></div>
+						<div id="inventoryButtons" class="inventoryButtons">
+							<img id="inventory2List" draggable="false" src="../img/list.png" style="position: absolute">
+							<img id="inventory2Icons" draggable="false" src="../img/icons.png" style="position: absolute; left: 0px; top: 32px">
+							<img id="recipeSelectButton" draggable="false" src="../img/recipe-select.png" alt="Recipe select"
+								@click="showRecipeSelect"
+								style="position: absolute; left: 0px; top: 80px; border: 1px solid #7f7f7f"
+							>
+						</div>
+						<div id="inventory2Client">
 							<div v-if="hasPosition">
 								<div v-if="hasBurner">
 									<div class="itemBack" @click="onClickFuel(0)" :style="{backgroundColor: `#ffffff`, backgroundImage: `url(${fuelBack})`}">

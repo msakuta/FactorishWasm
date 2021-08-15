@@ -82,7 +82,7 @@ body {
     text-align: justify;
 }
 
-#inventory, #inventory2{
+.inventory, #inventory2{
     position: absolute;
     height: 220px;
     left: 50%;

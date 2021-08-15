@@ -8,7 +8,7 @@ import inventory from "../img/inventory.png";
 import { loadImages, getImageFile } from "./images.js";
 import { FactorishState } from "../pkg/index.js";
 
-import { createApp } from "vue";
+import { createApp, nextTick } from "vue";
 
 /// We may no longer need support for IE, since WebAssembly is not supported by IE anyway.
 function isIE(){
@@ -123,7 +123,6 @@ let unlimited = true;
 
     const container = document.getElementById('container2');
     const containerRect = container.getBoundingClientRect();
-    const inventoryElem = document.getElementById('inventory2');
     const mouseIcon = document.getElementById("mouseIcon");
 
     const toolTip = document.createElement('dim');
@@ -562,6 +561,10 @@ let unlimited = true;
     const vueApplication = createApp({
         data() {
             return {
+                inventoryVisible: false,
+                left: 0,
+                top: 0,
+                closeImage,
                 hasPosition: false,
                 hasBurner: false,
                 burnerItems: [],
@@ -576,6 +579,16 @@ let unlimited = true;
                 storageItems: [],
                 progress: 0.,
                 playerItems: [],
+
+                dragWindow: evt => dragWindowMouseDown(evt, vueApp.$refs.inventory, vueApp.inventoryDragStart,
+                    (x, y) => {
+                        vueApp.left = x;
+                        vueApp.top = y;
+                    }),
+                inventoryDragStart: null,
+                close: () => vueApp.inventoryVisible = !vueApp.inventoryVisible,
+
+                showRecipeSelect,
 
                 onClickFuel: inventoryClickHandler(() => vueApp.burnerItems, "Burner"),
                 onClickInput: inventoryClickHandler(() => vueApp.inputItems, "Input"),
@@ -609,6 +622,23 @@ let unlimited = true;
                         }
                     }
                 },
+            }
+        },
+
+        methods: {
+            // Place a window element at the center, for Vue component.
+            placeCenter() {
+                // Defer one tick to allow DOM element to be created
+                nextTick(() => {
+                    if(!this.$refs.inventory)
+                        return;
+                    var elemRect = this.$refs.inventory.getBoundingClientRect();
+                    var bodyRect = document.body.getBoundingClientRect();
+                    vueApp.left = ((bodyRect.width - elemRect.width) / 2);
+                    vueApp.top = ((bodyRect.height - elemRect.height) / 2);
+                    if(!(this.$refs.inventory in windowOrder))
+                        windowOrder.push(this.$refs.inventory);
+                });
             }
         }
     });
@@ -659,17 +689,7 @@ let unlimited = true;
         }) : [];
     }
 
-    const inventory2ClientElem = document.getElementById('inventory2Client');
-
-    inventoryElem.style.display = 'none';
-
-    const inventory2CloseButton = document.getElementById("inventory2CloseButton");
-    inventory2CloseButton.style.backgroundImage = `url(${closeImage})`;
-    inventory2CloseButton.addEventListener("click", function(){
-        inventoryElem.style.display = "none";
-    });
-
-    function dragWindowMouseDown(evt,elem,pos){
+    function dragWindowMouseDown(evt,elem,pos, updatePos){
         pos = [evt.screenX, evt.screenY];
         bringToTop(elem);
         var mousecaptorElem = document.getElementById('mousecaptor');
@@ -686,8 +706,7 @@ let unlimited = true;
             var r = elem.getBoundingClientRect();
             var left = elem.style.left !== '' ? parseInt(elem.style.left) : (cr.left + cr.right) / 2;
             var top = elem.style.top !== '' ? parseInt(elem.style.top) : (cr.top + cr.bottom) / 2;
-            elem.style.left = (left + rel[0]) + 'px';
-            elem.style.top = (top + rel[1]) + 'px';
+            updatePos(left + rel[0], top + rel[1]);
         }
         
         mousecaptorElem.addEventListener('mousemove', mousemove);
@@ -704,12 +723,6 @@ let unlimited = true;
 
     var inventoryDragStart = null;
 
-    var inventoryTitleElem = document.getElementById('inventory2Title');
-
-    inventoryTitleElem.addEventListener('mousedown', function(evt){
-        dragWindowMouseDown(evt, inventoryElem, inventoryDragStart);
-    });
-
     /// Bring a window to the top on the other windows.
     function bringToTop(elem){
         var oldIdx = windowOrder.indexOf(elem);
@@ -719,8 +732,11 @@ let unlimited = true;
             for(var i = 0; i < windowOrder.length; i++)
                 windowOrder[i].style.zIndex = i + windowZIndex;
         }
+        else{
+            elem.style.zIndex = oldIdx + windowZIndex;
+        }
         var mousecaptorElem = document.getElementById('mousecaptor');
-        mousecaptorElem.style.zIndex = i + windowZIndex; // The mouse capture element comes on top of all other windows
+        mousecaptorElem.style.zIndex = windowOrder.length + windowZIndex; // The mouse capture element comes on top of all other windows
     }
 
     function showBurnerStatus([c, r]){
@@ -753,19 +769,15 @@ let unlimited = true;
     }
 
     function showInventory(event){
-        if(inventoryElem.style.display !== "none"){
-            inventoryElem.style.display = "none";
+        vueApp.inventoryVisible = !vueApp.inventoryVisible;
+        if(!vueApp.inventoryVisible){
             return;
         }
         // else if(tile.structure && tile.structure.inventory){
         else if(event){
             vueApp.hasPosition = true;
-            inventoryElem.style.display = "block";
-            inventoryElem.classList = "inventoryWide";
-            placeCenter(inventoryElem);
-            bringToTop(inventoryElem);
-            // var recipeSelectButtonElem = document.getElementById('recipeSelectButton');
-            recipeSelectButtonElem.style.display = !event.recipe_enable ? "none" : "block";
+            vueApp.placeCenter();
+            nextTick(() => bringToTop(vueApp.$refs.inventory));
             // toolTip.style.display = "none"; // Hide the tool tip for "Click to oepn inventory"
             const pos = event.pos;
             inventoryPos = event.pos;
@@ -798,9 +810,6 @@ let unlimited = true;
         }
         else{
             vueApp.hasPosition = false;
-            inventoryElem.style.display = "block";
-            inventoryElem.classList = "inventoryNarrow";
-            recipeSelectButtonElem.style.display = "none";
         }
     }
 
@@ -896,12 +905,6 @@ let unlimited = true;
         elem.style.top = ((bodyRect.height - elemRect.height) / 2) + 'px';
     }
 
-    placeCenter(inventoryElem);
-    windowOrder.push(inventoryElem);
-
-    const recipeSelectButtonElem = document.getElementById('recipeSelectButton');
-    recipeSelectButtonElem.onclick = showRecipeSelect;
-
     var recipeSelectorDragStart = null;
     let inventoryPos = [];
 
@@ -911,7 +914,10 @@ let unlimited = true;
         placeCenter(recipeSelector);
         windowOrder.push(recipeSelector);
         recipeSelectorTitle.addEventListener('mousedown', function(evt){
-            dragWindowMouseDown(evt, recipeSelector, recipeSelectorDragStart);
+            dragWindowMouseDown(evt, recipeSelector, recipeSelectorDragStart, (x, y) => {
+                recipeSelector.style.left = x + 'px';
+                recipeSelector.style.top = y + 'px';
+            });
         })
     }
 
@@ -1127,6 +1133,8 @@ let unlimited = true;
         perfElem.style.display = showPerfGraph.checked ? "block" : "none";
         perfLabel.style.display = showPerfGraph.checked ? "block" : "none";
     }
+
+    container.style.display = "block";
 
     updatePerfVisibility();
 
