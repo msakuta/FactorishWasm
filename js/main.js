@@ -8,6 +8,8 @@ import inventory from "../img/inventory.png";
 import { loadImages, getImageFile } from "./images.js";
 import { FactorishState } from "../pkg/index.js";
 
+import { createApp } from "vue";
+
 /// We may no longer need support for IE, since WebAssembly is not supported by IE anyway.
 function isIE(){
     var ua = window.navigator.userAgent;
@@ -557,58 +559,61 @@ let unlimited = true;
         }
     };
 
-    const vueApp = new Vue({
-        el: '#vueApp',
-        data: {
-            hasPosition: false,
-            hasBurner: false,
-            burnerItems: [],
-            burnerEnergy: 0,
-            fuelBack,
-            hasInput: false,
-            itemBack,
-            inputItems: [],
-            hasOutput: false,
-            outputItems: [],
-            hasStorage: false,
-            storageItems: [],
-            progress: 0.,
-            playerItems: [],
+    const vueApplication = createApp({
+        data() {
+            return {
+                hasPosition: false,
+                hasBurner: false,
+                burnerItems: [],
+                burnerEnergy: 0,
+                fuelBack,
+                hasInput: false,
+                itemBack,
+                inputItems: [],
+                hasOutput: false,
+                outputItems: [],
+                hasStorage: false,
+                storageItems: [],
+                progress: 0.,
+                playerItems: [],
 
-            onClickFuel: inventoryClickHandler(() => vueApp.burnerItems, "Burner"),
-            onClickInput: inventoryClickHandler(() => vueApp.inputItems, "Input"),
-            onClickOutput: inventoryClickHandler(() => vueApp.outputItems, "Output"),
-            onClickStorage: inventoryClickHandler(() => vueApp.storageItems, "Storage"),
+                onClickFuel: inventoryClickHandler(() => vueApp.burnerItems, "Burner"),
+                onClickInput: inventoryClickHandler(() => vueApp.inputItems, "Input"),
+                onClickOutput: inventoryClickHandler(() => vueApp.outputItems, "Output"),
+                onClickStorage: inventoryClickHandler(() => vueApp.storageItems, "Storage"),
 
-            onClickPlayer: i => {
-                console.log("onClickPlayer");
-                const itemType = sim.get_selected_item_type();
-                if(itemType === null){
-                    const items = vueApp.playerItems;
-                    if(i < items.length){
-                        sim.select_player_inventory(items[i].name);
-                        updateMouseIcon();
-                        // updateInventorySelection(elem);
-                    }
-                }
-                else if("PlayerInventory" in itemType){
-                    deselectInventory();
-                }
-                else{
-                    const invtype = sim.get_selected_inventory_type();
-                    if(invtype){
-                        if(sim.move_selected_inventory_item(true, invtype)){
-                            deselectInventory();
-                            updateInventory(sim.get_player_inventory());
-                            updateToolBar();
-                            updateStructureInventory();
+                onClickPlayer: i => {
+                    console.log("onClickPlayer");
+                    const itemType = sim.get_selected_item_type();
+                    if(itemType === null){
+                        const items = vueApp.playerItems;
+                        if(i < items.length){
+                            sim.select_player_inventory(items[i].name);
+                            updateMouseIcon();
+                            // updateInventorySelection(elem);
                         }
+                    }
+                    else if("PlayerInventory" in itemType){
                         deselectInventory();
                     }
-                }
-            },
+                    else{
+                        const invtype = sim.get_selected_inventory_type();
+                        if(invtype){
+                            if(sim.move_selected_inventory_item(true, invtype)){
+                                deselectInventory();
+                                updateInventory(sim.get_player_inventory());
+                                updateToolBar();
+                                updateStructureInventory();
+                            }
+                            deselectInventory();
+                        }
+                    }
+                },
+            }
         }
     });
+
+    const vueApp = vueApplication.mount('#vueApp');
 
     function updateVueInputInventory(inputInventory){
         vueApp.inputItems = inputInventory.length !== 0 ? inputInventory[0].map(item => {
