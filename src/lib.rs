@@ -1672,37 +1672,100 @@ impl FactorishState {
         Ok(harvested_structure || harvested_items)
     }
 
-    fn flatten_inventory(inventory: &Inventory) -> Vec<(ItemType, usize)> {
+    fn flatten_inventory(inventory: &[(ItemType, usize)]) -> Vec<(ItemType, usize)> {
         let mut ret = vec![];
-        for pair in inventory.iter() {
-            let mut amount = *pair.1;
+        for pair in inventory {
+            let mut amount = pair.1;
             while STACK_SIZE < amount {
-                ret.push((*pair.0, amount.min(STACK_SIZE)));
+                ret.push((pair.0, amount.min(STACK_SIZE)));
                 amount -= STACK_SIZE;
             }
-            ret.push((*pair.0, amount));
+            ret.push((pair.0, amount));
         }
         ret
     }
 
-    /// @returns 2-array of
+    fn inventory_to_vec(
+        structure: &dyn Structure,
+        inv_type: InventoryType,
+    ) -> Option<Vec<(ItemType, usize)>> {
+        let inventory = if let Some(inv) = structure.inventory(inv_type) {
+            inv
+        } else {
+            return None;
+        };
+        Some(if inv_type == InventoryType::Storage {
+            let mut v = inventory
+                .iter()
+                .map(|(item, count)| (*item, *count))
+                .collect::<Vec<_>>();
+            v.sort();
+            Self::flatten_inventory(&v)
+        } else {
+            let mut inventory = std::borrow::Cow::Borrowed(inventory);
+            if inv_type == InventoryType::Input {
+                if let Some(recipe) = structure.get_selected_recipe() {
+                    let inventory = inventory.to_mut();
+                    for key in recipe.input.keys() {
+                        if !inventory.contains_key(key) {
+                            inventory.insert(*key, 0);
+                        }
+                    }
+                }
+            }
+            let mut v = inventory
+                .iter()
+                .map(|(item, count)| (*item, *count))
+                .collect::<Vec<_>>();
+            v.sort();
+            v
+        })
+    }
+
+    /// Construct JS array representing inventory contents.
+    ///
+    /// Optionally flattens the inventory for easier selection of small amount.
+    /// Some inventory types, namely input, output and burner, does not benefit
+    /// from splitting, because they are usually moved all at once, unlike storage.
+    ///
+    fn inventory_to_js(
+        &self,
+        inventory: &Inventory,
+        selected_item: &Option<ItemType>,
+        flatten: bool,
+    ) -> Result<js_sys::Array, JsValue> {
+        let mut v = inventory
+            .iter()
+            .map(|(item, count)| (*item, *count))
+            .collect::<Vec<_>>();
+        v.sort();
+        if flatten {
+            self.vec_to_js(&Self::flatten_inventory(&v), selected_item)
+        } else {
+            self.vec_to_js(&v, selected_item)
+        }
+    }
+
+    /// Construct a JS object representing inventory from a vector slice.
+    ///
+    /// The returned object is 2-array of
     ///          * inventory (array), each of which element consists of
     ///              * name (string)
     ///              * count (int)
     ///          * selected item (string)
-    fn get_inventory(
+    fn vec_to_js(
         &self,
-        inventory: &Inventory,
+        inventory: &[(ItemType, usize)],
         selected_item: &Option<ItemType>,
     ) -> Result<js_sys::Array, JsValue> {
         Ok(js_sys::Array::of2(
             &JsValue::from({
-                Self::flatten_inventory(inventory)
-                    .into_iter()
+                inventory
+                    .iter()
                     .map(|(type_, count)| {
                         js_sys::Array::of2(
-                            &JsValue::from_str(&item_to_str(&type_)),
-                            &JsValue::from_f64(count as f64),
+                            &JsValue::from_str(&item_to_str(type_)),
+                            &JsValue::from_f64(*count as f64),
                         )
                     })
                     .collect::<js_sys::Array>()
@@ -1718,7 +1781,7 @@ impl FactorishState {
 
     /// Returns [[itemName, itemCount]*, selectedItemName]
     pub fn get_player_inventory(&self) -> Result<js_sys::Array, JsValue> {
-        self.get_inventory(
+        self.inventory_to_js(
             &self.player.inventory,
             &self.selected_item.and_then(|item| {
                 if let SelectedItem::PlayerInventory(i, _) = item {
@@ -1727,11 +1790,19 @@ impl FactorishState {
                     None
                 }
             }),
+            true,
         )
     }
 
     pub fn select_player_inventory(&mut self, idx: usize) -> Result<(), JsValue> {
-        let flat_inv = Self::flatten_inventory(&self.player.inventory);
+        let mut v = self
+            .player
+            .inventory
+            .iter()
+            .map(|(item, count)| (*item, *count))
+            .collect::<Vec<_>>();
+        v.sort();
+        let flat_inv = Self::flatten_inventory(&v);
         self.selected_item = Some(
             flat_inv
                 .get(idx)
@@ -1780,30 +1851,16 @@ impl FactorishState {
         inventory_type: JsValue,
     ) -> Result<js_sys::Array, JsValue> {
         let inventory_type = InventoryType::try_from(inventory_type)?;
-        if let Some(structure) = self.find_structure_tile(&[x, y]) {
-            if let Some(inventory) = structure.inventory(inventory_type) {
-                if inventory_type == InventoryType::Input {
-                    let mut inventory = std::borrow::Cow::Borrowed(inventory);
-                    if let Some(recipe) = structure.get_selected_recipe() {
-                        let inventory = inventory.to_mut();
-                        for key in recipe.input.keys() {
-                            if !inventory.contains_key(key) {
-                                inventory.insert(*key, 0);
-                            }
-                        }
-                    }
-                    return self.get_inventory(
-                        &inventory,
-                        &self
-                            .selected_item
-                            .and_then(|item| item.map_struct(&Position { x, y })),
-                    );
-                } else {
-                    return self.get_inventory(inventory, &None);
-                }
-            } else {
-                return Ok(js_sys::Array::new());
-            }
+        if let Some(inventory) = self
+            .find_structure_tile(&[x, y])
+            .and_then(|s| Self::inventory_to_vec(s, inventory_type))
+        {
+            return self.vec_to_js(
+                &inventory,
+                &self
+                    .selected_item
+                    .and_then(|item| item.map_struct(&Position { x, y })),
+            );
         }
 
         // We do not make getting inventory of nonexist structure or inventory an error, instead return an empty one.
@@ -1836,19 +1893,12 @@ impl FactorishState {
         inventory_type: JsValue,
     ) -> Result<(), JsValue> {
         let inv_type = InventoryType::try_from(inventory_type)?;
+
         let (pos, flat_inv) = self
             .selected_structure_inventory
-            .and_then(|pos| {
-                Some((
-                    pos,
-                    Self::flatten_inventory(
-                        self.structure_iter()
-                            .find(|s| *s.position() == pos)?
-                            .inventory(inv_type)?,
-                    ),
-                ))
-            })
-            .ok_or_else(|| js_str!("Structure not selected"))?;
+            .and_then(|pos| Some((pos, self.structure_iter().find(|s| *s.position() == pos)?)))
+            .and_then(|(pos, s)| Some((pos, Self::inventory_to_vec(s, inv_type)?)))
+            .ok_or_else(|| js_str!("Structure does not have inventory type"))?;
         let item = flat_inv
             .get(idx)
             .ok_or_else(|| JsValue::from("Item name not valid"))?;

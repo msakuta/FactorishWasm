@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 use web_sys::{CanvasRenderingContext2d, WebGlRenderingContext as GL, WebGlTexture};
 
-#[derive(Copy, Clone, Eq, PartialEq, Debug, Hash, Serialize, Deserialize)]
+#[derive(Copy, Clone, Eq, PartialEq, Debug, Hash, Serialize, Deserialize, PartialOrd, Ord)]
 pub(crate) enum ItemType {
     IronOre,
     CoalOre,

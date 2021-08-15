@@ -276,7 +276,8 @@ div.closeButton{
 }
 
 .burnerEnergyBack {
-    position: absolute;
+    /* position: absolute; */
+    display: inline-block;
     top: 10px;
     left: 40px;
     width: 80px;
