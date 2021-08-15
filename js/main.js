@@ -484,6 +484,7 @@ let unlimited = true;
     function updateInventory(inventory){
         try{
             updateInventoryInt(playerInventoryElem, sim, false, inventory);
+            updateVuePlayerInventory(inventory);
         }catch(e){
             console.log(e);
         }
@@ -626,6 +627,30 @@ let unlimited = true;
         }
     }
 
+    const inventoryClickHandler = (getItems, type) => (i) => {
+        console.log(`onClick${type}`);
+        const itemType = sim.get_selected_item_type();
+        if(itemType !== null && "PlayerInventory" in itemType){
+            if(sim.move_selected_inventory_item(false, type)){
+                deselectInventory();
+                updateInventory(sim.get_player_inventory());
+                updateToolBar();
+                updateStructureInventory();
+            }
+        }
+        else if(itemType === null){
+            const items = getItems();
+            if(i < items.length){
+                sim.select_structure_inventory(items[i].name, type);
+                updateMouseIcon();
+                // updateInventorySelection(elem);
+            }
+        }
+        else if(sim.get_selected_inventory()){
+            deselectInventory();
+        }
+    };
+
     const vueApp = new Vue({
         el: '#vueApp',
         data: {
@@ -641,100 +666,38 @@ let unlimited = true;
             hasStorage: false,
             storageItems: [],
             progress: 0.,
+            playerItems: [],
 
-            onClickFuel: (event) => {
-                console.log("onClickFuel");
+            onClickFuel: inventoryClickHandler(() => vueApp.burnerItems, "Burner"),
+            onClickInput: inventoryClickHandler(() => vueApp.inputItems, "Input"),
+            onClickOutput: inventoryClickHandler(() => vueApp.outputItems, "Output"),
+            onClickStorage: inventoryClickHandler(() => vueApp.storageItems, "Storage"),
+
+            onClickPlayer: i => {
+                console.log("onClickPlayer");
                 const itemType = sim.get_selected_item_type();
                 if(itemType === null){
-                    const items = vueApp.burnerItems;
-                    if(0 < items.length){
-                        sim.select_structure_inventory(items[0].name, "Burner");
+                    const items = vueApp.playerItems;
+                    if(i < items.length){
+                        sim.select_player_inventory(items[i].name);
                         updateMouseIcon();
                         // updateInventorySelection(elem);
                     }
                 }
                 else if("PlayerInventory" in itemType){
-                    if(sim.move_selected_inventory_item(false, "Burner")){
-                        deselectInventory();
-                        updateInventory(sim.get_player_inventory());
-                        updateToolBar();
-                        updateStructureInventory();
-                    }
-                }
-                else if(sim.get_selected_inventory()){
                     deselectInventory();
                 }
-            },
-
-            onClickInput: (i) => {
-                console.log("onClickInput");
-                const itemType = sim.get_selected_item_type();
-                if(itemType !== null && "PlayerInventory" in itemType){
-                    if(sim.move_selected_inventory_item(false, "Input")){
+                else{
+                    const invtype = sim.get_selected_inventory_type();
+                    if(invtype){
+                        if(sim.move_selected_inventory_item(true, invtype)){
+                            deselectInventory();
+                            updateInventory(sim.get_player_inventory());
+                            updateToolBar();
+                            updateStructureInventory();
+                        }
                         deselectInventory();
-                        updateInventory(sim.get_player_inventory());
-                        updateToolBar();
-                        updateStructureInventory();
                     }
-                }
-                else if(itemType === null){
-                    const items = vueApp.inputItems;
-                    if(i < items.length){
-                        sim.select_structure_inventory(items[i].name, "Input");
-                        updateMouseIcon();
-                        // updateInventorySelection(elem);
-                    }
-                }
-                else if(sim.get_selected_inventory()){
-                    deselectInventory();
-                }
-            },
-
-            onClickOutput: (i) => {
-                console.log("onClickOutput");
-                const itemType = sim.get_selected_item_type();
-                if(itemType !== null && "PlayerInventory" in itemType){
-                    if(sim.move_selected_inventory_item(false, "Output")){
-                        deselectInventory();
-                        updateInventory(sim.get_player_inventory());
-                        updateToolBar();
-                        updateStructureInventory();
-                    }
-                }
-                else if(itemType === null){
-                    const items = vueApp.outputItems;
-                    if(i < items.length){
-                        sim.select_structure_inventory(items[i].name, "Output");
-                        updateMouseIcon();
-                        // updateInventorySelection(elem);
-                    }
-                }
-                else if(sim.get_selected_inventory()){
-                    deselectInventory();
-                }
-            },
-
-            onClickStorage: (i) => {
-                console.log("onClickStorage");
-                const itemType = sim.get_selected_item_type();
-                if(itemType !== null && "PlayerInventory" in itemType){
-                    if(sim.move_selected_inventory_item(false, "Storage")){
-                        deselectInventory();
-                        updateInventory(sim.get_player_inventory());
-                        updateToolBar();
-                        updateStructureInventory();
-                    }
-                }
-                else if(itemType === null){
-                    const items = vueApp.storageItems;
-                    if(i < items.length){
-                        sim.select_structure_inventory(items[i].name, "Storage");
-                        updateMouseIcon();
-                        // updateInventorySelection(elem);
-                    }
-                }
-                else if(sim.get_selected_inventory()){
-                    deselectInventory();
                 }
             },
         }
@@ -764,6 +727,17 @@ let unlimited = true;
 
     function updateVueStorageInventory(inventory){
         vueApp.storageItems = inventory.length !== 0 ? inventory[0].map(item => {
+            const image = getImageFile(item[0]);
+            return {
+                name: item[0],
+                count: item[1],
+                ...image
+            };
+        }) : [];
+    }
+
+    function updateVuePlayerInventory(inventory){
+        vueApp.playerItems = inventory.length !== 0 ? inventory[0].map(item => {
             const image = getImageFile(item[0]);
             return {
                 name: item[0],
