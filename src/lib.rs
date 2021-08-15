@@ -1763,37 +1763,30 @@ impl FactorishState {
     ) -> Result<js_sys::Array, JsValue> {
         let inventory_type = InventoryType::try_from(inventory_type)?;
         if let Some(structure) = self.find_structure_tile(&[c, r]) {
-            match inventory_type {
-                InventoryType::Burner => {
-                    if let Some(inventory) = structure.burner_inventory() {
-                        return self.get_inventory(inventory, &None);
-                    } else {
-                        return Ok(js_sys::Array::new());
-                    }
-                }
-                _ => {
-                    if let Some(inventory) = structure.inventory(inventory_type) {
-                        let mut inventory = std::borrow::Cow::Borrowed(inventory);
-                        if inventory_type == InventoryType::Input {
-                            if let Some(recipe) = structure.get_selected_recipe() {
-                                let inventory = inventory.to_mut();
-                                for key in recipe.input.keys() {
-                                    if !inventory.contains_key(key) {
-                                        inventory.insert(*key, 0);
-                                    }
+            if let Some(inventory) = structure.inventory(inventory_type) {
+                if inventory_type == InventoryType::Burner {
+                    let mut inventory = std::borrow::Cow::Borrowed(inventory);
+                    if inventory_type == InventoryType::Input {
+                        if let Some(recipe) = structure.get_selected_recipe() {
+                            let inventory = inventory.to_mut();
+                            for key in recipe.input.keys() {
+                                if !inventory.contains_key(key) {
+                                    inventory.insert(*key, 0);
                                 }
                             }
                         }
-                        return self.get_inventory(
-                            &inventory,
-                            &self
-                                .selected_item
-                                .and_then(|item| item.map_struct(&Position { x: c, y: r })),
-                        );
-                    } else {
-                        return Ok(js_sys::Array::new());
                     }
+                    return self.get_inventory(
+                        &inventory,
+                        &self
+                            .selected_item
+                            .and_then(|item| item.map_struct(&Position { x: c, y: r })),
+                    );
+                } else {
+                    return self.get_inventory(inventory, &None);
                 }
+            } else {
+                return Ok(js_sys::Array::new());
             }
         }
 
@@ -1935,7 +1928,7 @@ impl FactorishState {
                             .add_burner_inventory(
                                 &item,
                                 -structure
-                                    .burner_inventory()
+                                    .inventory(InventoryType::Burner)
                                     .map(|i| i.count_item(&item) as isize)
                                     .unwrap_or(0),
                             )
@@ -2280,7 +2273,7 @@ impl FactorishState {
                 if structure.inventory(InventoryType::Input).is_some()
                     || structure.inventory(InventoryType::Output).is_some()
                     || structure.inventory(InventoryType::Storage).is_some()
-                    || structure.burner_inventory().is_some()
+                    || structure.inventory(InventoryType::Burner).is_some()
                 {
                     // Select clicked structure
                     console_log!("opening inventory at {:?}", cursor);
@@ -2641,10 +2634,7 @@ impl FactorishState {
             Some(SelectedItem::StructInventory(pos, inventory_type, item)) => self
                 .structure_iter()
                 .find(|s| *s.position() == pos)
-                .and_then(|s| match inventory_type {
-                    InventoryType::Burner => s.burner_inventory(),
-                    _ => s.inventory(inventory_type),
-                })
+                .and_then(|s| s.inventory(inventory_type))
                 .and_then(|inventory| inventory.get(&item))
                 .and(Some(item)),
             None => None,

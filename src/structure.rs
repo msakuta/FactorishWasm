@@ -308,9 +308,6 @@ pub(crate) trait Structure {
     fn output(&mut self, _state: &mut FactorishState, _item_type: &ItemType) -> Result<(), ()> {
         Err(())
     }
-    fn burner_inventory(&self) -> Option<&Inventory> {
-        None
-    }
     /// Attempt to add or remove items from a burner inventory and returns actual item count moved.
     /// Positive amount means adding items to the burner, otherwise remove.
     /// If it has limited capacity, positive amount may return less value than given.
