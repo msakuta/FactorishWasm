@@ -27,6 +27,3 @@ export default {
     <div id="burnerEnergy" class="burnerEnergy" :style="{width: `${burnerEnergy * 100}%`}"></div>
   </div>
 </template>
-
-<style scoped>
-</style>

@@ -551,7 +551,7 @@ let unlimited = true;
         else if(itemType === null){
             const items = getItems();
             if(i < items.length){
-                sim.select_structure_inventory(items[i].name, type);
+                sim.select_structure_inventory(i, type);
                 updateMouseIcon();
                 // updateInventorySelection(elem);
             }
@@ -567,7 +567,7 @@ let unlimited = true;
         if (itemType === null) {
           const items = vueApp.playerItems.value;
           if (i < items.length) {
-            sim.select_player_inventory(items[i].name);
+            sim.select_player_inventory(i);
             updateMouseIcon();
             // updateInventorySelection(elem);
           }

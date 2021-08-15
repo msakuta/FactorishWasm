@@ -3,13 +3,15 @@ use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, convert::TryFrom};
 use wasm_bindgen::prelude::*;
 
+pub(crate) const STACK_SIZE: usize = 50;
+
 pub(crate) type Inventory = HashMap<ItemType, usize>;
 
 pub(crate) trait InventoryTrait {
     fn remove_item(&mut self, item: &ItemType) -> bool {
-        self.remove_items(item, 1)
+        self.remove_items(item, 1) != 0
     }
-    fn remove_items(&mut self, item: &ItemType, count: usize) -> bool;
+    fn remove_items(&mut self, item: &ItemType, count: usize) -> usize;
     fn add_item(&mut self, item: &ItemType) {
         self.add_items(item, 1);
     }
@@ -20,16 +22,17 @@ pub(crate) trait InventoryTrait {
 }
 
 impl InventoryTrait for Inventory {
-    fn remove_items(&mut self, item: &ItemType, count: usize) -> bool {
-        if let Some(entry) = self.get_mut(item) {
-            if *entry <= count {
-                self.remove(item);
+    fn remove_items(&mut self, item: &ItemType, count: usize) -> usize {
+        use std::collections::hash_map::Entry;
+        if let Entry::Occupied(mut entry) = self.entry(*item) {
+            if *entry.get() <= count {
+                entry.remove()
             } else {
-                *entry -= count;
+                *entry.get_mut() -= count;
+                count
             }
-            true
         } else {
-            false
+            0
         }
     }
 

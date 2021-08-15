@@ -66,7 +66,7 @@ use elect_pole::ElectPole;
 use electric_furnace::ElectricFurnace;
 use furnace::Furnace;
 use inserter::Inserter;
-use inventory::{Inventory, InventoryTrait, InventoryType};
+use inventory::{Inventory, InventoryTrait, InventoryType, STACK_SIZE};
 use items::{item_to_str, str_to_item, ItemType};
 use offshore_pump::OffshorePump;
 use ore_mine::OreMine;
@@ -390,13 +390,13 @@ enum SelectedItem {
     /// This is index into `tool_belt`. It is kind of duplicate of `player.selected_item`,
     /// but we make it separate field because multiple tool belt slots refer to the same item type.
     ToolBelt(usize),
-    PlayerInventory(ItemType),
-    StructInventory(Position, InventoryType, ItemType),
+    PlayerInventory(ItemType, usize),
+    StructInventory(Position, InventoryType, ItemType, usize),
 }
 
 impl SelectedItem {
     fn map_struct(&self, position: &Position) -> Option<ItemType> {
-        if let SelectedItem::StructInventory(self_pos, _, item) = self {
+        if let SelectedItem::StructInventory(self_pos, _, item, _) = self {
             if self_pos == position {
                 Some(*item)
             } else {
@@ -1486,7 +1486,7 @@ impl FactorishState {
         if let Some(SelectedItem::ToolBelt(_selected_tool)) = self.selected_item {
             self.tool_rotation = self.tool_rotation.next();
             Ok(true)
-        } else if let Some(SelectedItem::PlayerInventory(_item)) = self.selected_item {
+        } else if let Some(SelectedItem::PlayerInventory(_item, _count)) = self.selected_item {
             self.tool_rotation = self.tool_rotation.next();
             Ok(true)
         } else {
@@ -1672,8 +1672,23 @@ impl FactorishState {
         Ok(harvested_structure || harvested_items)
     }
 
+    fn flatten_inventory(inventory: &Inventory) -> Vec<(ItemType, usize)> {
+        let mut ret = vec![];
+        for pair in inventory.iter() {
+            let mut amount = *pair.1;
+            while STACK_SIZE < amount {
+                ret.push((*pair.0, amount.min(STACK_SIZE)));
+                amount -= STACK_SIZE;
+            }
+            ret.push((*pair.0, amount));
+        }
+        ret
+    }
+
     /// @returns 2-array of
-    ///          * inventory (object) and
+    ///          * inventory (array), each of which element consists of
+    ///              * name (string)
+    ///              * count (int)
     ///          * selected item (string)
     fn get_inventory(
         &self,
@@ -1681,17 +1696,17 @@ impl FactorishState {
         selected_item: &Option<ItemType>,
     ) -> Result<js_sys::Array, JsValue> {
         Ok(js_sys::Array::of2(
-            &JsValue::from(
-                inventory
-                    .iter()
-                    .map(|pair| {
+            &JsValue::from({
+                Self::flatten_inventory(inventory)
+                    .into_iter()
+                    .map(|(type_, count)| {
                         js_sys::Array::of2(
-                            &JsValue::from_str(&item_to_str(&pair.0)),
-                            &JsValue::from_f64(*pair.1 as f64),
+                            &JsValue::from_str(&item_to_str(&type_)),
+                            &JsValue::from_f64(count as f64),
                         )
                     })
-                    .collect::<js_sys::Array>(),
-            ),
+                    .collect::<js_sys::Array>()
+            }),
             &JsValue::from_str(
                 &selected_item
                     .as_ref()
@@ -1706,7 +1721,7 @@ impl FactorishState {
         self.get_inventory(
             &self.player.inventory,
             &self.selected_item.and_then(|item| {
-                if let SelectedItem::PlayerInventory(i) = item {
+                if let SelectedItem::PlayerInventory(i, _) = item {
                     Some(i)
                 } else {
                     None
@@ -1715,10 +1730,14 @@ impl FactorishState {
         )
     }
 
-    pub fn select_player_inventory(&mut self, name: &str) -> Result<(), JsValue> {
-        self.selected_item = Some(SelectedItem::PlayerInventory(
-            str_to_item(name).ok_or_else(|| JsValue::from_str("Item name not identified"))?,
-        ));
+    pub fn select_player_inventory(&mut self, idx: usize) -> Result<(), JsValue> {
+        let flat_inv = Self::flatten_inventory(&self.player.inventory);
+        self.selected_item = Some(
+            flat_inv
+                .get(idx)
+                .map(|i| SelectedItem::PlayerInventory(i.0, i.1))
+                .ok_or_else(|| JsValue::from_str("Item name not identified"))?,
+        );
         Ok(())
     }
 
@@ -1816,15 +1835,27 @@ impl FactorishState {
 
     pub fn select_structure_inventory(
         &mut self,
-        name: &str,
+        idx: usize,
         inventory_type: JsValue,
     ) -> Result<(), JsValue> {
-        self.selected_item = Some(SelectedItem::StructInventory(
-            self.selected_structure_inventory
-                .ok_or_else(|| js_str!("Structure not selected"))?,
-            InventoryType::try_from(inventory_type)?,
-            str_to_item(name).ok_or_else(|| JsValue::from("Item name not valid"))?,
-        ));
+        let inv_type = InventoryType::try_from(inventory_type)?;
+        let (pos, flat_inv) = self
+            .selected_structure_inventory
+            .and_then(|pos| {
+                Some((
+                    pos,
+                    Self::flatten_inventory(
+                        self.structure_iter()
+                            .find(|s| *s.position() == pos)?
+                            .inventory(inv_type)?,
+                    ),
+                ))
+            })
+            .ok_or_else(|| js_str!("Structure not selected"))?;
+        let item = flat_inv
+            .get(idx)
+            .ok_or_else(|| JsValue::from("Item name not valid"))?;
+        self.selected_item = Some(SelectedItem::StructInventory(pos, inv_type, item.0, item.1));
         Ok(())
     }
 
@@ -1868,9 +1899,15 @@ impl FactorishState {
         }
     }
 
-    fn move_inventory_item(src: &mut Inventory, dst: &mut Inventory, item_type: &ItemType) -> bool {
-        if let Some(src_item) = src.remove(item_type) {
-            dst.add_items(item_type, src_item);
+    fn move_inventory_item(
+        src: &mut Inventory,
+        dst: &mut Inventory,
+        item_type: &ItemType,
+        count: usize,
+    ) -> bool {
+        let moved_count = src.remove_items(item_type, count);
+        if 0 < moved_count {
+            dst.add_items(item_type, moved_count);
             true
         } else {
             false
@@ -1918,7 +1955,7 @@ impl FactorishState {
             .find(|d| *d.position() == pos)
             .ok_or_else(|| js_str!("structure not found at position"))?;
         if to_player {
-            if let Some(SelectedItem::StructInventory(_, sel_inventory_type, item)) =
+            if let Some(SelectedItem::StructInventory(_, sel_inventory_type, item, count)) =
                 self.selected_item
             {
                 if sel_inventory_type == InventoryType::Burner {
@@ -1930,7 +1967,8 @@ impl FactorishState {
                                 -structure
                                     .inventory(InventoryType::Burner)
                                     .map(|i| i.count_item(&item) as isize)
-                                    .unwrap_or(0),
+                                    .unwrap_or(0)
+                                    .min(count as isize),
                             )
                             .abs() as usize,
                     );
@@ -1945,6 +1983,7 @@ impl FactorishState {
                         })?,
                         &mut self.player.inventory,
                         &item_name,
+                        count,
                     ) {
                         self.on_player_update
                             .call1(&window(), &JsValue::from(self.get_player_inventory()?))?;
@@ -1955,13 +1994,13 @@ impl FactorishState {
         } else {
             match inventory_type {
                 InventoryType::Burner => {
-                    if let Some(SelectedItem::PlayerInventory(i)) = self.selected_item {
+                    if let Some(SelectedItem::PlayerInventory(i, count)) = self.selected_item {
                         self.player.inventory.remove_items(
                             &i,
                             structure
                                 .add_burner_inventory(
                                     &i,
-                                    self.player.inventory.count_item(&i) as isize,
+                                    self.player.inventory.count_item(&i).min(count) as isize,
                                 )
                                 .abs() as usize,
                         );
@@ -1970,9 +2009,9 @@ impl FactorishState {
                 }
                 _ => {
                     // console_log!("moving {:?}", item_name);
-                    if let Some(item_name) = self.selected_item.and_then(|item| {
-                        if let SelectedItem::PlayerInventory(i) = item {
-                            Some(i)
+                    if let Some((item_name, count)) = self.selected_item.and_then(|item| {
+                        if let SelectedItem::PlayerInventory(i, count) = item {
+                            Some((i, count))
                         } else {
                             None
                         }
@@ -1983,6 +2022,7 @@ impl FactorishState {
                                 js_str!("No inventory at {:?} with {:?}", pos, inventory_type)
                             })?,
                             &item_name,
+                            count,
                         ) {
                             self.on_player_update
                                 .call1(&window(), &JsValue::from(self.get_player_inventory()?))?;
@@ -2414,8 +2454,12 @@ impl FactorishState {
                         .find_structure_tile(&cursor)
                         .and_then(|s| str_to_item(s.name()))
                     {
-                        self.selected_item = if self.player.inventory.count_item(&structure) > 0 {
-                            Some(SelectedItem::PlayerInventory(structure))
+                        let count = self.player.inventory.count_item(&structure);
+                        self.selected_item = if count > 0 {
+                            Some(SelectedItem::PlayerInventory(
+                                structure,
+                                count.min(STACK_SIZE),
+                            ))
                         } else {
                             None
                         };
@@ -2558,7 +2602,7 @@ impl FactorishState {
 
     /// Returns count of selected item or null
     pub fn get_selected_item(&self) -> JsValue {
-        if let Some(SelectedItem::PlayerInventory(selected_item)) = self.selected_item {
+        if let Some(SelectedItem::PlayerInventory(selected_item, _)) = self.selected_item {
             JsValue::from_f64(*self.player.inventory.get(&selected_item).unwrap_or(&0) as f64)
         } else {
             JsValue::null()
@@ -2630,8 +2674,8 @@ impl FactorishState {
     fn get_selected_tool_or_item_opt(&self) -> Option<ItemType> {
         match self.selected_item {
             Some(SelectedItem::ToolBelt(tool)) => self.tool_belt[tool],
-            Some(SelectedItem::PlayerInventory(item)) => Some(item),
-            Some(SelectedItem::StructInventory(pos, inventory_type, item)) => self
+            Some(SelectedItem::PlayerInventory(item, _)) => Some(item),
+            Some(SelectedItem::StructInventory(pos, inventory_type, item, _)) => self
                 .structure_iter()
                 .find(|s| *s.position() == pos)
                 .and_then(|s| s.inventory(inventory_type))
@@ -2649,7 +2693,7 @@ impl FactorishState {
 
     /// Returns either "Input", "Output" or "Burner" for the selected inventory
     pub fn get_selected_inventory_type(&self) -> JsValue {
-        if let Some(SelectedItem::StructInventory(_, type_, _)) = self.selected_item {
+        if let Some(SelectedItem::StructInventory(_, type_, _, _)) = self.selected_item {
             JsValue::from_serde(&type_).unwrap_or(JsValue::NULL)
         } else {
             JsValue::NULL
@@ -2661,7 +2705,7 @@ impl FactorishState {
     /// @param tool the index of the tool item, [0,9]
     /// @returns whether the tool bar item should be re-rendered
     pub fn select_tool(&mut self, tool: i32) -> Result<JsValue, JsValue> {
-        if let Some(SelectedItem::PlayerInventory(item)) = self.selected_item {
+        if let Some(SelectedItem::PlayerInventory(item, _)) = self.selected_item {
             // We allow only items in tool_defs to present on the tool belt
             // This behavior is different from Factorio, maybe we can allow it
             if tool_defs.iter().any(|i| i.item_type == item) {
