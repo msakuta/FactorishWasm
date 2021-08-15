@@ -132,7 +132,7 @@
 								</span>
 								<span v-if="hasInput || hasOutput" style="position: relative; width: 100px;">
 									<div class="progressBarBack">
-										<div id="burnerEnergy" class="burnerEnergy" :style="{width: `${burnerEnergy * 100}%`}"></div>
+										<div class="burnerEnergy" :style="{width: `${progress * 100}%`}"></div>
 									</div>
 								</span>
 								<span v-if="hasOutput" style="position: relative">

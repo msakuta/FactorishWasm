@@ -661,6 +661,7 @@ let unlimited = true;
             outputItems: [],
             hasStorage: false,
             storageItems: [],
+            progress: 0.,
 
             onClickFuel: (event) => {
                 console.log("onClickFuel");
@@ -907,7 +908,7 @@ let unlimited = true;
     }
 
     function updateStructureProgress(pos){
-        const progress = sim.get_structure_progress(pos);
+        const progress = sim.get_structure_progress(...pos);
         if(progress !== null){
             vueApp.progress = progress;
         }
@@ -1371,6 +1372,7 @@ let unlimited = true;
         const selPos = sim.get_selected_inventory();
         if(selPos){
             showBurnerStatus(selPos);
+            updateStructureProgress(selPos);
         }
 
         const minimapData = sim.render_minimap(miniMapSize, miniMapSize);
