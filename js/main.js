@@ -331,9 +331,9 @@ let unlimited = true;
         setToolTip(elem, text);
     };
 
-    function deselectPlayerInventory(){
+    function deselectInventory(){
         selectedInventory = null;
-        sim.deselect_player_inventory();
+        sim.deselect_inventory();
         mouseIcon.style.display = "none";
     }
 
@@ -604,7 +604,7 @@ let unlimited = true;
                     // }
                 }
                 if(selectedInventory === owner && selectedInventoryItem === itemName){
-                    deselectPlayerInventory();
+                    deselectInventory();
                     selectedInventoryItem = null;
                     updateInventorySelection(elem);
                     return true;
@@ -655,11 +655,14 @@ let unlimited = true;
                 }
                 else if("PlayerInventory" in itemType){
                     if(sim.move_selected_inventory_item(false, "Burner")){
-                        deselectPlayerInventory();
+                        deselectInventory();
                         updateInventory(sim.get_player_inventory());
                         updateToolBar();
                         updateStructureInventory();
                     }
+                }
+                else if(sim.get_selected_inventory()){
+                    deselectInventory();
                 }
             },
 
@@ -668,7 +671,7 @@ let unlimited = true;
                 const itemType = sim.get_selected_item_type();
                 if(itemType !== null && "PlayerInventory" in itemType){
                     if(sim.move_selected_inventory_item(false, "Input")){
-                        deselectPlayerInventory();
+                        deselectInventory();
                         updateInventory(sim.get_player_inventory());
                         updateToolBar();
                         updateStructureInventory();
@@ -682,6 +685,9 @@ let unlimited = true;
                         // updateInventorySelection(elem);
                     }
                 }
+                else if(sim.get_selected_inventory()){
+                    deselectInventory();
+                }
             },
 
             onClickOutput: (i) => {
@@ -689,7 +695,7 @@ let unlimited = true;
                 const itemType = sim.get_selected_item_type();
                 if(itemType !== null && "PlayerInventory" in itemType){
                     if(sim.move_selected_inventory_item(false, "Output")){
-                        deselectPlayerInventory();
+                        deselectInventory();
                         updateInventory(sim.get_player_inventory());
                         updateToolBar();
                         updateStructureInventory();
@@ -703,6 +709,9 @@ let unlimited = true;
                         // updateInventorySelection(elem);
                     }
                 }
+                else if(sim.get_selected_inventory()){
+                    deselectInventory();
+                }
             },
 
             onClickStorage: (i) => {
@@ -710,7 +719,7 @@ let unlimited = true;
                 const itemType = sim.get_selected_item_type();
                 if(itemType !== null && "PlayerInventory" in itemType){
                     if(sim.move_selected_inventory_item(false, "Storage")){
-                        deselectPlayerInventory();
+                        deselectInventory();
                         updateInventory(sim.get_player_inventory());
                         updateToolBar();
                         updateStructureInventory();
@@ -723,6 +732,9 @@ let unlimited = true;
                         updateMouseIcon();
                         // updateInventorySelection(elem);
                     }
+                }
+                else if(sim.get_selected_inventory()){
+                    deselectInventory();
                 }
             },
         }
@@ -1078,7 +1090,7 @@ let unlimited = true;
         // Update only if the selected inventory is the other one from destination.
         if(sim.get_selected_inventory() !== null){
             if(sim.move_selected_inventory_item(isPlayer, isInput ? "Input" : "Output")){
-                deselectPlayerInventory();
+                deselectInventory();
                 updateInventory(sim.get_player_inventory());
                 updateToolBar();
                 updateStructureInventory();

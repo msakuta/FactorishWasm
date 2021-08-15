@@ -1723,7 +1723,7 @@ impl FactorishState {
     }
 
     /// Deselect is a separate function from select because wasm-bindgen cannot overload Option
-    pub fn deselect_player_inventory(&mut self) -> Result<(), JsValue> {
+    pub fn deselect_inventory(&mut self) -> Result<(), JsValue> {
         self.selected_item = None;
         Ok(())
     }
