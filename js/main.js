@@ -716,6 +716,12 @@ let unlimited = true;
             this.removeEventListener('mousemove', mousemove);
             this.style.display = 'none';
         });
+        mousecaptorElem.addEventListener('mouseleave', function(){
+            // Stop dragging a window
+            elem = null;
+            this.removeEventListener('mousemove', mousemove);
+            this.style.display = 'none';
+        })
     }
 
     /// An array of window elements which holds order of z indices.
