@@ -936,6 +936,10 @@ let unlimited = true;
         if(result){
             if(result[0] === "ShowInventory"){
                 showInventory();
+                vueApp.placeCenter();
+                if(vueApp.inventoryVisible){
+                    nextTick(() => bringToTop(vueApp.$refs.inventory));
+                }
             }
             updateToolBarImage();
             updateToolCursor();
@@ -1011,6 +1015,7 @@ let unlimited = true;
         const reader = new FileReader();
         reader.onload = (event) => {
             sim.deserialize_game(event.target.result);
+            updateInventory(sim.get_player_inventory());
         };
         reader.readAsText(event.target.files[0]);
     });
@@ -1077,6 +1082,7 @@ let unlimited = true;
         } catch(e) {
             alert(`FactorishState.render_init failed: ${e}`);
         }
+        updateInventory(sim.get_player_inventory());
     });
 
     const altModeBox = document.getElementById("altModeBox");

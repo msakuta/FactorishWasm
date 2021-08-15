@@ -84,7 +84,7 @@ body {
 
 .inventory, #inventory2{
     position: absolute;
-    height: 220px;
+    height: 300px;
     left: 50%;
     top: 50%;
     margin-left: -175px;
@@ -95,11 +95,11 @@ body {
 }
 
 .inventoryNarrow {
-    width: 370px;
+    width: 390px;
 }
 
 .inventoryWide {
-    width: 700px;
+    width: 730px;
 }
 
 #inventoryTitle, #inventory2Title, .inventoryTitle{
@@ -155,7 +155,8 @@ body {
     border-style: solid;
     border-width: 1px;
     border: 1px solid #00f;
-    height: 160px;
+    height: 240px;
+    width: 340px;
     margin-top: 3px;
 }
 
