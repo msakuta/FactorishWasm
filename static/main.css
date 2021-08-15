@@ -283,6 +283,14 @@ div.closeButton{
     background-color: #0f0f0f;
 }
 
+.progressBar {
+    position: relative;
+    left: 0px;
+    height: 10px;
+    background-color: #0faf0f;
+}
+
+
 #points{
     font-size: 25px;
 }
