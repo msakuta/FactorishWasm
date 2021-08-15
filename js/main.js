@@ -2,13 +2,16 @@ import rotateImage from "../img/rotate.png";
 import closeImage from "../img/close.png";
 import rightarrow from "../img/rightarrow.png";
 import fuelBack from "../img/fuel-back.png";
-import itemBack from "../img/item-back.png";
 import inventory from "../img/inventory.png";
 
 import { loadImages, getImageFile } from "./images.js";
 import { FactorishState } from "../pkg/index.js";
 
 import { createApp, nextTick } from "vue";
+
+import CloseButton from "./components/CloseButton.vue";
+import BurnerInventory from "./components/BurnerInventory.vue";
+import InventoryWindow from "./components/InventoryWindow.vue";
 
 /// We may no longer need support for IE, since WebAssembly is not supported by IE anyway.
 function isIE(){
@@ -558,95 +561,50 @@ let unlimited = true;
         }
     };
 
-    const vueApplication = createApp({
-        data() {
-            return {
-                inventoryVisible: false,
-                left: 0,
-                top: 0,
-                closeImage,
-                hasPosition: false,
-                hasBurner: false,
-                burnerItems: [],
-                burnerEnergy: 0,
-                fuelBack,
-                hasInput: false,
-                itemBack,
-                inputItems: [],
-                hasOutput: false,
-                outputItems: [],
-                hasStorage: false,
-                storageItems: [],
-                progress: 0.,
-                playerItems: [],
-
-                dragWindow: evt => dragWindowMouseDown(evt, vueApp.$refs.inventory, vueApp.inventoryDragStart,
-                    (x, y) => {
-                        vueApp.left = x;
-                        vueApp.top = y;
-                    }),
-                inventoryDragStart: null,
-                close: () => vueApp.inventoryVisible = !vueApp.inventoryVisible,
-
-                showRecipeSelect,
-
-                onClickFuel: inventoryClickHandler(() => vueApp.burnerItems, "Burner"),
-                onClickInput: inventoryClickHandler(() => vueApp.inputItems, "Input"),
-                onClickOutput: inventoryClickHandler(() => vueApp.outputItems, "Output"),
-                onClickStorage: inventoryClickHandler(() => vueApp.storageItems, "Storage"),
-
-                onClickPlayer: i => {
-                    console.log("onClickPlayer");
-                    const itemType = sim.get_selected_item_type();
-                    if(itemType === null){
-                        const items = vueApp.playerItems;
-                        if(i < items.length){
-                            sim.select_player_inventory(items[i].name);
-                            updateMouseIcon();
-                            // updateInventorySelection(elem);
-                        }
-                    }
-                    else if("PlayerInventory" in itemType){
-                        deselectInventory();
-                    }
-                    else{
-                        const invtype = sim.get_selected_inventory_type();
-                        if(invtype){
-                            if(sim.move_selected_inventory_item(true, invtype)){
-                                deselectInventory();
-                                updateInventory(sim.get_player_inventory());
-                                updateToolBar();
-                                updateStructureInventory();
-                            }
-                            deselectInventory();
-                        }
-                    }
-                },
+    function playerClickHandler(i){
+        console.log("onClickPlayer");
+        const itemType = sim.get_selected_item_type();
+        if (itemType === null) {
+          const items = vueApp.playerItems.value;
+          if (i < items.length) {
+            sim.select_player_inventory(items[i].name);
+            updateMouseIcon();
+            // updateInventorySelection(elem);
+          }
+        } else if ("PlayerInventory" in itemType) {
+          deselectInventory();
+        } else {
+          const invtype = sim.get_selected_inventory_type();
+          if (invtype) {
+            if (sim.move_selected_inventory_item(true, invtype)) {
+              deselectInventory();
+              updateInventory(sim.get_player_inventory());
+              updateToolBar();
+              updateStructureInventory();
             }
-        },
-
-        methods: {
-            // Place a window element at the center, for Vue component.
-            placeCenter() {
-                // Defer one tick to allow DOM element to be created
-                nextTick(() => {
-                    if(!this.$refs.inventory)
-                        return;
-                    var elemRect = this.$refs.inventory.getBoundingClientRect();
-                    var bodyRect = document.body.getBoundingClientRect();
-                    vueApp.left = ((bodyRect.width - elemRect.width) / 2);
-                    vueApp.top = ((bodyRect.height - elemRect.height) / 2);
-                    if(!(this.$refs.inventory in windowOrder))
-                        windowOrder.push(this.$refs.inventory);
-                });
-            }
+            deselectInventory();
+          }
         }
-    });
+      }
+
+    /// An array of window elements which holds order of z indices.
+    var windowOrder = [];
+
+    const vueApplication = createApp(
+        InventoryWindow,
+        {
+            dragWindowMouseDown,
+            inventoryClickHandler,
+            playerClickHandler,
+            showRecipeSelect,
+            windowOrder,
+        }
+    );
 
     const vueApp = vueApplication.mount('#vueApp');
 
     function updateVueInputInventory(inputInventory){
-        vueApp.inputItems = inputInventory.length !== 0 ? inputInventory[0].map(item => {
+        vueApp.inputItems.value = inputInventory.length !== 0 ? inputInventory[0].map(item => {
             const image = getImageFile(item[0]);
             return {
                 name: item[0],
@@ -657,7 +615,7 @@ let unlimited = true;
     }
 
     function updateVueOutputInventory(inventory){
-        vueApp.outputItems = inventory.length !== 0 ? inventory[0].map(item => {
+        vueApp.outputItems.value = inventory.length !== 0 ? inventory[0].map(item => {
             const image = getImageFile(item[0]);
             return {
                 name: item[0],
@@ -668,7 +626,7 @@ let unlimited = true;
     }
 
     function updateVueStorageInventory(inventory){
-        vueApp.storageItems = inventory.length !== 0 ? inventory[0].map(item => {
+        vueApp.storageItems.value = inventory.length !== 0 ? inventory[0].map(item => {
             const image = getImageFile(item[0]);
             return {
                 name: item[0],
@@ -679,7 +637,7 @@ let unlimited = true;
     }
 
     function updateVuePlayerInventory(inventory){
-        vueApp.playerItems = inventory.length !== 0 ? inventory[0].map(item => {
+        vueApp.playerItems.value = inventory.length !== 0 ? inventory[0].map(item => {
             const image = getImageFile(item[0]);
             return {
                 name: item[0],
@@ -724,13 +682,10 @@ let unlimited = true;
         })
     }
 
-    /// An array of window elements which holds order of z indices.
-    var windowOrder = [];
-
-    var inventoryDragStart = null;
-
     /// Bring a window to the top on the other windows.
     function bringToTop(elem){
+        if(!vueApp.$refs.inventory)
+            return;
         var oldIdx = windowOrder.indexOf(elem);
         if(0 <= oldIdx && oldIdx < windowOrder.length - 1){
             windowOrder.splice(oldIdx, 1);

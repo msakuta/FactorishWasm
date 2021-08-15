@@ -2,6 +2,7 @@ const path = require("path");
 const CopyPlugin = require("copy-webpack-plugin");
 const WasmPackPlugin = require("@wasm-tool/wasm-pack-plugin");
 const HtmlWebpackPlugin = require('html-webpack-plugin');
+const { VueLoaderPlugin } = require('vue-loader');
 
 const dist = path.resolve(__dirname, "dist");
 
@@ -29,6 +30,11 @@ module.exports = {
     new HtmlWebpackPlugin({
       template: "./static/index.html"
     }),
+
+    new VueLoaderPlugin({
+      __VUE_OPTIONS_API__: true,
+      __VUE_PROD_DEVTOOLS__: false
+    }),
   ],
   module: {
     rules: [
@@ -50,6 +56,10 @@ module.exports = {
             },
           },
         ],
+      },
+      {
+        test: /\.vue$/,
+        loader: 'vue-loader'
       },
     ]
   },
