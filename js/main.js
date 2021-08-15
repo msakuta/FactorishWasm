@@ -503,6 +503,7 @@ let unlimited = true;
             ...position, "Output"));
         updateVueInputInventory(sim.get_structure_inventory(...position, "Input"));
         updateVueOutputInventory(sim.get_structure_inventory(...position, "Output"));
+        updateVueStorageInventory(sim.get_structure_inventory(...position, "Storage"));
     }
 
     function setItemImageToElem(img, i, iconSize){

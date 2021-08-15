@@ -1947,9 +1947,9 @@ impl FactorishState {
                     self.selected_item.and_then(|item| item.map_struct(&pos))
                 {
                     if FactorishState::move_inventory_item(
-                        structure
-                            .inventory_mut(sel_inventory_type)
-                            .ok_or_else(|| js_str!("No inventory"))?,
+                        structure.inventory_mut(sel_inventory_type).ok_or_else(|| {
+                            js_str!("No inventory at {:?} with {:?}", pos, sel_inventory_type)
+                        })?,
                         &mut self.player.inventory,
                         &item_name,
                     ) {
@@ -1986,9 +1986,9 @@ impl FactorishState {
                     }) {
                         if FactorishState::move_inventory_item(
                             &mut self.player.inventory,
-                            structure
-                                .inventory_mut(inventory_type)
-                                .ok_or_else(|| js_str!("No inventory"))?,
+                            structure.inventory_mut(inventory_type).ok_or_else(|| {
+                                js_str!("No inventory at {:?} with {:?}", pos, inventory_type)
+                            })?,
                             &item_name,
                         ) {
                             self.on_player_update

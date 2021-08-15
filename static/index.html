@@ -152,7 +152,7 @@
 								<div class="inventoryTitle">Storage inventory</div>
 								<div v-for="i in Math.ceil((1 + storageItems.length) / 10) * 10"
 									class="itemBack"
-									@click="onClickOutput(i-1)"
+									@click="onClickStorage(i-1)"
 									:style="{backgroundColor: `#ffffff`, backgroundImage: `url(${itemBack})`}"
 								>
 									<div v-if="i-1 < storageItems.length" class="burnerItem"
