@@ -932,6 +932,8 @@ let unlimited = true;
             const pos = event.pos;
             updateInventoryInt(inventoryContentElem, sim, false, sim.get_structure_inventory(pos[0], pos[1], "Input"), inputInventoryTitleElem);
             updateInventoryInt(outputInventoryContentElem, sim, false, sim.get_structure_inventory(pos[0], pos[1], "Output"), outputInventoryTitleElem);
+            inventoryPos = event.pos;
+
             const inputInventory = sim.get_structure_inventory(pos[0], pos[1], "Input");
             if(inputInventory && inputInventory.length !== 0){
                 vueApp.hasInput = true;
@@ -1030,6 +1032,8 @@ let unlimited = true;
                 const index = i;
                 recipeSelectorContent.appendChild(recipeDraw(recipes[i], (evt) => {
                     sim.select_recipe(recipeTarget[0], recipeTarget[1], index);
+                    if(inventoryPos.length === 2 && inventoryPos[0] == recipeTarget[0] && inventoryPos[1] === recipeTarget[1])
+                        updateVueInputInventory(sim.get_structure_inventory(...recipeTarget, "Input"));
                     recipeSelector.style.display = "none";
                 }));
             }
@@ -1064,6 +1068,7 @@ let unlimited = true;
     recipeSelectButtonElem.onclick = showRecipeSelect;
 
     var recipeSelectorDragStart = null;
+    let inventoryPos = [];
 
     const recipeSelectorTitle = document.getElementById('recipeSelectorTitle');
     const recipeSelector = document.getElementById('recipeSelector');
