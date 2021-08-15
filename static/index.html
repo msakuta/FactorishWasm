@@ -110,7 +110,7 @@
 							<div v-if="hasBurner">
 								<div class="itemBack" @click="onClickFuel(0)" :style="{backgroundColor: `#ffffff`, backgroundImage: `url(${fuelBack})`}">
 									<img v-if="0 < burnerItems.length" class="burnerItem" :src="burnerItems[0].url">
-									<div v-if="0 < burnerItems.length" class="overlay"> {{ burnerItems[0].count }} </div>
+									<div v-if="0 < burnerItems.length" class="overlay noselect"> {{ burnerItems[0].count }} </div>
 								</div>
 								<div class="burnerEnergyBack">
 									<div id="burnerEnergy" class="burnerEnergy" :style="{width: `${burnerEnergy * 100}%`}"></div>
@@ -126,7 +126,7 @@
 										<div v-if="i-1 < inputItems.length"
 											:class="['burnerItem', inputItems[i-1].count === 0 ? 'transparent' : '']"
 											:style="{backgroundImage: `url(${inputItems[i-1].url})`, backgroundSize: 32 * inputItems[i-1].widthFactor + 'px ' + 32 * inputItems[i-1].heightFactor + 'px'}">
-											<div v-if="i-1 < inputItems.length && 0 < inputItems[i-1].count" class="overlay"> {{ inputItems[i-1].count }} </div>
+											<div v-if="i-1 < inputItems.length && 0 < inputItems[i-1].count" class="overlay noselect"> {{ inputItems[i-1].count }} </div>
 										</div>
 									</div>
 								</span>
@@ -143,7 +143,7 @@
 									>
 										<div v-if="i-1 < outputItems.length" class="burnerItem"
 											:style="{backgroundImage: `url(${outputItems[i-1].url})`, backgroundSize: 32 * outputItems[i-1].widthFactor + 'px ' + 32 * outputItems[i-1].heightFactor + 'px'}">
-											<div v-if="i-1 < outputItems.length" class="overlay"> {{ outputItems[i-1].count }} </div>
+											<div v-if="i-1 < outputItems.length" class="overlay noselect"> {{ outputItems[i-1].count }} </div>
 										</div>
 									</div>
 								</span>
@@ -157,7 +157,7 @@
 								>
 									<div v-if="i-1 < storageItems.length" class="burnerItem"
 										:style="{backgroundImage: `url(${storageItems[i-1].url})`, backgroundSize: 32 * storageItems[i-1].widthFactor + 'px ' + 32 * storageItems[i-1].heightFactor + 'px'}">
-										<div v-if="i-1 < storageItems.length" class="overlay"> {{ storageItems[i-1].count }} </div>
+										<div v-if="i-1 < storageItems.length" class="overlay noselect"> {{ storageItems[i-1].count }} </div>
 									</div>
 								</div>
 							</div>
@@ -169,7 +169,7 @@
 							>
 								<div v-if="i-1 < playerItems.length" class="burnerItem"
 									:style="{backgroundImage: `url(${playerItems[i-1].url})`, backgroundSize: 32 * playerItems[i-1].widthFactor + 'px ' + 32 * playerItems[i-1].heightFactor + 'px'}">
-									<div v-if="i-1 < playerItems.length" class="overlay"> {{ playerItems[i-1].count }} </div>
+									<div v-if="i-1 < playerItems.length" class="overlay noselect"> {{ playerItems[i-1].count }} </div>
 								</div>
 							</div>
 						</div>
