@@ -111,48 +111,47 @@ export default {
     <div id="inventoryButtons" class="inventoryButtons">
       <img id="inventory2List" draggable="false" src="../../img/list.png" style="position: absolute">
       <img id="inventory2Icons" draggable="false" src="../../img/icons.png" style="position: absolute; left: 0px; top: 32px">
-      <img id="recipeSelectButton" draggable="false" src="../../img/recipe-select.png" alt="Recipe select"
-          @click="showRecipeSelect"
-          style="position: absolute; left: 0px; top: 80px; border: 1px solid #7f7f7f"
-      >
     </div>
     <div id="inventory2Client">
       <div v-if="hasPosition">
-        <burner-inventory v-if="hasBurner" @click-fuel="onClickFuel" :items="burnerItems" :burnerEnergy="burnerEnergy"></burner-inventory>
         <div style="vertical-align: middle;">
-            <span v-if="hasInput">
-                <div v-for="i in Math.max(1, inputItems.value.length)"
-                    :key="i"
-                    class="itemBack"
-                    @click="onClickInput(i-1)"
-                    :style="{backgroundColor: `#ffffff`, backgroundImage: `url(${itemBack})`}"
-                >
-                    <div v-if="i-1 < inputItems.value.length"
-                        :class="['burnerItem', inputItems.value[i-1].count === 0 ? 'transparent' : '']"
-                        :style="{backgroundImage: `url(${inputItems.value[i-1].url})`, backgroundSize: 32 * inputItems.value[i-1].widthFactor + 'px ' + 32 * inputItems.value[i-1].heightFactor + 'px'}">
-                        <div v-if="i-1 < inputItems.value.length && 0 < inputItems.value[i-1].count" class="overlay noselect"> {{ inputItems.value[i-1].count }} </div>
-                    </div>
-                </div>
-            </span>
-            <span v-if="hasInput || hasOutput" style="position: relative; width: 100px;">
-                <div class="progressBarBack">
-                    <div class="progressBar" :style="{width: `${progress * 100}%`}"></div>
-                </div>
-            </span>
-            <span v-if="hasOutput" style="position: relative">
-                <div v-for="i in Math.max(1 + outputItems.value.length)"
-                    :key="i"
-                    class="itemBack"
-                    @click="onClickOutput(i-1)"
-                    :style="{backgroundColor: `#ffffff`, backgroundImage: `url(${itemBack})`}"
-                >
-                    <div v-if="i-1 < outputItems.value.length" class="burnerItem"
-                        :style="{backgroundImage: `url(${outputItems.value[i-1].url})`, backgroundSize: 32 * outputItems.value[i-1].widthFactor + 'px ' + 32 * outputItems.value[i-1].heightFactor + 'px'}">
-                        <div v-if="i-1 < outputItems.value.length" class="overlay noselect"> {{ outputItems.value[i-1].count }} </div>
-                    </div>
-                </div>
-            </span>
+          <span v-if="hasInput">
+            <div v-for="i in Math.max(1, inputItems.value.length)"
+              :key="i"
+              class="itemBack"
+              @click="onClickInput(i-1)"
+              :style="{backgroundColor: `#ffffff`, backgroundImage: `url(${itemBack})`}"
+            >
+              <div v-if="i-1 < inputItems.value.length"
+                :class="['burnerItem', inputItems.value[i-1].count === 0 ? 'transparent' : '']"
+                :style="{backgroundImage: `url(${inputItems.value[i-1].url})`, backgroundSize: 32 * inputItems.value[i-1].widthFactor + 'px ' + 32 * inputItems.value[i-1].heightFactor + 'px'}">
+                <div v-if="i-1 < inputItems.value.length && 0 < inputItems.value[i-1].count" class="overlay noselect"> {{ inputItems.value[i-1].count }} </div>
+              </div>
+            </div>
+          </span>
+          <span v-if="hasInput || hasOutput" style="position: relative; width: 100px;">
+            <div class="progressBarBack">
+              <div class="progressBar" :style="{width: `${progress * 100}%`}"></div>
+            </div>
+          </span>
+          <span v-if="hasOutput" style="position: relative">
+            <div v-for="i in Math.max(1 + outputItems.value.length)"
+              :key="i"
+              class="itemBack"
+              @click="onClickOutput(i-1)"
+              :style="{backgroundColor: `#ffffff`, backgroundImage: `url(${itemBack})`}"
+            >
+              <div v-if="i-1 < outputItems.value.length" class="burnerItem"
+                :style="{backgroundImage: `url(${outputItems.value[i-1].url})`, backgroundSize: 32 * outputItems.value[i-1].widthFactor + 'px ' + 32 * outputItems.value[i-1].heightFactor + 'px'}">
+                <div v-if="i-1 < outputItems.value.length" class="overlay noselect"> {{ outputItems.value[i-1].count }} </div>
+              </div>
+            </div>
+          </span>
+          <img v-if="hasInput && hasOutput" src="../../img/recipe-select.png" alt="Recipe select"
+              @click="showRecipeSelect"
+          >
         </div>
+        <burner-inventory v-if="hasBurner" @click-fuel="onClickFuel" :items="burnerItems" :burnerEnergy="burnerEnergy"></burner-inventory>
         <div v-if="hasStorage">
             <div class="inventoryTitle">Storage inventory</div>
             <div v-for="i in Math.ceil((1 + storageItems.value.length) / 10) * 10"
