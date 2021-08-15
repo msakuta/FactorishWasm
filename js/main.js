@@ -497,10 +497,6 @@ let unlimited = true;
                 return;
         }
         const position = pos ? pos : sim.get_selected_inventory();
-        updateInventoryInt(inventoryContentElem, sim, false, sim.get_structure_inventory(
-            ...position, "Input"));
-        updateInventoryInt(outputInventoryContentElem, sim, false, sim.get_structure_inventory(
-            ...position, "Output"));
         updateVueInputInventory(sim.get_structure_inventory(...position, "Input"));
         updateVueOutputInventory(sim.get_structure_inventory(...position, "Output"));
         updateVueStorageInventory(sim.get_structure_inventory(...position, "Storage"));
@@ -618,12 +614,6 @@ let unlimited = true;
                 if(elem === playerInventoryElem){
                     sim.select_player_inventory(selectedInventoryItem);
                 }
-                else{
-                    sim.select_structure_inventory(selectedInventoryItem,
-                        elem === inventoryContentElem ? "Input" :
-                        elem === outputInventoryContentElem ? "Output" :
-                        "Burner");
-                }
                 updateMouseIcon();
                 updateInventorySelection(elem);
                 return true;
@@ -631,18 +621,6 @@ let unlimited = true;
             div.onclick = (name => evt => {
                 if(selectThisItem(name))
                     evt.stopPropagation();
-            })(name);
-            div.setAttribute('draggable', 'true');
-            div.ondragstart = (name => ev => {
-                console.log("dragStart");
-                selectThisItem(name);
-                ev.dataTransfer.dropEffect = 'move';
-                // Encode information to determine item to drop into a JSON
-                ev.dataTransfer.setData(textType, JSON.stringify({
-                    type: name,
-                    fromPlayer: elem === playerInventoryElem,
-                    inventoryType: elem === inventoryContentElem ? "Input" : "Output",
-                }));
             })(name);
             elem.appendChild(div);
         }
@@ -784,44 +762,7 @@ let unlimited = true;
     }
 
     const inventory2ClientElem = document.getElementById('inventory2Client');
-    const inputInventoryTitleElem = document.getElementById('inputInventoryTitle');
-    const inventoryContentElem = document.getElementById('inputInventoryContent');
-    inventoryContentElem.onclick = () => onInventoryClick(false, true);
-    const outputInventoryContentElem = document.getElementById('outputInventoryContent');
-    outputInventoryContentElem.onclick = () => onInventoryClick(false, false);
-    const outputInventoryTitleElem = document.getElementById('outputInventoryTitle');
 
-    [inventoryContentElem, outputInventoryContentElem].forEach((elem, idx) => {
-        // elem.ondragover = function(ev){
-        //     var ok = false;
-        //     for(var i = 0; i < ev.dataTransfer.types.length; i++){
-        //         if(ev.dataTransfer.types[i].toUpperCase() === textType.toUpperCase())
-        //             ok = true;
-        //     }
-        //     if(ok){
-        //         ev.preventDefault();
-        //         // Set the dropEffect to move
-        //         ev.dataTransfer.dropEffect = "move";
-        //     }
-        // }
-        // elem.addEventListener("drop", (ev) => {
-        //     ev.preventDefault();
-        //     var data = JSON.parse(ev.dataTransfer.getData(textType));
-        //     if(data.fromPlayer){
-        //         // The amount could have changed during dragging, so we'll query current value
-        //         // from the source inventory.
-        //         if(sim.move_selected_inventory_item(!data.fromPlayer, idx === 0 ? "Input" : idx === 1 ? "Output" : "Burner")){
-        //             deselectPlayerInventory();
-        //             updateInventory(sim.get_player_inventory());
-        //             updateToolBar();
-        //             updateStructureInventory();
-        //         }
-        //     }
-        // }, true);
-        elem.addEventListener("click", (ev) => {
-            console.log("Clicked inventory");
-        })
-    });
     inventoryElem.style.display = 'none';
 
     const inventory2CloseButton = document.getElementById("inventory2CloseButton");
@@ -910,9 +851,7 @@ let unlimited = true;
 
     function updateStructureProgress(pos){
         const progress = sim.get_structure_progress(...pos);
-        if(progress !== null){
-            vueApp.progress = progress;
-        }
+        vueApp.progress = progress || 0;
     }
 
     function showInventory(event){
@@ -932,8 +871,6 @@ let unlimited = true;
             recipeSelectButtonElem.style.display = !event.recipe_enable ? "none" : "block";
             // toolTip.style.display = "none"; // Hide the tool tip for "Click to oepn inventory"
             const pos = event.pos;
-            updateInventoryInt(inventoryContentElem, sim, false, sim.get_structure_inventory(pos[0], pos[1], "Input"), inputInventoryTitleElem);
-            updateInventoryInt(outputInventoryContentElem, sim, false, sim.get_structure_inventory(pos[0], pos[1], "Output"), outputInventoryTitleElem);
             inventoryPos = event.pos;
 
             const inputInventory = sim.get_structure_inventory(pos[0], pos[1], "Input");
