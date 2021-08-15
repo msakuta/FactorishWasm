@@ -366,6 +366,10 @@ impl Structure for Furnace {
         self.recipe.as_ref()
     }
 
+    fn get_progress(&self) -> Option<f64> {
+        self.progress
+    }
+
     fn serialize(&self) -> serde_json::Result<serde_json::Value> {
         serde_json::to_value(self)
     }

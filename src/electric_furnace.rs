@@ -340,6 +340,10 @@ impl Structure for ElectricFurnace {
         self.recipe.as_ref()
     }
 
+    fn get_progress(&self) -> Option<f64> {
+        self.progress
+    }
+
     fn power_sink(&self) -> bool {
         true
     }
