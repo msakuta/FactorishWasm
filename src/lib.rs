@@ -1772,26 +1772,23 @@ impl FactorishState {
     /// Returns inventory items in selected tile.
     /// @param c column number.
     /// @param r row number.
-    /// @param is_input if true, returns input buffer, otherwise output. Some structures have either one but not both.
     /// @param inventory_type a string indicating type of the inventory in the structure
     pub fn get_structure_inventory(
         &self,
-        c: i32,
-        r: i32,
+        x: i32,
+        y: i32,
         inventory_type: JsValue,
     ) -> Result<js_sys::Array, JsValue> {
         let inventory_type = InventoryType::try_from(inventory_type)?;
-        if let Some(structure) = self.find_structure_tile(&[c, r]) {
+        if let Some(structure) = self.find_structure_tile(&[x, y]) {
             if let Some(inventory) = structure.inventory(inventory_type) {
-                if inventory_type == InventoryType::Burner {
+                if inventory_type == InventoryType::Input {
                     let mut inventory = std::borrow::Cow::Borrowed(inventory);
-                    if inventory_type == InventoryType::Input {
-                        if let Some(recipe) = structure.get_selected_recipe() {
-                            let inventory = inventory.to_mut();
-                            for key in recipe.input.keys() {
-                                if !inventory.contains_key(key) {
-                                    inventory.insert(*key, 0);
-                                }
+                    if let Some(recipe) = structure.get_selected_recipe() {
+                        let inventory = inventory.to_mut();
+                        for key in recipe.input.keys() {
+                            if !inventory.contains_key(key) {
+                                inventory.insert(*key, 0);
                             }
                         }
                     }
@@ -1799,7 +1796,7 @@ impl FactorishState {
                         &inventory,
                         &self
                             .selected_item
-                            .and_then(|item| item.map_struct(&Position { x: c, y: r })),
+                            .and_then(|item| item.map_struct(&Position { x, y })),
                     );
                 } else {
                     return self.get_inventory(inventory, &None);
