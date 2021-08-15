@@ -483,7 +483,6 @@ let unlimited = true;
 
     function updateInventory(inventory){
         try{
-            updateInventoryInt(playerInventoryElem, sim, false, inventory);
             updateVuePlayerInventory(inventory);
         }catch(e){
             console.log(e);
@@ -534,99 +533,6 @@ let unlimited = true;
         return img;
     }
 
-    function microTask(f){
-        Promise.resolve().then(f);
-    }
-
-    function updateInventoryInt(elem, owner, icons, inventoryData, titleElem = null){
-        // Local function to update DOM elements based on selection
-        function updateInventorySelection(elem){
-            for(var i = 0; i < elem.children.length; i++){
-                var celem = elem.children[i];
-                celem.style.backgroundColor =
-                    celem.itemName === selectedInventoryItem ? "#00ffff" : "";
-            }
-        }
-
-        // Defer execution of updateMouseIcon in order to avoid 
-        // "recursive use of an object detected which would lead to unsafe aliasing in rust"
-        microTask(updateMouseIcon);
-
-        if(!inventoryData || inventoryData.length === 0){
-            elem.style.display = "none";
-            if(titleElem)
-                titleElem.style.display = "none";
-            return;
-        }
-        elem.style.display = "block";
-        if(titleElem)
-            titleElem.style.display = "block";
-        const [inventory, item] = inventoryData;
-
-        selectedInventoryItem = item;
-
-        // Clear the elements first
-        while(elem.firstChild)
-            elem.removeChild(elem.firstChild);
-
-        for(var i in inventory){
-            var [name, v] = inventory[i];
-            var div;
-            if(icons){
-                div = generateItemImage(name, true, v);
-            }
-            else{
-                div = document.createElement('div');
-                div.appendChild(generateItemImage(name));
-                var text = document.createElement('span');
-                text.innerHTML = v + ' ' + name;
-                div.appendChild(text);
-                div.style.textAlign = 'left';
-            }
-            if(selectedInventory === owner && selectedInventoryItem === name)
-                div.style.backgroundColor = '#00ffff';
-            div.setAttribute('class', 'noselect');
-            div.itemName = name;
-            div.itemAmount = v;
-            /// Either clicking or start dragging will select the item, so that
-            /// it can be moved on drop
-            function selectThisItem(itemName){
-                const currentItem = sim.get_selected_item_type();
-                if(currentItem){
-                    // elem.onclick();
-                    return false;
-                    // if(currntItem[0] === "PlayerInventory" && elem === playerInventoryElem){
-                    //     if(sim.move_selected_inventory_item(!data.fromPlayer, data.inventoryType)){
-                    //         deselectPlayerInventory();
-                    //         updateInventory(sim.get_player_inventory());
-                    //         updateToolBar();
-                    //         updateStructureInventory();
-                    //     }
-                    // }
-                }
-                if(selectedInventory === owner && selectedInventoryItem === itemName){
-                    deselectInventory();
-                    selectedInventoryItem = null;
-                    updateInventorySelection(elem);
-                    return true;
-                }
-                selectedInventory = owner;
-                selectedInventoryItem = itemName;
-                if(elem === playerInventoryElem){
-                    sim.select_player_inventory(selectedInventoryItem);
-                }
-                updateMouseIcon();
-                updateInventorySelection(elem);
-                return true;
-            };
-            div.onclick = (name => evt => {
-                if(selectThisItem(name))
-                    evt.stopPropagation();
-            })(name);
-            elem.appendChild(div);
-        }
-    }
-
     const inventoryClickHandler = (getItems, type) => (i) => {
         console.log(`onClick${type}`);
         const itemType = sim.get_selected_item_type();
@@ -654,6 +560,7 @@ let unlimited = true;
     const vueApp = new Vue({
         el: '#vueApp',
         data: {
+            hasPosition: false,
             hasBurner: false,
             burnerItems: [],
             burnerEnergy: 0,
@@ -847,10 +754,9 @@ let unlimited = true;
         }
         // else if(tile.structure && tile.structure.inventory){
         else if(event){
+            vueApp.hasPosition = true;
             inventoryElem.style.display = "block";
             inventoryElem.classList = "inventoryWide";
-            inventory2ClientElem.style.display = "block";
-            playerElem.style.left = '370px';
             placeCenter(inventoryElem);
             bringToTop(inventoryElem);
             // var recipeSelectButtonElem = document.getElementById('recipeSelectButton');
@@ -886,11 +792,10 @@ let unlimited = true;
             showBurnerStatus(pos);
         }
         else{
+            vueApp.hasPosition = false;
             inventoryElem.style.display = "block";
             inventoryElem.classList = "inventoryNarrow";
-            inventory2ClientElem.style.display = "none";
             recipeSelectButtonElem.style.display = "none";
-            playerElem.style.left = "40px";
         }
     }
 
@@ -1003,73 +908,6 @@ let unlimited = true;
         recipeSelectorTitle.addEventListener('mousedown', function(evt){
             dragWindowMouseDown(evt, recipeSelector, recipeSelectorDragStart);
         })
-    }
-
-    const playerElem = document.createElement('div');
-    playerElem.style.position = 'absolute';
-    playerElem.style.left = '370px';
-    playerElem.style.top = '20px';
-    playerElem.style.width = (320) + 'px';
-    playerElem.style.height = (160) + 'px';
-    inventoryElem.appendChild(playerElem);
-
-    const playerInventoryTitleElem = document.createElement('div');
-    playerInventoryTitleElem.innerHTML = "Player inventory";
-    playerInventoryTitleElem.classList = "inventoryTitle";
-    playerElem.appendChild(playerInventoryTitleElem);
-
-    const playerInventoryContainerElem = document.createElement('div');
-    playerInventoryContainerElem.style.overflow = 'hidden';
-    playerInventoryContainerElem.style.borderStyle = 'solid';
-    playerInventoryContainerElem.style.borderWidth = '1px';
-    playerInventoryContainerElem.style.border = '1px solid #00f';
-    playerInventoryContainerElem.style.backgroundColor = '#ffff7f';
-    playerInventoryContainerElem.style.height = (160) + 'px';
-    playerInventoryContainerElem.style.margin = '3px';
-    playerElem.appendChild(playerInventoryContainerElem);
-
-    const playerInventoryElem = document.createElement('div');
-    playerInventoryElem.style.overflowY = 'scroll';
-    playerInventoryElem.style.width = '100%';
-    playerInventoryElem.style.height = '100%';
-    playerInventoryElem.style.textAlign = 'left';
-    // playerInventoryElem.ondragover = function(ev){
-    //     var ok = false;
-    //     for(var i = 0; i < ev.dataTransfer.types.length; i++){
-    //         if(ev.dataTransfer.types[i].toUpperCase() === textType.toUpperCase())
-    //             ok = true;
-    //     }
-    //     if(ok){
-    //         ev.preventDefault();
-    //         // Set the dropEffect to move
-    //         ev.dataTransfer.dropEffect = "move";
-    //     }
-    // }
-    // playerInventoryElem.ondrop = function(ev){
-    //     ev.preventDefault();
-    //     var data = JSON.parse(ev.dataTransfer.getData(textType));
-    //     if(!data.fromPlayer){
-    //         if(sim.move_selected_inventory_item(!data.fromPlayer, data.inventoryType)){
-    //             deselectPlayerInventory();
-    //             updateInventory(sim.get_player_inventory());
-    //             updateToolBar();
-    //             updateStructureInventory();
-    //         }
-    //     }
-    // }
-    playerInventoryElem.onclick = function(){onInventoryClick(true, true)};
-    playerInventoryContainerElem.appendChild(playerInventoryElem);
-
-    function onInventoryClick(isPlayer, isInput){
-        // Update only if the selected inventory is the other one from destination.
-        if(sim.get_selected_inventory() !== null){
-            if(sim.move_selected_inventory_item(isPlayer, isInput ? "Input" : "Output")){
-                deselectInventory();
-                updateInventory(sim.get_player_inventory());
-                updateToolBar();
-                updateStructureInventory();
-            }
-        }
     }
 
     let dragging = null;
