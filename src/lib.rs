@@ -2170,7 +2170,7 @@ impl FactorishState {
         let mut events = vec![];
 
         if button == 0 {
-            if let Some(selected_tool) = self.get_selected_tool_or_item_opt() {
+            if let Some((selected_tool, _)) = self.get_selected_tool_or_item_opt() {
                 let cell = self.tile_at(&cursor);
                 if let Some((count, cell)) =
                     self.player.inventory.get(&selected_tool).zip(cell.as_ref())
@@ -2612,8 +2612,12 @@ impl FactorishState {
     /// Returns a selected item from either player inventory, toolbelt or a structure inventory.
     /// Returns null if none is selected.
     pub fn get_selected_tool_or_item(&self) -> JsValue {
-        if let Some(selected_item) = self.get_selected_tool_or_item_opt() {
-            JsValue::from_str(&item_to_str(&selected_item))
+        if let Some((item, count)) = self.get_selected_tool_or_item_opt() {
+            js_sys::Array::of2(
+                &JsValue::from_str(&item_to_str(&item)),
+                &JsValue::from_f64(count as f64),
+            )
+            .into()
         } else {
             JsValue::null()
         }
@@ -2671,16 +2675,16 @@ impl FactorishState {
     }
 
     /// Returns a selected item from either player inventory, toolbelt or a structure inventory.
-    fn get_selected_tool_or_item_opt(&self) -> Option<ItemType> {
+    fn get_selected_tool_or_item_opt(&self) -> Option<(ItemType, usize)> {
         match self.selected_item {
-            Some(SelectedItem::ToolBelt(tool)) => self.tool_belt[tool],
-            Some(SelectedItem::PlayerInventory(item, _)) => Some(item),
-            Some(SelectedItem::StructInventory(pos, inventory_type, item, _)) => self
+            Some(SelectedItem::ToolBelt(tool)) => Some((self.tool_belt[tool]?, 1)),
+            Some(SelectedItem::PlayerInventory(item, count)) => Some((item, count)),
+            Some(SelectedItem::StructInventory(pos, inventory_type, item, count)) => self
                 .structure_iter()
                 .find(|s| *s.position() == pos)
                 .and_then(|s| s.inventory(inventory_type))
                 .and_then(|inventory| inventory.get(&item))
-                .and(Some(item)),
+                .and(Some((item, count))),
             None => None,
         }
     }

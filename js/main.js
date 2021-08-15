@@ -127,6 +127,7 @@ let unlimited = true;
     const container = document.getElementById('container2');
     const containerRect = container.getBoundingClientRect();
     const mouseIcon = document.getElementById("mouseIcon");
+    const mouseIconOverlay = document.getElementById("mouseIconOverlay");
 
     const toolTip = document.createElement('dim');
     toolTip.setAttribute('id', 'tooltip');
@@ -303,7 +304,8 @@ let unlimited = true;
         const item = sim.get_selected_tool_or_item();
         if(item){
             mouseIcon.style.display = "block";
-            setItemImageToElem(mouseIcon, item, true);
+            setItemImageToElem(mouseIcon, item[0], true);
+            mouseIconOverlay.innerHTML = item[1];
         }
         else
             mouseIcon.style.display = "none";
