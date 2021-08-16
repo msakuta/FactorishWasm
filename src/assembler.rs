@@ -8,7 +8,7 @@ use super::{
     inventory::{Inventory, InventoryTrait, InventoryType},
     items::get_item_image_url,
     serialize_impl,
-    structure::{Structure, StructureDynIter, StructureId},
+    structure::{default_add_inventory, Structure, StructureDynIter, StructureId},
     FactorishState, FrameProcResult, ItemType, Position, Recipe, TILE_SIZE,
 };
 use cgmath::{Matrix3, Matrix4, Vector2, Vector3};
@@ -272,9 +272,8 @@ impl Structure for Assembler {
     }
 
     fn input(&mut self, o: &DropItem) -> Result<(), JsValue> {
-        if let Some(recipe) = &self.recipe {
-            if 0 < recipe.input.count_item(&o.type_) || 0 < recipe.output.count_item(&o.type_) {
-                self.input_inventory.add_item(&o.type_);
+        if self.recipe.is_some() {
+            if 0 < default_add_inventory(self, InventoryType::Input, &o.type_, 1) {
                 return Ok(());
             } else {
                 return Err(JsValue::from_str("Item is not part of recipe"));

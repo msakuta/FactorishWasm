@@ -2,7 +2,7 @@ use super::{
     gl::utils::{enable_buffer, Flatten},
     inventory::InventoryType,
     items::item_to_str,
-    structure::{Structure, StructureDynIter, StructureId, default_add_inventory},
+    structure::{default_add_inventory, Structure, StructureDynIter, StructureId},
     DropItem, FactorishState, FrameProcResult, Inventory, InventoryTrait, ItemType, Position,
     Recipe, TempEnt, COAL_POWER,
 };
@@ -295,15 +295,11 @@ impl Structure for Furnace {
             }
         }
 
-        if let Some(recipe) = &self.recipe {
-            if 0 < recipe.input.count_item(&o.type_) || 0 < recipe.output.count_item(&o.type_) {
-                self.input_inventory.add_item(&o.type_);
-                return Ok(());
-            } else {
-                return Err(JsValue::from_str("Item is not part of recipe"));
-            }
+        if 0 < default_add_inventory(self, InventoryType::Input, &o.type_, 1) {
+            Ok(())
+        } else {
+            Err(JsValue::from_str("Item is not part of recipe"))
         }
-        Err(JsValue::from_str("Recipe is not initialized"))
     }
 
     fn can_input(&self, item_type: &ItemType) -> bool {

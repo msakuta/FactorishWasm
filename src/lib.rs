@@ -1946,21 +1946,6 @@ impl FactorishState {
         }
     }
 
-    fn move_inventory_item(
-        src: &mut Inventory,
-        dst: &mut Inventory,
-        item_type: &ItemType,
-        count: usize,
-    ) -> bool {
-        let moved_count = src.remove_items(item_type, count);
-        if 0 < moved_count {
-            dst.add_items(item_type, moved_count);
-            true
-        } else {
-            false
-        }
-    }
-
     pub fn set_alt_mode(&mut self, value: bool) {
         self.alt_mode = value;
     }

@@ -189,12 +189,31 @@ pub(crate) enum RotateErr {
     Other(JsValue),
 }
 
+/// Factories will have input inventory capacity of recipe ingredients enough to make this many products
+const RECIPE_CAPACITY_MULTIPLIER: usize = 3;
+
 pub(crate) fn default_add_inventory(
     s: &mut (impl Structure + ?Sized),
     inventory_type: InventoryType,
     item_type: &ItemType,
     count: isize,
 ) -> isize {
+    let mut count = count;
+    if 0 < count {
+        if inventory_type == InventoryType::Input {
+            if let Some((recipe, inventory)) =
+                s.get_selected_recipe().zip(s.inventory(inventory_type))
+            {
+                let capacity = recipe.input.count_item(item_type) * RECIPE_CAPACITY_MULTIPLIER;
+                let existing_count = inventory.count_item(item_type);
+                if existing_count < capacity {
+                    count = count.min((capacity - existing_count) as isize);
+                } else {
+                    count = 0;
+                }
+            }
+        }
+    }
     if let Some(inventory) = s.inventory_mut(inventory_type) {
         if 0 < count {
             inventory.add_items(item_type, count as usize);
