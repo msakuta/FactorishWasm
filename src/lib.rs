@@ -2005,78 +2005,31 @@ impl FactorishState {
             if let Some(SelectedItem::StructInventory(_, sel_inventory_type, item, count)) =
                 self.selected_item
             {
-                if sel_inventory_type == InventoryType::Burner {
-                    self.player.inventory.add_items(
-                        &item,
-                        structure
-                            .add_burner_inventory(
-                                &item,
-                                -structure
-                                    .inventory(InventoryType::Burner)
-                                    .map(|i| i.count_item(&item) as isize)
-                                    .unwrap_or(0)
-                                    .min(count as isize),
-                            )
-                            .abs() as usize,
-                    );
-                    self.on_player_update
-                        .call1(&window(), &JsValue::from(self.get_player_inventory()?))?;
-                } else if let Some(item_name) =
-                    self.selected_item.and_then(|item| item.map_struct(&pos))
-                {
-                    if FactorishState::move_inventory_item(
-                        structure.inventory_mut(sel_inventory_type).ok_or_else(|| {
-                            js_str!("No inventory at {:?} with {:?}", pos, sel_inventory_type)
-                        })?,
-                        &mut self.player.inventory,
-                        &item_name,
-                        count,
-                    ) {
-                        self.on_player_update
-                            .call1(&window(), &JsValue::from(self.get_player_inventory()?))?;
-                        return Ok(true);
-                    }
-                }
+                self.player.inventory.add_items(
+                    &item,
+                    structure
+                        .add_inventory(sel_inventory_type, &item, -(count as isize))
+                        .abs() as usize,
+                );
+                self.on_player_update
+                    .call1(&window(), &JsValue::from(self.get_player_inventory()?))?;
+                return Ok(true);
             }
         } else {
-            match inventory_type {
-                InventoryType::Burner => {
-                    if let Some(SelectedItem::PlayerInventory(i, count)) = self.selected_item {
-                        self.player.inventory.remove_items(
+            if let Some(SelectedItem::PlayerInventory(i, count)) = self.selected_item {
+                self.player.inventory.remove_items(
+                    &i,
+                    structure
+                        .add_inventory(
+                            inventory_type,
                             &i,
-                            structure
-                                .add_burner_inventory(
-                                    &i,
-                                    self.player.inventory.count_item(&i).min(count) as isize,
-                                )
-                                .abs() as usize,
-                        );
-                        return Ok(true);
-                    }
-                }
-                _ => {
-                    // console_log!("moving {:?}", item_name);
-                    if let Some((item_name, count)) = self.selected_item.and_then(|item| {
-                        if let SelectedItem::PlayerInventory(i, count) = item {
-                            Some((i, count))
-                        } else {
-                            None
-                        }
-                    }) {
-                        if FactorishState::move_inventory_item(
-                            &mut self.player.inventory,
-                            structure.inventory_mut(inventory_type).ok_or_else(|| {
-                                js_str!("No inventory at {:?} with {:?}", pos, inventory_type)
-                            })?,
-                            &item_name,
-                            count,
-                        ) {
-                            self.on_player_update
-                                .call1(&window(), &JsValue::from(self.get_player_inventory()?))?;
-                            return Ok(true);
-                        }
-                    }
-                }
+                            self.player.inventory.count_item(&i).min(count) as isize,
+                        )
+                        .abs() as usize,
+                );
+                self.on_player_update
+                    .call1(&window(), &JsValue::from(self.get_player_inventory()?))?;
+                return Ok(true);
             }
         }
         Ok(false)

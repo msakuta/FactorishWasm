@@ -287,7 +287,15 @@ impl Structure for Boiler {
         }
     }
 
-    fn add_burner_inventory(&mut self, item_type: &ItemType, amount: isize) -> isize {
+    fn add_inventory(
+        &mut self,
+        inventory_type: InventoryType,
+        item_type: &ItemType,
+        amount: isize,
+    ) -> isize {
+        if inventory_type != InventoryType::Burner {
+            return 0;
+        }
         if amount < 0 {
             let existing = self.inventory.count_item(item_type);
             let removed = existing.min((-amount) as usize);

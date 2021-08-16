@@ -189,6 +189,24 @@ pub(crate) enum RotateErr {
     Other(JsValue),
 }
 
+pub(crate) fn default_add_inventory(
+    s: &mut (impl Structure + ?Sized),
+    inventory_type: InventoryType,
+    item_type: &ItemType,
+    count: isize,
+) -> isize {
+    if let Some(inventory) = s.inventory_mut(inventory_type) {
+        if 0 < count {
+            inventory.add_items(item_type, count as usize);
+            count
+        } else {
+            -(inventory.remove_items(item_type, count.abs() as usize) as isize)
+        }
+    } else {
+        0
+    }
+}
+
 pub(crate) trait Structure {
     fn name(&self) -> &str;
     fn position(&self) -> &Position;
@@ -311,8 +329,13 @@ pub(crate) trait Structure {
     /// Attempt to add or remove items from a burner inventory and returns actual item count moved.
     /// Positive amount means adding items to the burner, otherwise remove.
     /// If it has limited capacity, positive amount may return less value than given.
-    fn add_burner_inventory(&mut self, _item_type: &ItemType, _amount: isize) -> isize {
-        0
+    fn add_inventory(
+        &mut self,
+        inventory_type: InventoryType,
+        item_type: &ItemType,
+        count: isize,
+    ) -> isize {
+        default_add_inventory(self, inventory_type, item_type, count)
     }
     fn burner_energy(&self) -> Option<(f64, f64)> {
         None

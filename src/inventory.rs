@@ -37,6 +37,9 @@ impl InventoryTrait for Inventory {
     }
 
     fn add_items(&mut self, item: &ItemType, count: usize) {
+        if count == 0 {
+            return;
+        }
         if let Some(entry) = self.get_mut(item) {
             *entry += count;
         } else {

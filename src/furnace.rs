@@ -2,7 +2,7 @@ use super::{
     gl::utils::{enable_buffer, Flatten},
     inventory::InventoryType,
     items::item_to_str,
-    structure::{Structure, StructureDynIter, StructureId},
+    structure::{Structure, StructureDynIter, StructureId, default_add_inventory},
     DropItem, FactorishState, FrameProcResult, Inventory, InventoryTrait, ItemType, Position,
     Recipe, TempEnt, COAL_POWER,
 };
@@ -333,14 +333,22 @@ impl Structure for Furnace {
         }
     }
 
-    fn add_burner_inventory(&mut self, item_type: &ItemType, amount: isize) -> isize {
-        if amount < 0 {
+    fn add_inventory(
+        &mut self,
+        inventory_type: InventoryType,
+        item_type: &ItemType,
+        count: isize,
+    ) -> isize {
+        if inventory_type != InventoryType::Burner {
+            return default_add_inventory(self, inventory_type, item_type, count);
+        }
+        if count < 0 {
             let existing = self.burner_inventory.count_item(item_type);
-            let removed = existing.min((-amount) as usize);
+            let removed = existing.min((-count) as usize);
             self.burner_inventory.remove_items(item_type, removed);
             -(removed as isize)
         } else if *item_type == ItemType::CoalOre {
-            let add_amount = amount.min(
+            let add_amount = count.min(
                 (FUEL_CAPACITY - self.burner_inventory.count_item(&ItemType::CoalOre)) as isize,
             );
             self.burner_inventory
