@@ -283,6 +283,7 @@ div.closeButton{
     width: 80px;
     height: 10px;
     background-color: #0f0f0f;
+    margin: 3px;
 }
 
 .burnerEnergy {
