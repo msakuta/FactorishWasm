@@ -2012,21 +2012,51 @@ impl FactorishState {
             }
         } else {
             if let Some(SelectedItem::PlayerInventory(item, count)) = self.selected_item {
-                let count = if all {
-                    self.player.inventory.count_item(&item)
-                } else {
-                    self.player.inventory.count_item(&item).min(count)
+                let mut try_move = |inventory: &mut Inventory, inventory_type| {
+                    let count = if all {
+                        inventory.count_item(&item)
+                    } else {
+                        inventory.count_item(&item).min(count)
+                    };
+                    inventory.remove_items(
+                        &item,
+                        structure
+                            .add_inventory(inventory_type, &item, count as isize)
+                            .abs() as usize,
+                    )
                 };
 
-                let moved_count = self.player.inventory.remove_items(
-                    &item,
-                    structure
-                        .add_inventory(inventory_type, &item, count as isize)
-                        .abs() as usize,
-                );
-                self.on_player_update
-                    .call1(&window(), &JsValue::from(self.get_player_inventory()?))?;
-                return Ok(moved_count != 0);
+                if all {
+                    // We try to insert in this order. We don't want to insert into output.
+                    let try_order = if item == ItemType::CoalOre {
+                        // If it was fuel, prefer putting it into burner inventory
+                        [
+                            InventoryType::Burner,
+                            InventoryType::Input,
+                            InventoryType::Storage,
+                        ]
+                    } else {
+                        [
+                            InventoryType::Input,
+                            InventoryType::Burner,
+                            InventoryType::Storage,
+                        ]
+                    };
+
+                    for invtype in try_order {
+                        let moved_count = try_move(&mut self.player.inventory, invtype);
+                        if moved_count != 0 {
+                            self.on_player_update
+                                .call1(&window(), &JsValue::from(self.get_player_inventory()?))?;
+                            return Ok(moved_count != 0);
+                        }
+                    }
+                } else {
+                    let moved_count = try_move(&mut self.player.inventory, inventory_type);
+                    self.on_player_update
+                        .call1(&window(), &JsValue::from(self.get_player_inventory()?))?;
+                    return Ok(moved_count != 0);
+                }
             }
         }
         Ok(false)

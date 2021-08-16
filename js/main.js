@@ -583,16 +583,13 @@ let unlimited = true;
             if(evt.ctrlKey){
                 if(item < items.length){
                     sim.select_player_inventory(item);
-                    // We try to insert in this order. We don't want to insert into output.
-                    for(const invtype of ["Input", "Burner", "Storage"]){
-                        const res = sim.move_selected_inventory_item(false, invtype, true);
-                        if(res){
-                            deselectInventory();
-                            updateInventory(sim.get_player_inventory());
-                            updateToolBar();
-                            updateStructureInventory();
-                            break;
-                        }
+                    // The second argument doesn't matter, but needs to be something deserializable without error.
+                    const res = sim.move_selected_inventory_item(false, "Burner", true);
+                    if(res){
+                        deselectInventory();
+                        updateInventory(sim.get_player_inventory());
+                        updateToolBar();
+                        updateStructureInventory();
                     }
                 }
             }
