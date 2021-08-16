@@ -1969,10 +1969,12 @@ impl FactorishState {
     /// Move inventory items between structure and player
     /// @param to_player whether the movement happen towards player
     /// @param inventory_type a string indicating type of the inventory in the structure
+    /// @param all attempt to move all items of the same kind (ctrl key)
     pub fn move_selected_inventory_item(
         &mut self,
         to_player: bool,
         inventory_type: JsValue,
+        all: bool,
     ) -> Result<bool, JsValue> {
         let inventory_type = InventoryType::try_from(inventory_type)?;
         let pos = if let Some(pos) = self.selected_structure_inventory {
@@ -1990,6 +1992,14 @@ impl FactorishState {
             if let Some(SelectedItem::StructInventory(_, sel_inventory_type, item, count)) =
                 self.selected_item
             {
+                let count = if all {
+                    structure
+                        .inventory(sel_inventory_type)
+                        .map(|i| i.count_item(&item))
+                        .unwrap_or(0)
+                } else {
+                    count
+                };
                 self.player.inventory.add_items(
                     &item,
                     structure
@@ -1998,23 +2008,25 @@ impl FactorishState {
                 );
                 self.on_player_update
                     .call1(&window(), &JsValue::from(self.get_player_inventory()?))?;
-                return Ok(true);
+                return Ok(count != 0);
             }
         } else {
-            if let Some(SelectedItem::PlayerInventory(i, count)) = self.selected_item {
-                self.player.inventory.remove_items(
-                    &i,
+            if let Some(SelectedItem::PlayerInventory(item, count)) = self.selected_item {
+                let count = if all {
+                    self.player.inventory.count_item(&item)
+                } else {
+                    self.player.inventory.count_item(&item).min(count)
+                };
+
+                let moved_count = self.player.inventory.remove_items(
+                    &item,
                     structure
-                        .add_inventory(
-                            inventory_type,
-                            &i,
-                            self.player.inventory.count_item(&i).min(count) as isize,
-                        )
+                        .add_inventory(inventory_type, &item, count as isize)
                         .abs() as usize,
                 );
                 self.on_player_update
                     .call1(&window(), &JsValue::from(self.get_player_inventory()?))?;
-                return Ok(true);
+                return Ok(moved_count != 0);
             }
         }
         Ok(false)
@@ -2425,6 +2437,9 @@ impl FactorishState {
             }
             69 => {
                 //'e'
+                if self.selected_structure_inventory.is_some() {
+                    self.selected_structure_inventory = None;
+                }
                 Ok(
                     js_sys::Array::of1(&JsValue::from_serde(&JSEvent::ShowInventory).unwrap())
                         .into(),

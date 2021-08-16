@@ -12,14 +12,17 @@ export default {
   setup(props, context) {
     return {
       fuelBack,
-      onClickFuel: (i) => context.emit("clickFuel", i),
+      onClickFuel: (i, evt) => context.emit("clickFuel", i, evt),
     }
   }
 }
 </script>
 
 <template>
-  <div class="itemBack" @click="onClickFuel(0)" :style="{backgroundColor: `#ffffff`, backgroundImage: `url(${fuelBack})`}">
+  <div class="itemBack"
+    @click="evt => onClickFuel(0, evt)"
+    :style="{backgroundColor: `#ffffff`, backgroundImage: `url(${fuelBack})`}"
+  >
     <img v-if="0 < items.length" class="burnerItem" :src="items[0].url">
     <div v-if="0 < items.length" class="overlay noselect"> {{ items[0].count }} </div>
   </div>

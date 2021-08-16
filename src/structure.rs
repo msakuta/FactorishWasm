@@ -192,6 +192,9 @@ pub(crate) enum RotateErr {
 /// Factories will have input inventory capacity of recipe ingredients enough to make this many products
 const RECIPE_CAPACITY_MULTIPLIER: usize = 3;
 
+/// If recipe was not selected for a furnace, it is allowed to insert any item, but limit the amount by this value.
+const DEFAULT_MAX_CAPACITY: usize = 50;
+
 pub(crate) fn default_add_inventory(
     s: &mut (impl Structure + ?Sized),
     inventory_type: InventoryType,
@@ -211,6 +214,8 @@ pub(crate) fn default_add_inventory(
                 } else {
                     count = 0;
                 }
+            } else {
+                count = DEFAULT_MAX_CAPACITY as isize;
             }
         }
     }

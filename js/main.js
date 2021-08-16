@@ -539,11 +539,23 @@ let unlimited = true;
         return img;
     }
 
-    const inventoryClickHandler = (getItems, type) => (i) => {
-        console.log(`onClick${type}`);
+    const inventoryClickHandler = (getItems, invtype) => (i, evt) => {
+        console.log(`onClick${invtype}: evt.ctrlKey: ${evt.ctrlKey}`);
         const itemType = sim.get_selected_item_type();
-        if(itemType !== null && "PlayerInventory" in itemType){
-            if(sim.move_selected_inventory_item(false, type)){
+        if(evt.ctrlKey && itemType === null){
+            const items = getItems();
+            if(i < items.length){
+                sim.select_structure_inventory(i, invtype);
+                if(sim.move_selected_inventory_item(true, invtype, true)){
+                    deselectInventory();
+                    updateInventory(sim.get_player_inventory());
+                    updateToolBar();
+                    updateStructureInventory();
+                }
+            }
+        }
+        else if(itemType !== null && "PlayerInventory" in itemType){
+            if(sim.move_selected_inventory_item(false, invtype, false)){
                 deselectInventory();
                 updateInventory(sim.get_player_inventory());
                 updateToolBar();
@@ -553,7 +565,7 @@ let unlimited = true;
         else if(itemType === null){
             const items = getItems();
             if(i < items.length){
-                sim.select_structure_inventory(i, type);
+                sim.select_structure_inventory(i, invtype);
                 updateMouseIcon();
                 // updateInventorySelection(elem);
             }
@@ -563,22 +575,40 @@ let unlimited = true;
         }
     };
 
-    function playerClickHandler(i){
-        console.log("onClickPlayer");
+    function playerClickHandler(item, evt){
+        console.log(`onClickPlayer evt.ctrlKey: ${evt.ctrlKey}`);
         const itemType = sim.get_selected_item_type();
         if (itemType === null) {
-          const items = vueApp.playerItems.value;
-          if (i < items.length) {
-            sim.select_player_inventory(i);
-            updateMouseIcon();
-            // updateInventorySelection(elem);
-          }
+            const items = vueApp.playerItems.value;
+            if(evt.ctrlKey){
+                if(item < items.length){
+                    sim.select_player_inventory(item);
+                    // We try to insert in this order. We don't want to insert into output.
+                    for(const invtype of ["Input", "Burner", "Storage"]){
+                        const res = sim.move_selected_inventory_item(false, invtype, true);
+                        if(res){
+                            deselectInventory();
+                            updateInventory(sim.get_player_inventory());
+                            updateToolBar();
+                            updateStructureInventory();
+                            break;
+                        }
+                    }
+                }
+            }
+            else{
+                if (item < items.length) {
+                    sim.select_player_inventory(item);
+                    updateMouseIcon();
+                    // updateInventorySelection(elem);
+                }
+            }
         } else if ("PlayerInventory" in itemType) {
           deselectInventory();
         } else {
           const invtype = sim.get_selected_inventory_type();
           if (invtype) {
-            if (sim.move_selected_inventory_item(true, invtype)) {
+            if (sim.move_selected_inventory_item(true, invtype, false)) {
               deselectInventory();
               updateInventory(sim.get_player_inventory());
               updateToolBar();
