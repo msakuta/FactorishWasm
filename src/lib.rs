@@ -1794,7 +1794,11 @@ impl FactorishState {
         )
     }
 
-    pub fn select_player_inventory(&mut self, idx: usize) -> Result<(), JsValue> {
+    pub fn select_player_inventory(
+        &mut self,
+        idx: usize,
+        right_click: bool,
+    ) -> Result<(), JsValue> {
         let mut v = self
             .player
             .inventory
@@ -1806,7 +1810,9 @@ impl FactorishState {
         self.selected_item = Some(
             flat_inv
                 .get(idx)
-                .map(|i| SelectedItem::PlayerInventory(i.0, i.1))
+                .map(|i| {
+                    SelectedItem::PlayerInventory(i.0, if right_click { i.1 / 2 } else { i.1 })
+                })
                 .ok_or_else(|| JsValue::from_str("Item name not identified"))?,
         );
         Ok(())
@@ -1891,6 +1897,7 @@ impl FactorishState {
         &mut self,
         idx: usize,
         inventory_type: JsValue,
+        right_click: bool,
     ) -> Result<(), JsValue> {
         let inv_type = InventoryType::try_from(inventory_type)?;
 
@@ -1902,7 +1909,12 @@ impl FactorishState {
         let item = flat_inv
             .get(idx)
             .ok_or_else(|| JsValue::from("Item name not valid"))?;
-        self.selected_item = Some(SelectedItem::StructInventory(pos, inv_type, item.0, item.1));
+        self.selected_item = Some(SelectedItem::StructInventory(
+            pos,
+            inv_type,
+            item.0,
+            if right_click { item.1 / 2 } else { item.1 },
+        ));
         Ok(())
     }
 

@@ -119,7 +119,8 @@ export default {
             <div v-for="i in Math.max(1, inputItems.value.length)"
               :key="i"
               class="itemBack"
-              @click="evt => onClickInput(i-1, evt)"
+              @click="evt => onClickInput(i-1, evt, false)"
+              @contextmenu="evt => onClickInput(i-1, evt, true)"
               :style="{backgroundColor: `#ffffff`, backgroundImage: `url(${itemBack})`}"
             >
               <div v-if="i-1 < inputItems.value.length"
@@ -138,7 +139,8 @@ export default {
             <div v-for="i in Math.max(1 + outputItems.value.length)"
               :key="i"
               class="itemBack"
-              @click="evt => onClickOutput(i-1, evt)"
+              @click="evt => onClickOutput(i-1, evt, false)"
+              @contextmenu="evt => onClickOutput(i-1, evt, true)"
               :style="{backgroundColor: `#ffffff`, backgroundImage: `url(${itemBack})`}"
             >
               <div v-if="i-1 < outputItems.value.length" class="burnerItem"
@@ -157,7 +159,8 @@ export default {
             <div v-for="i in Math.ceil((1 + storageItems.value.length) / 10) * 10"
                 :key="i"
                 class="itemBack"
-                @click="evt => onClickStorage(i-1, evt)"
+                @click="evt => onClickStorage(i-1, evt, false)"
+                @contextmenu="evt => onClickStorage(i-1, evt, true)"
                 :style="{backgroundColor: `#ffffff`, backgroundImage: `url(${itemBack})`}"
             >
                 <div v-if="i-1 < storageItems.value.length" class="burnerItem"
@@ -173,7 +176,8 @@ export default {
             <div v-for="i in Math.ceil((1 + playerItems.value.length) / 10) * 10"
                 :key="i"
                 class="itemBack"
-                @click="evt => onClickPlayer(i-1, evt)"
+                @click="evt => onClickPlayer(i-1, evt, false)"
+                @contextmenu="evt => onClickPlayer(i-1, evt, true)"
                 :style="{backgroundColor: `#ffffff`, backgroundImage: `url(${itemBack})`}"
             >
                 <div v-if="i-1 < playerItems.value.length" class="burnerItem"

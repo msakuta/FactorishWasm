@@ -12,7 +12,7 @@ export default {
   setup(props, context) {
     return {
       fuelBack,
-      onClickFuel: (i, evt) => context.emit("clickFuel", i, evt),
+      onClickFuel: (i, evt, rightClick) => context.emit("clickFuel", i, evt, rightClick),
     }
   }
 }
@@ -20,7 +20,8 @@ export default {
 
 <template>
   <div class="itemBack"
-    @click="evt => onClickFuel(0, evt)"
+    @click="evt => onClickFuel(0, evt, false)"
+    @contextmenu="evt => onClickFuel(0, evt, true)"
     :style="{backgroundColor: `#ffffff`, backgroundImage: `url(${fuelBack})`}"
   >
     <img v-if="0 < items.length" class="burnerItem" :src="items[0].url">

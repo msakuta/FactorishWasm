@@ -539,13 +539,13 @@ let unlimited = true;
         return img;
     }
 
-    const inventoryClickHandler = (getItems, invtype) => (i, evt) => {
+    const inventoryClickHandler = (getItems, invtype) => (i, evt, rightClick) => {
         console.log(`onClick${invtype}: evt.ctrlKey: ${evt.ctrlKey}`);
         const itemType = sim.get_selected_item_type();
         if(evt.ctrlKey && itemType === null){
             const items = getItems();
             if(i < items.length){
-                sim.select_structure_inventory(i, invtype);
+                sim.select_structure_inventory(i, invtype, rightClick);
                 if(sim.move_selected_inventory_item(true, invtype, true)){
                     deselectInventory();
                     updateInventory(sim.get_player_inventory());
@@ -565,7 +565,7 @@ let unlimited = true;
         else if(itemType === null){
             const items = getItems();
             if(i < items.length){
-                sim.select_structure_inventory(i, invtype);
+                sim.select_structure_inventory(i, invtype, rightClick);
                 updateMouseIcon();
                 // updateInventorySelection(elem);
             }
@@ -573,16 +573,17 @@ let unlimited = true;
         else if(sim.get_selected_inventory()){
             deselectInventory();
         }
+        evt.preventDefault();
     };
 
-    function playerClickHandler(item, evt){
+    function playerClickHandler(item, evt, rightClick){
         console.log(`onClickPlayer evt.ctrlKey: ${evt.ctrlKey}`);
         const itemType = sim.get_selected_item_type();
         if (itemType === null) {
             const items = vueApp.playerItems.value;
             if(evt.ctrlKey){
                 if(item < items.length){
-                    sim.select_player_inventory(item);
+                    sim.select_player_inventory(item, rightClick);
                     // The second argument doesn't matter, but needs to be something deserializable without error.
                     const res = sim.move_selected_inventory_item(false, "Burner", true);
                     if(res){
@@ -595,7 +596,7 @@ let unlimited = true;
             }
             else{
                 if (item < items.length) {
-                    sim.select_player_inventory(item);
+                    sim.select_player_inventory(item, rightClick);
                     updateMouseIcon();
                     // updateInventorySelection(elem);
                 }
@@ -614,7 +615,8 @@ let unlimited = true;
             deselectInventory();
           }
         }
-      }
+        evt.preventDefault();
+    }
 
     /// An array of window elements which holds order of z indices.
     var windowOrder = [];
