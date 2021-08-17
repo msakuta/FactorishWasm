@@ -19,6 +19,9 @@ pub(crate) trait InventoryTrait {
     fn count_item(&self, item: &ItemType) -> usize;
     fn merge(&mut self, other: Inventory);
     fn describe(&self) -> String;
+
+    /// Calculate occupied slots
+    fn count_slots(&self) -> usize;
 }
 
 impl InventoryTrait for Inventory {
@@ -65,6 +68,19 @@ impl InventoryTrait for Inventory {
         self.iter()
             .map(|item| format!("{:?}: {}<br>", item.0, item.1))
             .fold(String::from(""), |accum, item| accum + &item)
+    }
+
+    fn count_slots(&self) -> usize {
+        let mut ret = 0;
+        for pair in self {
+            let mut amount = *pair.1;
+            while STACK_SIZE < amount {
+                ret += 1;
+                amount -= STACK_SIZE;
+            }
+            ret += 1;
+        }
+        ret
     }
 }
 

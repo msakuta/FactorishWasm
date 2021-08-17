@@ -111,8 +111,7 @@ impl Structure for Chest {
     }
 
     fn item_response(&mut self, _item: &DropItem) -> Result<ItemResponseResult, ()> {
-        if self.inventory.len() < CHEST_CAPACITY {
-            self.inventory.add_item(&_item.type_);
+        if 0 < self.add_inventory(InventoryType::Storage, &_item.type_, 1) {
             Ok((
                 ItemResponse::Consume,
                 Some(FrameProcResult::InventoryChanged(self.position)),

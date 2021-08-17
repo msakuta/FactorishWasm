@@ -1,5 +1,7 @@
 mod iter;
 
+use crate::inventory::STACK_SIZE;
+
 use super::{
     drop_items::DropItem,
     dyn_iter::{DynIter, DynIterMut},
@@ -195,6 +197,9 @@ const RECIPE_CAPACITY_MULTIPLIER: usize = 3;
 /// If recipe was not selected for a furnace, it is allowed to insert any item, but limit the amount by this value.
 const DEFAULT_MAX_CAPACITY: usize = 50;
 
+/// Chest storage size, matching to Factorio
+const STORAGE_MAX_SLOTS: usize = 48;
+
 pub(crate) fn default_add_inventory(
     s: &mut (impl Structure + ?Sized),
     inventory_type: InventoryType,
@@ -203,20 +208,35 @@ pub(crate) fn default_add_inventory(
 ) -> isize {
     let mut count = count;
     if 0 < count {
-        if inventory_type == InventoryType::Input {
-            if let Some((recipe, inventory)) =
-                s.get_selected_recipe().zip(s.inventory(inventory_type))
-            {
-                let capacity = recipe.input.count_item(item_type) * RECIPE_CAPACITY_MULTIPLIER;
-                let existing_count = inventory.count_item(item_type);
-                if existing_count < capacity {
-                    count = count.min((capacity - existing_count) as isize);
+        match inventory_type {
+            InventoryType::Input => {
+                if let Some((recipe, inventory)) =
+                    s.get_selected_recipe().zip(s.inventory(inventory_type))
+                {
+                    let capacity = recipe.input.count_item(item_type) * RECIPE_CAPACITY_MULTIPLIER;
+                    let existing_count = inventory.count_item(item_type);
+                    if existing_count < capacity {
+                        count = count.min((capacity - existing_count) as isize);
+                    } else {
+                        count = 0;
+                    }
                 } else {
-                    count = 0;
+                    count = DEFAULT_MAX_CAPACITY as isize;
                 }
-            } else {
-                count = DEFAULT_MAX_CAPACITY as isize;
             }
+            InventoryType::Storage => {
+                if let Some(inventory) = s.inventory(inventory_type) {
+                    let occupied_slots = inventory.count_slots() as isize;
+                    let mut left_count =
+                        (STORAGE_MAX_SLOTS as isize - occupied_slots) * STACK_SIZE as isize;
+                    let last_stack = inventory.count_item(item_type) % STACK_SIZE;
+                    if 0 < last_stack {
+                        left_count += (STACK_SIZE - last_stack) as isize;
+                    }
+                    count = count.min(left_count);
+                }
+            }
+            _ => (),
         }
     }
     if let Some(inventory) = s.inventory_mut(inventory_type) {

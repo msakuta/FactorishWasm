@@ -156,7 +156,7 @@ export default {
         <burner-inventory v-if="hasBurner" @click-fuel="onClickFuel" :items="burnerItems" :burnerEnergy="burnerEnergy"></burner-inventory>
         <div v-if="hasStorage">
             <div class="inventoryTitle">Storage inventory</div>
-            <div v-for="i in Math.ceil((1 + storageItems.value.length) / 10) * 10"
+            <div v-for="i in 48"
                 :key="i"
                 class="itemBack"
                 @click="evt => onClickStorage(i-1, evt, false)"
