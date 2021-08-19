@@ -553,6 +553,11 @@ let unlimited = true;
                     updateStructureInventory();
                 }
             }
+            else if(sim.move_all_inventory_items(true, invtype)) {
+                updateInventory(sim.get_player_inventory());
+                updateToolBar();
+                updateStructureInventory();
+            }
         }
         else if(itemType !== null && "PlayerInventory" in itemType){
             if(sim.move_selected_inventory_item(false, invtype, false)){
@@ -592,6 +597,11 @@ let unlimited = true;
                         updateToolBar();
                         updateStructureInventory();
                     }
+                }
+                else if(sim.move_all_inventory_items(false, "Burner")){
+                    updateInventory(sim.get_player_inventory());
+                    updateToolBar();
+                    updateStructureInventory();
                 }
             }
             else{

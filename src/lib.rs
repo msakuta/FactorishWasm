@@ -1978,6 +1978,24 @@ impl FactorishState {
         self.use_webgl_instancing = value;
     }
 
+    /// We try to insert in this order. We don't want to insert into output.
+    fn inventory_move_order(item: &ItemType) -> [InventoryType; 3] {
+        if *item == ItemType::CoalOre {
+            // If it was fuel, prefer putting it into burner inventory
+            [
+                InventoryType::Burner,
+                InventoryType::Input,
+                InventoryType::Storage,
+            ]
+        } else {
+            [
+                InventoryType::Input,
+                InventoryType::Burner,
+                InventoryType::Storage,
+            ]
+        }
+    }
+
     /// Move inventory items between structure and player
     /// @param to_player whether the movement happen towards player
     /// @param inventory_type a string indicating type of the inventory in the structure
@@ -2039,21 +2057,7 @@ impl FactorishState {
                 };
 
                 if all {
-                    // We try to insert in this order. We don't want to insert into output.
-                    let try_order = if item == ItemType::CoalOre {
-                        // If it was fuel, prefer putting it into burner inventory
-                        [
-                            InventoryType::Burner,
-                            InventoryType::Input,
-                            InventoryType::Storage,
-                        ]
-                    } else {
-                        [
-                            InventoryType::Input,
-                            InventoryType::Burner,
-                            InventoryType::Storage,
-                        ]
-                    };
+                    let try_order = Self::inventory_move_order(&item);
 
                     for invtype in try_order {
                         let moved_count = try_move(&mut self.player.inventory, invtype);
@@ -2071,6 +2075,80 @@ impl FactorishState {
                 }
             }
         }
+        Ok(false)
+    }
+
+    pub fn move_all_inventory_items(
+        &mut self,
+        to_player: bool,
+        inventory_type: JsValue,
+    ) -> Result<bool, JsValue> {
+        let inventory_type = InventoryType::try_from(inventory_type)?;
+        let pos = if let Some(pos) = self.selected_structure_inventory {
+            pos
+        } else {
+            return Ok(false);
+        };
+        let structure = self
+            .structures
+            .iter_mut()
+            .filter_map(|entry| entry.dynamic.as_deref_mut())
+            .find(|d| *d.position() == pos)
+            .ok_or_else(|| js_str!("structure not found at position"))?;
+        if to_player {
+            // Player has no capacity limit, so copy everything by taking
+            if let Some(inventory) = structure.inventory_mut(inventory_type) {
+                let ret = !inventory.is_empty();
+                self.player.inventory.merge(std::mem::take(inventory));
+                inventory.clear();
+                self.on_player_update
+                    .call1(&window(), &JsValue::from(self.get_player_inventory()?))?;
+                return Ok(ret);
+            }
+        } else {
+            // Structure's inventory has capacity limit, so we need to check one item at a time
+            // and exit if we fail to add a new item.
+            let mut ret = false;
+            while let Some((item, count)) = self
+                .player
+                .inventory
+                .iter()
+                .next()
+                .map(|(item, count)| (*item, *count))
+            {
+                if count == 0 {
+                    return Ok(ret);
+                }
+                let try_order = Self::inventory_move_order(&item);
+
+                let mut moved = 0;
+                for invtype in try_order {
+                    let moved_count = structure.add_inventory(invtype, &item, count as isize);
+                    if moved_count == 0 {
+                        continue;
+                    }
+                    if self
+                        .player
+                        .inventory
+                        .remove_items(&item, moved_count as usize)
+                        != 0
+                    {
+                        ret = true;
+                        moved = moved_count;
+                        break;
+                    } else {
+                        panic!("We have checked player has {} {:?}, no?", count, item);
+                    }
+                }
+
+                // If failed to move, finish
+                if moved == 0 {
+                    break;
+                }
+            }
+            return Ok(true);
+        }
+
         Ok(false)
     }
 
