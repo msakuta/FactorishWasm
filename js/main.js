@@ -552,6 +552,9 @@ let unlimited = true;
                     updateToolBar();
                     updateStructureInventory();
                 }
+                else{
+                    deselectInventory();
+                }
             }
             else if(sim.move_all_inventory_items(true, invtype)) {
                 updateInventory(sim.get_player_inventory());
@@ -596,6 +599,9 @@ let unlimited = true;
                         updateInventory(sim.get_player_inventory());
                         updateToolBar();
                         updateStructureInventory();
+                    }
+                    else{
+                        deselectInventory();
                     }
                 }
                 else if(sim.move_all_inventory_items(false, "Burner")){
