@@ -7,6 +7,12 @@ import inventory from "../img/inventory.png";
 import { loadImages, getImageFile } from "./images.js";
 import { FactorishState } from "../pkg/index.js";
 
+import { createApp, nextTick } from "vue";
+
+import CloseButton from "./components/CloseButton.vue";
+import BurnerInventory from "./components/BurnerInventory.vue";
+import InventoryWindow from "./components/InventoryWindow.vue";
+
 /// We may no longer need support for IE, since WebAssembly is not supported by IE anyway.
 function isIE(){
     var ua = window.navigator.userAgent;
@@ -120,8 +126,8 @@ let unlimited = true;
 
     const container = document.getElementById('container2');
     const containerRect = container.getBoundingClientRect();
-    const inventoryElem = document.getElementById('inventory2');
     const mouseIcon = document.getElementById("mouseIcon");
+    const mouseIconOverlay = document.getElementById("mouseIconOverlay");
 
     const toolTip = document.createElement('dim');
     toolTip.setAttribute('id', 'tooltip');
@@ -157,6 +163,7 @@ let unlimited = true;
         },
         updateInventory,
         popupText,
+        structureDestroyed,
         scenarioSelectElem.value,
         context,
         loadedImages,
@@ -298,8 +305,8 @@ let unlimited = true;
         const item = sim.get_selected_tool_or_item();
         if(item){
             mouseIcon.style.display = "block";
-            let imageFile = getImageFile(item);
-            mouseIcon.style.backgroundImage = `url(${imageFile.url})`;
+            setItemImageToElem(mouseIcon, item[0], true);
+            mouseIconOverlay.innerHTML = item[1];
         }
         else
             mouseIcon.style.display = "none";
@@ -331,9 +338,9 @@ let unlimited = true;
         setToolTip(elem, text);
     };
 
-    function deselectPlayerInventory(){
+    function deselectInventory(){
         selectedInventory = null;
-        sim.deselect_player_inventory();
+        sim.deselect_inventory();
         mouseIcon.style.display = "none";
     }
 
@@ -483,9 +490,15 @@ let unlimited = true;
 
     function updateInventory(inventory){
         try{
-            updateInventoryInt(playerInventoryElem, sim, false, inventory);
+            updateVuePlayerInventory(inventory);
         }catch(e){
             console.log(e);
+        }
+    }
+
+    function structureDestroyed(isSelectedStructure){
+        if(isSelectedStructure){
+            vueApp.inventoryVisible = false;
         }
     }
 
@@ -497,23 +510,27 @@ let unlimited = true;
                 return;
         }
         const position = pos ? pos : sim.get_selected_inventory();
-        updateInventoryInt(inventoryContentElem, sim, false, sim.get_structure_inventory(
-            ...position, "Input"));
-        updateInventoryInt(outputInventoryContentElem, sim, false, sim.get_structure_inventory(
-            ...position, "Output"));
+        updateVueInputInventory(sim.get_structure_inventory(...position, "Input"));
+        updateVueOutputInventory(sim.get_structure_inventory(...position, "Output"));
+        updateVueStorageInventory(sim.get_structure_inventory(...position, "Storage"));
     }
 
-    function generateItemImage(i, iconSize, count){
-        var img = document.createElement('div');
+    function setItemImageToElem(img, i, iconSize){
         var imageFile = getImageFile(i);
         img.style.backgroundImage = `url(${imageFile.url})`;
         var size = iconSize ? 32 : objViewSize;
         img.style.width = size + 'px';
         img.style.height = size + 'px';
-        img.style.display = 'inline-block';
         img.style.backgroundSize = size * imageFile.widthFactor + 'px ' + size * imageFile.heightFactor + 'px';
+    }
+
+    function generateItemImage(i, iconSize, count){
+        var img = document.createElement('div');
+        setItemImageToElem(img, i, iconSize);
+        img.style.display = 'inline-block';
         img.setAttribute('draggable', 'false');
         if(iconSize && count){
+            var size = iconSize ? 32 : objViewSize;
             var container = document.createElement('span');
             container.style.position = 'relative';
             container.style.display = 'inline-block';
@@ -529,148 +546,162 @@ let unlimited = true;
         return img;
     }
 
-    function microTask(f){
-        Promise.resolve().then(f);
-    }
-
-    function updateInventoryInt(elem, owner, icons, inventoryData, titleElem = null){
-        // Local function to update DOM elements based on selection
-        function updateInventorySelection(elem){
-            for(var i = 0; i < elem.children.length; i++){
-                var celem = elem.children[i];
-                celem.style.backgroundColor =
-                    celem.itemName === selectedInventoryItem ? "#00ffff" : "";
-            }
-        }
-
-        // Defer execution of updateMouseIcon in order to avoid 
-        // "recursive use of an object detected which would lead to unsafe aliasing in rust"
-        microTask(updateMouseIcon);
-
-        if(!inventoryData || inventoryData.length === 0){
-            elem.style.display = "none";
-            if(titleElem)
-                titleElem.style.display = "none";
-            return;
-        }
-        elem.style.display = "block";
-        if(titleElem)
-            titleElem.style.display = "block";
-        const [inventory, item] = inventoryData;
-
-        selectedInventoryItem = item;
-
-        // Clear the elements first
-        while(elem.firstChild)
-            elem.removeChild(elem.firstChild);
-
-        for(var i in inventory){
-            var [name, v] = inventory[i];
-            var div;
-            if(icons){
-                div = generateItemImage(name, true, v);
-            }
-            else{
-                div = document.createElement('div');
-                div.appendChild(generateItemImage(name));
-                var text = document.createElement('span');
-                text.innerHTML = v + ' ' + name;
-                div.appendChild(text);
-                div.style.textAlign = 'left';
-            }
-            if(selectedInventory === owner && selectedInventoryItem === name)
-                div.style.backgroundColor = '#00ffff';
-            div.setAttribute('class', 'noselect');
-            div.itemName = name;
-            div.itemAmount = v;
-            /// Either clicking or start dragging will select the item, so that
-            /// it can be moved on drop
-            function selectThisItem(itemName){
-                if(selectedInventory === owner && selectedInventoryItem === itemName){
-                    deselectPlayerInventory();
-                    selectedInventoryItem = null;
-                    updateInventorySelection(elem);
-                    return;
-                }
-                selectedInventory = owner;
-                selectedInventoryItem = itemName;
-                if(elem === playerInventoryElem){
-                    sim.select_player_inventory(selectedInventoryItem);
-                    updateMouseIcon();
+    const inventoryClickHandler = (getItems, invtype) => (i, evt, rightClick) => {
+        console.log(`onClick${invtype}: evt.ctrlKey: ${evt.ctrlKey}`);
+        const itemType = sim.get_selected_item_type();
+        if(evt.ctrlKey && itemType === null){
+            const items = getItems();
+            if(i < items.length){
+                sim.select_structure_inventory(i, invtype, rightClick);
+                if(sim.move_selected_inventory_item(true, invtype, true)){
+                    deselectInventory();
+                    updateInventory(sim.get_player_inventory());
+                    updateToolBar();
+                    updateStructureInventory();
                 }
                 else{
-                    sim.select_structure_inventory(selectedInventoryItem);
+                    deselectInventory();
                 }
-                updateInventorySelection(elem);
-            };
-            div.onclick = (name => evt => {
-                selectThisItem(name);
-                evt.stopPropagation();
-            })(name);
-            div.setAttribute('draggable', 'true');
-            div.ondragstart = (name => ev => {
-                console.log("dragStart");
-                selectThisItem(name);
-                ev.dataTransfer.dropEffect = 'move';
-                // Encode information to determine item to drop into a JSON
-                ev.dataTransfer.setData(textType, JSON.stringify({
-                    type: name,
-                    fromPlayer: elem === playerInventoryElem,
-                    inventoryType: elem === inventoryContentElem ? "Input" : "Output",
-                }));
-            })(name);
-            elem.appendChild(div);
-        }
-    }
-
-    const inventory2ClientElem = document.getElementById('inventory2Client');
-    const inputInventoryTitleElem = document.getElementById('inputInventoryTitle');
-    const inventoryContentElem = document.getElementById('inputInventoryContent');
-    inventoryContentElem.onclick = () => onInventoryClick(false, true);
-    const outputInventoryContentElem = document.getElementById('outputInventoryContent');
-    outputInventoryContentElem.onclick = () => onInventoryClick(false, false);
-    const outputInventoryTitleElem = document.getElementById('outputInventoryTitle');
-    const burnerContainer = document.getElementById('burnerContainer');
-    const inputFuelElem = document.getElementById('inputFuel');
-    inputFuelElem.style.backgroundImage = `url(${fuelBack})`;
-
-    [inventoryContentElem, outputInventoryContentElem, inputFuelElem].forEach((elem, idx) => {
-        elem.ondragover = function(ev){
-            var ok = false;
-            for(var i = 0; i < ev.dataTransfer.types.length; i++){
-                if(ev.dataTransfer.types[i].toUpperCase() === textType.toUpperCase())
-                    ok = true;
             }
-            if(ok){
-                ev.preventDefault();
-                // Set the dropEffect to move
-                ev.dataTransfer.dropEffect = "move";
+            else if(sim.move_all_inventory_items(true, invtype)) {
+                updateInventory(sim.get_player_inventory());
+                updateToolBar();
+                updateStructureInventory();
             }
         }
-        elem.addEventListener("drop", (ev) => {
-            ev.preventDefault();
-            var data = JSON.parse(ev.dataTransfer.getData(textType));
-            if(data.fromPlayer){
-                // The amount could have changed during dragging, so we'll query current value
-                // from the source inventory.
-                if(sim.move_selected_inventory_item(!data.fromPlayer, idx === 0 ? "Input" : idx === 1 ? "Output" : "Burner")){
-                    deselectPlayerInventory();
+        else if(itemType !== null && "PlayerInventory" in itemType){
+            if(sim.move_selected_inventory_item(false, invtype, false)){
+                deselectInventory();
+                updateInventory(sim.get_player_inventory());
+                updateToolBar();
+                updateStructureInventory();
+            }
+        }
+        else if(itemType === null){
+            const items = getItems();
+            if(i < items.length){
+                sim.select_structure_inventory(i, invtype, rightClick);
+                updateMouseIcon();
+                // updateInventorySelection(elem);
+            }
+        }
+        else if(sim.get_selected_inventory()){
+            deselectInventory();
+        }
+        evt.preventDefault();
+    };
+
+    function playerClickHandler(item, evt, rightClick){
+        console.log(`onClickPlayer evt.ctrlKey: ${evt.ctrlKey}`);
+        const itemType = sim.get_selected_item_type();
+        if (itemType === null) {
+            const items = vueApp.playerItems.value;
+            if(evt.ctrlKey){
+                if(item < items.length){
+                    sim.select_player_inventory(item, rightClick);
+                    // The second argument doesn't matter, but needs to be something deserializable without error.
+                    const res = sim.move_selected_inventory_item(false, "Burner", true);
+                    if(res){
+                        deselectInventory();
+                        updateInventory(sim.get_player_inventory());
+                        updateToolBar();
+                        updateStructureInventory();
+                    }
+                    else{
+                        deselectInventory();
+                    }
+                }
+                else if(sim.move_all_inventory_items(false, "Burner")){
                     updateInventory(sim.get_player_inventory());
                     updateToolBar();
                     updateStructureInventory();
                 }
             }
-        }, true);
-    });
-    inventoryElem.style.display = 'none';
+            else{
+                if (item < items.length) {
+                    sim.select_player_inventory(item, rightClick);
+                    updateMouseIcon();
+                    // updateInventorySelection(elem);
+                }
+            }
+        } else if ("PlayerInventory" in itemType) {
+          deselectInventory();
+        } else {
+          const invtype = sim.get_selected_inventory_type();
+          if (invtype) {
+            if (sim.move_selected_inventory_item(true, invtype, false)) {
+              deselectInventory();
+              updateInventory(sim.get_player_inventory());
+              updateToolBar();
+              updateStructureInventory();
+            }
+            deselectInventory();
+          }
+        }
+        evt.preventDefault();
+    }
 
-    const inventory2CloseButton = document.getElementById("inventory2CloseButton");
-    inventory2CloseButton.style.backgroundImage = `url(${closeImage})`;
-    inventory2CloseButton.addEventListener("click", function(){
-        inventoryElem.style.display = "none";
-    });
+    /// An array of window elements which holds order of z indices.
+    var windowOrder = [];
 
-    function dragWindowMouseDown(evt,elem,pos){
+    const vueApplication = createApp(
+        InventoryWindow,
+        {
+            dragWindowMouseDown,
+            inventoryClickHandler,
+            playerClickHandler,
+            showRecipeSelect,
+            windowOrder,
+        }
+    );
+
+    const vueApp = vueApplication.mount('#vueApp');
+
+    function updateVueInputInventory(inputInventory){
+        vueApp.inputItems.value = inputInventory.length !== 0 ? inputInventory[0].map(item => {
+            const image = getImageFile(item[0]);
+            return {
+                name: item[0],
+                count: item[1],
+                ...image
+            };
+        }) : [];
+    }
+
+    function updateVueOutputInventory(inventory){
+        vueApp.outputItems.value = inventory.length !== 0 ? inventory[0].map(item => {
+            const image = getImageFile(item[0]);
+            return {
+                name: item[0],
+                count: item[1],
+                ...image
+            };
+        }) : [];
+    }
+
+    function updateVueStorageInventory(inventory){
+        vueApp.storageItems.value = inventory.length !== 0 ? inventory[0].map(item => {
+            const image = getImageFile(item[0]);
+            return {
+                name: item[0],
+                count: item[1],
+                ...image
+            };
+        }) : [];
+    }
+
+    function updateVuePlayerInventory(inventory){
+        vueApp.playerItems.value = inventory.length !== 0 ? inventory[0].map(item => {
+            const image = getImageFile(item[0]);
+            return {
+                name: item[0],
+                count: item[1],
+                ...image
+            };
+        }) : [];
+    }
+
+    function dragWindowMouseDown(evt,elem,pos, updatePos){
         pos = [evt.screenX, evt.screenY];
         bringToTop(elem);
         var mousecaptorElem = document.getElementById('mousecaptor');
@@ -687,8 +718,7 @@ let unlimited = true;
             var r = elem.getBoundingClientRect();
             var left = elem.style.left !== '' ? parseInt(elem.style.left) : (cr.left + cr.right) / 2;
             var top = elem.style.top !== '' ? parseInt(elem.style.top) : (cr.top + cr.bottom) / 2;
-            elem.style.left = (left + rel[0]) + 'px';
-            elem.style.top = (top + rel[1]) + 'px';
+            updatePos(left + rel[0], top + rel[1]);
         }
         
         mousecaptorElem.addEventListener('mousemove', mousemove);
@@ -698,21 +728,18 @@ let unlimited = true;
             this.removeEventListener('mousemove', mousemove);
             this.style.display = 'none';
         });
+        mousecaptorElem.addEventListener('mouseleave', function(){
+            // Stop dragging a window
+            elem = null;
+            this.removeEventListener('mousemove', mousemove);
+            this.style.display = 'none';
+        })
     }
-
-    /// An array of window elements which holds order of z indices.
-    var windowOrder = [];
-
-    var inventoryDragStart = null;
-
-    var inventoryTitleElem = document.getElementById('inventory2Title');
-
-    inventoryTitleElem.addEventListener('mousedown', function(evt){
-        dragWindowMouseDown(evt, inventoryElem, inventoryDragStart);
-    });
 
     /// Bring a window to the top on the other windows.
     function bringToTop(elem){
+        if(!vueApp.$refs.inventory)
+            return;
         var oldIdx = windowOrder.indexOf(elem);
         if(0 <= oldIdx && oldIdx < windowOrder.length - 1){
             windowOrder.splice(oldIdx, 1);
@@ -720,88 +747,84 @@ let unlimited = true;
             for(var i = 0; i < windowOrder.length; i++)
                 windowOrder[i].style.zIndex = i + windowZIndex;
         }
+        else{
+            elem.style.zIndex = oldIdx + windowZIndex;
+        }
         var mousecaptorElem = document.getElementById('mousecaptor');
-        mousecaptorElem.style.zIndex = i + windowZIndex; // The mouse capture element comes on top of all other windows
+        mousecaptorElem.style.zIndex = windowOrder.length + windowZIndex; // The mouse capture element comes on top of all other windows
     }
 
-    let burnerItemElem = null;
     function showBurnerStatus([c, r]){
         const [burnerInventory, _] = sim.get_structure_inventory(c, r, "Burner");
         if(burnerInventory){
-            burnerContainer.style.display = "block";
-            const elem = inputFuelElem;
-            // Clear the elements first
-            // while(elem.firstChild)
-            //     elem.removeChild(elem.firstChild);
-
-            if(0 < burnerInventory.length){
-                const [name, v] = burnerInventory[0];
-                if(burnerItemElem === null){
-                    burnerItemElem = generateItemImage(name, true, v);
-                    burnerItemElem.setAttribute('draggable', 'true');
-                }
-                else{
-                    const imageFile = getImageFile(i);
-                    burnerItemElem.src = `url(${imageFile.url})`;
-                    burnerItemElem.children[1].innerHTML = v;
-                }
-                burnerItemElem.ondragstart = function(ev){
-                    console.log("dragStart");
-                    // selectThisItem(this.itemName);
-                    ev.dataTransfer.dropEffect = 'move';
-                    // Encode information to determine item to drop into a JSON
-                    ev.dataTransfer.setData(textType, JSON.stringify({
-                        type: name,
-                        fromPlayer: false,
-                        inventoryType: "Burner",
-                    }));
+            vueApp.hasBurner = true;
+            vueApp.burnerItems = burnerInventory.map(item => {
+                return {
+                    name: item[0],
+                    url: getImageFile(item[0]).url,
+                    count: item[1],
                 };
-                burnerItemElem.setAttribute('class', 'noselect');
-                elem.appendChild(burnerItemElem);
-            }
-            else if(burnerItemElem){
-                elem.removeChild(burnerItemElem);
-                burnerItemElem = null;
-            }
+            });
 
             const burnerEnergy = sim.get_structure_burner_energy(c, r, true);
+            // if(burnerEnergy)
+            //     vueApp.burnerEnergy = burnerEnergy[0] / burnerEnergy[1] * 80;
             if(burnerEnergy){
-                const burnerEnergyElem = document.getElementById('burnerEnergy');
-                burnerEnergyElem.style.width = `${burnerEnergy[0] / burnerEnergy[1] * 80}px`;
+                vueApp.burnerEnergy = burnerEnergy[0] / burnerEnergy[1];
             }
         }
         else{
-            burnerContainer.style.display = "none";
+            vueApp.hasBurner = false;
         }
     }
 
+    function updateStructureProgress(pos){
+        const progress = sim.get_structure_progress(...pos);
+        vueApp.progress = progress || 0;
+    }
+
     function showInventory(event){
-        if(inventoryElem.style.display !== "none"){
-            inventoryElem.style.display = "none";
+        vueApp.inventoryVisible = !vueApp.inventoryVisible;
+        if(!vueApp.inventoryVisible){
             return;
         }
         // else if(tile.structure && tile.structure.inventory){
         else if(event){
-            inventoryElem.style.display = "block";
-            inventoryElem.classList = "inventoryWide";
-            inventory2ClientElem.style.display = "block";
-            playerElem.style.left = '370px';
-            placeCenter(inventoryElem);
-            bringToTop(inventoryElem);
-            // var recipeSelectButtonElem = document.getElementById('recipeSelectButton');
-            recipeSelectButtonElem.style.display = !event.recipe_enable ? "none" : "block";
+            vueApp.hasPosition = true;
+            vueApp.placeCenter();
+            nextTick(() => bringToTop(vueApp.$refs.inventory));
             // toolTip.style.display = "none"; // Hide the tool tip for "Click to oepn inventory"
             const pos = event.pos;
-            updateInventoryInt(inventoryContentElem, sim, false, sim.get_structure_inventory(pos[0], pos[1], "Input"), inputInventoryTitleElem);
-            updateInventoryInt(outputInventoryContentElem, sim, false, sim.get_structure_inventory(pos[0], pos[1], "Output"), outputInventoryTitleElem);
+            inventoryPos = event.pos;
+
+            const inputInventory = sim.get_structure_inventory(pos[0], pos[1], "Input");
+            if(inputInventory && inputInventory.length !== 0){
+                vueApp.hasInput = true;
+                updateVueInputInventory(inputInventory);
+            }
+            else{
+                vueApp.hasInput = false;
+            }
+            const outputInventory = sim.get_structure_inventory(pos[0], pos[1], "Output");
+            if(outputInventory && outputInventory.length !== 0){
+                vueApp.hasOutput = true;
+                updateVueOutputInventory(outputInventory);
+            }
+            else{
+                vueApp.hasOutput = false;
+            }
+            const storageInventory = sim.get_structure_inventory(pos[0], pos[1], "Storage");
+            if(storageInventory && storageInventory.length !== 0){
+                vueApp.hasStorage = true;
+                updateVueStorageInventory(storageInventory);
+            }
+            else{
+                vueApp.hasStorage = false;
+            }
             showBurnerStatus(pos);
         }
         else{
-            inventoryElem.style.display = "block";
-            inventoryElem.classList = "inventoryNarrow";
-            inventory2ClientElem.style.display = "none";
-            recipeSelectButtonElem.style.display = "none";
-            playerElem.style.left = "40px";
+            vueApp.hasPosition = false;
         }
     }
 
@@ -868,6 +891,8 @@ let unlimited = true;
                 const index = i;
                 recipeSelectorContent.appendChild(recipeDraw(recipes[i], (evt) => {
                     sim.select_recipe(recipeTarget[0], recipeTarget[1], index);
+                    if(inventoryPos.length === 2 && inventoryPos[0] == recipeTarget[0] && inventoryPos[1] === recipeTarget[1])
+                        updateVueInputInventory(sim.get_structure_inventory(...recipeTarget, "Input"));
                     recipeSelector.style.display = "none";
                 }));
             }
@@ -895,13 +920,8 @@ let unlimited = true;
         elem.style.top = ((bodyRect.height - elemRect.height) / 2) + 'px';
     }
 
-    placeCenter(inventoryElem);
-    windowOrder.push(inventoryElem);
-
-    const recipeSelectButtonElem = document.getElementById('recipeSelectButton');
-    recipeSelectButtonElem.onclick = showRecipeSelect;
-
     var recipeSelectorDragStart = null;
+    let inventoryPos = [];
 
     const recipeSelectorTitle = document.getElementById('recipeSelectorTitle');
     const recipeSelector = document.getElementById('recipeSelector');
@@ -909,75 +929,11 @@ let unlimited = true;
         placeCenter(recipeSelector);
         windowOrder.push(recipeSelector);
         recipeSelectorTitle.addEventListener('mousedown', function(evt){
-            dragWindowMouseDown(evt, recipeSelector, recipeSelectorDragStart);
+            dragWindowMouseDown(evt, recipeSelector, recipeSelectorDragStart, (x, y) => {
+                recipeSelector.style.left = x + 'px';
+                recipeSelector.style.top = y + 'px';
+            });
         })
-    }
-
-    const playerElem = document.createElement('div');
-    playerElem.style.position = 'absolute';
-    playerElem.style.left = '370px';
-    playerElem.style.top = '20px';
-    playerElem.style.width = (320) + 'px';
-    playerElem.style.height = (160) + 'px';
-    inventoryElem.appendChild(playerElem);
-
-    const playerInventoryTitleElem = document.createElement('div');
-    playerInventoryTitleElem.innerHTML = "Player inventory";
-    playerInventoryTitleElem.classList = "inventoryTitle";
-    playerElem.appendChild(playerInventoryTitleElem);
-
-    const playerInventoryContainerElem = document.createElement('div');
-    playerInventoryContainerElem.style.overflow = 'hidden';
-    playerInventoryContainerElem.style.borderStyle = 'solid';
-    playerInventoryContainerElem.style.borderWidth = '1px';
-    playerInventoryContainerElem.style.border = '1px solid #00f';
-    playerInventoryContainerElem.style.backgroundColor = '#ffff7f';
-    playerInventoryContainerElem.style.height = (160) + 'px';
-    playerInventoryContainerElem.style.margin = '3px';
-    playerElem.appendChild(playerInventoryContainerElem);
-
-    const playerInventoryElem = document.createElement('div');
-    playerInventoryElem.style.overflowY = 'scroll';
-    playerInventoryElem.style.width = '100%';
-    playerInventoryElem.style.height = '100%';
-    playerInventoryElem.style.textAlign = 'left';
-    playerInventoryElem.ondragover = function(ev){
-        var ok = false;
-        for(var i = 0; i < ev.dataTransfer.types.length; i++){
-            if(ev.dataTransfer.types[i].toUpperCase() === textType.toUpperCase())
-                ok = true;
-        }
-        if(ok){
-            ev.preventDefault();
-            // Set the dropEffect to move
-            ev.dataTransfer.dropEffect = "move";
-        }
-    }
-    playerInventoryElem.ondrop = function(ev){
-        ev.preventDefault();
-        var data = JSON.parse(ev.dataTransfer.getData(textType));
-        if(!data.fromPlayer){
-            if(sim.move_selected_inventory_item(!data.fromPlayer, data.inventoryType)){
-                deselectPlayerInventory();
-                updateInventory(sim.get_player_inventory());
-                updateToolBar();
-                updateStructureInventory();
-            }
-        }
-    }
-    playerInventoryElem.onclick = function(){onInventoryClick(true, true)};
-    playerInventoryContainerElem.appendChild(playerInventoryElem);
-
-    function onInventoryClick(isPlayer, isInput){
-        // Update only if the selected inventory is the other one from destination.
-        if(sim.get_selected_inventory() !== null){
-            if(sim.move_selected_inventory_item(isPlayer, isInput ? "Input" : "Output")){
-                deselectPlayerInventory();
-                updateInventory(sim.get_player_inventory());
-                updateToolBar();
-                updateStructureInventory();
-            }
-        }
     }
 
     let dragging = null;
@@ -1032,6 +988,10 @@ let unlimited = true;
         if(result){
             if(result[0] === "ShowInventory"){
                 showInventory();
+                vueApp.placeCenter();
+                if(vueApp.inventoryVisible){
+                    nextTick(() => bringToTop(vueApp.$refs.inventory));
+                }
             }
             updateToolBarImage();
             updateToolCursor();
@@ -1107,6 +1067,7 @@ let unlimited = true;
         const reader = new FileReader();
         reader.onload = (event) => {
             sim.deserialize_game(event.target.result);
+            updateInventory(sim.get_player_inventory());
         };
         reader.readAsText(event.target.files[0]);
     });
@@ -1164,6 +1125,7 @@ let unlimited = true;
             },
             updateInventory,
             popupText,
+            structureDestroyed,
             scenarioSelectElem.value,
             context,
             loadedImages);
@@ -1173,6 +1135,7 @@ let unlimited = true;
         } catch(e) {
             alert(`FactorishState.render_init failed: ${e}`);
         }
+        updateInventory(sim.get_player_inventory());
     });
 
     const altModeBox = document.getElementById("altModeBox");
@@ -1193,6 +1156,8 @@ let unlimited = true;
         perfLabel.style.display = showPerfGraph.checked ? "block" : "none";
     }
 
+    container.style.display = "block";
+
     updatePerfVisibility();
 
     window.setInterval(function(){
@@ -1204,6 +1169,7 @@ let unlimited = true;
         const selPos = sim.get_selected_inventory();
         if(selPos){
             showBurnerStatus(selPos);
+            updateStructureProgress(selPos);
         }
 
         const minimapData = sim.render_minimap(miniMapSize, miniMapSize);

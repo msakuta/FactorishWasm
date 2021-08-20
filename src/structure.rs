@@ -1,8 +1,11 @@
 mod iter;
 
+use crate::inventory::STACK_SIZE;
+
 use super::{
     drop_items::DropItem,
     dyn_iter::{DynIter, DynIterMut},
+    inventory::InventoryType,
     items::ItemType,
     underground_belt::UnderDirection,
     water_well::FluidBox,
@@ -188,6 +191,66 @@ pub(crate) enum RotateErr {
     Other(JsValue),
 }
 
+/// Factories will have input inventory capacity of recipe ingredients enough to make this many products
+const RECIPE_CAPACITY_MULTIPLIER: usize = 3;
+
+/// If recipe was not selected for a furnace, it is allowed to insert any item, but limit the amount by this value.
+const DEFAULT_MAX_CAPACITY: usize = 50;
+
+/// Chest storage size, matching to Factorio
+const STORAGE_MAX_SLOTS: usize = 48;
+
+pub(crate) fn default_add_inventory(
+    s: &mut (impl Structure + ?Sized),
+    inventory_type: InventoryType,
+    item_type: &ItemType,
+    count: isize,
+) -> isize {
+    let mut count = count;
+    if 0 < count {
+        match inventory_type {
+            InventoryType::Input => {
+                if let Some((recipe, inventory)) =
+                    s.get_selected_recipe().zip(s.inventory(inventory_type))
+                {
+                    let capacity = recipe.input.count_item(item_type) * RECIPE_CAPACITY_MULTIPLIER;
+                    let existing_count = inventory.count_item(item_type);
+                    if existing_count < capacity {
+                        count = count.min((capacity - existing_count) as isize);
+                    } else {
+                        count = 0;
+                    }
+                } else {
+                    count = DEFAULT_MAX_CAPACITY as isize;
+                }
+            }
+            InventoryType::Storage => {
+                if let Some(inventory) = s.inventory(inventory_type) {
+                    let occupied_slots = inventory.count_slots() as isize;
+                    let mut left_count =
+                        (STORAGE_MAX_SLOTS as isize - occupied_slots) * STACK_SIZE as isize;
+                    let last_stack = inventory.count_item(item_type) % STACK_SIZE;
+                    if 0 < last_stack {
+                        left_count += (STACK_SIZE - last_stack) as isize;
+                    }
+                    count = count.min(left_count);
+                }
+            }
+            _ => (),
+        }
+    }
+    if let Some(inventory) = s.inventory_mut(inventory_type) {
+        if 0 < count {
+            inventory.add_items(item_type, count as usize);
+            count
+        } else {
+            -(inventory.remove_items(item_type, count.abs() as usize) as isize)
+        }
+    } else {
+        0
+    }
+}
+
 pub(crate) trait Structure {
     fn name(&self) -> &str;
     fn position(&self) -> &Position;
@@ -307,19 +370,24 @@ pub(crate) trait Structure {
     fn output(&mut self, _state: &mut FactorishState, _item_type: &ItemType) -> Result<(), ()> {
         Err(())
     }
-    fn burner_inventory(&self) -> Option<&Inventory> {
-        None
-    }
-    fn add_burner_inventory(&mut self, _item_type: &ItemType, _amount: isize) -> isize {
-        0
+    /// Attempt to add or remove items from a burner inventory and returns actual item count moved.
+    /// Positive amount means adding items to the burner, otherwise remove.
+    /// If it has limited capacity, positive amount may return less value than given.
+    fn add_inventory(
+        &mut self,
+        inventory_type: InventoryType,
+        item_type: &ItemType,
+        count: isize,
+    ) -> isize {
+        default_add_inventory(self, inventory_type, item_type, count)
     }
     fn burner_energy(&self) -> Option<(f64, f64)> {
         None
     }
-    fn inventory(&self, _is_input: bool) -> Option<&Inventory> {
+    fn inventory(&self, _inventory_type: InventoryType) -> Option<&Inventory> {
         None
     }
-    fn inventory_mut(&mut self, _is_input: bool) -> Option<&mut Inventory> {
+    fn inventory_mut(&mut self, _inventory_type: InventoryType) -> Option<&mut Inventory> {
         None
     }
     /// Some structures don't have an inventory, but still can have some item, e.g. inserter hands.
@@ -327,12 +395,14 @@ pub(crate) trait Structure {
     /// It will take away the inventory by default, destroying the instance's inventory.
     fn destroy_inventory(&mut self) -> Inventory {
         let mut ret = self
-            .inventory_mut(true)
+            .inventory_mut(InventoryType::Input)
             .map_or(Inventory::new(), |inventory| std::mem::take(inventory));
-        ret.merge(
-            self.inventory_mut(false)
-                .map_or(Inventory::new(), |inventory| std::mem::take(inventory)),
-        );
+        if let Some(inv) = self.inventory_mut(InventoryType::Output) {
+            ret.merge(std::mem::take(inv));
+        }
+        if let Some(inv) = self.inventory_mut(InventoryType::Storage) {
+            ret.merge(std::mem::take(inv));
+        }
         ret
     }
     /// Returns a list of recipes. The return value is wrapped in a Cow because some
@@ -345,6 +415,9 @@ pub(crate) trait Structure {
         Err(JsValue::from_str("recipes not available"))
     }
     fn get_selected_recipe(&self) -> Option<&Recipe> {
+        None
+    }
+    fn get_progress(&self) -> Option<f64> {
         None
     }
     fn fluid_connections(&self) -> [bool; 4] {

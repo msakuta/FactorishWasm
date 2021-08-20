@@ -4,9 +4,10 @@ use super::{
         draw_electricity_alarm_gl,
         utils::{enable_buffer, Flatten},
     },
+    inventory::InventoryType,
     items::item_to_str,
     serialize_impl,
-    structure::{Structure, StructureDynIter, StructureId},
+    structure::{default_add_inventory, Structure, StructureDynIter, StructureId},
     DropItem, FactorishState, FrameProcResult, Inventory, InventoryTrait, ItemType, Position,
     Recipe, TILE_SIZE,
 };
@@ -270,15 +271,11 @@ impl Structure for ElectricFurnace {
             }
         }
 
-        if let Some(recipe) = &self.recipe {
-            if 0 < recipe.input.count_item(&o.type_) || 0 < recipe.output.count_item(&o.type_) {
-                self.input_inventory.add_item(&o.type_);
-                return Ok(());
-            } else {
-                return Err(JsValue::from_str("Item is not part of recipe"));
-            }
+        if 0 < default_add_inventory(self, InventoryType::Input, &o.type_, 1) {
+            Ok(())
+        } else {
+            Err(JsValue::from_str("Item is not part of recipe"))
         }
-        Err(JsValue::from_str("Recipe is not initialized"))
     }
 
     fn can_input(&self, item_type: &ItemType) -> bool {
@@ -303,19 +300,19 @@ impl Structure for ElectricFurnace {
         }
     }
 
-    fn inventory(&self, is_input: bool) -> Option<&Inventory> {
-        Some(if is_input {
-            &self.input_inventory
-        } else {
-            &self.output_inventory
+    fn inventory(&self, invtype: InventoryType) -> Option<&Inventory> {
+        Some(match invtype {
+            InventoryType::Input => &self.input_inventory,
+            InventoryType::Output => &self.output_inventory,
+            _ => return None,
         })
     }
 
-    fn inventory_mut(&mut self, is_input: bool) -> Option<&mut Inventory> {
-        Some(if is_input {
-            &mut self.input_inventory
-        } else {
-            &mut self.output_inventory
+    fn inventory_mut(&mut self, invtype: InventoryType) -> Option<&mut Inventory> {
+        Some(match invtype {
+            InventoryType::Input => &mut self.input_inventory,
+            InventoryType::Output => &mut self.output_inventory,
+            _ => return None,
         })
     }
 
@@ -337,6 +334,10 @@ impl Structure for ElectricFurnace {
 
     fn get_selected_recipe(&self) -> Option<&Recipe> {
         self.recipe.as_ref()
+    }
+
+    fn get_progress(&self) -> Option<f64> {
+        self.progress
     }
 
     fn power_sink(&self) -> bool {

@@ -5,10 +5,10 @@ use super::{
         utils::{enable_buffer, Flatten},
         ShaderBundle,
     },
-    inventory::{Inventory, InventoryTrait},
+    inventory::{Inventory, InventoryTrait, InventoryType},
     items::get_item_image_url,
     serialize_impl,
-    structure::{Structure, StructureDynIter, StructureId},
+    structure::{default_add_inventory, Structure, StructureDynIter, StructureId},
     FactorishState, FrameProcResult, ItemType, Position, Recipe, TILE_SIZE,
 };
 use cgmath::{Matrix3, Matrix4, Vector2, Vector3};
@@ -241,6 +241,7 @@ impl Structure for Assembler {
                         self.input_inventory.remove_items(item, *count);
                     }
                     self.progress = Some(0.);
+                    console_log!("inputting from Assembler {}", recipe.output.len());
                     ret = FrameProcResult::InventoryChanged(self.position);
                 }
             }
@@ -258,6 +259,7 @@ impl Structure for Assembler {
                         self.output_inventory
                             .add_items(&output_item.0, *output_item.1);
                     }
+                    console_log!("outputting from Assembler {}", recipe.output.len());
                     return Ok(FrameProcResult::InventoryChanged(self.position));
                 } else {
                     self.progress = Some(prev_progress + progress);
@@ -270,9 +272,8 @@ impl Structure for Assembler {
     }
 
     fn input(&mut self, o: &DropItem) -> Result<(), JsValue> {
-        if let Some(recipe) = &self.recipe {
-            if 0 < recipe.input.count_item(&o.type_) || 0 < recipe.output.count_item(&o.type_) {
-                self.input_inventory.add_item(&o.type_);
+        if self.recipe.is_some() {
+            if 0 < default_add_inventory(self, InventoryType::Input, &o.type_, 1) {
                 return Ok(());
             } else {
                 return Err(JsValue::from_str("Item is not part of recipe"));
@@ -293,19 +294,19 @@ impl Structure for Assembler {
         }
     }
 
-    fn inventory(&self, is_input: bool) -> Option<&Inventory> {
-        Some(if is_input {
-            &self.input_inventory
-        } else {
-            &self.output_inventory
+    fn inventory(&self, invtype: InventoryType) -> Option<&Inventory> {
+        Some(match invtype {
+            InventoryType::Input => &self.input_inventory,
+            InventoryType::Output => &self.output_inventory,
+            _ => return None,
         })
     }
 
-    fn inventory_mut(&mut self, is_input: bool) -> Option<&mut Inventory> {
-        Some(if is_input {
-            &mut self.input_inventory
-        } else {
-            &mut self.output_inventory
+    fn inventory_mut(&mut self, invtype: InventoryType) -> Option<&mut Inventory> {
+        Some(match invtype {
+            InventoryType::Input => &mut self.input_inventory,
+            InventoryType::Output => &mut self.output_inventory,
+            _ => return None,
         })
     }
 
@@ -450,6 +451,10 @@ impl Structure for Assembler {
 
     fn get_selected_recipe(&self) -> Option<&Recipe> {
         self.recipe.as_ref()
+    }
+
+    fn get_progress(&self) -> Option<f64> {
+        self.progress
     }
 
     fn power_sink(&self) -> bool {

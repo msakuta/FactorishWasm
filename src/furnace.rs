@@ -1,7 +1,8 @@
 use super::{
     gl::utils::{enable_buffer, Flatten},
+    inventory::InventoryType,
     items::item_to_str,
-    structure::{Structure, StructureDynIter, StructureId},
+    structure::{default_add_inventory, Structure, StructureDynIter, StructureId},
     DropItem, FactorishState, FrameProcResult, Inventory, InventoryTrait, ItemType, Position,
     Recipe, TempEnt, COAL_POWER,
 };
@@ -40,6 +41,8 @@ pub(crate) static RECIPES: Lazy<[Recipe; 3]> = Lazy::new(|| {
 #[derive(Serialize, Deserialize)]
 pub(crate) struct Furnace {
     position: Position,
+    #[serde(default)]
+    burner_inventory: Inventory,
     input_inventory: Inventory,
     output_inventory: Inventory,
     progress: Option<f64>,
@@ -52,6 +55,7 @@ impl Furnace {
     pub(crate) fn new(position: &Position) -> Self {
         Furnace {
             position: *position,
+            burner_inventory: Inventory::new(),
             input_inventory: Inventory::new(),
             output_inventory: Inventory::new(),
             progress: None,
@@ -208,12 +212,12 @@ impl Structure for Furnace {
         if let Some(recipe) = &self.recipe {
             let mut ret = FrameProcResult::None;
             // First, check if we need to refill the energy buffer in order to continue the current work.
-            if self.input_inventory.get(&ItemType::CoalOre).is_some() {
+            if self.burner_inventory.get(&ItemType::CoalOre).is_some() {
                 // Refill the energy from the fuel
                 if self.power < recipe.power_cost {
                     self.power += COAL_POWER;
                     self.max_power = self.power;
-                    self.input_inventory.remove_item(&ItemType::CoalOre);
+                    self.burner_inventory.remove_item(&ItemType::CoalOre);
                     ret = FrameProcResult::InventoryChanged(self.position);
                 }
             }
@@ -271,9 +275,9 @@ impl Structure for Furnace {
     fn input(&mut self, o: &DropItem) -> Result<(), JsValue> {
         // Fuels are always welcome.
         if o.type_ == ItemType::CoalOre
-            && self.input_inventory.count_item(&ItemType::CoalOre) < FUEL_CAPACITY
+            && self.burner_inventory.count_item(&ItemType::CoalOre) < FUEL_CAPACITY
         {
-            self.input_inventory.add_item(&ItemType::CoalOre);
+            self.burner_inventory.add_item(&ItemType::CoalOre);
             return Ok(());
         }
 
@@ -291,20 +295,16 @@ impl Structure for Furnace {
             }
         }
 
-        if let Some(recipe) = &self.recipe {
-            if 0 < recipe.input.count_item(&o.type_) || 0 < recipe.output.count_item(&o.type_) {
-                self.input_inventory.add_item(&o.type_);
-                return Ok(());
-            } else {
-                return Err(JsValue::from_str("Item is not part of recipe"));
-            }
+        if 0 < default_add_inventory(self, InventoryType::Input, &o.type_, 1) {
+            Ok(())
+        } else {
+            Err(JsValue::from_str("Item is not part of recipe"))
         }
-        Err(JsValue::from_str("Recipe is not initialized"))
     }
 
     fn can_input(&self, item_type: &ItemType) -> bool {
         if *item_type == ItemType::CoalOre
-            && self.input_inventory.count_item(item_type) < FUEL_CAPACITY
+            && self.burner_inventory.count_item(item_type) < FUEL_CAPACITY
         {
             return true;
         }
@@ -329,25 +329,58 @@ impl Structure for Furnace {
         }
     }
 
-    fn inventory(&self, is_input: bool) -> Option<&Inventory> {
-        Some(if is_input {
-            &self.input_inventory
+    fn add_inventory(
+        &mut self,
+        inventory_type: InventoryType,
+        item_type: &ItemType,
+        count: isize,
+    ) -> isize {
+        if inventory_type != InventoryType::Burner {
+            return default_add_inventory(self, inventory_type, item_type, count);
+        }
+        if count < 0 {
+            let existing = self.burner_inventory.count_item(item_type);
+            let removed = existing.min((-count) as usize);
+            self.burner_inventory.remove_items(item_type, removed);
+            -(removed as isize)
+        } else if *item_type == ItemType::CoalOre {
+            let add_amount = count.min(
+                (FUEL_CAPACITY - self.burner_inventory.count_item(&ItemType::CoalOre)) as isize,
+            );
+            self.burner_inventory
+                .add_items(item_type, add_amount as usize);
+            add_amount as isize
         } else {
-            &self.output_inventory
+            0
+        }
+    }
+
+    fn burner_energy(&self) -> Option<(f64, f64)> {
+        Some((self.power, self.max_power))
+    }
+
+    fn inventory(&self, invtype: InventoryType) -> Option<&Inventory> {
+        Some(match invtype {
+            InventoryType::Burner => &self.burner_inventory,
+            InventoryType::Input => &self.input_inventory,
+            InventoryType::Output => &self.output_inventory,
+            _ => return None,
         })
     }
 
-    fn inventory_mut(&mut self, is_input: bool) -> Option<&mut Inventory> {
-        Some(if is_input {
-            &mut self.input_inventory
-        } else {
-            &mut self.output_inventory
+    fn inventory_mut(&mut self, invtype: InventoryType) -> Option<&mut Inventory> {
+        Some(match invtype {
+            InventoryType::Burner => &mut self.burner_inventory,
+            InventoryType::Input => &mut self.input_inventory,
+            InventoryType::Output => &mut self.output_inventory,
+            _ => return None,
         })
     }
 
     fn destroy_inventory(&mut self) -> Inventory {
         let mut ret = std::mem::take(&mut self.input_inventory);
         ret.merge(std::mem::take(&mut self.output_inventory));
+        ret.merge(std::mem::take(&mut self.burner_inventory));
         // Return the ingredients if it was in the middle of processing a recipe.
         if let Some(mut recipe) = self.recipe.take() {
             if self.progress.is_some() {
@@ -363,6 +396,10 @@ impl Structure for Furnace {
 
     fn get_selected_recipe(&self) -> Option<&Recipe> {
         self.recipe.as_ref()
+    }
+
+    fn get_progress(&self) -> Option<f64> {
+        self.progress
     }
 
     fn serialize(&self) -> serde_json::Result<serde_json::Value> {

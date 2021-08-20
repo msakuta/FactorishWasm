@@ -2,6 +2,7 @@ use super::pipe::Pipe;
 use super::{
     drop_items::DropItem,
     gl::utils::{enable_buffer, Flatten},
+    inventory::InventoryType,
     serialize_impl,
     structure::{Structure, StructureDynIter, StructureId},
     water_well::{FluidBox, FluidType},
@@ -286,11 +287,15 @@ impl Structure for Boiler {
         }
     }
 
-    fn burner_inventory(&self) -> Option<&Inventory> {
-        Some(&self.inventory)
-    }
-
-    fn add_burner_inventory(&mut self, item_type: &ItemType, amount: isize) -> isize {
+    fn add_inventory(
+        &mut self,
+        inventory_type: InventoryType,
+        item_type: &ItemType,
+        amount: isize,
+    ) -> isize {
+        if inventory_type != InventoryType::Burner {
+            return 0;
+        }
         if amount < 0 {
             let existing = self.inventory.count_item(item_type);
             let removed = existing.min((-amount) as usize);
@@ -308,6 +313,20 @@ impl Structure for Boiler {
 
     fn burner_energy(&self) -> Option<(f64, f64)> {
         Some((self.power, self.max_power))
+    }
+
+    fn inventory(&self, invtype: InventoryType) -> Option<&Inventory> {
+        Some(match invtype {
+            InventoryType::Burner => &self.inventory,
+            _ => return None,
+        })
+    }
+
+    fn inventory_mut(&mut self, invtype: InventoryType) -> Option<&mut Inventory> {
+        Some(match invtype {
+            InventoryType::Burner => &mut self.inventory,
+            _ => return None,
+        })
     }
 
     fn destroy_inventory(&mut self) -> Inventory {

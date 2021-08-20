@@ -82,24 +82,24 @@ body {
     text-align: justify;
 }
 
-#inventory, #inventory2{
+.inventory, #inventory2{
     position: absolute;
-    height: 220px;
+    height: 300px;
     left: 50%;
     top: 50%;
     margin-left: -175px;
     margin-top: -80px;
-    border: 2px solid #000000;
-    background-color: #f0f0f0;
+    border: 3px outset #666666;
+    background-color: #7D7D7D;
     text-align: left;
 }
 
 .inventoryNarrow {
-    width: 370px;
+    width: 390px;
 }
 
 .inventoryWide {
-    width: 700px;
+    width: 730px;
 }
 
 #inventoryTitle, #inventory2Title, .inventoryTitle{
@@ -142,6 +142,24 @@ body {
     background-color: #ffff7f;
 }
 
+.player {
+    position: absolute;
+    left: 370px;
+    top: 0px;
+    width: 330px;
+    height: 160px;
+}
+
+.playerInventoryContainer {
+    overflow-y: scroll;
+    border-style: solid;
+    border-width: 1px;
+    border: 1px solid #00f;
+    height: 240px;
+    width: 340px;
+    margin-top: 3px;
+}
+
 #recipeSelector{
     position: absolute;
     width: 300px;
@@ -151,7 +169,7 @@ body {
     margin-left: -125px;
     margin-top: -150px;
     border: 2px solid #000000;
-    background-color: #ffffaf;
+    background-color: #7D7D7D;
     text-align: left;
 }
 
@@ -235,6 +253,22 @@ div.closeButton{
     left: 40px;
 }
 
+.itemBack {
+    display: inline-block;
+    position: relative;
+    width: 32px;
+    height: 32px;
+}
+
+.transparent {
+    opacity: 0.5;
+}
+
+.burnerItem {
+    width: 32px;
+    height: 32px;
+}
+
 .fuelBackground {
     left: 0px;
     width: 32px;
@@ -242,12 +276,14 @@ div.closeButton{
 }
 
 .burnerEnergyBack {
-    position: absolute;
+    /* position: absolute; */
+    display: inline-block;
     top: 10px;
     left: 40px;
     width: 80px;
     height: 10px;
     background-color: #0f0f0f;
+    margin: 3px;
 }
 
 .burnerEnergy {
@@ -256,6 +292,25 @@ div.closeButton{
     height: 10px;
     background-color: #ff0fff;
 }
+
+.progressBarBack {
+    /* position: relative; */
+    display: inline-block;
+    top: 10px;
+    left: 40px;
+    width: 80px;
+    height: 10px;
+    background-color: #0f0f0f;
+    margin: 3px;
+}
+
+.progressBar {
+    position: relative;
+    left: 0px;
+    height: 10px;
+    background-color: #0faf0f;
+}
+
 
 #points{
     font-size: 25px;
