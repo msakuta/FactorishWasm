@@ -495,6 +495,7 @@ pub struct FactorishState {
     info_elem: Option<HtmlDivElement>,
     on_player_update: js_sys::Function,
     on_popup_text: js_sys::Function,
+    on_structure_destroy: js_sys::Function,
     minimap_buffer: Vec<u8>,
     power_wires: Vec<PowerWire>,
     alt_mode: bool,
@@ -558,6 +559,7 @@ impl FactorishState {
         terrain_params: JsValue,
         on_player_update: js_sys::Function,
         on_popup_text: js_sys::Function,
+        on_structure_destroy: js_sys::Function,
         // on_show_inventory: js_sys::Function,
         scenario: &str,
         context: WebGlRenderingContext,
@@ -668,6 +670,7 @@ impl FactorishState {
             drop_items_index: DropItemIndex::default(),
             on_player_update,
             on_popup_text,
+            on_structure_destroy,
             temp_ents: vec![],
             rng: Xor128::new(3142125),
             // on_show_inventory,
@@ -1662,8 +1665,9 @@ impl FactorishState {
                 .into_iter()
                 .filter(|power_wire| power_wire.0.id != i as u32 && power_wire.1.id != i as u32)
                 .collect();
+            let destroyed_id = StructureId { id: i as u32, gen };
             structure.on_construction_self(
-                StructureId { id: i as u32, gen },
+                destroyed_id,
                 &StructureDynIter::new_all(&mut self.structures),
                 false,
             )?;
@@ -1683,8 +1687,13 @@ impl FactorishState {
             self.update_fluid_connections(&position)?;
 
             self.on_player_update
-                .call1(&window(), &JsValue::from(self.get_player_inventory()?))
-                .unwrap_or_else(|_| JsValue::from(true));
+                .call1(&window(), &JsValue::from(self.get_player_inventory()?))?;
+
+            self.on_structure_destroy.call1(
+                &window(),
+                &JsValue::from_bool(self.selected_structure_inventory == Some(destroyed_id)),
+            )?;
+
             harvested_structure = true;
         }
         let mut harvested_items = false;

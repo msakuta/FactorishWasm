@@ -163,6 +163,7 @@ let unlimited = true;
         },
         updateInventory,
         popupText,
+        structureDestroyed,
         scenarioSelectElem.value,
         context,
         loadedImages,
@@ -492,6 +493,12 @@ let unlimited = true;
             updateVuePlayerInventory(inventory);
         }catch(e){
             console.log(e);
+        }
+    }
+
+    function structureDestroyed(isSelectedStructure){
+        if(isSelectedStructure){
+            vueApp.inventoryVisible = false;
         }
     }
 
@@ -1118,6 +1125,7 @@ let unlimited = true;
             },
             updateInventory,
             popupText,
+            structureDestroyed,
             scenarioSelectElem.value,
             context,
             loadedImages);
