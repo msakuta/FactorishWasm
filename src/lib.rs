@@ -2109,19 +2109,15 @@ impl FactorishState {
             // Structure's inventory has capacity limit, so we need to check one item at a time
             // and exit if we fail to add a new item.
             let mut ret = false;
-            while let Some((item, count)) = self
+            let items = self
                 .player
                 .inventory
                 .iter()
-                .next()
                 .map(|(item, count)| (*item, *count))
-            {
-                if count == 0 {
-                    return Ok(ret);
-                }
+                .collect::<Vec<_>>();
+            for (item, count) in items {
                 let try_order = Self::inventory_move_order(&item);
 
-                let mut moved = 0;
                 for invtype in try_order {
                     let moved_count = structure.add_inventory(invtype, &item, count as isize);
                     if moved_count == 0 {
@@ -2134,19 +2130,13 @@ impl FactorishState {
                         != 0
                     {
                         ret = true;
-                        moved = moved_count;
                         break;
                     } else {
                         panic!("We have checked player has {} {:?}, no?", count, item);
                     }
                 }
-
-                // If failed to move, finish
-                if moved == 0 {
-                    break;
-                }
             }
-            return Ok(true);
+            return Ok(ret);
         }
 
         Ok(false)
