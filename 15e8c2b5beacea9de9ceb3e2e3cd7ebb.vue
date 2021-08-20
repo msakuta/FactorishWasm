@@ -1,0 +1,9 @@
+
+div.closeButton{
+    position: absolute;
+    width: 16px;
+    height: 16px;
+    right: 2px;
+    top: 2px;
+    border: 1px solid #7f7f7f;
+}
