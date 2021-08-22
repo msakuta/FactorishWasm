@@ -95,11 +95,11 @@ body {
 }
 
 .inventoryNarrow {
-    width: 390px;
+    width: 360px;
 }
 
 .inventoryWide {
-    width: 730px;
+    width: 695px;
 }
 
 #inventoryTitle, #inventory2Title, .inventoryTitle{
@@ -126,8 +126,8 @@ body {
 
 #inventoryClient, #inventory2Client{
     position: absolute;
-    top: 20px;
-    left: 40px;
+    top: 22px;
+    left: 5px;
     width: 340px;
     height: 140px;
 }

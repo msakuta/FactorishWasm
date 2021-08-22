@@ -2,7 +2,7 @@
 import CloseButton from "./CloseButton.vue";
 import BurnerInventory from "./BurnerInventory.vue";
 import itemBack from "../../img/item-back.png";
-import { nextTick, reactive, ref, toRefs } from "vue";
+import { nextTick, ref } from "vue";
 
 export default {
   components: {
@@ -108,10 +108,6 @@ export default {
   >
     <div id="inventory2Title" @mousedown="dragWindow">Inventory</div>
     <close-button @click="close"></close-button>
-    <div id="inventoryButtons" class="inventoryButtons">
-      <img id="inventory2List" draggable="false" src="../../img/list.png" style="position: absolute">
-      <img id="inventory2Icons" draggable="false" src="../../img/icons.png" style="position: absolute; left: 0px; top: 32px">
-    </div>
     <div id="inventory2Client">
       <div v-if="hasPosition">
         <div style="vertical-align: middle;">
