@@ -355,7 +355,12 @@ pub(crate) trait Structure {
     /// that returns recipes by get_selected_recipe(), it will check if it's in the inputs.
     fn can_input(&self, item_type: &ItemType) -> bool {
         if let Some(recipe) = self.get_selected_recipe() {
-            recipe.input.get(item_type).is_some()
+            if let Some(inventory) = self.inventory(InventoryType::Input) {
+                // Two times the product requirements
+                inventory.count_item(item_type) < recipe.input.get(item_type).unwrap_or(&0) * 2
+            } else {
+                recipe.input.get(item_type).is_some()
+            }
         } else {
             false
         }
