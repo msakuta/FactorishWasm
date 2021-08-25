@@ -1,5 +1,6 @@
 use super::{
     gl::utils::{enable_buffer, Flatten},
+    pipe::Pipe,
     structure::{Structure, StructureDynIter, StructureId},
     water_well::FluidBox,
     FactorishState, FrameProcResult, Position, Rotation, TILE_SIZE,
@@ -143,6 +144,7 @@ impl Structure for UndergroundPipe {
                 gl.draw_arrays(GL::TRIANGLE_FAN, 0, 4);
             }
             2 => {
+                Pipe::draw_gl_int(self, state, gl, 2, false, is_ghost)?;
                 let on_cursor = state.cursor == Some([self.position.x, self.position.y]);
                 if state.alt_mode && matches!(self.rotation, Rotation::Left | Rotation::Top)
                     || on_cursor

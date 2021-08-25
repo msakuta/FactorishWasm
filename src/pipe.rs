@@ -197,8 +197,9 @@ impl Pipe {
                 Rotation::Right,
                 Rotation::Bottom,
             ];
+            const MIN_FLOW: f64 = 1e-6;
             for (i, (flow, rotation)) in flows.iter().zip(ROTATIONS.iter()).enumerate() {
-                if 1e-6 < flow.abs() {
+                if MIN_FLOW < flow.abs() {
                     let origin = rotation.delta();
                     enable_buffer(&gl, &state.assets.rect_buffer, 2, shader.vertex_position);
                     gl.uniform_matrix4fv_with_f32_array(
@@ -214,7 +215,9 @@ impl Pipe {
                             * Matrix4::from_angle_z(
                                 Rad(rotation.next().next().angle_rad() as f32),
                             )
-                            * Matrix4::from_scale(0.25))
+                            * Matrix4::from_scale(
+                                0.1 + 0.25 * (1. / 6.) * (flow.abs() / MIN_FLOW).log10() as f32,
+                            ))
                         .flatten(),
                     );
                     gl.draw_arrays(GL::TRIANGLE_FAN, 0, 4);
