@@ -1,12 +1,10 @@
-use crate::{TILE_SIZE, TILE_SIZE_I};
-
 use super::{
     gl::utils::{enable_buffer, Flatten},
     structure::{Structure, StructureDynIter, StructureId},
     water_well::FluidBox,
-    FactorishState, FrameProcResult, Position,
+    FactorishState, FrameProcResult, Position, Rotation, TILE_SIZE, TILE_SIZE_I,
 };
-use cgmath::{Matrix3, Matrix4, Vector2, Vector3};
+use cgmath::{Matrix3, Matrix4, Rad, Vector2, Vector3};
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 use web_sys::{CanvasRenderingContext2d, WebGlRenderingContext as GL};
@@ -86,9 +84,28 @@ impl Pipe {
         draw_center: bool,
         is_ghost: bool,
     ) -> Result<(), JsValue> {
-        if depth != 0 {
-            return Ok(());
+        match depth {
+            0 => {
+                Self::draw_pipe_gl(gl, structure, state, draw_center, is_ghost)?;
+            }
+            2 => {
+                if state.alt_mode {
+                    Self::draw_flow_overlay_gl(gl, structure, state)?;
+                }
+            }
+            _ => (),
         }
+
+        Ok(())
+    }
+
+    fn draw_pipe_gl(
+        gl: &GL,
+        structure: &dyn Structure,
+        state: &FactorishState,
+        draw_center: bool,
+        is_ghost: bool,
+    ) -> Result<(), JsValue> {
         let position = structure.position();
         let (x, y) = (
             position.x as f32 + state.viewport.x as f32,
@@ -142,7 +159,68 @@ impl Pipe {
             .flatten(),
         );
         gl.draw_arrays(GL::TRIANGLE_FAN, 0, 4);
+        Ok(())
+    }
 
+    fn draw_flow_overlay_gl(
+        gl: &GL,
+        structure: &dyn Structure,
+        state: &FactorishState,
+    ) -> Result<(), JsValue> {
+        let position = structure.position();
+        let (x, y) = (
+            position.x as f32 + state.viewport.x as f32,
+            position.y as f32 + state.viewport.y as f32,
+        );
+        let shader = state
+            .assets
+            .textured_shader
+            .as_ref()
+            .ok_or_else(|| js_str!("Shader not found"))?;
+        gl.use_program(Some(&shader.program));
+        gl.uniform1f(shader.alpha_loc.as_ref(), 1.);
+        gl.active_texture(GL::TEXTURE0);
+        gl.bind_texture(GL::TEXTURE_2D, Some(&state.assets.tex_flow_direction));
+        gl.uniform_matrix3fv_with_f32_array(
+            shader.tex_transform_loc.as_ref(),
+            false,
+            (Matrix3::from_scale(0.5) * Matrix3::from_translation(Vector2::new(1., 1.))).flatten(),
+        );
+
+        if let Some(flows) = structure
+            .fluid_box()
+            .and_then(|fluid_boxes| Some(fluid_boxes.first()?.flow))
+        {
+            const ROTATIONS: [Rotation; 4] = [
+                Rotation::Left,
+                Rotation::Top,
+                Rotation::Right,
+                Rotation::Bottom,
+            ];
+            for (i, (flow, rotation)) in flows.iter().zip(ROTATIONS.iter()).enumerate() {
+                if 1e-6 < flow.abs() {
+                    let origin = rotation.delta();
+                    enable_buffer(&gl, &state.assets.rect_buffer, 2, shader.vertex_position);
+                    gl.uniform_matrix4fv_with_f32_array(
+                        shader.transform_loc.as_ref(),
+                        false,
+                        (state.get_world_transform()?
+                            * Matrix4::from_scale(2.)
+                            * Matrix4::from_translation(Vector3::new(
+                                x + 0.5 + origin.0 as f32 * 0.5,
+                                y + 0.5 + origin.1 as f32 * 0.5,
+                                0.,
+                            ))
+                            * Matrix4::from_angle_z(
+                                Rad(rotation.next().next().angle_rad() as f32),
+                            )
+                            * Matrix4::from_scale(0.25))
+                        .flatten(),
+                    );
+                    gl.draw_arrays(GL::TRIANGLE_FAN, 0, 4);
+                }
+            }
+        }
         Ok(())
     }
 }
