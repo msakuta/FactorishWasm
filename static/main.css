@@ -185,7 +185,7 @@ body {
     overflow-y: scroll;
 }
 
-#tooltip{
+.tooltip{
     position: absolute;
     border: 3px solid #0000ff;
     padding: 5px;

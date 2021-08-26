@@ -9,9 +9,8 @@ import { FactorishState } from "../pkg/index.js";
 
 import { createApp, nextTick } from "vue";
 
-import CloseButton from "./components/CloseButton.vue";
-import BurnerInventory from "./components/BurnerInventory.vue";
 import InventoryWindow from "./components/InventoryWindow.vue";
+import ToolTip from "./components/ToolTip.vue";
 
 /// We may no longer need support for IE, since WebAssembly is not supported by IE anyway.
 function isIE(){
@@ -129,13 +128,7 @@ let unlimited = true;
     const mouseIcon = document.getElementById("mouseIcon");
     const mouseIconOverlay = document.getElementById("mouseIconOverlay");
 
-    const toolTip = document.createElement('dim');
-    toolTip.setAttribute('id', 'tooltip');
-    toolTip.setAttribute('class', 'noselect');
-    toolTip.innerHTML = 'hello there';
-    toolTip.style.zIndex = tooltipZIndex; // Usually comes on top of all the other elements
-    toolTip.style.display = 'none'; // Initially invisible
-    container.appendChild(toolTip);
+    const vueToolTipApp = createApp(ToolTip).mount('#toolTip');
 
     const infoElem = document.createElement('div');
     infoElem.style.position = 'absolute';
@@ -315,11 +308,10 @@ let unlimited = true;
     function setToolTip(elem, text){
         var r = elem.getBoundingClientRect();
         var cr = container.getBoundingClientRect();
-        toolTip.style.display = 'block';
-        toolTip.innerHTML = text;
-        const toolTipRect = toolTip.getBoundingClientRect();
-        toolTip.style.left = (r.left - cr.left) + 'px';
-        toolTip.style.top = (r.top - cr.top - toolTipRect.height) + 'px';
+        vueToolTipApp.visible = true;
+        vueToolTipApp.text = text;
+        vueToolTipApp.left = (r.left - cr.left);
+        vueToolTipApp.bottom = window.innerHeight - r.top;
     }
     const renderToolTip = (elem, idx) => {
         const tool = sim.get_tool_desc(idx);
@@ -402,7 +394,7 @@ let unlimited = true;
                 return;
             renderToolTip(this, idx);
         };
-        toolElem.onmouseleave = (_e) => toolTip.style.display = 'none';
+        toolElem.onmouseleave = (_e) => vueToolTipApp.visible = false;
         toolContainer.appendChild(toolElem);
         toolBarCanvases.push(toolElem);
         toolContainer.appendChild(overlay);
@@ -419,7 +411,7 @@ let unlimited = true;
     rotateButton.style.backgroundImage = `url(${rotateImage}`;
     rotateButton.onmousedown = () => rotate();
     rotateButton.onmouseenter = (e) => setToolTip(e.target, "<b>Rotate</b><br><i>Shortcut: (R)</i>");
-    rotateButton.onmouseleave = (_e) => toolTip.style.display = 'none';
+    rotateButton.onmouseleave = (_e) => vueToolTipApp.visible = false;
     toolBarElem.appendChild(rotateButton);
     // Set the margin after contents are initialized
     // toolBarElem.style.marginLeft = (-(toolBarElem.getBoundingClientRect().width + miniMapSize + tableMargin) / 2) + 'px';
@@ -432,9 +424,12 @@ let unlimited = true;
     inventoryButton.style.left = (32.0 * i + 4) + 'px';
     inventoryButton.style.border = '1px blue solid';
     inventoryButton.style.backgroundImage = `url(${inventory})`;
-    inventoryButton.onmousedown = () => showInventory();
+    inventoryButton.onmousedown = () => {
+        showInventory();
+        vueApp.placeCenter();
+    };
     inventoryButton.onmouseenter = (e) => setToolTip(e.target, "<b>Inventory</b><br><i>Shortcut: (E)</i>");
-    inventoryButton.onmouseleave = () => toolTip.style.display = 'none';
+    inventoryButton.onmouseleave = () => vueToolTipApp.visible = false;
     toolBarElem.appendChild(inventoryButton);
 
     function updateToolBarImage(){
