@@ -187,9 +187,9 @@ body {
 
 .tooltip{
     position: absolute;
-    border: 3px solid #0000ff;
+    border: 3px outset #7D7D7D;
     padding: 5px;
-    background-color: #ffffaf;
+    background-color: #afafaf;
     pointer-events: none;
     text-align: left;
     font-family: sans-serif;
