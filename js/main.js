@@ -201,9 +201,6 @@ let unlimited = true;
             setHeaderVisible(false);
     }
 
-    let selectedInventory = null;
-    let selectedInventoryItem = null;
-
     let miniMapDrag = null;
     const tilesize = 32;
     const textType = isIE() ? "Text" : "text/plain";
@@ -331,7 +328,6 @@ let unlimited = true;
     };
 
     function deselectInventory(){
-        selectedInventory = null;
         sim.deselect_inventory();
         mouseIcon.style.display = "none";
     }
@@ -586,14 +582,25 @@ let unlimited = true;
         evt.preventDefault();
     };
 
-    function playerClickHandler(item, evt, rightClick){
+    const inventoryMouseEnterHandler = (getItems, _invtype) => (i, evt) => {
+        const items = getItems();
+        if(i < items.length){
+            setToolTip(evt.target, `${items[i].name} (${items[i].count})`);
+        }
+    };
+
+    const inventoryMouseLeaveHandler = (_getItems, _invtype) => (i, evt) => {
+        vueToolTipApp.visible = false;
+    };
+
+    function playerClickHandler(i, evt, rightClick){
         console.log(`onClickPlayer evt.ctrlKey: ${evt.ctrlKey}`);
         const itemType = sim.get_selected_item_type();
         if (itemType === null) {
             const items = vueApp.playerItems.value;
             if(evt.ctrlKey){
-                if(item < items.length){
-                    sim.select_player_inventory(item, rightClick);
+                if(i < items.length){
+                    sim.select_player_inventory(i, rightClick);
                     // The second argument doesn't matter, but needs to be something deserializable without error.
                     const res = sim.move_selected_inventory_item(false, "Burner", true);
                     if(res){
@@ -613,8 +620,8 @@ let unlimited = true;
                 }
             }
             else{
-                if (item < items.length) {
-                    sim.select_player_inventory(item, rightClick);
+                if (i < items.length) {
+                    sim.select_player_inventory(i, rightClick);
                     updateMouseIcon();
                     // updateInventorySelection(elem);
                 }
@@ -636,6 +643,17 @@ let unlimited = true;
         evt.preventDefault();
     }
 
+    const playerMouseEnterHandler = (i, evt) => {
+        const items = vueApp.playerItems.value;
+        if(i < items.length){
+            setToolTip(evt.target, `${items[i].name} (${items[i].count})`);
+        }
+    };
+
+    const playerMouseLeaveHandler = (_i, _evt) => {
+        vueToolTipApp.visible = false;
+    };
+
     /// An array of window elements which holds order of z indices.
     var windowOrder = [];
 
@@ -644,7 +662,11 @@ let unlimited = true;
         {
             dragWindowMouseDown,
             inventoryClickHandler,
+            inventoryMouseEnterHandler,
+            inventoryMouseLeaveHandler,
             playerClickHandler,
+            playerMouseEnterHandler,
+            playerMouseLeaveHandler,
             showRecipeSelect,
             windowOrder,
         }

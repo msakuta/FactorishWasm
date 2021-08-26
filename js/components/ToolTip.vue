@@ -13,7 +13,7 @@ export default {
   setup(props, context) {
     return {
       visible: ref(false),
-      tootipZIndex: ref(1000),
+      tootipZIndex: ref(10000),
       fuelBack,
       left: ref(0),
       bottom: ref(0),

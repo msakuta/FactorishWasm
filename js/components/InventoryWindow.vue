@@ -14,7 +14,11 @@ export default {
     dragWindowMouseDown: Function,
     showRecipeSelect: Function,
     inventoryClickHandler: Function,
+    inventoryMouseEnterHandler: Function,
+    inventoryMouseLeaveHandler: Function,
     playerClickHandler: Function,
+    playerMouseEnterHandler: Function,
+    playerMouseLeaveHandler: Function,
     windowOrder: Array,
   },
 
@@ -22,7 +26,11 @@ export default {
     const {
       dragWindowMouseDown,
       inventoryClickHandler,
+      inventoryMouseEnterHandler,
+      inventoryMouseLeaveHandler,
       playerClickHandler,
+      playerMouseEnterHandler,
+      playerMouseLeaveHandler,
       windowOrder
     } = props;
 
@@ -63,11 +71,21 @@ export default {
       showRecipeSelect: props.showRecipeSelect,
 
       onClickFuel: inventoryClickHandler(() => burnerItems.value, "Burner"),
+      onMouseEnterFuel: inventoryMouseEnterHandler(() => burnerItems.value, "Burner"),
+      onMouseLeaveFuel: inventoryMouseLeaveHandler(() => burnerItems.value, "Burner"),
       onClickInput: inventoryClickHandler(() => inputItems.value.value, "Input"),
+      onMouseEnterInput: inventoryMouseEnterHandler(() => inputItems.value.value, "Input"),
+      onMouseLeaveInput: inventoryMouseLeaveHandler(() => inputItems.value.value, "Input"),
       onClickOutput: inventoryClickHandler(() => outputItems.value.value, "Output"),
+      onMouseEnterOutput: inventoryMouseEnterHandler(() => outputItems.value.value, "Output"),
+      onMouseLeaveOutput: inventoryMouseLeaveHandler(() => outputItems.value.value, "Output"),
       onClickStorage: inventoryClickHandler(() => storageItems.value.value, "Storage"),
+      onMouseEnterStorage: inventoryMouseEnterHandler(() => storageItems.value.value, "Storage"),
+      onMouseLeaveStorage: inventoryMouseLeaveHandler(() => storageItems.value.value, "Storage"),
 
       onClickPlayer: playerClickHandler,
+      onMouseEnterPlayer: playerMouseEnterHandler,
+      onMouseLeavePlayer: playerMouseLeaveHandler,
     };
   },
 
@@ -117,6 +135,8 @@ export default {
               class="itemBack"
               @click="evt => onClickInput(i-1, evt, false)"
               @contextmenu="evt => onClickInput(i-1, evt, true)"
+              @mouseenter="evt => onMouseEnterInput(i-1, evt)"
+              @mouseleave="evt => onMouseLeaveInput(i-1, evt)"
               :style="{backgroundColor: `#ffffff`, backgroundImage: `url(${itemBack})`}"
             >
               <div v-if="i-1 < inputItems.value.length"
@@ -137,6 +157,8 @@ export default {
               class="itemBack"
               @click="evt => onClickOutput(i-1, evt, false)"
               @contextmenu="evt => onClickOutput(i-1, evt, true)"
+              @mouseenter="evt => onMouseEnterOutput(i-1, evt)"
+              @mouseleave="evt => onMouseLeaveOutput(i-1, evt)"
               :style="{backgroundColor: `#ffffff`, backgroundImage: `url(${itemBack})`}"
             >
               <div v-if="i-1 < outputItems.value.length" class="burnerItem"
@@ -149,7 +171,14 @@ export default {
               @click="showRecipeSelect"
           >
         </div>
-        <burner-inventory v-if="hasBurner" @click-fuel="onClickFuel" :items="burnerItems" :burnerEnergy="burnerEnergy"></burner-inventory>
+        <burner-inventory
+          v-if="hasBurner"
+          @click-fuel="onClickFuel"
+          @mouse-enter="onMouseEnterFuel"
+          @mouse-leave="onMouseLeaveFuel"
+          :items="burnerItems"
+          :burnerEnergy="burnerEnergy"
+        ></burner-inventory>
         <div v-if="hasStorage">
             <div class="inventoryTitle">Storage inventory</div>
             <div v-for="i in 48"
@@ -157,6 +186,8 @@ export default {
                 class="itemBack"
                 @click="evt => onClickStorage(i-1, evt, false)"
                 @contextmenu="evt => onClickStorage(i-1, evt, true)"
+                @mouseenter="evt => onMouseEnterStorage(i-1, evt)"
+                @mouseleave="evt => onMouseLeaveStorage(i-1, evt)"
                 :style="{backgroundColor: `#ffffff`, backgroundImage: `url(${itemBack})`}"
             >
                 <div v-if="i-1 < storageItems.value.length" class="burnerItem"
@@ -174,6 +205,8 @@ export default {
                 class="itemBack"
                 @click="evt => onClickPlayer(i-1, evt, false)"
                 @contextmenu="evt => onClickPlayer(i-1, evt, true)"
+                @mouseenter="evt => onMouseEnterPlayer(i-1, evt)"
+                @mouseleave="evt => onMouseLeavePlayer(i-1, evt)"
                 :style="{backgroundColor: `#ffffff`, backgroundImage: `url(${itemBack})`}"
             >
                 <div v-if="i-1 < playerItems.value.length" class="burnerItem"
