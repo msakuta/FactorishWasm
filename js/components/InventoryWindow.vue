@@ -12,14 +12,16 @@ export default {
 
   props: {
     dragWindowMouseDown: Function,
-    showRecipeSelect: Function,
     inventoryClickHandler: Function,
     inventoryMouseEnterHandler: Function,
     inventoryMouseLeaveHandler: Function,
     playerClickHandler: Function,
     playerMouseEnterHandler: Function,
     playerMouseLeaveHandler: Function,
-    windowOrder: Array,
+    showRecipeSelect: Function,
+    recipeSelectMouseEnterHandler: Function,
+    recipeSelectMouseLeaveHandler: Function,
+    bringToTop: Function,
   },
 
   setup(props, context) {
@@ -31,7 +33,6 @@ export default {
       playerClickHandler,
       playerMouseEnterHandler,
       playerMouseLeaveHandler,
-      windowOrder
     } = props;
 
     const inventoryVisible = ref(false);
@@ -59,7 +60,7 @@ export default {
       progress: ref(0),
       playerItems,
 
-      windowOrder,
+      zIndex: ref(0),
       dragWindowMouseDown,
 
       inventoryDragStart: null,
@@ -67,8 +68,6 @@ export default {
         console.log("Handling click: " + inventoryVisible.value);
         inventoryVisible.value = !inventoryVisible.value;
       },
-
-      showRecipeSelect: props.showRecipeSelect,
 
       onClickFuel: inventoryClickHandler(() => burnerItems.value, "Burner"),
       onMouseEnterFuel: inventoryMouseEnterHandler(() => burnerItems.value, "Burner"),
@@ -94,6 +93,7 @@ export default {
       this.dragWindowMouseDown(
         evt,
         this.$refs.inventory,
+        this,
         this.inventoryDragStart,
         (x, y) => {
           this.left = x;
@@ -111,8 +111,6 @@ export default {
         var bodyRect = document.body.getBoundingClientRect();
         this.left = (bodyRect.width - elemRect.width) / 2;
         this.top = (bodyRect.height - elemRect.height) / 2;
-        if (!(this.$refs.inventory in this.windowOrder))
-          this.windowOrder.push(this.$refs.inventory);
       });
     },
   },
@@ -121,8 +119,9 @@ export default {
 
 <template>
   <div v-if="inventoryVisible" ref="inventory"
-  :class="['noselect', 'inventory', hasPosition ? 'inventoryWide' : 'inventoryNarrow']"
-  :style="{left: `${left}px`, top: `${top}px`}"
+    :class="['noselect', 'inventory', hasPosition ? 'inventoryWide' : 'inventoryNarrow']"
+    :style="{left: `${left}px`, top: `${top}px`, zIndex}"
+    @click="bringToTop"
   >
     <div id="inventory2Title" @mousedown="dragWindow">Inventory</div>
     <close-button @click="close"></close-button>
@@ -167,8 +166,13 @@ export default {
               </div>
             </div>
           </span>
-          <img v-if="hasInput && hasOutput" src="../../img/recipe-select.png" alt="Recipe select"
-              @click="showRecipeSelect"
+          <img
+            v-if="hasInput && hasOutput"
+            src="../../img/recipe-select.png"
+            alt="Recipe select"
+            @click="showRecipeSelect"
+            @mouseenter="recipeSelectMouseEnterHandler"
+            @mouseleave="recipeSelectMouseLeaveHandler"
           >
         </div>
         <burner-inventory
@@ -180,7 +184,7 @@ export default {
           :burnerEnergy="burnerEnergy"
         ></burner-inventory>
         <div v-if="hasStorage">
-            <div class="inventoryTitle">Storage inventory</div>
+            <div class="inventorySubTitle">Storage inventory</div>
             <div v-for="i in 48"
                 :key="i"
                 class="itemBack"
@@ -198,7 +202,7 @@ export default {
         </div>
       </div>
       <div class="player" :style="{left: hasPosition ? '330px' : '0px'}">
-        <div class="inventoryTitle">Player inventory</div>
+        <div class="inventorySubTitle">Player inventory</div>
         <div class="playerInventoryContainer">
             <div v-for="i in Math.ceil((1 + playerItems.value.length) / 10) * 10"
                 :key="i"

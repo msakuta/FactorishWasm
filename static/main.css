@@ -108,9 +108,10 @@ body {
     background-color: #7f7fff;
 }
 
-.inventoryTitle {
+.inventorySubTitle {
     background-color: #6f6fcf;
     width: 316px;
+    height: 20px;
     margin-top: 2px;
     /* margin-left: 37px; */
     margin-right: 33px;
@@ -160,15 +161,15 @@ body {
     margin-top: 3px;
 }
 
-#recipeSelector{
+.recipeSelector{
     position: absolute;
-    width: 300px;
+    width: 360px;
     height: 400px;
     left: 50%;
     top: 50%;
     margin-left: -125px;
     margin-top: -150px;
-    border: 2px solid #000000;
+    border: 3px outset #666666;
     background-color: #7D7D7D;
     text-align: left;
 }
@@ -217,6 +218,7 @@ div.closeButton{
     width: 100%;
     height: auto;
     color: rgb(0,0,0);
+    font-family: Monospace;
     font-weight: bold;
     text-shadow: 1px 1px #fff, -1px -1px 0 #fff, 1px -1px 0 #fff, -1px 1px 0 #fff;
     text-align: right;

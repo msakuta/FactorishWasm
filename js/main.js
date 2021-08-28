@@ -1,7 +1,5 @@
 import rotateImage from "../img/rotate.png";
-import closeImage from "../img/close.png";
 import rightarrow from "../img/rightarrow.png";
-import fuelBack from "../img/fuel-back.png";
 import inventory from "../img/inventory.png";
 
 import { loadImages, getImageFile } from "./images.js";
@@ -10,6 +8,7 @@ import { FactorishState } from "../pkg/index.js";
 import { createApp, nextTick } from "vue";
 
 import InventoryWindow from "./components/InventoryWindow.vue";
+import RecipeSelectorWindow from "./components/RecipeSelectorWindow.vue";
 import ToolTip from "./components/ToolTip.vue";
 
 /// We may no longer need support for IE, since WebAssembly is not supported by IE anyway.
@@ -306,6 +305,7 @@ let unlimited = true;
         var r = elem.getBoundingClientRect();
         var cr = container.getBoundingClientRect();
         vueToolTipApp.visible = true;
+        vueToolTipApp.recipeDraw = false;
         vueToolTipApp.text = text;
         vueToolTipApp.left = (r.left - cr.left);
         vueToolTipApp.bottom = window.innerHeight - r.top;
@@ -655,7 +655,7 @@ let unlimited = true;
     };
 
     /// An array of window elements which holds order of z indices.
-    var windowOrder = [];
+    const windowOrder = [];
 
     const vueApplication = createApp(
         InventoryWindow,
@@ -668,11 +668,15 @@ let unlimited = true;
             playerMouseEnterHandler,
             playerMouseLeaveHandler,
             showRecipeSelect,
-            windowOrder,
+            recipeSelectMouseEnterHandler: evt => setToolTip(evt.target, "Select a recipe"),
+            recipeSelectMouseLeaveHandler: () => vueToolTipApp.visible = false,
+            bringToTop: () => bringToTop(vueApp),
         }
     );
 
     const vueApp = vueApplication.mount('#vueApp');
+
+    windowOrder.push(vueApp);
 
     function updateVueInputInventory(inputInventory){
         vueApp.inputItems.value = inputInventory.length !== 0 ? inputInventory[0].map(item => {
@@ -718,9 +722,43 @@ let unlimited = true;
         }) : [];
     }
 
-    function dragWindowMouseDown(evt,elem,pos, updatePos){
+    function recipeClickHandler(recipes, i, evt){
+        console.log(`onClick: evt.ctrlKey: ${evt.ctrlKey}`);
+        const pos = sim.get_selected_inventory();
+        if(sim.select_recipe(...pos, i))
+            vueRecipeSelector.visible = false;
+        evt.preventDefault();
+    };
+
+    const recipeMouseEnterHandler = (recipes, i, evt) => {
+        if(i < recipes.length){
+            const elem = evt.target;
+            const r = elem.getBoundingClientRect();
+            const cr = container.getBoundingClientRect();
+            vueToolTipApp.visible = true;
+            vueToolTipApp.recipeDraw = true;
+            vueToolTipApp.recipe = recipes[i];
+            vueToolTipApp.left = (r.left - cr.left);
+            vueToolTipApp.bottom = window.innerHeight - r.top;
+        }
+    };
+
+    const vueRecipeSelector = createApp(
+        RecipeSelectorWindow,
+        {
+            dragWindowMouseDown,
+            recipeClickHandler,
+            recipeMouseEnterHandler,
+            recipeMouseLeaveHandler: () => vueToolTipApp.visible = false,
+            bringToTop: () => bringToTop(vueRecipeSelector),
+        }
+    ).mount('#recipeSelector');
+
+    windowOrder.push(vueRecipeSelector);
+
+    function dragWindowMouseDown(evt, elem, vueApp, pos, updatePos){
         pos = [evt.screenX, evt.screenY];
-        bringToTop(elem);
+        bringToTop(vueApp);
         var mousecaptorElem = document.getElementById('mousecaptor');
         mousecaptorElem.style.display = 'block';
 
@@ -754,18 +792,16 @@ let unlimited = true;
     }
 
     /// Bring a window to the top on the other windows.
-    function bringToTop(elem){
-        if(!vueApp.$refs.inventory)
-            return;
-        var oldIdx = windowOrder.indexOf(elem);
+    function bringToTop(vueApp){
+        var oldIdx = windowOrder.indexOf(vueApp);
         if(0 <= oldIdx && oldIdx < windowOrder.length - 1){
             windowOrder.splice(oldIdx, 1);
-            windowOrder.push(elem);
+            windowOrder.push(vueApp);
             for(var i = 0; i < windowOrder.length; i++)
-                windowOrder[i].style.zIndex = i + windowZIndex;
+                windowOrder[i].zIndex = i + windowZIndex;
         }
         else{
-            elem.style.zIndex = oldIdx + windowZIndex;
+            vueApp.zIndex = oldIdx + windowZIndex;
         }
         var mousecaptorElem = document.getElementById('mousecaptor');
         mousecaptorElem.style.zIndex = windowOrder.length + windowZIndex; // The mouse capture element comes on top of all other windows
@@ -805,14 +841,11 @@ let unlimited = true;
         if(!vueApp.inventoryVisible){
             return;
         }
-        // else if(tile.structure && tile.structure.inventory){
         else if(event){
             vueApp.hasPosition = true;
             vueApp.placeCenter();
-            nextTick(() => bringToTop(vueApp.$refs.inventory));
-            // toolTip.style.display = "none"; // Hide the tool tip for "Click to oepn inventory"
+            nextTick(() => bringToTop(vueApp));
             const pos = event.pos;
-            inventoryPos = event.pos;
 
             const inputInventory = sim.get_structure_inventory(pos[0], pos[1], "Input");
             if(inputInventory && inputInventory.length !== 0){
@@ -845,37 +878,6 @@ let unlimited = true;
         }
     }
 
-    let recipeTarget = null;
-
-    function recipeDraw(recipe, onclick){
-        const recipeBox = document.createElement("div");
-        recipeBox.className = "recipe-box";
-        recipeBox.onclick = onclick;
-        const timeIcon = document.createElement("span");
-        timeIcon.style.display = "inline-block";
-        timeIcon.style.margin = "1px";
-        timeIcon.innerHTML = getHTML(generateItemImage("time", true, recipe.recipe_time), true);
-        recipeBox.appendChild(timeIcon);
-        const inputBox = document.createElement("span");
-        inputBox.style.display = "inline-block";
-        inputBox.style.width = "50%";
-        for(var k in recipe.input)
-            inputBox.innerHTML += getHTML(generateItemImage(k, true, recipe.input[k]), true);
-        recipeBox.appendChild(inputBox);
-        const arrowImg = document.createElement("img");
-        arrowImg.src = rightarrow;
-        arrowImg.style.width = "20px";
-        arrowImg.style.height = "32px";
-        recipeBox.appendChild(arrowImg);
-        const outputBox = document.createElement("span");
-        outputBox.style.display = "inline-block";
-        outputBox.style.width = "10%";
-        for(var k in recipe.output)
-            outputBox.innerHTML += getHTML(generateItemImage(k, true, recipe.output[k]), true);
-        recipeBox.appendChild(outputBox);
-        return recipeBox;
-    }
-
     /// Convert a HTML element to string.
     /// If deep === true, descendants are serialized, too.
     function getHTML(who, deep){
@@ -889,45 +891,31 @@ let unlimited = true;
         return txt;
     }
 
-    function showRecipeSelect(){
-        var recipeSelector = document.getElementById('recipeSelector');
-        var recipeSelectorContent = document.getElementById('recipeSelectorContent');
-        if(recipeSelector.style.display !== "none"){
-            recipeSelector.style.display = "none";
+    function showRecipeSelect(evt){
+        evt.stopPropagation();
+        if(vueRecipeSelector.visible){
+            vueRecipeSelector.visible = false;
             return;
         }
-        else if(sim.get_selected_inventory()){
-            recipeSelector.style.display = "block";
-            bringToTop(recipeSelector);
-            recipeTarget = sim.get_selected_inventory();
-            var text = "";
-            var recipes = sim.get_structure_recipes(...sim.get_selected_inventory());
-            while(0 < recipeSelectorContent.childNodes.length)
-                recipeSelectorContent.removeChild(recipeSelectorContent.childNodes[0]);
-            for(var i = 0; i < recipes.length; i++){
-                const index = i;
-                recipeSelectorContent.appendChild(recipeDraw(recipes[i], (evt) => {
-                    sim.select_recipe(recipeTarget[0], recipeTarget[1], index);
-                    if(inventoryPos.length === 2 && inventoryPos[0] == recipeTarget[0] && inventoryPos[1] === recipeTarget[1])
-                        updateVueInputInventory(sim.get_structure_inventory(...recipeTarget, "Input"));
-                    recipeSelector.style.display = "none";
-                }));
-            }
-            // recipeSelectorContent.innerHTML = text;
-        }
-        else{
-            recipeTarget = null;
-            recipeSelectorContent.innerHTML = "No recipes available";
+        const sel_pos = sim.get_selected_inventory();
+        if(sel_pos){
+            vueRecipeSelector.visible = true;
+            vueRecipeSelector.placeCenter();
+            bringToTop(vueRecipeSelector);
+            var recipes = sim.get_structure_recipes(...sel_pos);
+            vueRecipeSelector.recipes = recipes.map(recipe => {
+                let firstKey = null;
+                for(let key in recipe.output){
+                    firstKey = key;
+                    break;
+                }
+                return {
+                    ...recipe,
+                    ...getImageFile(firstKey),
+                }
+            });
         }
     }
-
-    function hideRecipeSelect(){
-        var recipeSelector = document.getElementById('recipeSelector');
-        recipeSelector.style.display = "none";
-    }
-    const recipeSelectorCloseButton = document.getElementById('recipeSelectorCloseButton');
-    recipeSelectorCloseButton.onclick = hideRecipeSelect;
-    recipeSelectorCloseButton.style.backgroundImage = `url(${closeImage})`;
 
     // Place a window element at the center of the container, assumes the windows have margin set in the middle.
     function placeCenter(elem){
@@ -938,13 +926,11 @@ let unlimited = true;
     }
 
     var recipeSelectorDragStart = null;
-    let inventoryPos = [];
 
     const recipeSelectorTitle = document.getElementById('recipeSelectorTitle');
     const recipeSelector = document.getElementById('recipeSelector');
     if(recipeSelectorTitle && recipeSelector){
         placeCenter(recipeSelector);
-        windowOrder.push(recipeSelector);
         recipeSelectorTitle.addEventListener('mousedown', function(evt){
             dragWindowMouseDown(evt, recipeSelector, recipeSelectorDragStart, (x, y) => {
                 recipeSelector.style.left = x + 'px';
@@ -1007,7 +993,7 @@ let unlimited = true;
                 showInventory();
                 vueApp.placeCenter();
                 if(vueApp.inventoryVisible){
-                    nextTick(() => bringToTop(vueApp.$refs.inventory));
+                    bringToTop(vueApp);
                 }
             }
             updateToolBarImage();
