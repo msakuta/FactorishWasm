@@ -1,8 +1,12 @@
 <script>
+import ItemIcon from "./ItemIcon.vue";
 import fuelBack from "../../img/fuel-back.png";
 
 export default {
   name: 'BurnerInventory',
+  components: {
+    ItemIcon
+  },
   props: {
     items: Array,
     burnerEnergy: Number,
@@ -28,8 +32,7 @@ export default {
     @mouseleave="evt => mouseLeave(0, evt)"
     :style="{backgroundColor: `#ffffff`, backgroundImage: `url(${fuelBack})`}"
   >
-    <img v-if="0 < items.length" class="burnerItem" :src="items[0].url">
-    <div v-if="0 < items.length" class="overlay noselect"> {{ items[0].count }} </div>
+    <item-icon v-if="0 < items.length" :item="items[0].name" :count="items[0].count" />
   </div>
   <div class="burnerEnergyBack">
     <div id="burnerEnergy" class="burnerEnergy" :style="{width: `${burnerEnergy * 100}%`}"></div>

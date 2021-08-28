@@ -515,28 +515,6 @@ let unlimited = true;
         img.style.backgroundSize = size * imageFile.widthFactor + 'px ' + size * imageFile.heightFactor + 'px';
     }
 
-    function generateItemImage(i, iconSize, count){
-        var img = document.createElement('div');
-        setItemImageToElem(img, i, iconSize);
-        img.style.display = 'inline-block';
-        img.setAttribute('draggable', 'false');
-        if(iconSize && count){
-            var size = iconSize ? 32 : objViewSize;
-            var container = document.createElement('span');
-            container.style.position = 'relative';
-            container.style.display = 'inline-block';
-            container.style.width = size + 'px';
-            container.style.height = size + 'px';
-            container.appendChild(img);
-            var overlay = document.createElement('div');
-            overlay.setAttribute('class', 'overlay noselect');
-            overlay.innerHTML = count;
-            container.appendChild(overlay);
-            return container;
-        }
-        return img;
-    }
-
     const inventoryClickHandler = (getItems, invtype) => (i, evt, rightClick) => {
         console.log(`onClick${invtype}: evt.ctrlKey: ${evt.ctrlKey}`);
         const itemType = sim.get_selected_item_type();
@@ -680,44 +658,36 @@ let unlimited = true;
 
     function updateVueInputInventory(inputInventory){
         vueApp.inputItems.value = inputInventory.length !== 0 ? inputInventory[0].map(item => {
-            const image = getImageFile(item[0]);
             return {
                 name: item[0],
                 count: item[1],
-                ...image
             };
         }) : [];
     }
 
     function updateVueOutputInventory(inventory){
         vueApp.outputItems.value = inventory.length !== 0 ? inventory[0].map(item => {
-            const image = getImageFile(item[0]);
             return {
                 name: item[0],
                 count: item[1],
-                ...image
             };
         }) : [];
     }
 
     function updateVueStorageInventory(inventory){
         vueApp.storageItems.value = inventory.length !== 0 ? inventory[0].map(item => {
-            const image = getImageFile(item[0]);
             return {
                 name: item[0],
                 count: item[1],
-                ...image
             };
         }) : [];
     }
 
     function updateVuePlayerInventory(inventory){
         vueApp.playerItems.value = inventory.length !== 0 ? inventory[0].map(item => {
-            const image = getImageFile(item[0]);
             return {
                 name: item[0],
                 count: item[1],
-                ...image
             };
         }) : [];
     }
@@ -725,8 +695,10 @@ let unlimited = true;
     function recipeClickHandler(recipes, i, evt){
         console.log(`onClick: evt.ctrlKey: ${evt.ctrlKey}`);
         const pos = sim.get_selected_inventory();
-        if(sim.select_recipe(...pos, i))
+        if(sim.select_recipe(...pos, i)){
+            updateVueInputInventory(sim.get_structure_inventory(...pos, "Input"));
             vueRecipeSelector.visible = false;
+        }
         evt.preventDefault();
     };
 
@@ -814,7 +786,6 @@ let unlimited = true;
             vueApp.burnerItems = burnerInventory.map(item => {
                 return {
                     name: item[0],
-                    url: getImageFile(item[0]).url,
                     count: item[1],
                 };
             });
@@ -903,17 +874,7 @@ let unlimited = true;
             vueRecipeSelector.placeCenter();
             bringToTop(vueRecipeSelector);
             var recipes = sim.get_structure_recipes(...sel_pos);
-            vueRecipeSelector.recipes = recipes.map(recipe => {
-                let firstKey = null;
-                for(let key in recipe.output){
-                    firstKey = key;
-                    break;
-                }
-                return {
-                    ...recipe,
-                    ...getImageFile(firstKey),
-                }
-            });
+            vueRecipeSelector.recipes = recipes;
         }
     }
 

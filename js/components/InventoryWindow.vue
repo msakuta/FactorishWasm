@@ -1,5 +1,6 @@
 <script>
 import CloseButton from "./CloseButton.vue";
+import ItemIcon from "./ItemIcon.vue";
 import BurnerInventory from "./BurnerInventory.vue";
 import itemBack from "../../img/item-back.png";
 import { nextTick, ref } from "vue";
@@ -8,6 +9,7 @@ export default {
   components: {
     CloseButton,
     BurnerInventory,
+    ItemIcon,
   },
 
   props: {
@@ -138,11 +140,12 @@ export default {
               @mouseleave="evt => onMouseLeaveInput(i-1, evt)"
               :style="{backgroundColor: `#ffffff`, backgroundImage: `url(${itemBack})`}"
             >
-              <div v-if="i-1 < inputItems.value.length"
-                :class="['burnerItem', inputItems.value[i-1].count === 0 ? 'transparent' : '']"
-                :style="{backgroundImage: `url(${inputItems.value[i-1].url})`, backgroundSize: 32 * inputItems.value[i-1].widthFactor + 'px ' + 32 * inputItems.value[i-1].heightFactor + 'px'}">
-                <div v-if="i-1 < inputItems.value.length && 0 < inputItems.value[i-1].count" class="overlay noselect"> {{ inputItems.value[i-1].count }} </div>
-              </div>
+              <template v-if="i-1 < inputItems.value.length">
+                <item-icon
+                  :item="inputItems.value[i-1].name"
+                  :count="inputItems.value[i-1].count"
+                />
+              </template>
             </div>
           </span>
           <span v-if="hasInput || hasOutput" style="position: relative; width: 100px;">
@@ -160,10 +163,12 @@ export default {
               @mouseleave="evt => onMouseLeaveOutput(i-1, evt)"
               :style="{backgroundColor: `#ffffff`, backgroundImage: `url(${itemBack})`}"
             >
-              <div v-if="i-1 < outputItems.value.length" class="burnerItem"
-                :style="{backgroundImage: `url(${outputItems.value[i-1].url})`, backgroundSize: 32 * outputItems.value[i-1].widthFactor + 'px ' + 32 * outputItems.value[i-1].heightFactor + 'px'}">
-                <div v-if="i-1 < outputItems.value.length" class="overlay noselect"> {{ outputItems.value[i-1].count }} </div>
-              </div>
+              <template v-if="i-1 < outputItems.value.length">
+                <item-icon
+                  :item="outputItems.value[i-1].name"
+                  :count="outputItems.value[i-1].count"
+                />
+              </template>
             </div>
           </span>
           <img
@@ -186,18 +191,20 @@ export default {
         <div v-if="hasStorage">
             <div class="inventorySubTitle">Storage inventory</div>
             <div v-for="i in 48"
-                :key="i"
-                class="itemBack"
-                @click="evt => onClickStorage(i-1, evt, false)"
-                @contextmenu="evt => onClickStorage(i-1, evt, true)"
-                @mouseenter="evt => onMouseEnterStorage(i-1, evt)"
-                @mouseleave="evt => onMouseLeaveStorage(i-1, evt)"
-                :style="{backgroundColor: `#ffffff`, backgroundImage: `url(${itemBack})`}"
+              :key="i"
+              class="itemBack"
+              @click="evt => onClickStorage(i-1, evt, false)"
+              @contextmenu="evt => onClickStorage(i-1, evt, true)"
+              @mouseenter="evt => onMouseEnterStorage(i-1, evt)"
+              @mouseleave="evt => onMouseLeaveStorage(i-1, evt)"
+              :style="{backgroundColor: `#ffffff`, backgroundImage: `url(${itemBack})`}"
             >
-                <div v-if="i-1 < storageItems.value.length" class="burnerItem"
-                    :style="{backgroundImage: `url(${storageItems.value[i-1].url})`, backgroundSize: 32 * storageItems.value[i-1].widthFactor + 'px ' + 32 * storageItems.value[i-1].heightFactor + 'px'}">
-                    <div v-if="i-1 < storageItems.value.length" class="overlay noselect"> {{ storageItems.value[i-1].count }} </div>
-                </div>
+              <template v-if="i-1 < storageItems.value.length">
+                <item-icon
+                  :item="storageItems.value[i-1].name"
+                  :count="storageItems.value[i-1].count"
+                />
+              </template>
             </div>
         </div>
       </div>
@@ -205,18 +212,21 @@ export default {
         <div class="inventorySubTitle">Player inventory</div>
         <div class="playerInventoryContainer">
             <div v-for="i in Math.ceil((1 + playerItems.value.length) / 10) * 10"
-                :key="i"
-                class="itemBack"
-                @click="evt => onClickPlayer(i-1, evt, false)"
-                @contextmenu="evt => onClickPlayer(i-1, evt, true)"
-                @mouseenter="evt => onMouseEnterPlayer(i-1, evt)"
-                @mouseleave="evt => onMouseLeavePlayer(i-1, evt)"
-                :style="{backgroundColor: `#ffffff`, backgroundImage: `url(${itemBack})`}"
+              :key="i"
+              class="itemBack"
+              @click="evt => onClickPlayer(i-1, evt, false)"
+              @contextmenu="evt => onClickPlayer(i-1, evt, true)"
+              @mouseenter="evt => onMouseEnterPlayer(i-1, evt)"
+              @mouseleave="evt => onMouseLeavePlayer(i-1, evt)"
+              :style="{backgroundColor: `#ffffff`, backgroundImage: `url(${itemBack})`}"
             >
-                <div v-if="i-1 < playerItems.value.length" class="burnerItem"
-                    :style="{backgroundImage: `url(${playerItems.value[i-1].url})`, backgroundSize: 32 * playerItems.value[i-1].widthFactor + 'px ' + 32 * playerItems.value[i-1].heightFactor + 'px'}">
-                    <div v-if="i-1 < playerItems.value.length" class="overlay noselect"> {{ playerItems.value[i-1].count }} </div>
-                </div>
+              <template v-if="i-1 < playerItems.value.length">
+                <item-icon
+                  :item="playerItems.value[i-1].name"
+                  :count="playerItems.value[i-1].count"
+                >
+                </item-icon>
+              </template>
             </div>
         </div>
       </div>

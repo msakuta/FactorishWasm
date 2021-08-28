@@ -9,21 +9,24 @@ export default {
       type: Number,
       default: 0,
     },
+    noCount: {
+      type: Boolean,
+      default: false,
+    }
   },
 
   setup(props, context) {
-    const itemFile = getImageFile(props.item);
     return {
-      itemFile,
-      count: props.count,
-
-      style: {
-        display: `inline-block`,
-        position: "relative",
-        backgroundImage: `url(${itemFile.url})`,
-        backgroundSize: 32 * itemFile.widthFactor + 'px ' + 32 * itemFile.heightFactor + 'px',
-        width: `32px`,
-        height: `32px`,
+      style: () => {
+        const itemFile = getImageFile(props.item);
+        return {
+          display: `inline-block`,
+          position: "relative",
+          backgroundImage: `url(${itemFile.url})`,
+          backgroundSize: 32 * itemFile.widthFactor + 'px ' + 32 * itemFile.heightFactor + 'px',
+          width: `32px`,
+          height: `32px`,
+        };
       },
     }
   }
@@ -31,8 +34,8 @@ export default {
 </script>
 
 <template>
-  <div :style="style">
-    <div class="overlay noselect">
+  <div :style="style()" :class="[count === 0 && !noCount ? 'transparent' : '']">
+    <div v-if="!noCount && 0 < count" class="overlay noselect">
     {{ count }}
     </div>
   </div>

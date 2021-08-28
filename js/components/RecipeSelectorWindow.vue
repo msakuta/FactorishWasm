@@ -1,11 +1,13 @@
 <script>
 import CloseButton from "./CloseButton.vue";
+import ItemIcon from './ItemIcon.vue';
 import itemBack from "../../img/item-back.png";
 import { nextTick, ref } from "vue";
 
 export default {
   components: {
     CloseButton,
+    ItemIcon,
   },
 
   props: {
@@ -98,10 +100,12 @@ export default {
           @mouseleave="evt => onMouseLeaveRecipe(i-1, evt)"
           :style="{backgroundColor: `#ffffff`, backgroundImage: `url(${itemBack})`}"
         >
-          <div v-if="i-1 < recipes.length" class="burnerItem"
-              :style="{backgroundImage: `url(${recipes[i-1].url})`, backgroundSize: 32 * recipes[i-1].widthFactor + 'px ' + 32 * recipes[i-1].heightFactor + 'px'}">
-              <div v-if="i-1 < recipes.length" class="overlay noselect"> {{ recipes[i-1].count }} </div>
-          </div>
+          <template v-if="i-1 < recipes.length && Object.entries(recipes[i-1].output).length">
+            <item-icon
+              :item="Object.entries(recipes[i-1].output)[0][0]"
+              :noCount="true"
+            />
+          </template>
         </div>
       </div>
     </div>
