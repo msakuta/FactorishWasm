@@ -21,6 +21,7 @@ export default {
       visible: ref(false),
       recipeDraw: ref(false),
       tootipZIndex: ref(10000),
+      owner: ref(""),
       fuelBack,
       getImageFile,
       rightarrow,

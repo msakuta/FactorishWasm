@@ -43,6 +43,7 @@ export default {
     const outputItems = ref([]);
     const storageItems = ref([]);
     const playerItems = ref([]);
+    const onClose = ref(() => {});
 
     return {
       inventoryVisible,
@@ -66,9 +67,11 @@ export default {
       dragWindowMouseDown,
 
       inventoryDragStart: null,
+      onClose,
       close(){
         console.log("Handling click: " + inventoryVisible.value);
         inventoryVisible.value = !inventoryVisible.value;
+        onClose.value(inventoryVisible.value);
       },
 
       onClickFuel: inventoryClickHandler(() => burnerItems.value, "Burner"),

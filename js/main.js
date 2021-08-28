@@ -301,11 +301,12 @@ let unlimited = true;
             mouseIcon.style.display = "none";
     }
 
-    function setToolTip(elem, text){
+    function setToolTip(elem, text, owner=""){
         var r = elem.getBoundingClientRect();
         var cr = container.getBoundingClientRect();
         vueToolTipApp.visible = true;
         vueToolTipApp.recipeDraw = false;
+        vueToolTipApp.owner = owner;
         vueToolTipApp.text = text;
         vueToolTipApp.left = (r.left - cr.left);
         vueToolTipApp.bottom = window.innerHeight - r.top;
@@ -563,7 +564,7 @@ let unlimited = true;
     const inventoryMouseEnterHandler = (getItems, _invtype) => (i, evt) => {
         const items = getItems();
         if(i < items.length){
-            setToolTip(evt.target, `${items[i].name} (${items[i].count})`);
+            setToolTip(evt.target, `${items[i].name} (${items[i].count})`, "inventory");
         }
     };
 
@@ -624,7 +625,7 @@ let unlimited = true;
     const playerMouseEnterHandler = (i, evt) => {
         const items = vueApp.playerItems.value;
         if(i < items.length){
-            setToolTip(evt.target, `${items[i].name} (${items[i].count})`);
+            setToolTip(evt.target, `${items[i].name} (${items[i].count})`, "inventory");
         }
     };
 
@@ -646,7 +647,7 @@ let unlimited = true;
             playerMouseEnterHandler,
             playerMouseLeaveHandler,
             showRecipeSelect,
-            recipeSelectMouseEnterHandler: evt => setToolTip(evt.target, "Select a recipe"),
+            recipeSelectMouseEnterHandler: evt => setToolTip(evt.target, "Select a recipe", "recipe"),
             recipeSelectMouseLeaveHandler: () => vueToolTipApp.visible = false,
             bringToTop: () => bringToTop(vueApp),
         }
@@ -655,6 +656,15 @@ let unlimited = true;
     const vueApp = vueApplication.mount('#vueApp');
 
     windowOrder.push(vueApp);
+
+    vueApp.onClose = (visible) => {
+        if(!visible){
+            if(vueRecipeSelector.visible)
+                vueRecipeSelector.visible = false;
+            if(vueToolTipApp.visible && (vueToolTipApp.owner === "inventory" || vueToolTipApp.owner === "recipe"))
+                vueToolTipApp.visible = false;
+        }
+    };
 
     function updateVueInputInventory(inputInventory){
         vueApp.inputItems.value = inputInventory.length !== 0 ? inputInventory[0].map(item => {
@@ -698,6 +708,8 @@ let unlimited = true;
         if(sim.select_recipe(...pos, i)){
             updateVueInputInventory(sim.get_structure_inventory(...pos, "Input"));
             vueRecipeSelector.visible = false;
+            if(vueToolTipApp.visible && vueToolTipApp.owner === "recipe")
+                vueToolTipApp.visible = false;
         }
         evt.preventDefault();
     };
@@ -810,6 +822,10 @@ let unlimited = true;
     function showInventory(event){
         vueApp.inventoryVisible = !vueApp.inventoryVisible;
         if(!vueApp.inventoryVisible){
+            if(vueRecipeSelector.visible)
+                vueRecipeSelector.visible = false;
+            if(vueToolTipApp.visible && (vueToolTipApp.owner === "inventory" || vueToolTipApp.owner === "recipe"))
+                vueToolTipApp.visible = false;
             return;
         }
         else if(event){
