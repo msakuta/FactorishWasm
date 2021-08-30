@@ -1,12 +1,10 @@
 use super::{
-    burner::Burner,
+    burner::{Burner, FUEL_CAPACITY},
     gl::utils::{enable_buffer, Flatten},
     pipe::Pipe,
     structure::{
         Energy, Structure, StructureBundle, StructureComponents, StructureDynIter, StructureId,
     },
-    inventory::InventoryType,
-    serialize_impl,
     water_well::{FluidBox, FluidType},
     FactorishState, FrameProcResult, Inventory, ItemType, Position, Recipe, TempEnt,
 };
@@ -16,8 +14,6 @@ use wasm_bindgen::prelude::*;
 use web_sys::{CanvasRenderingContext2d, WebGlRenderingContext as GL};
 
 use std::collections::HashMap;
-
-const FUEL_CAPACITY: usize = 10;
 
 #[derive(Serialize, Deserialize)]
 pub(crate) struct Boiler {

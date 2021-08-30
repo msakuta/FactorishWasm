@@ -2,16 +2,13 @@ use super::{
     burner::Burner,
     factory::Factory,
     gl::utils::{enable_buffer, Flatten},
-    inventory::InventoryType,
     items::item_to_str,
     serialize_impl,
     structure::{
-        default_add_inventory,
         Energy, FrameProcResult, Structure, StructureBundle, StructureComponents, StructureDynIter,
         StructureId,
     },
-    DropItem, FactorishState, FrameProcResult, Inventory, InventoryTrait, ItemType, Position,
-    Recipe, TempEnt, COAL_POWER,
+    DropItem, FactorishState, Inventory, InventoryTrait, ItemType, Position, Recipe,
 };
 use cgmath::{Matrix3, Matrix4, Vector2, Vector3};
 use once_cell::sync::Lazy;
@@ -229,9 +226,7 @@ impl Structure for Furnace {
         _state: &mut FactorishState,
         _structures: &mut StructureDynIter,
     ) -> Result<FrameProcResult, ()> {
-        let position = components.position.ok_or_else(|| ())?;
         let factory = components.factory.as_mut().ok_or_else(|| ())?;
-        let energy = components.energy.as_mut().ok_or_else(|| ())?;
         if factory.recipe.is_none() {
             factory.recipe = RECIPES
                 .iter()
@@ -251,7 +246,10 @@ impl Structure for Furnace {
             .factory
             .as_mut()
             .ok_or_else(|| js_str!("Furnace without Factory component"))?;
-        let burner = components.burner.as_mut().ok_or_else(|| js_str!("Furnace without Burner component"))?;
+        let burner = components
+            .burner
+            .as_mut()
+            .ok_or_else(|| js_str!("Furnace without Burner component"))?;
         if o.type_ == ItemType::CoalOre
             && burner.inventory.count_item(&ItemType::CoalOre) < FUEL_CAPACITY
         {
@@ -274,7 +272,7 @@ impl Structure for Furnace {
         }
 
         // if 0 < default_add_inventory(self, InventoryType::Input, &o.type_, 1) {
-            Ok(())
+        Ok(())
         // } else {
         //     Err(JsValue::from_str("Item is not part of recipe"))
         // }

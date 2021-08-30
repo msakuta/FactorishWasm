@@ -6,15 +6,13 @@ use super::{
         draw_direction_arrow_gl,
         utils::{enable_buffer, Flatten},
     },
+    inventory::Inventory,
     structure::{
         Energy, RotateErr, Structure, StructureBundle, StructureComponents, StructureDynIter,
         StructureId,
     },
-    inventory::{Inventory, InventoryTrait, InventoryType},
-    items::ItemType,
-    structure::{RotateErr, Structure, StructureDynIter, StructureId},
-    DropItem, FactorishState, FrameProcResult, Position, Recipe, Rotation, TempEnt, COAL_POWER,
-    TILE_SIZE, TILE_SIZE_I,
+    DropItem, FactorishState, FrameProcResult, Position, Recipe, Rotation, TempEnt, TILE_SIZE,
+    TILE_SIZE_I,
 };
 use cgmath::{Matrix3, Matrix4, Vector2, Vector3};
 use serde::{Deserialize, Serialize};
@@ -189,7 +187,7 @@ impl Structure for OreMine {
 
                 let draw_exit = || {
                     gl.bind_texture(GL::TEXTURE_2D, Some(&state.assets.tex_ore_mine_exit));
-                    let sx = self.rotation.angle_4() as f32 / 4.;
+                    let sx = rotation.angle_4() as f32 / 4.;
                     gl.uniform_matrix3fv_with_f32_array(
                         shader.tex_transform_loc.as_ref(),
                         false,
@@ -200,7 +198,7 @@ impl Structure for OreMine {
                     gl.draw_arrays(GL::TRIANGLE_FAN, 0, 4);
                 };
 
-                if self.rotation != Rotation::Bottom {
+                if rotation != Rotation::Bottom {
                     draw_exit();
                 }
 
@@ -220,7 +218,7 @@ impl Structure for OreMine {
 
                 gl.draw_arrays(GL::TRIANGLE_FAN, 0, 4);
 
-                if self.rotation == Rotation::Bottom {
+                if rotation == Rotation::Bottom {
                     draw_exit();
                 }
             }

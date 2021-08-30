@@ -120,9 +120,10 @@ impl Structure for ElectPole {
         true
     }
 
-    fn power_outlet(&mut self, demand: f64) -> Option<f64> {
-        let power = demand.min(self.power);
-        self.power -= power;
+    fn power_outlet(&mut self, components: &mut StructureComponents, demand: f64) -> Option<f64> {
+        let energy = components.energy.as_mut()?;
+        let power = demand.min(energy.value);
+        energy.value -= power;
         Some(power)
     }
 

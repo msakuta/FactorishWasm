@@ -1,5 +1,6 @@
 use super::{
     drop_items::DropItem,
+    inventory::InventoryType,
     items::ItemType,
     structure::{Energy, Position},
     FactorishState, FrameProcResult, Inventory, InventoryTrait, Recipe,
@@ -111,20 +112,20 @@ impl Factory {
         }
     }
 
-    pub fn inventory(&self, is_input: bool) -> Option<&Inventory> {
-        Some(if is_input {
-            &self.input_inventory
-        } else {
-            &self.output_inventory
-        })
+    pub fn inventory(&self, inventory_type: InventoryType) -> Option<&Inventory> {
+        match inventory_type {
+            InventoryType::Input => Some(&self.input_inventory),
+            InventoryType::Output => Some(&self.output_inventory),
+            _ => None,
+        }
     }
 
-    pub fn inventory_mut(&mut self, is_input: bool) -> Option<&mut Inventory> {
-        Some(if is_input {
-            &mut self.input_inventory
-        } else {
-            &mut self.output_inventory
-        })
+    pub fn inventory_mut(&mut self, inventory_type: InventoryType) -> Option<&mut Inventory> {
+        match inventory_type {
+            InventoryType::Input => Some(&mut self.input_inventory),
+            InventoryType::Output => Some(&mut self.output_inventory),
+            _ => None,
+        }
     }
 
     pub fn destroy_inventory(&mut self) -> Inventory {

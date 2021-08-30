@@ -1,13 +1,11 @@
 mod iter;
 
-use crate::inventory::STACK_SIZE;
-
 use super::{
     burner::Burner,
     drop_items::DropItem,
     dyn_iter::{DynIter, DynIterMut},
     factory::Factory,
-    inventory::InventoryType,
+    inventory::{InventoryType, STACK_SIZE},
     items::ItemType,
     underground_belt::UnderDirection,
     water_well::FluidBox,
@@ -500,7 +498,7 @@ pub(crate) trait Structure {
     /// Try to drain power from this structure.
     /// @param demand in kilojoules.
     /// @returns None if it does not support power supply.
-    fn power_outlet(&mut self, _demand: f64) -> Option<f64> {
+    fn power_outlet(&mut self, _components: &mut StructureComponents, _demand: f64) -> Option<f64> {
         None
     }
     fn wire_reach(&self) -> u32 {
@@ -687,7 +685,10 @@ impl StructureBundle {
         }
     }
 
-    pub(crate) fn inventory_mut(&mut self, inventory_type: InventoryType) -> Option<&mut Inventory> {
+    pub(crate) fn inventory_mut(
+        &mut self,
+        inventory_type: InventoryType,
+    ) -> Option<&mut Inventory> {
         if let Some(inventory) = self.dynamic.inventory_mut(inventory_type) {
             return Some(inventory);
         } else {
@@ -695,6 +696,45 @@ impl StructureBundle {
                 .factory
                 .as_mut()
                 .map(|factory| factory.inventory_mut(inventory_type))?
+        }
+    }
+
+    pub(crate) fn add_inventory(
+        &mut self,
+        inventory_type: InventoryType,
+        item_type: &ItemType,
+        amount: isize,
+    ) -> isize {
+        match inventory_type {
+            InventoryType::Burner => {
+                if let Some(ref mut burner) = self.components.burner {
+                    burner.add_burner_inventory(item_type, amount)
+                } else {
+                    return 0;
+                }
+            }
+            InventoryType::Input => {
+                if let Some(ref mut factory) = self.components.factory {
+                    let mut count = 0;
+                    if let Some(recipe) = self.dynamic.get_selected_recipe() {
+                        let inventory = &mut factory.input_inventory;
+                        let capacity =
+                            recipe.input.count_item(item_type) * RECIPE_CAPACITY_MULTIPLIER;
+                        let existing_count = inventory.count_item(item_type);
+                        if existing_count < capacity {
+                            count = count.min((capacity - existing_count) as isize);
+                        } else {
+                            count = 0;
+                        }
+                    } else {
+                        count = DEFAULT_MAX_CAPACITY as isize;
+                    }
+                    count
+                } else {
+                    default_add_inventory(self.dynamic.as_mut(), inventory_type, item_type, amount)
+                }
+            }
+            _ => 0,
         }
     }
 

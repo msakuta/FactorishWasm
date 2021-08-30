@@ -21,8 +21,8 @@ mod chest;
 mod drop_items;
 mod dyn_iter;
 mod elect_pole;
-mod factory;
 mod electric_furnace;
+mod factory;
 mod furnace;
 mod inserter;
 mod inventory;
@@ -72,7 +72,6 @@ use crate::{
 };
 use assembler::Assembler;
 use boiler::Boiler;
-use burner::Burner;
 use chest::Chest;
 use elect_pole::ElectPole;
 use electric_furnace::ElectricFurnace;
@@ -1608,19 +1607,22 @@ impl FactorishState {
             .map(|(idx, _)| idx)
     }
 
-    fn find_structure_tile_id(&self, tile: &[i32]) -> Option<(StructureId, &dyn Structure)> {
+    fn find_structure_tile_id(&self, tile: &[i32]) -> Option<(StructureId, &StructureBundle)> {
         self.structure_id_iter()
-            .find(|(_, d)| {
-                let pos = *d.position();
-                pos.x == tile[0] && pos.y == tile[1]
+            .find(|(_, bundle)| {
+                bundle
+                    .components
+                    .position
+                    .map(|pos| pos.x == tile[0] && pos.y == tile[1])
+                    .unwrap_or(false)
             })
             .map(|(id, s)| (id, s))
     }
 
-    fn find_structure_by_id(&self, id: StructureId) -> Option<&dyn Structure> {
+    fn find_structure_by_id(&self, id: StructureId) -> Option<&StructureBundle> {
         let s = self.structures.get(id.id as usize)?;
         if s.gen == id.gen {
-            Some(s.dynamic.as_deref()?)
+            Some(s.bundle.as_ref()?)
         } else {
             None
         }
@@ -1644,7 +1646,7 @@ impl FactorishState {
     ) -> Option<(&mut StructureBundle, &mut Player)> {
         let s = self.structures.get_mut(id.id as usize)?;
         if s.gen == id.gen {
-            Some((s.dynamic.as_deref_mut()?, &mut self.player))
+            Some((s.bundle.as_mut()?, &mut self.player))
         } else {
             None
         }
@@ -1874,7 +1876,6 @@ impl FactorishState {
             structure.dynamic.on_construction_self(
                 StructureId { id: i as u32, gen },
                 &mut structure.components,
-                destroyed_id,
                 &StructureDynIter::new_all(&mut self.structures),
                 false,
             )?;
@@ -1973,7 +1974,7 @@ impl FactorishState {
     }
 
     fn inventory_to_vec(
-        structure: &dyn Structure,
+        structure: &StructureBundle,
         inv_type: InventoryType,
     ) -> Option<Vec<(ItemType, usize)>> {
         let inventory = if let Some(inv) = structure.inventory(inv_type) {
@@ -1991,7 +1992,7 @@ impl FactorishState {
         } else {
             let mut inventory = std::borrow::Cow::Borrowed(inventory);
             if inv_type == InventoryType::Input {
-                if let Some(recipe) = structure.get_selected_recipe() {
+                if let Some(recipe) = structure.dynamic.get_selected_recipe() {
                     let inventory = inventory.to_mut();
                     for key in recipe.input.keys() {
                         if !inventory.contains_key(key) {
@@ -2128,7 +2129,7 @@ impl FactorishState {
         if let Some(pos) = self
             .selected_structure_inventory
             .and_then(|id| self.find_structure_by_id(id))
-            .map(|s| s.position())
+            .and_then(|s| s.components.position)
         {
             return Ok(JsValue::from(js_sys::Array::of2(
                 &JsValue::from(pos.x),
@@ -2151,38 +2152,9 @@ impl FactorishState {
         let inventory_type = InventoryType::try_from(inventory_type)?;
         if let Some((id, inventory)) = self
             .structure_id_iter()
-            .find(|(_, d)| *d.position() == Position { x, y })
+            .find(|(_, d)| d.components.position == Some(Position { x, y }))
             .and_then(|(id, s)| Some((id, Self::inventory_to_vec(s, inventory_type)?)))
         {
-            match inventory_type {
-                InventoryType::Burner => {
-                    if let Some(Burner { inventory, .. }) = &structure.components.burner {
-                        return self.get_inventory(inventory, &None);
-                    } else {
-                        return Ok(js_sys::Array::new());
-                    }
-                }
-                _ => {
-                    if let Some(inventory) = structure
-                        .dynamic
-                        .inventory(inventory_type == InventoryType::Input)
-                        .or_else(|| {
-                            structure.components.factory.as_ref().map(|factory| {
-                                factory.inventory(inventory_type == InventoryType::Input)
-                            })?
-                        })
-                    {
-                        return self.get_inventory(
-                            inventory,
-                            &self
-                                .selected_item
-                                .and_then(|item| item.map_struct(&Position { x: c, y: r })),
-                        );
-                    } else {
-                        return Ok(js_sys::Array::new());
-                    }
-                }
-            }
             return self.vec_to_js(
                 &inventory,
                 &self.selected_item.and_then(|item| item.map_struct(&id)),
@@ -2199,8 +2171,14 @@ impl FactorishState {
     }
 
     pub fn get_structure_progress(&self, x: i32, y: i32) -> Option<f64> {
-        self.find_structure_tile(&[x, y])
-            .and_then(|structure| structure.get_progress())
+        self.find_structure_tile(&[x, y]).and_then(|structure| {
+            structure
+                .components
+                .factory
+                .as_ref()
+                .and_then(|factory| factory.progress)
+                .or_else(|| structure.dynamic.get_progress())
+        })
     }
 
     pub fn get_structure_burner_energy(&self, c: i32, r: i32) -> Option<js_sys::Array> {
@@ -2340,10 +2318,10 @@ impl FactorishState {
         };
 
         if to_player {
-            if let Some(SelectedItem::StructInventory(_, sel_inventory_type, item, count)) =
+            if let Some(SelectedItem::StructInventory(id, sel_inventory_type, item, count)) =
                 self.selected_item
             {
-                console_log!("selected_structure_inventory: {:?}", pos);
+                console_log!("selected_structure_inventory: {:?}", id);
                 let (structure, player) = self.find_structure_by_id_mut_and_player_err(id)?;
                 let count = if all {
                     structure
@@ -2355,14 +2333,14 @@ impl FactorishState {
                 };
 
                 player.inventory.add_items(
-                        &item,
-                        structure
-                            .add_inventory(sel_inventory_type, &item, -(count as isize))
-                            .abs() as usize,
-                    );
-                    self.on_player_update
-                        .call1(&window(), &JsValue::from(self.get_player_inventory()?))?;
-                    return Ok(count != 0);
+                    &item,
+                    structure
+                        .add_inventory(sel_inventory_type, &item, -(count as isize))
+                        .abs() as usize,
+                );
+                self.on_player_update
+                    .call1(&window(), &JsValue::from(self.get_player_inventory()?))?;
+                return Ok(count != 0);
             }
         } else {
             if let Some(SelectedItem::PlayerInventory(item, count)) = self.selected_item {
@@ -2477,6 +2455,9 @@ impl FactorishState {
             ItemType::Chest => return Ok(Chest::new(*cursor)),
             ItemType::Furnace => {
                 return Ok(Furnace::new(cursor));
+            }
+            ItemType::ElectricFurnace => {
+                return Ok(ElectricFurnace::new(cursor));
             }
             ItemType::Assembler => {
                 return Ok(Assembler::new(cursor));
@@ -2849,9 +2830,12 @@ impl FactorishState {
                     }
                 }
             } else if let Some(structure) = self.find_structure_tile(&[cursor.x, cursor.y]) {
-                if structure.dynamic.inventory(true).is_some()
+                if structure.dynamic.inventory(InventoryType::Input).is_some()
                     || structure.dynamic.inventory(InventoryType::Output).is_some()
-                    || structure.dynamic.inventory(InventoryType::Storage).is_some()
+                    || structure
+                        .dynamic
+                        .inventory(InventoryType::Storage)
+                        .is_some()
                     || structure.dynamic.inventory(InventoryType::Burner).is_some()
                     || structure.components.burner.is_some()
                     || structure.components.factory.is_some()
@@ -3407,14 +3391,14 @@ impl FactorishState {
     }
 
     /// Returns an iterator over valid structures and their ids
-    fn structure_id_iter(&self) -> impl Iterator<Item = (StructureId, &dyn Structure)> {
+    fn structure_id_iter(&self) -> impl Iterator<Item = (StructureId, &StructureBundle)> {
         self.structures.iter().enumerate().filter_map(|(id, s)| {
             Some((
                 StructureId {
                     id: id as u32,
                     gen: s.gen,
                 },
-                s.dynamic.as_deref()?,
+                s.bundle.as_ref()?,
             ))
         })
     }

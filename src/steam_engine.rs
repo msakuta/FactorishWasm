@@ -236,9 +236,10 @@ impl Structure for SteamEngine {
         true
     }
 
-    fn power_outlet(&mut self, demand: f64) -> Option<f64> {
-        let energy = demand.min(self.power);
-        self.power -= energy;
+    fn power_outlet(&mut self, components: &mut StructureComponents, demand: f64) -> Option<f64> {
+        let energy_comp = components.energy.as_mut()?;
+        let energy = demand.min(energy_comp.value);
+        energy_comp.value -= energy;
         Some(energy)
     }
 

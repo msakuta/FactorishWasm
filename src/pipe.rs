@@ -2,7 +2,7 @@ use super::{
     gl::utils::{enable_buffer, Flatten},
     structure::{Position, Structure, StructureBundle, StructureComponents},
     water_well::FluidBox,
-    FactorishState, FrameProcResult, Position, Rotation, TILE_SIZE, TILE_SIZE_I,
+    FactorishState, Rotation, TILE_SIZE, TILE_SIZE_I,
 };
 use cgmath::{Matrix3, Matrix4, Rad, Vector2, Vector3};
 use serde::{Deserialize, Serialize};
@@ -108,8 +108,7 @@ impl Pipe {
         draw_center: bool,
         is_ghost: bool,
     ) -> Result<(), JsValue> {
-        let position = components
-            .get_position()?;
+        let position = components.get_position()?;
         let (x, y) = (
             position.x as f32 + state.viewport.x as f32,
             position.y as f32 + state.viewport.y as f32,
@@ -196,7 +195,7 @@ impl Pipe {
                 Rotation::Bottom,
             ];
             const MIN_FLOW: f64 = 1e-6;
-            for (i, (flow, rotation)) in flows.iter().zip(ROTATIONS.iter()).enumerate() {
+            for (_i, (flow, rotation)) in flows.iter().zip(ROTATIONS.iter()).enumerate() {
                 if MIN_FLOW < flow.abs() {
                     let origin = rotation.delta();
                     enable_buffer(&gl, &state.assets.rect_buffer, 2, shader.vertex_position);

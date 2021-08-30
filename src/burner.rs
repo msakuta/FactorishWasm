@@ -8,6 +8,8 @@ use serde::{Deserialize, Serialize};
 use wasm_bindgen::JsValue;
 use web_sys::CanvasRenderingContext2d;
 
+pub(crate) const FUEL_CAPACITY: usize = 10;
+
 #[derive(Serialize, Deserialize)]
 pub(crate) struct Burner {
     pub inventory: Inventory,

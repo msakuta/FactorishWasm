@@ -9,9 +9,8 @@ use super::{
     items::get_item_image_url,
     serialize_impl,
     structure::{
-        default_add_inventory, Energy, Structure, StructureBundle, StructureComponents, StructureDynIter, StructureId,
+        Energy, Structure, StructureBundle, StructureComponents, StructureDynIter, StructureId,
     },
-    serialize_impl,
     FactorishState, FrameProcResult, ItemType, Position, Recipe, TILE_SIZE,
 };
 use cgmath::{Matrix3, Matrix4, Vector2, Vector3};
@@ -237,8 +236,6 @@ impl Structure for Assembler {
             factory:
                 Some(Factory {
                     recipe: Some(recipe),
-                    ref mut input_inventory,
-                    ref mut progress,
                     ..
                 }),
             ..
@@ -257,7 +254,9 @@ impl Structure for Assembler {
                     for id in network.sources.iter() {
                         if let Some(source) = structures.get_mut(*id) {
                             let demand = energy.max - energy.value - accumulated;
-                            if let Some(energy) = source.dynamic.power_outlet(demand) {
+                            if let Some(energy) =
+                                source.dynamic.power_outlet(&mut source.components, demand)
+                            {
                                 accumulated += energy;
                                 // console_log!("draining {:?}kJ of energy with {:?} demand, from {:?}, accumulated {:?}", energy, demand, structure.name(), accumulated);
                             }
