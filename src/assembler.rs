@@ -1,6 +1,7 @@
 use super::{
     factory::Factory,
     gl::{
+        draw_electricity_alarm_gl,
         utils::{enable_buffer, Flatten},
         ShaderBundle,
     },
@@ -8,8 +9,9 @@ use super::{
     items::get_item_image_url,
     serialize_impl,
     structure::{
-        Energy, Structure, StructureBundle, StructureComponents, StructureDynIter, StructureId,
+        default_add_inventory, Energy, Structure, StructureBundle, StructureComponents, StructureDynIter, StructureId,
     },
+    serialize_impl,
     FactorishState, FrameProcResult, ItemType, Position, Recipe, TILE_SIZE,
 };
 use cgmath::{Matrix3, Matrix4, Vector2, Vector3};
@@ -178,18 +180,8 @@ impl Structure for Assembler {
                     },
                 )) = components.energy.as_ref().zip(components.factory.as_ref())
                 {
-                    if !is_ghost && energy.value == 0. && state.sim_time % 1. < 0.5 {
-                        let shader = get_shader()?;
-                        gl.active_texture(GL::TEXTURE0);
-                        gl.bind_texture(GL::TEXTURE_2D, Some(&state.assets.tex_electricity_alarm));
-                        gl.uniform_matrix3fv_with_f32_array(
-                            shader.tex_transform_loc.as_ref(),
-                            false,
-                            Matrix3::from_scale(1.).flatten(),
-                        );
-
-                        shape(shader)?;
-                        gl.draw_arrays(GL::TRIANGLE_FAN, 0, 4);
+                    if !is_ghost && energy.value == 0. {
+                        draw_electricity_alarm_gl((x, y), state, gl)?;
                     }
                 }
             }
@@ -245,6 +237,8 @@ impl Structure for Assembler {
             factory:
                 Some(Factory {
                     recipe: Some(recipe),
+                    ref mut input_inventory,
+                    ref mut progress,
                     ..
                 }),
             ..
@@ -315,6 +309,12 @@ impl Structure for Assembler {
                 Recipe::new(
                     hash_map!(ItemType::StoneOre => 5usize),
                     hash_map!(ItemType::Furnace => 1usize),
+                    20.,
+                    20.,
+                ),
+                Recipe::new(
+                    hash_map!(ItemType::SteelPlate => 5usize, ItemType::Furnace => 1),
+                    hash_map!(ItemType::ElectricFurnace => 1usize),
                     20.,
                     20.,
                 ),

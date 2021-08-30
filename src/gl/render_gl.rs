@@ -63,6 +63,43 @@ macro_rules! draw_fuel_alarm_gl_impl {
     };
 }
 
+pub(crate) fn draw_electricity_alarm_gl(
+    (x, y): (f32, f32),
+    state: &FactorishState,
+    gl: &GL,
+) -> Result<(), JsValue> {
+    if !(state.sim_time % 1. < 0.5) {
+        return Ok(());
+    }
+    let shader = state
+        .assets
+        .textured_shader
+        .as_ref()
+        .ok_or_else(|| js_str!("Shader not found"))?;
+    gl.use_program(Some(&shader.program));
+    gl.uniform1f(shader.alpha_loc.as_ref(), 1.);
+    gl.active_texture(GL::TEXTURE0);
+    gl.bind_texture(GL::TEXTURE_2D, Some(&state.assets.tex_electricity_alarm));
+    gl.uniform_matrix3fv_with_f32_array(
+        shader.tex_transform_loc.as_ref(),
+        false,
+        Matrix3::from_scale(1.).flatten(),
+    );
+
+    enable_buffer(&gl, &state.assets.screen_buffer, 2, shader.vertex_position);
+    gl.uniform_matrix4fv_with_f32_array(
+        shader.transform_loc.as_ref(),
+        false,
+        (state.get_world_transform()?
+            * Matrix4::from_scale(2.)
+            * Matrix4::from_translation(Vector3::new(x, y, 0.)))
+        .flatten(),
+    );
+
+    gl.draw_arrays(GL::TRIANGLE_FAN, 0, 4);
+    Ok(())
+}
+
 pub(crate) fn draw_fuel_alarm_gl(
     this: &StructureComponents,
     state: &FactorishState,

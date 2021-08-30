@@ -11,8 +11,10 @@ import undergroundBelt from "../img/underbelt.png";
 import splitter from "../img/splitter.png";
 import chest from "../img/chest.png";
 import mine from "../img/mine.png";
+import mineExit from "../img/ore-mine-exit.png";
 import assembler from "../img/assembler.png";
 import furnace from "../img/furnace.png";
+import electricFurnace from "../img/electric-furnace.png";
 import waterWell from "../img/waterwell.png";
 import offshorePump from "../img/offshore-pump.png";
 import boiler from "../img/boiler.png";
@@ -20,6 +22,7 @@ import pipe from "../img/pipe.png";
 import inserter from "../img/inserter-base.png";
 import direction from "../img/direction.png";
 import sparseDirection from "../img/sparse-direction.png";
+import flowDirection from "../img/flow-direction.png";
 import connectOverlay from "../img/connect-overlay.png";
 import ore from "../img/ore.png";
 import coalOre from "../img/coal-ore.png";
@@ -48,6 +51,7 @@ export let loadImages = [
     ["backTiles", backTiles],
     ["weeds", weeds],
     ["iron", iron],
+    ["steelPlate", steelPlate],
     ["coal", coal],
     ["copper", copper],
     ["stone", stone],
@@ -55,7 +59,9 @@ export let loadImages = [
     ["undergroundBelt", undergroundBelt],
     ["chest", chest],
     ["mine", mine],
+    ["mineExit", mineExit],
     ["furnace", furnace],
+    ["electricFurnace", electricFurnace],
     ["assembler", assembler],
     ["boiler", boiler],
     ["steamEngine", steamEngine],
@@ -66,6 +72,7 @@ export let loadImages = [
     ["pipe", pipe],
     ["inserter", inserter],
     ["direction", direction],
+    ["flowDirection", flowDirection],
     ["sparseDirection", sparseDirection],
     ["connectOverlay", connectOverlay],
     ["ore", ore],
@@ -126,6 +133,8 @@ function getImageFileInt(type){
         return [mine, 3];
     case 'Furnace':
         return [furnace, 3];
+    case 'Electric Furnace':
+        return [electricFurnace, 3];
     case 'Assembler':
         return [assembler, 4];
     case 'Water Well':

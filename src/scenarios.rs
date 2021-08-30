@@ -6,6 +6,7 @@ use super::{
     elect_pole::ElectPole,
     furnace::Furnace,
     inserter::Inserter,
+    inventory::InventoryType,
     items::ItemType,
     ore_mine::OreMine,
     pipe::Pipe,
@@ -107,7 +108,7 @@ fn inserter_bench(
         if x % 2 == 0 {
             wrap_structure({
                 let mut chest = Chest::new(Position::new(x, 10));
-                if let Some(inv) = chest.inventory_mut(true) {
+                if let Some(inv) = chest.inventory_mut(InventoryType::Storage) {
                     inv.add_item(&ItemType::IronOre);
                 }
                 chest
@@ -119,7 +120,7 @@ fn inserter_bench(
     structures.extend((10..=100).map(|x| {
         wrap_structure(if x % 2 == 0 {
             let mut chest = Chest::new(Position::new(x, 100));
-            if let Some(inv) = chest.inventory_mut(true) {
+            if let Some(inv) = chest.inventory_mut(InventoryType::Storage) {
                 inv.add_item(&ItemType::CoalOre);
             }
             chest

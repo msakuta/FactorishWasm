@@ -5,6 +5,8 @@ use super::{
     structure::{
         Energy, Structure, StructureBundle, StructureComponents, StructureDynIter, StructureId,
     },
+    inventory::InventoryType,
+    serialize_impl,
     water_well::{FluidBox, FluidType},
     FactorishState, FrameProcResult, Inventory, ItemType, Position, Recipe, TempEnt,
 };

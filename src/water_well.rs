@@ -27,6 +27,8 @@ pub(crate) struct FluidBox {
     #[serde(skip)]
     pub connect_to: [Option<StructureId>; 4],
     pub filter: Option<FluidType>, // permits undefined
+    #[serde(skip)]
+    pub flow: [f64; 4],
 }
 
 impl FluidBox {
@@ -39,6 +41,7 @@ impl FluidBox {
             output_enable,
             connect_to: [None; 4],
             filter: None,
+            flow: [0.; 4],
         }
     }
 
@@ -55,6 +58,7 @@ impl FluidBox {
             output_enable,
             connect_to: [None; 4],
             filter,
+            flow: [0.; 4],
         }
     }
 
@@ -66,12 +70,13 @@ impl FluidBox {
     pub(crate) fn desc(&self) -> String {
         let amount_ratio = self.amount / self.max_amount * 100.;
         // Progress bar
-        format!("{}{}{}{:?}",
+        format!("{}{}{}connect: {:?}<br>flow: {:?}",
             format!("{}: {:.0}%<br>", self.type_.map(|v| format!("{:?}", v)).unwrap_or_else(|| "None".to_string()), amount_ratio),
             "<div style='position: relative; width: 100px; height: 10px; background-color: #001f1f; margin: 2px; border: 1px solid #3f3f3f'>",
             format!("<div style='position: absolute; width: {}px; height: 10px; background-color: #ff00ff'></div></div>",
                 amount_ratio),
             self.connect_to,
+            self.flow,
             )
     }
 
@@ -87,12 +92,14 @@ impl FluidBox {
         if self.amount == 0. || !self.input_enable && !self.output_enable {
             return;
         }
+        self.flow = [0.; 4];
         let connect_list = self
             .connect_to
             .iter()
+            .zip(self.flow.iter_mut())
             .enumerate()
-            .filter_map(|(i, c)| Some((i, (*c)?)));
-        for (i, id) in connect_list {
+            .filter_map(|(i, (c, f))| Some((i, ((*c)?, f))));
+        for (i, (id, flow)) in connect_list {
             if let Some(bundle) = structures.get_mut(id) {
                 for fluid_box in &mut bundle.components.fluid_boxes {
                     // Different types of fluids won't mix
@@ -107,9 +114,9 @@ impl FluidBox {
                     if 0. < pressure {
                         continue;
                     }
-                    let flow = pressure * 0.1;
+                    let flow_amount = pressure * 0.1;
                     // Check input/output valve state
-                    if if flow < 0. {
+                    if if flow_amount < 0. {
                         !self.output_enable
                             || !fluid_box.input_enable
                             || fluid_box.filter.is_some() && fluid_box.filter != self.type_
@@ -120,17 +127,18 @@ impl FluidBox {
                     } {
                         continue;
                     }
-                    fluid_box.amount -= flow;
-                    self.amount += flow;
-                    if flow < 0. {
+                    fluid_box.amount -= flow_amount;
+                    self.amount += flow_amount;
+                    if flow_amount < 0. {
                         fluid_box.type_ = self.type_;
                     } else {
                         self.type_ = fluid_box.type_;
                     }
-                    if biggest_flow_amount < flow.abs() {
-                        biggest_flow_amount = flow;
+                    if biggest_flow_amount < flow_amount.abs() {
+                        biggest_flow_amount = flow_amount;
                         _biggest_flow_idx = i as isize;
                     }
+                    *flow = flow_amount;
                 }
             }
         }

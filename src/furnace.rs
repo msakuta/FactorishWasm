@@ -2,13 +2,16 @@ use super::{
     burner::Burner,
     factory::Factory,
     gl::utils::{enable_buffer, Flatten},
+    inventory::InventoryType,
     items::item_to_str,
     serialize_impl,
     structure::{
+        default_add_inventory,
         Energy, FrameProcResult, Structure, StructureBundle, StructureComponents, StructureDynIter,
         StructureId,
     },
-    DropItem, FactorishState, Inventory, InventoryTrait, ItemType, Position, Recipe, COAL_POWER,
+    DropItem, FactorishState, FrameProcResult, Inventory, InventoryTrait, ItemType, Position,
+    Recipe, TempEnt, COAL_POWER,
 };
 use cgmath::{Matrix3, Matrix4, Vector2, Vector3};
 use once_cell::sync::Lazy;
@@ -19,7 +22,7 @@ use web_sys::{CanvasRenderingContext2d, WebGlRenderingContext as GL};
 const FUEL_CAPACITY: usize = 10;
 
 /// A list of fixed recipes, because dynamic get_recipes() can only return a Vec.
-static RECIPES: Lazy<[Recipe; 2]> = Lazy::new(|| {
+pub(crate) static RECIPES: Lazy<[Recipe; 3]> = Lazy::new(|| {
     [
         Recipe::new(
             hash_map!(ItemType::IronOre => 1usize),
@@ -32,6 +35,12 @@ static RECIPES: Lazy<[Recipe; 2]> = Lazy::new(|| {
             hash_map!(ItemType::CopperPlate => 1usize),
             20.,
             50.,
+        ),
+        Recipe::new(
+            hash_map!(ItemType::IronPlate => 5usize),
+            hash_map!(ItemType::SteelPlate => 1usize),
+            100.,
+            250.,
         ),
     ]
 });
@@ -234,21 +243,6 @@ impl Structure for Furnace {
                 })
                 .cloned();
         }
-        if let Some(recipe) = &factory.recipe {
-            let mut ret = FrameProcResult::None;
-            // First, check if we need to refill the energy buffer in order to continue the current work.
-            if factory.input_inventory.get(&ItemType::CoalOre).is_some() {
-                // Refill the energy from the fuel
-                if energy.value < recipe.power_cost {
-                    energy.value += COAL_POWER;
-                    energy.max = energy.value;
-                    factory.input_inventory.remove_item(&ItemType::CoalOre);
-                    ret = FrameProcResult::InventoryChanged(position);
-                }
-            }
-
-            return Ok(ret);
-        }
         Ok(FrameProcResult::None)
     }
 
@@ -257,49 +251,33 @@ impl Structure for Furnace {
             .factory
             .as_mut()
             .ok_or_else(|| js_str!("Furnace without Factory component"))?;
+        let burner = components.burner.as_mut().ok_or_else(|| js_str!("Furnace without Burner component"))?;
         if o.type_ == ItemType::CoalOre
-            && factory.input_inventory.count_item(&ItemType::CoalOre) < FUEL_CAPACITY
+            && burner.inventory.count_item(&ItemType::CoalOre) < FUEL_CAPACITY
         {
-            factory.input_inventory.add_item(&ItemType::CoalOre);
+            burner.inventory.add_item(&ItemType::CoalOre);
             return Ok(());
         }
 
         if factory.recipe.is_none() {
-            match o.type_ {
-                ItemType::IronOre => {
-                    factory.recipe = Some(Recipe::new(
-                        hash_map!(ItemType::IronOre => 1usize),
-                        hash_map!(ItemType::IronPlate => 1usize),
-                        20.,
-                        50.,
-                    ));
-                }
-                ItemType::CopperOre => {
-                    factory.recipe = Some(Recipe::new(
-                        hash_map!(ItemType::CopperOre => 1usize),
-                        hash_map!(ItemType::CopperPlate => 1usize),
-                        20.,
-                        50.,
-                    ));
-                }
-                _ => {
-                    return Err(JsValue::from_str(&format!(
-                        "Cannot smelt {}",
-                        item_to_str(&o.type_)
-                    )))
-                }
+            if let Some(recipe) = RECIPES
+                .iter()
+                .find(|recipe| recipe.input.contains_key(&o.type_))
+            {
+                factory.recipe = Some(recipe.clone());
+            } else {
+                return Err(JsValue::from_str(&format!(
+                    "Cannot smelt {}",
+                    item_to_str(&o.type_)
+                )));
             }
         }
 
-        if let Some(recipe) = &factory.recipe {
-            if 0 < recipe.input.count_item(&o.type_) || 0 < recipe.output.count_item(&o.type_) {
-                factory.input_inventory.add_item(&o.type_);
-                return Ok(());
-            } else {
-                return Err(JsValue::from_str("Item is not part of recipe"));
-            }
-        }
-        Err(JsValue::from_str("Recipe is not initialized"))
+        // if 0 < default_add_inventory(self, InventoryType::Input, &o.type_, 1) {
+            Ok(())
+        // } else {
+        //     Err(JsValue::from_str("Item is not part of recipe"))
+        // }
     }
 
     fn can_input(&self, components: &StructureComponents, item_type: &ItemType) -> bool {
@@ -312,17 +290,40 @@ impl Structure for Furnace {
         //     ItemType::IronOre | ItemType::CopperOre => true,
         //     _ => false,
         // }
-        if *item_type == ItemType::CoalOre
-            && factory.input_inventory.count_item(item_type) < FUEL_CAPACITY
-        {
-            return true;
-        }
         if let Some(recipe) = &factory.recipe {
             recipe.input.get(item_type).is_some()
         } else {
-            matches!(item_type, ItemType::IronOre | ItemType::CopperOre)
+            RECIPES
+                .iter()
+                .any(|recipe| recipe.input.contains_key(item_type))
         }
     }
+
+    // fn add_inventory(
+    //     &mut self,
+    //     inventory_type: InventoryType,
+    //     item_type: &ItemType,
+    //     count: isize,
+    // ) -> isize {
+    //     if inventory_type != InventoryType::Burner {
+    //         return default_add_inventory(self, inventory_type, item_type, count);
+    //     }
+    //     if count < 0 {
+    //         let existing = self.burner_inventory.count_item(item_type);
+    //         let removed = existing.min((-count) as usize);
+    //         self.burner_inventory.remove_items(item_type, removed);
+    //         -(removed as isize)
+    //     } else if *item_type == ItemType::CoalOre {
+    //         let add_amount = count.min(
+    //             (FUEL_CAPACITY - self.burner_inventory.count_item(&ItemType::CoalOre)) as isize,
+    //         );
+    //         self.burner_inventory
+    //             .add_items(item_type, add_amount as usize);
+    //         add_amount as isize
+    //     } else {
+    //         0
+    //     }
+    // }
 
     fn get_recipes(&self) -> std::borrow::Cow<[Recipe]> {
         std::borrow::Cow::from(&RECIPES[..])

@@ -22,6 +22,7 @@ mod drop_items;
 mod dyn_iter;
 mod elect_pole;
 mod factory;
+mod electric_furnace;
 mod furnace;
 mod inserter;
 mod inventory;
@@ -49,7 +50,9 @@ mod gl {
     mod shader_bundle;
     pub(crate) mod utils;
 
-    pub(crate) use render_gl::{draw_direction_arrow_gl, draw_fuel_alarm_gl};
+    pub(crate) use render_gl::{
+        draw_direction_arrow_gl, draw_electricity_alarm_gl, draw_fuel_alarm_gl,
+    };
     pub(crate) use shader_bundle::ShaderBundle;
 }
 
@@ -72,9 +75,10 @@ use boiler::Boiler;
 use burner::Burner;
 use chest::Chest;
 use elect_pole::ElectPole;
+use electric_furnace::ElectricFurnace;
 use furnace::Furnace;
 use inserter::Inserter;
-use inventory::{Inventory, InventoryTrait, InventoryType};
+use inventory::{Inventory, InventoryTrait, InventoryType, STACK_SIZE};
 use items::{item_to_str, str_to_item, ItemType};
 use offshore_pump::OffshorePump;
 use ore_mine::OreMine;
@@ -210,7 +214,7 @@ struct ToolDef {
     item_type: ItemType,
     desc: &'static str,
 }
-const tool_defs: [ToolDef; 15] = [
+const tool_defs: [ToolDef; 16] = [
     ToolDef {
         item_type: ItemType::TransportBelt,
         desc: "Transports items on ground",
@@ -234,6 +238,10 @@ const tool_defs: [ToolDef; 15] = [
     ToolDef {
         item_type: ItemType::Furnace,
         desc: "Smelts metal ores into metal bars.<br>Requires coal ores to operate.",
+    },
+    ToolDef {
+        item_type: ItemType::ElectricFurnace,
+        desc: "Smelts metal ores into metal bars.<br>Uses electricity to operate.",
     },
     ToolDef {
         item_type: ItemType::Assembler,
@@ -389,19 +397,19 @@ impl TempEnt {
 #[derive(Eq, PartialEq, Hash, Copy, Clone, Serialize, Deserialize, Debug)]
 struct PowerWire(StructureId, StructureId);
 
-#[derive(Eq, PartialEq, Copy, Clone, Debug)]
+#[derive(Eq, PartialEq, Copy, Clone, Debug, Serialize)]
 enum SelectedItem {
     /// This is index into `tool_belt`. It is kind of duplicate of `player.selected_item`,
     /// but we make it separate field because multiple tool belt slots refer to the same item type.
     ToolBelt(usize),
-    PlayerInventory(ItemType),
-    StructInventory(Position, ItemType),
+    PlayerInventory(ItemType, usize),
+    StructInventory(StructureId, InventoryType, ItemType, usize),
 }
 
 impl SelectedItem {
-    fn map_struct(&self, position: &Position) -> Option<ItemType> {
-        if let SelectedItem::StructInventory(self_pos, item) = self {
-            if self_pos == position {
+    fn map_struct(&self, id: &StructureId) -> Option<ItemType> {
+        if let SelectedItem::StructInventory(self_id, _, item, _) = self {
+            if self_id == id {
                 Some(*item)
             } else {
                 None
@@ -480,7 +488,7 @@ pub struct FactorishState {
     board: Chunks,
     terrain_params: TerrainParameters,
     structures: Vec<StructureEntry>,
-    selected_structure_inventory: Option<Position>,
+    selected_structure_inventory: Option<StructureId>,
     drop_items: Vec<DropItemEntry>,
     drop_items_index: DropItemIndex,
     tool_belt: [Option<ItemType>; 10],
@@ -499,6 +507,7 @@ pub struct FactorishState {
     info_elem: Option<HtmlDivElement>,
     on_player_update: js_sys::Function,
     on_popup_text: js_sys::Function,
+    on_structure_destroy: js_sys::Function,
     minimap_buffer: Vec<u8>,
     power_wires: Vec<PowerWire>,
     alt_mode: bool,
@@ -520,6 +529,7 @@ pub struct FactorishState {
     image_chest: Option<ImageBundle>,
     image_mine: Option<ImageBundle>,
     image_furnace: Option<ImageBundle>,
+    image_electric_furnace: Option<ImageBundle>,
     image_assembler: Option<ImageBundle>,
     image_boiler: Option<ImageBundle>,
     image_steam_engine: Option<ImageBundle>,
@@ -539,6 +549,7 @@ pub struct FactorishState {
     image_gear: Option<ImageBundle>,
     image_copper_wire: Option<ImageBundle>,
     image_circuit: Option<ImageBundle>,
+    image_steel_plate: Option<ImageBundle>,
     image_time: Option<ImageBundle>,
     image_underground_belt_item: Option<ImageBundle>,
 
@@ -560,6 +571,7 @@ impl FactorishState {
         terrain_params: JsValue,
         on_player_update: js_sys::Function,
         on_popup_text: js_sys::Function,
+        on_structure_destroy: js_sys::Function,
         // on_show_inventory: js_sys::Function,
         scenario: &str,
         context: WebGlRenderingContext,
@@ -638,6 +650,7 @@ impl FactorishState {
             image_chest: None,
             image_mine: None,
             image_furnace: None,
+            image_electric_furnace: None,
             image_assembler: None,
             image_boiler: None,
             image_steam_engine: None,
@@ -657,6 +670,7 @@ impl FactorishState {
             image_gear: None,
             image_copper_wire: None,
             image_circuit: None,
+            image_steel_plate: None,
             image_time: None,
             image_underground_belt_item: None,
             board,
@@ -668,6 +682,7 @@ impl FactorishState {
             drop_items_index: DropItemIndex::default(),
             on_player_update,
             on_popup_text,
+            on_structure_destroy,
             temp_ents: vec![],
             rng: Xor128::new(3142125),
             // on_show_inventory,
@@ -1593,6 +1608,57 @@ impl FactorishState {
             .map(|(idx, _)| idx)
     }
 
+    fn find_structure_tile_id(&self, tile: &[i32]) -> Option<(StructureId, &dyn Structure)> {
+        self.structure_id_iter()
+            .find(|(_, d)| {
+                let pos = *d.position();
+                pos.x == tile[0] && pos.y == tile[1]
+            })
+            .map(|(id, s)| (id, s))
+    }
+
+    fn find_structure_by_id(&self, id: StructureId) -> Option<&dyn Structure> {
+        let s = self.structures.get(id.id as usize)?;
+        if s.gen == id.gen {
+            Some(s.dynamic.as_deref()?)
+        } else {
+            None
+        }
+    }
+
+    // fn find_structure_by_id_mut(&mut self, id: StructureId) -> Option<&mut dyn Structure> {
+    //     let s = self.structures.get_mut(id.id as usize)?;
+    //     if s.gen == id.gen {
+    //         Some(s.dynamic.as_deref_mut()?)
+    //     } else {
+    //         None
+    //     }
+    // }
+
+    /// Find structure by id and return a mutable reference along with player.
+    ///
+    /// Because the combination of these two often occurs in inventory transfer code, we made it a common method.
+    fn find_structure_by_id_mut_and_player(
+        &mut self,
+        id: StructureId,
+    ) -> Option<(&mut StructureBundle, &mut Player)> {
+        let s = self.structures.get_mut(id.id as usize)?;
+        if s.gen == id.gen {
+            Some((s.dynamic.as_deref_mut()?, &mut self.player))
+        } else {
+            None
+        }
+    }
+
+    /// `find_structure_by_id_mut_and_player` with common error string.
+    fn find_structure_by_id_mut_and_player_err(
+        &mut self,
+        id: StructureId,
+    ) -> Result<(&mut StructureBundle, &mut Player), JsValue> {
+        self.find_structure_by_id_mut_and_player(id)
+            .ok_or_else(|| js_str!("structure id {:?} not found at position", id))
+    }
+
     // fn find_structure_tile_mut<'a>(&'a mut self, tile: &[i32]) -> Option<&'a mut dyn Structure> {
     //     self.structures
     //         .iter_mut()
@@ -1669,7 +1735,7 @@ impl FactorishState {
         if let Some(SelectedItem::ToolBelt(_selected_tool)) = self.selected_item {
             self.tool_rotation = self.tool_rotation.next();
             Ok(true)
-        } else if let Some(SelectedItem::PlayerInventory(_item)) = self.selected_item {
+        } else if let Some(SelectedItem::PlayerInventory(_item, _count)) = self.selected_item {
             self.tool_rotation = self.tool_rotation.next();
             Ok(true)
         } else {
@@ -1781,13 +1847,20 @@ impl FactorishState {
             for i in 0..structures.len() {
                 let (notify_structure, others) = StructureDynIter::new(&mut structures, i)?;
                 if let Some(s) = notify_structure.bundle.as_mut() {
-                    s.dynamic.on_construction(
+                    match s.dynamic.on_construction(
                         &mut s.components,
                         StructureId { id: i as u32, gen },
                         &structure,
                         &others,
                         false,
-                    )?;
+                    ) {
+                        Ok(()) => (),
+                        Err(s) => {
+                            drop(others);
+                            self.structures = structures;
+                            return Err(s);
+                        }
+                    }
                 }
             }
             self.structures = structures;
@@ -1797,9 +1870,11 @@ impl FactorishState {
                 .into_iter()
                 .filter(|power_wire| power_wire.0.id != i as u32 && power_wire.1.id != i as u32)
                 .collect();
+            let destroyed_id = StructureId { id: i as u32, gen };
             structure.dynamic.on_construction_self(
                 StructureId { id: i as u32, gen },
                 &mut structure.components,
+                destroyed_id,
                 &StructureDynIter::new_all(&mut self.structures),
                 false,
             )?;
@@ -1839,8 +1914,13 @@ impl FactorishState {
             self.update_fluid_connections(&position)?;
 
             self.on_player_update
-                .call1(&window(), &JsValue::from(self.get_player_inventory()?))
-                .unwrap_or_else(|_| JsValue::from(true));
+                .call1(&window(), &JsValue::from(self.get_player_inventory()?))?;
+
+            self.on_structure_destroy.call1(
+                &window(),
+                &JsValue::from_bool(self.selected_structure_inventory == Some(destroyed_id)),
+            )?;
+
             harvested_structure = true;
         }
         let mut harvested_items = false;
@@ -1879,26 +1959,104 @@ impl FactorishState {
         Ok(harvested_structure || harvested_items)
     }
 
-    /// @returns 2-array of
-    ///          * inventory (object) and
-    ///          * selected item (string)
-    fn get_inventory(
+    fn flatten_inventory(inventory: &[(ItemType, usize)]) -> Vec<(ItemType, usize)> {
+        let mut ret = vec![];
+        for pair in inventory {
+            let mut amount = pair.1;
+            while STACK_SIZE < amount {
+                ret.push((pair.0, amount.min(STACK_SIZE)));
+                amount -= STACK_SIZE;
+            }
+            ret.push((pair.0, amount));
+        }
+        ret
+    }
+
+    fn inventory_to_vec(
+        structure: &dyn Structure,
+        inv_type: InventoryType,
+    ) -> Option<Vec<(ItemType, usize)>> {
+        let inventory = if let Some(inv) = structure.inventory(inv_type) {
+            inv
+        } else {
+            return None;
+        };
+        Some(if inv_type == InventoryType::Storage {
+            let mut v = inventory
+                .iter()
+                .map(|(item, count)| (*item, *count))
+                .collect::<Vec<_>>();
+            v.sort();
+            Self::flatten_inventory(&v)
+        } else {
+            let mut inventory = std::borrow::Cow::Borrowed(inventory);
+            if inv_type == InventoryType::Input {
+                if let Some(recipe) = structure.get_selected_recipe() {
+                    let inventory = inventory.to_mut();
+                    for key in recipe.input.keys() {
+                        if !inventory.contains_key(key) {
+                            inventory.insert(*key, 0);
+                        }
+                    }
+                }
+            }
+            let mut v = inventory
+                .iter()
+                .map(|(item, count)| (*item, *count))
+                .collect::<Vec<_>>();
+            v.sort();
+            v
+        })
+    }
+
+    /// Construct JS array representing inventory contents.
+    ///
+    /// Optionally flattens the inventory for easier selection of small amount.
+    /// Some inventory types, namely input, output and burner, does not benefit
+    /// from splitting, because they are usually moved all at once, unlike storage.
+    ///
+    fn inventory_to_js(
         &self,
         inventory: &Inventory,
         selected_item: &Option<ItemType>,
+        flatten: bool,
+    ) -> Result<js_sys::Array, JsValue> {
+        let mut v = inventory
+            .iter()
+            .map(|(item, count)| (*item, *count))
+            .collect::<Vec<_>>();
+        v.sort();
+        if flatten {
+            self.vec_to_js(&Self::flatten_inventory(&v), selected_item)
+        } else {
+            self.vec_to_js(&v, selected_item)
+        }
+    }
+
+    /// Construct a JS object representing inventory from a vector slice.
+    ///
+    /// The returned object is 2-array of
+    ///          * inventory (array), each of which element consists of
+    ///              * name (string)
+    ///              * count (int)
+    ///          * selected item (string)
+    fn vec_to_js(
+        &self,
+        inventory: &[(ItemType, usize)],
+        selected_item: &Option<ItemType>,
     ) -> Result<js_sys::Array, JsValue> {
         Ok(js_sys::Array::of2(
-            &JsValue::from(
+            &JsValue::from({
                 inventory
                     .iter()
-                    .map(|pair| {
+                    .map(|(type_, count)| {
                         js_sys::Array::of2(
-                            &JsValue::from_str(&item_to_str(&pair.0)),
-                            &JsValue::from_f64(*pair.1 as f64),
+                            &JsValue::from_str(&item_to_str(type_)),
+                            &JsValue::from_f64(*count as f64),
                         )
                     })
-                    .collect::<js_sys::Array>(),
-            ),
+                    .collect::<js_sys::Array>()
+            }),
             &JsValue::from_str(
                 &selected_item
                     .as_ref()
@@ -1910,36 +2068,55 @@ impl FactorishState {
 
     /// Returns [[itemName, itemCount]*, selectedItemName]
     pub fn get_player_inventory(&self) -> Result<js_sys::Array, JsValue> {
-        self.get_inventory(
+        self.inventory_to_js(
             &self.player.inventory,
             &self.selected_item.and_then(|item| {
-                if let SelectedItem::PlayerInventory(i) = item {
+                if let SelectedItem::PlayerInventory(i, _) = item {
                     Some(i)
                 } else {
                     None
                 }
             }),
+            true,
         )
     }
 
-    pub fn select_player_inventory(&mut self, name: &str) -> Result<(), JsValue> {
-        self.selected_item = Some(SelectedItem::PlayerInventory(
-            str_to_item(name).ok_or_else(|| JsValue::from_str("Item name not identified"))?,
-        ));
+    pub fn select_player_inventory(
+        &mut self,
+        idx: usize,
+        right_click: bool,
+    ) -> Result<(), JsValue> {
+        let mut v = self
+            .player
+            .inventory
+            .iter()
+            .map(|(item, count)| (*item, *count))
+            .collect::<Vec<_>>();
+        v.sort();
+        let flat_inv = Self::flatten_inventory(&v);
+        self.selected_item = Some(
+            flat_inv
+                .get(idx)
+                .map(|i| {
+                    SelectedItem::PlayerInventory(i.0, if right_click { i.1 / 2 } else { i.1 })
+                })
+                .ok_or_else(|| JsValue::from_str("Item name not identified"))?,
+        );
         Ok(())
     }
 
     /// Deselect is a separate function from select because wasm-bindgen cannot overload Option
-    pub fn deselect_player_inventory(&mut self) -> Result<(), JsValue> {
+    pub fn deselect_inventory(&mut self) -> Result<(), JsValue> {
         self.selected_item = None;
         Ok(())
     }
 
     pub fn open_structure_inventory(&mut self, c: i32, r: i32) -> Result<bool, JsValue> {
         let pos = Position { x: c, y: r };
-        if let Some(s) = self.find_structure_tile(&[pos.x, pos.y]) {
+        // if let Some(s) = self.find_structure_tile(&[pos.x, pos.y]) {
+        if let Some((id, s)) = self.find_structure_tile_id(&[pos.x, pos.y]) {
             let recipe_enable = !s.dynamic.get_recipes().is_empty();
-            self.selected_structure_inventory = Some(pos);
+            self.selected_structure_inventory = Some(id);
             Ok(recipe_enable)
         } else {
             Err(JsValue::from_str("structure not found"))
@@ -1948,7 +2125,11 @@ impl FactorishState {
 
     /// Returns currently selected structure's coordinates in 2-array or `null` if none selected
     pub fn get_selected_inventory(&self) -> Result<JsValue, JsValue> {
-        if let Some(pos) = self.selected_structure_inventory {
+        if let Some(pos) = self
+            .selected_structure_inventory
+            .and_then(|id| self.find_structure_by_id(id))
+            .map(|s| s.position())
+        {
             return Ok(JsValue::from(js_sys::Array::of2(
                 &JsValue::from(pos.x),
                 &JsValue::from(pos.y),
@@ -1960,16 +2141,19 @@ impl FactorishState {
     /// Returns inventory items in selected tile.
     /// @param c column number.
     /// @param r row number.
-    /// @param is_input if true, returns input buffer, otherwise output. Some structures have either one but not both.
     /// @param inventory_type a string indicating type of the inventory in the structure
     pub fn get_structure_inventory(
         &self,
-        c: i32,
-        r: i32,
+        x: i32,
+        y: i32,
         inventory_type: JsValue,
     ) -> Result<js_sys::Array, JsValue> {
         let inventory_type = InventoryType::try_from(inventory_type)?;
-        if let Some(structure) = self.find_structure_tile(&[c, r]) {
+        if let Some((id, inventory)) = self
+            .structure_id_iter()
+            .find(|(_, d)| *d.position() == Position { x, y })
+            .and_then(|(id, s)| Some((id, Self::inventory_to_vec(s, inventory_type)?)))
+        {
             match inventory_type {
                 InventoryType::Burner => {
                     if let Some(Burner { inventory, .. }) = &structure.components.burner {
@@ -1999,6 +2183,10 @@ impl FactorishState {
                     }
                 }
             }
+            return self.vec_to_js(
+                &inventory,
+                &self.selected_item.and_then(|item| item.map_struct(&id)),
+            );
         }
 
         // We do not make getting inventory of nonexist structure or inventory an error, instead return an empty one.
@@ -2008,6 +2196,11 @@ impl FactorishState {
         // Err(JsValue::from_str(
         //     "structure is not found or doesn't have inventory",
         // ))
+    }
+
+    pub fn get_structure_progress(&self, x: i32, y: i32) -> Option<f64> {
+        self.find_structure_tile(&[x, y])
+            .and_then(|structure| structure.get_progress())
     }
 
     pub fn get_structure_burner_energy(&self, c: i32, r: i32) -> Option<js_sys::Array> {
@@ -2020,11 +2213,28 @@ impl FactorishState {
         })
     }
 
-    pub fn select_structure_inventory(&mut self, name: &str) -> Result<(), JsValue> {
+    /// Select an item in a structure inventory at index `idx`. If a structure was not previously selected, ignored.
+    pub fn select_structure_inventory(
+        &mut self,
+        idx: usize,
+        inventory_type: JsValue,
+        right_click: bool,
+    ) -> Result<(), JsValue> {
+        let inv_type = InventoryType::try_from(inventory_type)?;
+
+        let (id, flat_inv) = self
+            .selected_structure_inventory
+            .and_then(|id| Some((id, self.find_structure_by_id(id)?)))
+            .and_then(|(id, s)| Some((id, Self::inventory_to_vec(s, inv_type)?)))
+            .ok_or_else(|| js_str!("Structure does not have inventory type"))?;
+        let item = flat_inv
+            .get(idx)
+            .ok_or_else(|| JsValue::from("Item name not valid"))?;
         self.selected_item = Some(SelectedItem::StructInventory(
-            self.selected_structure_inventory
-                .ok_or_else(|| js_str!("Structure not selected"))?,
-            str_to_item(name).ok_or_else(|| JsValue::from("Item name not valid"))?,
+            id,
+            inv_type,
+            item.0,
+            if right_click { item.1 / 2 } else { item.1 },
         ));
         Ok(())
     }
@@ -2074,15 +2284,6 @@ impl FactorishState {
         }
     }
 
-    fn move_inventory_item(src: &mut Inventory, dst: &mut Inventory, item_type: &ItemType) -> bool {
-        if let Some(src_item) = src.remove(item_type) {
-            dst.add_items(item_type, src_item);
-            true
-        } else {
-            false
-        }
-    }
-
     pub fn set_alt_mode(&mut self, value: bool) {
         self.alt_mode = value;
     }
@@ -2103,98 +2304,155 @@ impl FactorishState {
         self.use_webgl_instancing = value;
     }
 
+    /// We try to insert in this order. We don't want to insert into output.
+    fn inventory_move_order(item: &ItemType) -> [InventoryType; 3] {
+        if *item == ItemType::CoalOre {
+            // If it was fuel, prefer putting it into burner inventory
+            [
+                InventoryType::Burner,
+                InventoryType::Input,
+                InventoryType::Storage,
+            ]
+        } else {
+            [
+                InventoryType::Input,
+                InventoryType::Burner,
+                InventoryType::Storage,
+            ]
+        }
+    }
+
     /// Move inventory items between structure and player
     /// @param to_player whether the movement happen towards player
     /// @param inventory_type a string indicating type of the inventory in the structure
+    /// @param all attempt to move all items of the same kind (ctrl key)
     pub fn move_selected_inventory_item(
+        &mut self,
+        to_player: bool,
+        inventory_type: JsValue,
+        all: bool,
+    ) -> Result<bool, JsValue> {
+        let inventory_type = InventoryType::try_from(inventory_type)?;
+        let id = if let Some(id) = self.selected_structure_inventory {
+            id
+        } else {
+            return Ok(false);
+        };
+
+        if to_player {
+            if let Some(SelectedItem::StructInventory(_, sel_inventory_type, item, count)) =
+                self.selected_item
+            {
+                console_log!("selected_structure_inventory: {:?}", pos);
+                let (structure, player) = self.find_structure_by_id_mut_and_player_err(id)?;
+                let count = if all {
+                    structure
+                        .inventory(sel_inventory_type)
+                        .map(|i| i.count_item(&item))
+                        .unwrap_or(0)
+                } else {
+                    count
+                };
+
+                player.inventory.add_items(
+                        &item,
+                        structure
+                            .add_inventory(sel_inventory_type, &item, -(count as isize))
+                            .abs() as usize,
+                    );
+                    self.on_player_update
+                        .call1(&window(), &JsValue::from(self.get_player_inventory()?))?;
+                    return Ok(count != 0);
+            }
+        } else {
+            if let Some(SelectedItem::PlayerInventory(item, count)) = self.selected_item {
+                let (structure, player) = self.find_structure_by_id_mut_and_player_err(id)?;
+                let mut try_move = |inventory: &mut Inventory, inventory_type| {
+                    let count = if all {
+                        inventory.count_item(&item)
+                    } else {
+                        inventory.count_item(&item).min(count)
+                    };
+                    inventory.remove_items(
+                        &item,
+                        structure
+                            .add_inventory(inventory_type, &item, count as isize)
+                            .abs() as usize,
+                    )
+                };
+
+                if all {
+                    let try_order = Self::inventory_move_order(&item);
+
+                    for invtype in try_order {
+                        let moved_count = try_move(&mut player.inventory, invtype);
+                        if moved_count != 0 {
+                            self.on_player_update
+                                .call1(&window(), &JsValue::from(self.get_player_inventory()?))?;
+                            return Ok(moved_count != 0);
+                        }
+                    }
+                } else {
+                    let moved_count = try_move(&mut player.inventory, inventory_type);
+                    self.on_player_update
+                        .call1(&window(), &JsValue::from(self.get_player_inventory()?))?;
+                    return Ok(moved_count != 0);
+                }
+            }
+        }
+        Ok(false)
+    }
+
+    pub fn move_all_inventory_items(
         &mut self,
         to_player: bool,
         inventory_type: JsValue,
     ) -> Result<bool, JsValue> {
         let inventory_type = InventoryType::try_from(inventory_type)?;
-        let pos = if let Some(pos) = self.selected_structure_inventory {
-            pos
+        let id = if let Some(id) = self.selected_structure_inventory {
+            id
         } else {
             return Ok(false);
         };
-        console_log!("selected_structure_inventory: {:?}", pos);
-        if let Some(idx) = self.find_structure_tile_idx(pos) {
-            let structure = self
-                .structures
-                .get_mut(idx)
-                .ok_or_else(|| js_str!("structure out of bounds"))?
-                .bundle
-                .as_mut()
-                .ok_or_else(|| js_str!("Dead structure"))?;
+        let (structure, player) = self.find_structure_by_id_mut_and_player_err(id)?;
+        if to_player {
+            // Player has no capacity limit, so copy everything by taking
+            if let Some(inventory) = structure.inventory_mut(inventory_type) {
+                let ret = !inventory.is_empty();
+                player.inventory.merge(std::mem::take(inventory));
+                inventory.clear();
+                self.on_player_update
+                    .call1(&window(), &JsValue::from(self.get_player_inventory()?))?;
+                return Ok(ret);
+            }
+        } else {
+            // Structure's inventory has capacity limit, so we need to check one item at a time
+            // and exit if we fail to add a new item.
+            let mut ret = false;
+            let items = player
+                .inventory
+                .iter()
+                .map(|(item, count)| (*item, *count))
+                .collect::<Vec<_>>();
+            for (item, count) in items {
+                let try_order = Self::inventory_move_order(&item);
 
-            match inventory_type {
-                InventoryType::Burner => {
-                    if to_player {
-                        if let Some(burner) = &mut structure.components.burner {
-                            console_log!("Burner to player");
-                            if let Some((&item, &count)) = burner.inventory.iter().next() {
-                                self.player.inventory.add_items(
-                                    &item,
-                                    -burner.add_burner_inventory(&item, -(count as isize)) as usize,
-                                );
-                                return Ok(true);
-                            }
-                        }
-                    } else {
-                        if let Some((SelectedItem::PlayerInventory(i), burner)) =
-                            self.selected_item.zip(structure.components.burner.as_mut())
-                        {
-                            console_log!("player to Burner");
-                            self.player.inventory.remove_items(
-                                &i,
-                                burner
-                                    .add_burner_inventory(
-                                        &i,
-                                        self.player.inventory.count_item(&i) as isize,
-                                    )
-                                    .abs() as usize,
-                            );
-                            return Ok(true);
-                        }
+                for invtype in try_order {
+                    let moved_count = structure.add_inventory(invtype, &item, count as isize);
+                    if moved_count == 0 {
+                        continue;
                     }
-                }
-                _ => {
-                    if let Some(inventory) =
-                        structure.inventory_mut(inventory_type == InventoryType::Input)
-                    {
-                        let (src, dst, item_name) = if to_player {
-                            (
-                                inventory,
-                                &mut self.player.inventory,
-                                self.selected_item.and_then(|item| item.map_struct(&pos)),
-                            )
-                        } else {
-                            (
-                                &mut self.player.inventory,
-                                inventory,
-                                self.selected_item.and_then(|item| {
-                                    if let SelectedItem::PlayerInventory(i) = item {
-                                        Some(i)
-                                    } else {
-                                        None
-                                    }
-                                }),
-                            )
-                        };
-                        // console_log!("moving {:?}", item_name);
-                        if let Some(item_name) = item_name {
-                            if FactorishState::move_inventory_item(src, dst, &item_name) {
-                                self.on_player_update.call1(
-                                    &window(),
-                                    &JsValue::from(self.get_player_inventory()?),
-                                )?;
-                                return Ok(true);
-                            }
-                        }
+                    if player.inventory.remove_items(&item, moved_count as usize) != 0 {
+                        ret = true;
+                        break;
+                    } else {
+                        panic!("We have checked player has {} {:?}, no?", count, item);
                     }
                 }
             }
+            return Ok(ret);
         }
+
         Ok(false)
     }
 
@@ -2276,6 +2534,9 @@ impl FactorishState {
             ItemType::OreMine => Box::new(map_err(serde_json::from_value::<OreMine>(payload))?),
             ItemType::Chest => Box::new(map_err(serde_json::from_value::<Chest>(payload))?),
             ItemType::Furnace => Box::new(map_err(serde_json::from_value::<Furnace>(payload))?),
+            ItemType::ElectricFurnace => {
+                Box::new(map_err(serde_json::from_value::<ElectricFurnace>(payload))?)
+            }
             ItemType::Assembler => Box::new(map_err(serde_json::from_value::<Assembler>(payload))?),
             ItemType::Boiler => Box::new(map_err(serde_json::from_value::<Boiler>(payload))?),
             ItemType::WaterWell => Box::new(map_err(serde_json::from_value::<WaterWell>(payload))?),
@@ -2390,13 +2651,17 @@ impl FactorishState {
         let mut events = vec![];
 
         if button == 0 {
-            if let Some(selected_tool) = self.get_selected_tool_or_item_opt() {
+            if let Some((selected_tool, _)) = self.get_selected_tool_or_item_opt() {
                 let cell = self.tile_at(&cursor);
                 if let Some((count, cell)) =
                     self.player.inventory.get(&selected_tool).zip(cell.as_ref())
                 {
                     if 1 <= *count && cell.water ^ (selected_tool != ItemType::OffshorePump) {
-                        let mut new_s = self.new_structure(&selected_tool, &cursor)?;
+                        let mut new_s = if let Ok(s) = self.new_structure(&selected_tool, &cursor) {
+                            s
+                        } else {
+                            return Ok(JsValue::UNDEFINED);
+                        };
                         if let Some(bbox) = new_s.dynamic.bounding_box(&new_s.components) {
                             for y in bbox.y0..bbox.y1 {
                                 for x in bbox.x0..bbox.x1 {
@@ -2585,7 +2850,9 @@ impl FactorishState {
                 }
             } else if let Some(structure) = self.find_structure_tile(&[cursor.x, cursor.y]) {
                 if structure.dynamic.inventory(true).is_some()
-                    || structure.dynamic.inventory(false).is_some()
+                    || structure.dynamic.inventory(InventoryType::Output).is_some()
+                    || structure.dynamic.inventory(InventoryType::Storage).is_some()
+                    || structure.dynamic.inventory(InventoryType::Burner).is_some()
                     || structure.components.burner.is_some()
                     || structure.components.factory.is_some()
                 {
@@ -2714,6 +2981,9 @@ impl FactorishState {
             }
             69 => {
                 //'e'
+                if self.selected_structure_inventory.is_some() {
+                    self.selected_structure_inventory = None;
+                }
                 Ok(
                     js_sys::Array::of1(&JsValue::from_serde(&JSEvent::ShowInventory).unwrap())
                         .into(),
@@ -2728,8 +2998,12 @@ impl FactorishState {
                         .find_structure_tile(&cursor)
                         .and_then(|s| str_to_item(s.dynamic.name()))
                     {
-                        self.selected_item = if self.player.inventory.count_item(&structure) > 0 {
-                            Some(SelectedItem::PlayerInventory(structure))
+                        let count = self.player.inventory.count_item(&structure);
+                        self.selected_item = if count > 0 {
+                            Some(SelectedItem::PlayerInventory(
+                                structure,
+                                count.min(STACK_SIZE),
+                            ))
                         } else {
                             None
                         };
@@ -2814,6 +3088,7 @@ impl FactorishState {
         self.image_chest = Some(load_image("chest")?);
         self.image_mine = Some(load_image("mine")?);
         self.image_furnace = Some(load_image("furnace")?);
+        self.image_electric_furnace = Some(load_image("electricFurnace")?);
         self.image_assembler = Some(load_image("assembler")?);
         self.image_boiler = Some(load_image("boiler")?);
         self.image_steam_engine = Some(load_image("steamEngine")?);
@@ -2833,6 +3108,7 @@ impl FactorishState {
         self.image_gear = Some(load_image("gear")?);
         self.image_copper_wire = Some(load_image("copperWire")?);
         self.image_circuit = Some(load_image("circuit")?);
+        self.image_steel_plate = Some(load_image("steelPlate")?);
         self.image_time = Some(load_image("time")?);
         self.image_underground_belt_item = Some(load_image("undergroundBeltItem")?);
         Ok(())
@@ -2870,16 +3146,22 @@ impl FactorishState {
 
     /// Returns count of selected item or null
     pub fn get_selected_item(&self) -> JsValue {
-        if let Some(SelectedItem::PlayerInventory(selected_item)) = self.selected_item {
+        if let Some(SelectedItem::PlayerInventory(selected_item, _)) = self.selected_item {
             JsValue::from_f64(*self.player.inventory.get(&selected_item).unwrap_or(&0) as f64)
         } else {
             JsValue::null()
         }
     }
 
+    /// Returns a selected item from either player inventory, toolbelt or a structure inventory.
+    /// Returns null if none is selected.
     pub fn get_selected_tool_or_item(&self) -> JsValue {
-        if let Some(selected_item) = self.get_selected_tool_or_item_opt() {
-            JsValue::from_str(&item_to_str(&selected_item))
+        if let Some((item, count)) = self.get_selected_tool_or_item_opt() {
+            js_sys::Array::of2(
+                &JsValue::from_str(&item_to_str(&item)),
+                &JsValue::from_f64(count as f64),
+            )
+            .into()
         } else {
             JsValue::null()
         }
@@ -2937,20 +3219,32 @@ impl FactorishState {
         }
     }
 
-    fn get_selected_tool_or_item_opt(&self) -> Option<ItemType> {
+    /// Returns a selected item from either player inventory, toolbelt or a structure inventory.
+    fn get_selected_tool_or_item_opt(&self) -> Option<(ItemType, usize)> {
         match self.selected_item {
-            Some(SelectedItem::ToolBelt(tool)) => self.tool_belt[tool],
-            Some(SelectedItem::PlayerInventory(item)) => tool_defs
-                .iter()
-                .find(|def| def.item_type == item)
-                .and(Some(item)),
-            Some(SelectedItem::StructInventory(pos, item)) => self
-                .structure_iter()
-                .find(|s| s.components.position == Some(pos))
-                .and_then(|s| s.inventory(false))
+            Some(SelectedItem::ToolBelt(tool)) => Some((self.tool_belt[tool]?, 1)),
+            Some(SelectedItem::PlayerInventory(item, count)) => Some((item, count)),
+            Some(SelectedItem::StructInventory(id, inventory_type, item, count)) => self
+                .find_structure_by_id(id)
+                .and_then(|s| s.inventory(inventory_type))
                 .and_then(|inventory| inventory.get(&item))
-                .and(Some(item)),
+                .and(Some((item, count))),
             None => None,
+        }
+    }
+
+    pub fn get_selected_item_type(&self) -> JsValue {
+        self.selected_item
+            .and_then(|i| JsValue::from_serde(&i).ok())
+            .unwrap_or(JsValue::NULL)
+    }
+
+    /// Returns either "Input", "Output" or "Burner" for the selected inventory
+    pub fn get_selected_inventory_type(&self) -> JsValue {
+        if let Some(SelectedItem::StructInventory(_, type_, _, _)) = self.selected_item {
+            JsValue::from_serde(&type_).unwrap_or(JsValue::NULL)
+        } else {
+            JsValue::NULL
         }
     }
 
@@ -2959,7 +3253,7 @@ impl FactorishState {
     /// @param tool the index of the tool item, [0,9]
     /// @returns whether the tool bar item should be re-rendered
     pub fn select_tool(&mut self, tool: i32) -> Result<JsValue, JsValue> {
-        if let Some(SelectedItem::PlayerInventory(item)) = self.selected_item {
+        if let Some(SelectedItem::PlayerInventory(item, _)) = self.selected_item {
             // We allow only items in tool_defs to present on the tool belt
             // This behavior is different from Factorio, maybe we can allow it
             if tool_defs.iter().any(|i| i.item_type == item) {
@@ -3110,5 +3404,18 @@ impl FactorishState {
     /// Returns an iterator over valid structures
     fn structure_iter(&self) -> impl Iterator<Item = &StructureBundle> {
         self.structures.iter().filter_map(|s| s.bundle.as_ref())
+    }
+
+    /// Returns an iterator over valid structures and their ids
+    fn structure_id_iter(&self) -> impl Iterator<Item = (StructureId, &dyn Structure)> {
+        self.structures.iter().enumerate().filter_map(|(id, s)| {
+            Some((
+                StructureId {
+                    id: id as u32,
+                    gen: s.gen,
+                },
+                s.dynamic.as_deref()?,
+            ))
+        })
     }
 }

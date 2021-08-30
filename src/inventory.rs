@@ -3,13 +3,15 @@ use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, convert::TryFrom};
 use wasm_bindgen::prelude::*;
 
+pub(crate) const STACK_SIZE: usize = 50;
+
 pub(crate) type Inventory = HashMap<ItemType, usize>;
 
 pub(crate) trait InventoryTrait {
     fn remove_item(&mut self, item: &ItemType) -> bool {
-        self.remove_items(item, 1)
+        self.remove_items(item, 1) != 0
     }
-    fn remove_items(&mut self, item: &ItemType, count: usize) -> bool;
+    fn remove_items(&mut self, item: &ItemType, count: usize) -> usize;
     fn add_item(&mut self, item: &ItemType) {
         self.add_items(item, 1);
     }
@@ -17,23 +19,30 @@ pub(crate) trait InventoryTrait {
     fn count_item(&self, item: &ItemType) -> usize;
     fn merge(&mut self, other: Inventory);
     fn describe(&self) -> String;
+
+    /// Calculate occupied slots
+    fn count_slots(&self) -> usize;
 }
 
 impl InventoryTrait for Inventory {
-    fn remove_items(&mut self, item: &ItemType, count: usize) -> bool {
-        if let Some(entry) = self.get_mut(item) {
-            if *entry <= count {
-                self.remove(item);
+    fn remove_items(&mut self, item: &ItemType, count: usize) -> usize {
+        use std::collections::hash_map::Entry;
+        if let Entry::Occupied(mut entry) = self.entry(*item) {
+            if *entry.get() <= count {
+                entry.remove()
             } else {
-                *entry -= count;
+                *entry.get_mut() -= count;
+                count
             }
-            true
         } else {
-            false
+            0
         }
     }
 
     fn add_items(&mut self, item: &ItemType, count: usize) {
+        if count == 0 {
+            return;
+        }
         if let Some(entry) = self.get_mut(item) {
             *entry += count;
         } else {
@@ -60,12 +69,26 @@ impl InventoryTrait for Inventory {
             .map(|item| format!("{:?}: {}<br>", item.0, item.1))
             .fold(String::from(""), |accum, item| accum + &item)
     }
+
+    fn count_slots(&self) -> usize {
+        let mut ret = 0;
+        for pair in self {
+            let mut amount = *pair.1;
+            while STACK_SIZE < amount {
+                ret += 1;
+                amount -= STACK_SIZE;
+            }
+            ret += 1;
+        }
+        ret
+    }
 }
 
-#[derive(PartialEq, Debug, Serialize, Deserialize)]
+#[derive(PartialEq, Eq, Debug, Serialize, Deserialize, Clone, Copy)]
 pub(crate) enum InventoryType {
     Input,
     Output,
+    Storage,
     Burner,
 }
 

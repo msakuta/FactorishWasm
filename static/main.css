@@ -82,24 +82,24 @@ body {
     text-align: justify;
 }
 
-#inventory, #inventory2{
+.inventory, #inventory2{
     position: absolute;
-    height: 220px;
+    height: 300px;
     left: 50%;
     top: 50%;
     margin-left: -175px;
     margin-top: -80px;
-    border: 2px solid #000000;
-    background-color: #f0f0f0;
+    border: 3px outset #666666;
+    background-color: #7D7D7D;
     text-align: left;
 }
 
 .inventoryNarrow {
-    width: 370px;
+    width: 360px;
 }
 
 .inventoryWide {
-    width: 700px;
+    width: 695px;
 }
 
 #inventoryTitle, #inventory2Title, .inventoryTitle{
@@ -108,9 +108,10 @@ body {
     background-color: #7f7fff;
 }
 
-.inventoryTitle {
+.inventorySubTitle {
     background-color: #6f6fcf;
     width: 316px;
+    height: 20px;
     margin-top: 2px;
     /* margin-left: 37px; */
     margin-right: 33px;
@@ -126,8 +127,8 @@ body {
 
 #inventoryClient, #inventory2Client{
     position: absolute;
-    top: 20px;
-    left: 40px;
+    top: 22px;
+    left: 5px;
     width: 340px;
     height: 140px;
 }
@@ -142,16 +143,34 @@ body {
     background-color: #ffff7f;
 }
 
-#recipeSelector{
+.player {
     position: absolute;
-    width: 300px;
+    left: 370px;
+    top: 0px;
+    width: 330px;
+    height: 160px;
+}
+
+.playerInventoryContainer {
+    overflow-y: scroll;
+    border-style: solid;
+    border-width: 1px;
+    border: 1px solid #00f;
+    height: 240px;
+    width: 340px;
+    margin-top: 3px;
+}
+
+.recipeSelector{
+    position: absolute;
+    width: 360px;
     height: 400px;
     left: 50%;
     top: 50%;
     margin-left: -125px;
     margin-top: -150px;
-    border: 2px solid #000000;
-    background-color: #ffffaf;
+    border: 3px outset #666666;
+    background-color: #7D7D7D;
     text-align: left;
 }
 
@@ -167,11 +186,11 @@ body {
     overflow-y: scroll;
 }
 
-#tooltip{
+.tooltip{
     position: absolute;
-    border: 3px solid #0000ff;
+    border: 3px outset #7D7D7D;
     padding: 5px;
-    background-color: #ffffaf;
+    background-color: #afafaf;
     pointer-events: none;
     text-align: left;
     font-family: sans-serif;
@@ -199,6 +218,7 @@ div.closeButton{
     width: 100%;
     height: auto;
     color: rgb(0,0,0);
+    font-family: Monospace;
     font-weight: bold;
     text-shadow: 1px 1px #fff, -1px -1px 0 #fff, 1px -1px 0 #fff, -1px 1px 0 #fff;
     text-align: right;
@@ -219,9 +239,36 @@ div.closeButton{
     pointer-events: none;
 }
 
+#loadingContainer {
+    position: absolute;
+    display: inline;
+    pointer-events: none;
+    font-size: 48px;
+    color: #ffffff;
+    text-align: center;
+    top: 50%;
+    left: 50%;
+}
+
 .burnerContainer {
     position: relative;
     left: 40px;
+}
+
+.itemBack {
+    display: inline-block;
+    position: relative;
+    width: 32px;
+    height: 32px;
+}
+
+.transparent {
+    opacity: 0.5;
+}
+
+.burnerItem {
+    width: 32px;
+    height: 32px;
 }
 
 .fuelBackground {
@@ -231,12 +278,14 @@ div.closeButton{
 }
 
 .burnerEnergyBack {
-    position: absolute;
+    /* position: absolute; */
+    display: inline-block;
     top: 10px;
     left: 40px;
     width: 80px;
     height: 10px;
     background-color: #0f0f0f;
+    margin: 3px;
 }
 
 .burnerEnergy {
@@ -245,6 +294,25 @@ div.closeButton{
     height: 10px;
     background-color: #ff0fff;
 }
+
+.progressBarBack {
+    /* position: relative; */
+    display: inline-block;
+    top: 10px;
+    left: 40px;
+    width: 80px;
+    height: 10px;
+    background-color: #0f0f0f;
+    margin: 3px;
+}
+
+.progressBar {
+    position: relative;
+    left: 0px;
+    height: 10px;
+    background-color: #0faf0f;
+}
+
 
 #points{
     font-size: 25px;

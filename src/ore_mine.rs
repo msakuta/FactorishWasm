@@ -6,13 +6,15 @@ use super::{
         draw_direction_arrow_gl,
         utils::{enable_buffer, Flatten},
     },
-    inventory::Inventory,
     structure::{
         Energy, RotateErr, Structure, StructureBundle, StructureComponents, StructureDynIter,
         StructureId,
     },
-    DropItem, FactorishState, FrameProcResult, Position, Recipe, Rotation, TempEnt, TILE_SIZE,
-    TILE_SIZE_I,
+    inventory::{Inventory, InventoryTrait, InventoryType},
+    items::ItemType,
+    structure::{RotateErr, Structure, StructureDynIter, StructureId},
+    DropItem, FactorishState, FrameProcResult, Position, Recipe, Rotation, TempEnt, COAL_POWER,
+    TILE_SIZE, TILE_SIZE_I,
 };
 use cgmath::{Matrix3, Matrix4, Vector2, Vector3};
 use serde::{Deserialize, Serialize};
@@ -172,7 +174,36 @@ impl Structure for OreMine {
                     .ok_or_else(|| js_str!("Shader not found"))?;
                 gl.use_program(Some(&shader.program));
                 gl.uniform1f(shader.alpha_loc.as_ref(), if is_ghost { 0.5 } else { 1. });
+
+                enable_buffer(&gl, &state.assets.screen_buffer, 2, shader.vertex_position);
+                gl.uniform_matrix4fv_with_f32_array(
+                    shader.transform_loc.as_ref(),
+                    false,
+                    (state.get_world_transform()?
+                        * Matrix4::from_scale(2.)
+                        * Matrix4::from_translation(Vector3::new(x, y, 0.)))
+                    .flatten(),
+                );
+
                 gl.active_texture(GL::TEXTURE0);
+
+                let draw_exit = || {
+                    gl.bind_texture(GL::TEXTURE_2D, Some(&state.assets.tex_ore_mine_exit));
+                    let sx = self.rotation.angle_4() as f32 / 4.;
+                    gl.uniform_matrix3fv_with_f32_array(
+                        shader.tex_transform_loc.as_ref(),
+                        false,
+                        (Matrix3::from_translation(Vector2::new(sx, 0.))
+                            * Matrix3::from_nonuniform_scale(1. / 4., 1.))
+                        .flatten(),
+                    );
+                    gl.draw_arrays(GL::TRIANGLE_FAN, 0, 4);
+                };
+
+                if self.rotation != Rotation::Bottom {
+                    draw_exit();
+                }
+
                 gl.bind_texture(GL::TEXTURE_2D, Some(&state.assets.tex_ore_mine));
                 let sx = if self.digging {
                     (((state.sim_time * 5.) as isize) % 2 + 1) as f32 / 3.
@@ -187,16 +218,11 @@ impl Structure for OreMine {
                     .flatten(),
                 );
 
-                enable_buffer(&gl, &state.assets.screen_buffer, 2, shader.vertex_position);
-                gl.uniform_matrix4fv_with_f32_array(
-                    shader.transform_loc.as_ref(),
-                    false,
-                    (state.get_world_transform()?
-                        * Matrix4::from_scale(2.)
-                        * Matrix4::from_translation(Vector3::new(x, y, 0.)))
-                    .flatten(),
-                );
                 gl.draw_arrays(GL::TRIANGLE_FAN, 0, 4);
+
+                if self.rotation == Rotation::Bottom {
+                    draw_exit();
+                }
             }
             2 => {
                 if state.alt_mode {
@@ -441,6 +467,32 @@ impl Structure for OreMine {
         }
         Ok(())
     }
+
+    // fn add_inventory(
+    //     &mut self,
+    //     inventory_type: InventoryType,
+    //     item_type: &ItemType,
+    //     amount: isize,
+    // ) -> isize {
+    //     if inventory_type != InventoryType::Burner {
+    //         return 0;
+    //     }
+    //     if amount < 0 {
+    //         let existing = self.input_inventory.count_item(item_type);
+    //         let removed = existing.min((-amount) as usize);
+    //         self.input_inventory.remove_items(item_type, removed);
+    //         -(removed as isize)
+    //     } else if *item_type == ItemType::CoalOre {
+    //         let add_amount = amount.min(
+    //             (FUEL_CAPACITY - self.input_inventory.count_item(&ItemType::CoalOre)) as isize,
+    //         );
+    //         self.input_inventory
+    //             .add_items(item_type, add_amount as usize);
+    //         add_amount
+    //     } else {
+    //         0
+    //     }
+    // }
 
     crate::serialize_impl!();
 }

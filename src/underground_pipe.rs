@@ -1,6 +1,7 @@
 use super::{
     gl::utils::{enable_buffer, Flatten},
     structure::{Structure, StructureBundle, StructureComponents, StructureDynIter, StructureId},
+    pipe::Pipe,
     water_well::FluidBox,
     FactorishState, FrameProcResult, Position, Rotation, TILE_SIZE,
 };
