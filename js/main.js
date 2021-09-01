@@ -519,19 +519,6 @@ let unlimited = true;
         img.style.height = size + 'px';
         img.style.backgroundSize = size * imageFile.widthFactor + 'px ' + size * imageFile.heightFactor + 'px';
         img.setAttribute('draggable', 'false');
-        if(iconSize){
-            var container = document.createElement('span');
-            container.style.position = 'relative';
-            container.style.display = 'inline-block';
-            container.style.width = size + 'px';
-            container.style.height = size + 'px';
-            container.appendChild(img);
-            var overlay = document.createElement('div');
-            overlay.setAttribute('class', 'overlay noselect');
-            overlay.innerHTML = count || 0;
-            container.appendChild(overlay);
-            return container;
-        }
         return img;
     }
 
