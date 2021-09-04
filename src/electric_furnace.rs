@@ -351,6 +351,10 @@ impl Structure for ElectricFurnace {
         std::borrow::Cow::from(&RECIPES[..])
     }
 
+    fn auto_recipe(&self) -> bool {
+        true
+    }
+
     fn power_sink(&self) -> bool {
         true
     }

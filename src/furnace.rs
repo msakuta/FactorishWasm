@@ -327,5 +327,9 @@ impl Structure for Furnace {
         std::borrow::Cow::from(&RECIPES[..])
     }
 
+    fn auto_recipe(&self) -> bool {
+        true
+    }
+
     serialize_impl!();
 }

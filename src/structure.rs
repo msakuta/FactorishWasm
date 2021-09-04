@@ -437,6 +437,9 @@ pub(crate) trait Structure {
     fn get_recipes(&self) -> Cow<[Recipe]> {
         Cow::from(&[][..])
     }
+    fn auto_recipe(&self) -> bool {
+        false
+    }
     fn select_recipe(&mut self, _factory: &mut Factory, _index: usize) -> Result<bool, JsValue> {
         Err(JsValue::from_str("recipes not available"))
     }
@@ -709,12 +712,23 @@ impl StructureBundle {
         }
     }
 
+    /// Try to add items to a structure's inventory and return items actually moved.
+    /// The sign is positive if they are added to inventory and negative if they are removed.
     pub(crate) fn add_inventory(
         &mut self,
         inventory_type: InventoryType,
         item_type: &ItemType,
         amount: isize,
     ) -> isize {
+        let real_move = |inventory: &mut Inventory, count: isize| {
+            if 0 < count {
+                inventory.add_items(item_type, count as usize);
+                count
+            } else {
+                -(inventory.remove_items(item_type, count.abs() as usize) as isize)
+            }
+        };
+
         match inventory_type {
             InventoryType::Burner => {
                 if let Some(ref mut burner) = self.components.burner {
@@ -725,24 +739,67 @@ impl StructureBundle {
             }
             InventoryType::Input => {
                 if let Some(ref mut factory) = self.components.factory {
-                    let mut count = 0;
-                    if let Some(ref mut recipe) = factory.recipe {
-                        let inventory = &mut factory.input_inventory;
-                        let capacity =
-                            recipe.input.count_item(item_type) * RECIPE_CAPACITY_MULTIPLIER;
+                    let mut count = amount;
+                    let mut try_move = |inventory: &mut Inventory, recipe: &Recipe| {
                         let existing_count = inventory.count_item(item_type);
-                        if existing_count < capacity {
-                            count = count.min((capacity - existing_count) as isize);
+                        if 0 < count {
+                            let capacity =
+                                recipe.input.count_item(item_type) * RECIPE_CAPACITY_MULTIPLIER;
+                            if existing_count < capacity {
+                                count = count.min((capacity - existing_count) as isize);
+                            } else {
+                                count = 0;
+                            }
                         } else {
-                            count = 0;
+                            count = -count.abs().min(existing_count as isize);
+                        }
+                    };
+                    if self.dynamic.auto_recipe() {
+                        for recipe in self.dynamic.get_recipes().as_ref() {
+                            if recipe.input.contains_key(item_type) {
+                                try_move(&mut factory.input_inventory, recipe);
+                                break;
+                            }
                         }
                     } else {
-                        count = DEFAULT_MAX_CAPACITY as isize;
+                        if let Some(ref mut recipe) = factory.recipe {
+                            try_move(&mut factory.input_inventory, recipe);
+                        } else {
+                            count = DEFAULT_MAX_CAPACITY as isize;
+                        }
                     }
-                    count
+                    real_move(&mut factory.input_inventory, count)
                 } else {
                     default_add_inventory(self.dynamic.as_mut(), inventory_type, item_type, amount)
                 }
+            }
+            InventoryType::Output => {
+                if let Some(ref mut factory) = self.components.factory {
+                    let mut count = amount;
+                    let inventory = &mut factory.output_inventory;
+                    let existing_count = inventory.count_item(item_type);
+                    if 0 < count {
+                        if let Some(ref mut recipe) = factory.recipe {
+                            let capacity =
+                                recipe.output.count_item(item_type) * RECIPE_CAPACITY_MULTIPLIER;
+                            if existing_count < capacity {
+                                count = count.min((capacity - existing_count) as isize);
+                            } else {
+                                count = 0;
+                            }
+                        } else {
+                            count = DEFAULT_MAX_CAPACITY as isize;
+                        }
+                    } else {
+                        count = -count.abs().min(existing_count as isize);
+                    }
+                    real_move(&mut factory.output_inventory, count)
+                } else {
+                    default_add_inventory(self.dynamic.as_mut(), inventory_type, item_type, amount)
+                }
+            }
+            InventoryType::Storage => {
+                default_add_inventory(self.dynamic.as_mut(), inventory_type, item_type, amount)
             }
             _ => 0,
         }
