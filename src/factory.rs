@@ -92,14 +92,6 @@ impl Factory {
         Ok(())
     }
 
-    pub fn can_input(&self, item_type: &ItemType) -> bool {
-        if let Some(recipe) = &self.recipe {
-            recipe.input.get(item_type).is_some()
-        } else {
-            false
-        }
-    }
-
     pub fn can_output(&self) -> Inventory {
         self.output_inventory.clone()
     }

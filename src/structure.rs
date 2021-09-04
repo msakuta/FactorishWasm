@@ -630,6 +630,14 @@ impl StructureBundle {
             })
             .or_else(|_| {
                 if let Some(factory) = self.components.factory.as_mut() {
+                    if self.dynamic.auto_recipe() {
+                        factory.recipe = self
+                            .dynamic
+                            .get_recipes()
+                            .iter()
+                            .find(|recipe| recipe.input.contains_key(&item.type_))
+                            .cloned();
+                    }
                     factory.input(item)
                 } else {
                     js_err!("No input inventory")
@@ -645,12 +653,7 @@ impl StructureBundle {
                 .as_ref()
                 .map(|burner| burner.can_input(item_type))
                 .unwrap_or(false)
-            || self
-                .components
-                .factory
-                .as_ref()
-                .map(|_factory| self.factory_can_input(item_type, 1) == 1)
-                .unwrap_or(false)
+            || self.factory_can_input(item_type, 1) == 1
     }
 
     pub(crate) fn can_output(&self, others: &StructureDynIter) -> Inventory {
@@ -712,6 +715,11 @@ impl StructureBundle {
         }
     }
 
+    /// Return whether an item can be inserted to Factory component.
+    ///
+    /// Negative `count` means removing items.
+    ///
+    /// It is separated in a function because the logic is a bit complex.
     fn factory_can_input(&self, item_type: &ItemType, count: isize) -> isize {
         let factory = if let Some(ref factory) = self.components.factory {
             factory
@@ -732,7 +740,9 @@ impl StructureBundle {
                 count = -count.abs().min(existing_count as isize);
             }
         };
-        if self.dynamic.auto_recipe() {
+        if let Some(ref recipe) = factory.recipe {
+            try_move(&factory.input_inventory, recipe);
+        } else if self.dynamic.auto_recipe() {
             for recipe in self.dynamic.get_recipes().as_ref() {
                 if recipe.input.contains_key(item_type) {
                     try_move(&factory.input_inventory, recipe);
@@ -740,11 +750,7 @@ impl StructureBundle {
                 }
             }
         } else {
-            if let Some(ref recipe) = factory.recipe {
-                try_move(&factory.input_inventory, recipe);
-            } else {
-                count = DEFAULT_MAX_CAPACITY as isize;
-            }
+            count = DEFAULT_MAX_CAPACITY as isize;
         }
         count
     }
@@ -775,11 +781,7 @@ impl StructureBundle {
                 }
             }
             InventoryType::Input => {
-                let count = if 0 < amount {
-                    self.factory_can_input(item_type, amount)
-                } else {
-                    amount
-                };
+                let count = self.factory_can_input(item_type, amount);
                 if 0 != count {
                     if let Some(ref mut factory) = self.components.factory {
                         return real_move(&mut factory.input_inventory, count);
@@ -815,7 +817,6 @@ impl StructureBundle {
             InventoryType::Storage => {
                 default_add_inventory(self.dynamic.as_mut(), inventory_type, item_type, amount)
             }
-            _ => 0,
         }
     }
 

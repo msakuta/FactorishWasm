@@ -7,11 +7,10 @@ use super::{
         utils::{enable_buffer, Flatten},
     },
     inventory::Inventory,
-    items::item_to_str,
     serialize_impl,
     structure::Energy,
     structure::{Structure, StructureBundle, StructureComponents, StructureDynIter, StructureId},
-    DropItem, FactorishState, FrameProcResult, InventoryTrait, ItemType, Position, Recipe,
+    FactorishState, FrameProcResult, InventoryTrait, Position, Recipe,
 };
 use cgmath::{Matrix3, Matrix4, Vector2, Vector3};
 use serde::{Deserialize, Serialize};
@@ -293,58 +292,6 @@ impl Structure for ElectricFurnace {
             return Ok(ret);
         }
         Ok(FrameProcResult::None)
-    }
-
-    fn input(&mut self, components: &mut StructureComponents, o: &DropItem) -> Result<(), JsValue> {
-        let factory = components
-            .factory
-            .as_mut()
-            .ok_or_else(|| js_str!("ElectricFurnace without Factory component"))?;
-        let burner = components
-            .burner
-            .as_mut()
-            .ok_or_else(|| js_str!("ElectricFurnace without Burner component"))?;
-        if o.type_ == ItemType::CoalOre
-            && burner.inventory.count_item(&ItemType::CoalOre) < FUEL_CAPACITY
-        {
-            burner.inventory.add_item(&ItemType::CoalOre);
-            return Ok(());
-        }
-
-        if factory.recipe.is_none() {
-            if let Some(recipe) = RECIPES
-                .iter()
-                .find(|recipe| recipe.input.contains_key(&o.type_))
-            {
-                factory.recipe = Some(recipe.clone());
-            } else {
-                return Err(JsValue::from_str(&format!(
-                    "Cannot smelt {}",
-                    item_to_str(&o.type_)
-                )));
-            }
-        }
-
-        // if 0 < default_add_inventory(self, InventoryType::Input, &o.type_, 1) {
-        Ok(())
-        // } else {
-        //     Err(JsValue::from_str("Item is not part of recipe"))
-        // }
-    }
-
-    fn can_input(&self, components: &StructureComponents, item_type: &ItemType) -> bool {
-        let factory = if let Some(factory) = components.factory.as_ref() {
-            factory
-        } else {
-            return false;
-        };
-        if let Some(recipe) = &factory.recipe {
-            recipe.input.get(item_type).is_some()
-        } else {
-            RECIPES
-                .iter()
-                .any(|recipe| recipe.input.contains_key(item_type))
-        }
     }
 
     fn get_recipes(&self) -> std::borrow::Cow<[Recipe]> {
