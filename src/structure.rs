@@ -649,7 +649,7 @@ impl StructureBundle {
                 .components
                 .factory
                 .as_ref()
-                .map(|factory| factory.can_input(item_type))
+                .map(|_factory| self.factory_can_input(item_type, 1) == 1)
                 .unwrap_or(false)
     }
 
@@ -712,6 +712,43 @@ impl StructureBundle {
         }
     }
 
+    fn factory_can_input(&self, item_type: &ItemType, count: isize) -> isize {
+        let factory = if let Some(ref factory) = self.components.factory {
+            factory
+        } else {
+            return 0;
+        };
+        let mut count = count;
+        let mut try_move = |inventory: &Inventory, recipe: &Recipe| {
+            let existing_count = inventory.count_item(item_type);
+            if 0 < count {
+                let capacity = recipe.input.count_item(item_type) * RECIPE_CAPACITY_MULTIPLIER;
+                if existing_count < capacity {
+                    count = count.min((capacity - existing_count) as isize);
+                } else {
+                    count = 0;
+                }
+            } else {
+                count = -count.abs().min(existing_count as isize);
+            }
+        };
+        if self.dynamic.auto_recipe() {
+            for recipe in self.dynamic.get_recipes().as_ref() {
+                if recipe.input.contains_key(item_type) {
+                    try_move(&factory.input_inventory, recipe);
+                    break;
+                }
+            }
+        } else {
+            if let Some(ref recipe) = factory.recipe {
+                try_move(&factory.input_inventory, recipe);
+            } else {
+                count = DEFAULT_MAX_CAPACITY as isize;
+            }
+        }
+        count
+    }
+
     /// Try to add items to a structure's inventory and return items actually moved.
     /// The sign is positive if they are added to inventory and negative if they are removed.
     pub(crate) fn add_inventory(
@@ -738,40 +775,17 @@ impl StructureBundle {
                 }
             }
             InventoryType::Input => {
-                if let Some(ref mut factory) = self.components.factory {
-                    let mut count = amount;
-                    let mut try_move = |inventory: &mut Inventory, recipe: &Recipe| {
-                        let existing_count = inventory.count_item(item_type);
-                        if 0 < count {
-                            let capacity =
-                                recipe.input.count_item(item_type) * RECIPE_CAPACITY_MULTIPLIER;
-                            if existing_count < capacity {
-                                count = count.min((capacity - existing_count) as isize);
-                            } else {
-                                count = 0;
-                            }
-                        } else {
-                            count = -count.abs().min(existing_count as isize);
-                        }
-                    };
-                    if self.dynamic.auto_recipe() {
-                        for recipe in self.dynamic.get_recipes().as_ref() {
-                            if recipe.input.contains_key(item_type) {
-                                try_move(&mut factory.input_inventory, recipe);
-                                break;
-                            }
-                        }
-                    } else {
-                        if let Some(ref mut recipe) = factory.recipe {
-                            try_move(&mut factory.input_inventory, recipe);
-                        } else {
-                            count = DEFAULT_MAX_CAPACITY as isize;
-                        }
-                    }
-                    real_move(&mut factory.input_inventory, count)
+                let count = if 0 < amount {
+                    self.factory_can_input(item_type, amount)
                 } else {
-                    default_add_inventory(self.dynamic.as_mut(), inventory_type, item_type, amount)
+                    amount
+                };
+                if 0 != count {
+                    if let Some(ref mut factory) = self.components.factory {
+                        return real_move(&mut factory.input_inventory, count);
+                    }
                 }
+                default_add_inventory(self.dynamic.as_mut(), inventory_type, item_type, amount)
             }
             InventoryType::Output => {
                 if let Some(ref mut factory) = self.components.factory {
