@@ -681,7 +681,17 @@ impl StructureBundle {
             self.components
                 .factory
                 .as_ref()
-                .map(|factory| factory.inventory(inventory_type))?
+                .and_then(|factory| factory.inventory(inventory_type))
+                .or_else(|| {
+                    if inventory_type == InventoryType::Burner {
+                        self.components
+                            .burner
+                            .as_ref()
+                            .map(|burner| &burner.inventory)
+                    } else {
+                        None
+                    }
+                })
         }
     }
 
@@ -716,7 +726,7 @@ impl StructureBundle {
             InventoryType::Input => {
                 if let Some(ref mut factory) = self.components.factory {
                     let mut count = 0;
-                    if let Some(recipe) = self.dynamic.get_selected_recipe() {
+                    if let Some(ref mut recipe) = factory.recipe {
                         let inventory = &mut factory.input_inventory;
                         let capacity =
                             recipe.input.count_item(item_type) * RECIPE_CAPACITY_MULTIPLIER;
