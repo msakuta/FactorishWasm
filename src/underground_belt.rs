@@ -447,7 +447,7 @@ impl Structure for UndergroundBelt {
         {
             return Ok(());
         }
-        let opos = other.components.get_position(self)?;
+        let opos = other.components.get_position(other.dynamic.as_ref())?;
         let d = if let Some(d) = self.distance(components, &opos) {
             d
         } else {

@@ -1,12 +1,10 @@
 use super::{
-    burner::{Burner, FUEL_CAPACITY},
     factory::Factory,
     furnace::RECIPES,
     gl::{
         draw_electricity_alarm_gl,
         utils::{enable_buffer, Flatten},
     },
-    inventory::Inventory,
     serialize_impl,
     structure::Energy,
     structure::{Structure, StructureBundle, StructureComponents, StructureDynIter, StructureId},

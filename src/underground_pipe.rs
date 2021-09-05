@@ -241,7 +241,13 @@ impl Structure for UndergroundPipe {
             return Ok(());
         }
 
-        let other_rotation = other.components.get_rotation(self)?;
+        let other_rotation = if let Ok(orot) = other.components.get_rotation(other.dynamic.as_ref())
+        {
+            orot
+        } else {
+            return Ok(());
+        };
+
         let rotation = components.get_rotation(self)?;
         if other_rotation != rotation.next().next() {
             return Ok(());
