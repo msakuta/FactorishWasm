@@ -28,7 +28,7 @@ impl OffshorePump {
 }
 
 impl Structure for OffshorePump {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "Offshore Pump"
     }
 
@@ -72,7 +72,7 @@ impl Structure for OffshorePump {
         let position = components
             .position
             .ok_or_else(|| js_str!("OffshorePump without Position"))?;
-        Pipe::draw_gl_int(components, state, gl, depth, false, is_ghost)?;
+        Pipe::draw_gl_int(self, components, state, gl, depth, false, is_ghost)?;
         let (x, y) = (
             position.x as f32 + state.viewport.x as f32,
             position.y as f32 + state.viewport.y as f32,

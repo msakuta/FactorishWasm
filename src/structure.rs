@@ -253,7 +253,7 @@ pub(crate) fn default_add_inventory(
 }
 
 pub(crate) trait Structure {
-    fn name(&self) -> &str;
+    fn name(&self) -> &'static str;
 
     /// Specialized method to get underground belt direction.
     /// We don't like to put this to Structure trait method, but we don't have an option
@@ -516,11 +516,14 @@ pub(crate) struct Energy {
     pub max: f64,
 }
 
-pub(crate) struct ComponentError(&'static str);
+pub(crate) struct ComponentError {
+    structure: &'static str,
+    component: &'static str,
+}
 
 impl From<ComponentError> for JsValue {
     fn from(ce: ComponentError) -> Self {
-        js_str!("UndergroundPipe without {}", ce.0)
+        js_str!("{} without {} component", ce.structure, ce.component)
     }
 }
 
@@ -556,18 +559,28 @@ impl StructureComponents {
         }
     }
 
-    pub fn get_position(&self) -> Result<Position, ComponentError> {
-        self.position.ok_or_else(|| ComponentError("Position"))
+    pub fn get_position(&self, dynamic: &dyn Structure) -> Result<Position, ComponentError> {
+        self.position.ok_or_else(|| ComponentError {
+            structure: dynamic.name(),
+            component: "Position",
+        })
     }
 
-    pub fn get_rotation(&self) -> Result<Rotation, ComponentError> {
-        self.rotation.ok_or_else(|| ComponentError("Rotation"))
+    pub fn get_rotation(&self, dynamic: &dyn Structure) -> Result<Rotation, ComponentError> {
+        self.rotation.ok_or_else(|| ComponentError {
+            structure: dynamic.name(),
+            component: "Rotation",
+        })
     }
 
-    pub fn get_fluid_box_first(&self) -> Result<&FluidBox, ComponentError> {
-        self.fluid_boxes
-            .first()
-            .ok_or_else(|| ComponentError("FluidBox"))
+    pub fn get_fluid_box_first(
+        &self,
+        dynamic: &dyn Structure,
+    ) -> Result<&FluidBox, ComponentError> {
+        self.fluid_boxes.first().ok_or_else(|| ComponentError {
+            structure: dynamic.name(),
+            component: "FluidBox",
+        })
     }
 }
 

@@ -29,7 +29,7 @@ impl ElectPole {
 }
 
 impl Structure for ElectPole {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "Electric Pole"
     }
 

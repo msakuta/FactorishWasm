@@ -38,7 +38,7 @@ impl ElectricFurnace {
 }
 
 impl Structure for ElectricFurnace {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "Electric Furnace"
     }
 

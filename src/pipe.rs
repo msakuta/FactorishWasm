@@ -80,6 +80,7 @@ impl Pipe {
     }
 
     pub(crate) fn draw_gl_int(
+        dynamic: &dyn Structure,
         components: &StructureComponents,
         state: &FactorishState,
         gl: &GL,
@@ -89,11 +90,11 @@ impl Pipe {
     ) -> Result<(), JsValue> {
         match depth {
             0 => {
-                Self::draw_pipe_gl(gl, components, state, draw_center, is_ghost)?;
+                Self::draw_pipe_gl(gl, dynamic, components, state, draw_center, is_ghost)?;
             }
             2 => {
                 if state.alt_mode {
-                    Self::draw_flow_overlay_gl(gl, components, state)?;
+                    Self::draw_flow_overlay_gl(gl, dynamic, components, state)?;
                 }
             }
             _ => (),
@@ -103,12 +104,13 @@ impl Pipe {
 
     fn draw_pipe_gl(
         gl: &GL,
+        dynamic: &dyn Structure,
         components: &StructureComponents,
         state: &FactorishState,
         draw_center: bool,
         is_ghost: bool,
     ) -> Result<(), JsValue> {
-        let position = components.get_position()?;
+        let position = components.get_position(dynamic)?;
         let (x, y) = (
             position.x as f32 + state.viewport.x as f32,
             position.y as f32 + state.viewport.y as f32,
@@ -160,10 +162,11 @@ impl Pipe {
 
     fn draw_flow_overlay_gl(
         gl: &GL,
+        dynamic: &dyn Structure,
         components: &StructureComponents,
         state: &FactorishState,
     ) -> Result<(), JsValue> {
-        let position = components.get_position()?;
+        let position = components.get_position(dynamic)?;
         let (x, y) = (
             position.x as f32 + state.viewport.x as f32,
             position.y as f32 + state.viewport.y as f32,
@@ -226,7 +229,7 @@ impl Pipe {
 }
 
 impl Structure for Pipe {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "Pipe"
     }
 
@@ -249,7 +252,7 @@ impl Structure for Pipe {
         depth: i32,
         is_ghost: bool,
     ) -> Result<(), JsValue> {
-        Self::draw_gl_int(components, state, gl, depth, true, is_ghost)
+        Self::draw_gl_int(self, components, state, gl, depth, true, is_ghost)
     }
 
     fn desc(&self, components: &StructureComponents, _state: &FactorishState) -> String {

@@ -96,7 +96,7 @@ impl Inserter {
 }
 
 impl Structure for Inserter {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "Inserter"
     }
 

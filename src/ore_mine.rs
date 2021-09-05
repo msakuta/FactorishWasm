@@ -87,7 +87,7 @@ impl OreMine {
 }
 
 impl Structure for OreMine {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "Ore Mine"
     }
 

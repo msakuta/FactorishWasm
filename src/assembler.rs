@@ -50,7 +50,7 @@ impl Assembler {
 }
 
 impl Structure for Assembler {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "Assembler"
     }
 

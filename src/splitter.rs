@@ -30,7 +30,7 @@ impl Splitter {
 }
 
 impl Structure for Splitter {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "Splitter"
     }
 

@@ -46,7 +46,7 @@ impl TransportBelt {
 }
 
 impl Structure for TransportBelt {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "Transport Belt"
     }
 
@@ -104,8 +104,8 @@ impl Structure for TransportBelt {
         depth: i32,
         is_ghost: bool,
     ) -> Result<(), JsValue> {
-        let position = components.get_position()?;
-        let rotation = components.get_rotation()?;
+        let position = components.get_position(self)?;
+        let rotation = components.get_rotation(self)?;
 
         let (x, y) = (
             position.x as f32 + state.viewport.x as f32,

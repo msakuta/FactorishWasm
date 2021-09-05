@@ -77,7 +77,7 @@ impl Boiler {
 }
 
 impl Structure for Boiler {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "Boiler"
     }
 
@@ -138,7 +138,7 @@ impl Structure for Boiler {
         depth: i32,
         is_ghost: bool,
     ) -> Result<(), JsValue> {
-        Pipe::draw_gl_int(components, state, gl, depth, false, is_ghost)?;
+        Pipe::draw_gl_int(self, components, state, gl, depth, false, is_ghost)?;
         let position = components
             .position
             .ok_or_else(|| js_str!("Boiler without Position"))?;

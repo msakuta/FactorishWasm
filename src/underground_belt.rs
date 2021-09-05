@@ -75,7 +75,7 @@ impl UndergroundBelt {
 }
 
 impl Structure for UndergroundBelt {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "Underground Belt"
     }
 
@@ -94,8 +94,8 @@ impl Structure for UndergroundBelt {
         if depth != 0 && depth != 1 {
             return Ok(());
         };
-        let position = components.get_position()?;
-        let rotation = components.get_rotation()?;
+        let position = components.get_position(self)?;
+        let rotation = components.get_rotation(self)?;
         match state.image_underground_belt.as_ref() {
             Some(img) => {
                 context.save();
@@ -134,8 +134,8 @@ impl Structure for UndergroundBelt {
         depth: i32,
         is_ghost: bool,
     ) -> Result<(), JsValue> {
-        let position = components.get_position()?;
-        let rotation = components.get_rotation()?;
+        let position = components.get_position(self)?;
+        let rotation = components.get_rotation(self)?;
         let (x, y) = (
             position.x as f32 + state.viewport.x as f32,
             position.y as f32 + state.viewport.y as f32,
@@ -386,7 +386,7 @@ impl Structure for UndergroundBelt {
                 Err(js_str!("Underground belt not connected"))
             }
         } else {
-            TransportBelt::transport_item(components.get_rotation()?.next().next(), item)
+            TransportBelt::transport_item(components.get_rotation(self)?.next().next(), item)
         }
     }
 
@@ -441,13 +441,13 @@ impl Structure for UndergroundBelt {
             }
             return Ok(());
         }
-        let rotation = components.get_rotation()?;
+        let rotation = components.get_rotation(self)?;
         if other.dynamic.name() != self.name()
             || other.components.rotation != Some(rotation.next().next())
         {
             return Ok(());
         }
-        let opos = other.components.get_position()?;
+        let opos = other.components.get_position(self)?;
         let d = if let Some(d) = self.distance(components, &opos) {
             d
         } else {
@@ -483,7 +483,7 @@ impl Structure for UndergroundBelt {
         others: &StructureDynIter,
         _construct: bool,
     ) -> Result<(), JsValue> {
-        let rotation = components.get_rotation()?;
+        let rotation = components.get_rotation(self)?;
         if let Some((id, _)) = others.dyn_iter_id().find(|(_, other)| {
             if other.dynamic.name() != self.name()
                 || other.components.rotation != Some(rotation.next().next())

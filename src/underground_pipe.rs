@@ -48,7 +48,7 @@ impl UndergroundPipe {
 }
 
 impl Structure for UndergroundPipe {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "Underground Pipe"
     }
 
@@ -63,8 +63,8 @@ impl Structure for UndergroundPipe {
         if depth != 0 && depth != 1 {
             return Ok(());
         };
-        let position = components.get_position()?;
-        let rotation = components.get_rotation()?;
+        let position = components.get_position(self)?;
+        let rotation = components.get_rotation(self)?;
         match state.image_pipe.as_ref() {
             Some(img) => {
                 context.save();
@@ -143,7 +143,7 @@ impl Structure for UndergroundPipe {
                 gl.draw_arrays(GL::TRIANGLE_FAN, 0, 4);
             }
             2 => {
-                let fluid_box = components.get_fluid_box_first()?;
+                let fluid_box = components.get_fluid_box_first(self)?;
                 let on_cursor = state.cursor == Some([position.x, position.y]);
                 if state.alt_mode && matches!(rotation, Rotation::Left | Rotation::Top) || on_cursor
                 {
@@ -241,8 +241,8 @@ impl Structure for UndergroundPipe {
             return Ok(());
         }
 
-        let other_rotation = other.components.get_rotation()?;
-        let rotation = components.get_rotation()?;
+        let other_rotation = other.components.get_rotation(self)?;
+        let rotation = components.get_rotation(self)?;
         if other_rotation != rotation.next().next() {
             return Ok(());
         }
@@ -268,13 +268,13 @@ impl Structure for UndergroundPipe {
         }
 
         let connect_index = rotation.angle_4() as usize;
-        let fluid_box = components.get_fluid_box_first()?;
+        let fluid_box = components.get_fluid_box_first(self)?;
 
         // If there is already an underground belt with shorter distance, don't connect to the new one.
         if let Some(target) =
             fluid_box.connect_to[connect_index].and_then(|target| others.get(target))
         {
-            let target_pos = target.components.get_position()?;
+            let target_pos = target.components.get_position(self)?;
             if let Some(target_d) = self.distance(components, &target_pos) {
                 if 0 < target_d && target_d < d {
                     return Ok(());
@@ -296,7 +296,7 @@ impl Structure for UndergroundPipe {
         others: &StructureDynIter,
         _construct: bool,
     ) -> Result<(), JsValue> {
-        let rotation = components.get_rotation()?;
+        let rotation = components.get_rotation(self)?;
         let connect_index = rotation.angle_4() as usize;
 
         if let Some((id, _)) =
