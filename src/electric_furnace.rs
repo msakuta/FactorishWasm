@@ -26,10 +26,7 @@ impl ElectricFurnace {
             Box::new(ElectricFurnace {}),
             Some(*position),
             None,
-            Some(Burner {
-                inventory: Inventory::new(),
-                capacity: FUEL_CAPACITY,
-            }),
+            None,
             Some(Energy {
                 value: 0.,
                 max: 100.,
