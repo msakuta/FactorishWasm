@@ -3,7 +3,8 @@ use super::{
     pipe::Pipe,
     serialize_impl,
     structure::{
-        Position, Structure, StructureBundle, StructureComponents, StructureDynIter, StructureId,
+        Energy, Position, Structure, StructureBundle, StructureComponents, StructureDynIter,
+        StructureId,
     },
     water_well::{FluidBox, FluidType},
     FactorishState, FrameProcResult, Recipe,
@@ -18,8 +19,6 @@ use std::collections::HashMap;
 #[derive(Serialize, Deserialize)]
 pub(crate) struct SteamEngine {
     progress: Option<f64>,
-    power: f64,
-    max_power: f64,
     recipe: Option<Recipe>,
 }
 
@@ -27,8 +26,6 @@ impl SteamEngine {
     pub(crate) fn new(position: Position) -> StructureBundle {
         let entity = SteamEngine {
             progress: None,
-            power: 0.,
-            max_power: 100.,
             recipe: Some(Recipe {
                 input: HashMap::new(),
                 input_fluid: Some(FluidType::Steam),
@@ -43,7 +40,10 @@ impl SteamEngine {
             Some(position),
             None,
             None,
-            None,
+            Some(Energy {
+                value: 0.,
+                max: 100.,
+            }),
             None,
             vec![FluidBox::new(true, false)],
         )
@@ -54,8 +54,13 @@ impl SteamEngine {
 
     fn combustion_rate(&self, components: &StructureComponents) -> f64 {
         assert!(!components.fluid_boxes.is_empty());
+        let energy = if let Some(ref energy) = components.energy {
+            energy
+        } else {
+            return 0.;
+        };
         if let Some(ref recipe) = self.recipe {
-            ((self.max_power - self.power) / recipe.power_cost.abs())
+            ((energy.max - energy.value) / recipe.power_cost.abs())
                 .min(1. / recipe.recipe_time)
                 .min(components.fluid_boxes[0].amount / Self::FLUID_PER_PROGRESS)
                 .min(1.)
@@ -174,6 +179,11 @@ impl Structure for SteamEngine {
 
     fn desc(&self, components: &StructureComponents, _state: &FactorishState) -> String {
         if self.recipe.is_some() {
+            let energy = if let Some(ref energy) = components.energy {
+                energy
+            } else {
+                return "No energy component!".to_string();
+            };
             assert!(!components.fluid_boxes.is_empty());
             // Progress bar
             format!("{}{}{}{}{}Input fluid: {}",
@@ -183,8 +193,8 @@ impl Structure for SteamEngine {
                     self.progress.unwrap_or(0.) * 100.),
                 format!(r#"Power: {:.1}kJ <div style='position: relative; width: 100px; height: 10px; background-color: #001f1f; margin: 2px; border: 1px solid #3f3f3f'>
                 <div style='position: absolute; width: {}px; height: 10px; background-color: #ff00ff'></div></div>"#,
-                self.power,
-                if 0. < self.max_power { (self.power) / self.max_power * 100. } else { 0. }),
+                energy.value,
+                if 0. < energy.max { (energy.value) / energy.max * 100. } else { 0. }),
                 format!("<div>Combustion rate: {:.1}</div>", self.combustion_rate(components)),
                 components.fluid_boxes[0].desc())
         // getHTML(generateItemImage("time", true, this.recipe.time), true) + "<br>" +
@@ -213,12 +223,13 @@ impl Structure for SteamEngine {
             if let Some(prev_progress) = self.progress {
                 // Proceed only if we have sufficient energy in the buffer.
                 let progress = self.combustion_rate(components);
+                let energy = components.energy.as_mut().ok_or(())?;
                 if 1. <= prev_progress + progress {
                     self.progress = None;
                     return Ok(FrameProcResult::InventoryChanged(*position));
                 } else if Self::COMBUSTION_EPSILON < progress {
                     self.progress = Some(prev_progress + progress);
-                    self.power -= progress * recipe.power_cost;
+                    energy.value -= progress * recipe.power_cost;
                     components.fluid_boxes.first_mut().ok_or(())?.amount -=
                         progress * Self::FLUID_PER_PROGRESS;
                 }
