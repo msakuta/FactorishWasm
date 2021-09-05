@@ -62,6 +62,7 @@ use crate::{
         remove_index, update_index, DropItem, DropItemEntry, DropItemId, DropItemIndex,
         DROP_ITEM_SIZE, INDEX_CHUNK_SIZE,
     },
+    factory::Factory,
     gl::assets::Assets,
     perf::PerfStats,
     scenarios::select_scenario,
@@ -1992,7 +1993,11 @@ impl FactorishState {
         } else {
             let mut inventory = std::borrow::Cow::Borrowed(inventory);
             if inv_type == InventoryType::Input {
-                if let Some(recipe) = structure.dynamic.get_selected_recipe() {
+                if let Some(Factory {
+                    recipe: Some(ref recipe),
+                    ..
+                }) = structure.components.factory
+                {
                     let inventory = inventory.to_mut();
                     for key in recipe.input.keys() {
                         if !inventory.contains_key(key) {
