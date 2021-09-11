@@ -1614,7 +1614,7 @@ impl FactorishState {
         Ok(())
     }
 
-    fn harvest(&mut self, position: &Position, clear_item: bool) -> Result<bool, JsValue> {
+    fn harvest_structure(&mut self, position: &Position) -> Result<(bool, String), JsValue> {
         let mut harvested_structure = false;
         let mut popup_text = String::new();
         for i in 0..self.structures.len() {
@@ -1696,6 +1696,21 @@ impl FactorishState {
 
             harvested_structure = true;
         }
+        Ok((harvested_structure, popup_text))
+    }
+
+    fn harvest(
+        &mut self,
+        position: &Position,
+        clear_structure: bool,
+        clear_item: bool,
+    ) -> Result<bool, JsValue> {
+        let (harvested_structure, mut popup_text) = if clear_structure {
+            self.harvest_structure(position)?
+        } else {
+            (false, String::new())
+        };
+
         let mut harvested_items = false;
         if !harvested_structure && clear_item {
             // Pick up dropped items in the cell
@@ -2293,21 +2308,22 @@ impl FactorishState {
         };
 
         console_log!("mouse_down: {}, {}, button: {}", cursor.x, cursor.y, button);
-        if button == 2
-            && self.find_structure_tile(&[cursor.x, cursor.y]).is_none()
+        if button == 2 {
+            self.harvest(&cursor, false, true)?;
+            if self.find_structure_tile(&[cursor.x, cursor.y]).is_none()
             // Let the player pick up drop items before harvesting ore below.
             && !drop_item_iter(&self.drop_items).any(|item| {
                 item.x / TILE_SIZE_I == pos[0] as i32 / TILE_SIZE_I
                     && item.y / TILE_SIZE_I == pos[1] as i32 / TILE_SIZE_I
-            })
-        {
-            if let Some(tile) = self.tile_at(&cursor) {
-                if let Some(ore_type) = tile.get_ore_type() {
-                    self.ore_harvesting = Some(OreHarvesting {
-                        pos: cursor,
-                        ore_type,
-                        timer: 0,
-                    });
+            }) {
+                if let Some(tile) = self.tile_at(&cursor) {
+                    if let Some(ore_type) = tile.get_ore_type() {
+                        self.ore_harvesting = Some(OreHarvesting {
+                            pos: cursor,
+                            ore_type,
+                            timer: 0,
+                        });
+                    }
                 }
             }
         }
@@ -2340,7 +2356,7 @@ impl FactorishState {
                         let bbox = new_s.bounding_box();
                         for y in bbox.y0..bbox.y1 {
                             for x in bbox.x0..bbox.x1 {
-                                self.harvest(&Position { x, y }, !new_s.movable())?;
+                                self.harvest(&Position { x, y }, true, !new_s.movable())?;
                             }
                         }
                         // let connections = new_s.connection(self, &Ref(&self.structures));
@@ -2492,7 +2508,7 @@ impl FactorishState {
                 self.ore_harvesting = None;
             } else {
                 // Right click means explicit cleanup, so we pick up items no matter what.
-                self.harvest(&cursor, true)?;
+                self.harvest(&cursor, true, true)?;
                 events.push(JsValue::from_serde(&JSEvent::UpdatePlayerInventory).unwrap());
             }
         }

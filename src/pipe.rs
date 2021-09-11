@@ -198,7 +198,7 @@ impl Pipe {
                 Rotation::Bottom,
             ];
             const MIN_FLOW: f64 = 1e-6;
-            for (i, (flow, rotation)) in flows.iter().zip(ROTATIONS.iter()).enumerate() {
+            for (flow, rotation) in flows.iter().zip(ROTATIONS.iter()) {
                 if MIN_FLOW < flow.abs() {
                     let origin = rotation.delta();
                     enable_buffer(&gl, &state.assets.rect_buffer, 2, shader.vertex_position);
