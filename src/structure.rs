@@ -175,6 +175,7 @@ impl Rotation {
 pub(crate) enum FrameProcResult {
     None,
     InventoryChanged(Position),
+    UpdateResearch,
 }
 
 pub(crate) enum ItemResponse {

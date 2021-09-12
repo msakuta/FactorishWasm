@@ -14,7 +14,7 @@ use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 use web_sys::{CanvasRenderingContext2d, WebGlRenderingContext as GL};
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 const FUEL_CAPACITY: usize = 10;
 
@@ -45,6 +45,7 @@ impl Boiler {
                 output_fluid: Some(FluidType::Steam),
                 power_cost: 100.,
                 recipe_time: 30.,
+                requires_technology: HashSet::new(),
             }),
             input_fluid_box: FluidBox::new_with_filter(true, false, Some(FluidType::Water)),
             output_fluid_box: FluidBox::new(false, true),

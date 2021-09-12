@@ -29,11 +29,12 @@ pub(crate) static RECIPES: Lazy<[Recipe; 3]> = Lazy::new(|| {
             20.,
             50.,
         ),
-        Recipe::new(
+        Recipe::new_with_requires(
             hash_map!(ItemType::IronPlate => 5usize),
             hash_map!(ItemType::SteelPlate => 1usize),
             100.,
             250.,
+            hash_set!("SteelWorks".to_string()),
         ),
     ]
 });

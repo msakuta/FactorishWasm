@@ -9,7 +9,8 @@ import { createApp, nextTick } from "vue";
 
 import InventoryWindow from "./components/InventoryWindow.vue";
 import RecipeSelectorWindow from "./components/RecipeSelectorWindow.vue";
-import ToolTip from "./components/ToolTip.vue";
+import ResearchSelectorWindow from "./components/ResearchSelectorWindow.vue";
+import ToolTip, { HTMLDraw, RecipeDraw, ResearchDraw } from "./components/ToolTip.vue";
 
 /// We may no longer need support for IE, since WebAssembly is not supported by IE anyway.
 function isIE(){
@@ -305,7 +306,7 @@ let unlimited = true;
         var r = elem.getBoundingClientRect();
         var cr = container.getBoundingClientRect();
         vueToolTipApp.visible = true;
-        vueToolTipApp.recipeDraw = false;
+        vueToolTipApp.drawMode = HTMLDraw;
         vueToolTipApp.owner = owner;
         vueToolTipApp.text = text;
         vueToolTipApp.left = (r.left - cr.left);
@@ -342,7 +343,7 @@ let unlimited = true;
     toolBarElem.margin = '3px';
     // toolBarElem.style.top = '480px';
     // toolBarElem.style.left = '50%';
-    toolBarElem.style.width = ((toolBeltSize + 2) * tilesize + 8) + 'px';
+    toolBarElem.style.width = ((toolBeltSize + 3) * tilesize + 8) + 'px';
     toolBarElem.style.height = (tilesize + 8) + 'px';
     var toolBarCanvases = [];
     for(var i = 0; i < toolBeltSize; i++){
@@ -418,7 +419,7 @@ let unlimited = true;
     inventoryButton.style.height = '31px';
     inventoryButton.style.position = 'absolute';
     inventoryButton.style.top = '4px';
-    inventoryButton.style.left = (32.0 * i + 4) + 'px';
+    inventoryButton.style.left = (32.0 * i++ + 4) + 'px';
     inventoryButton.style.border = '1px blue solid';
     inventoryButton.style.backgroundImage = `url(${inventory})`;
     inventoryButton.onmousedown = () => {
@@ -428,6 +429,22 @@ let unlimited = true;
     inventoryButton.onmouseenter = (e) => setToolTip(e.target, "<b>Inventory</b><br><i>Shortcut: (E)</i>");
     inventoryButton.onmouseleave = () => vueToolTipApp.visible = false;
     toolBarElem.appendChild(inventoryButton);
+
+    const researchButton = document.createElement('div');
+    researchButton.style.width = '31px';
+    researchButton.style.height = '31px';
+    researchButton.style.position = 'absolute';
+    researchButton.style.top = '4px';
+    researchButton.style.left = (32.0 * i + 4) + 'px';
+    researchButton.style.border = '1px blue solid';
+    researchButton.style.backgroundImage = `url(${inventory})`;
+    researchButton.onmousedown = (evt) => {
+        showReserachSelect(evt);
+        vueResearchSelector.placeCenter();
+    };
+    researchButton.onmouseenter = (e) => setToolTip(e.target, "<b>Research</b><br><i>Shortcut: (T)</i>");
+    researchButton.onmouseleave = () => vueToolTipApp.visible = false;
+    toolBarElem.appendChild(researchButton);
 
     function updateToolBarImage(){
         for(var i = 0; i < toolBarCanvases.length; i++){
@@ -705,7 +722,7 @@ let unlimited = true;
     function recipeClickHandler(recipes, i, evt){
         console.log(`onClick: evt.ctrlKey: ${evt.ctrlKey}`);
         const pos = sim.get_selected_inventory();
-        if(sim.select_recipe(...pos, i)){
+        if(sim.select_recipe(...pos, recipes[i].index)){
             updateVueInputInventory(sim.get_structure_inventory(...pos, "Input"));
             vueRecipeSelector.visible = false;
             if(vueToolTipApp.visible && vueToolTipApp.owner === "recipe")
@@ -720,7 +737,7 @@ let unlimited = true;
             const r = elem.getBoundingClientRect();
             const cr = container.getBoundingClientRect();
             vueToolTipApp.visible = true;
-            vueToolTipApp.recipeDraw = true;
+            vueToolTipApp.drawMode = RecipeDraw;
             vueToolTipApp.recipe = recipes[i];
             vueToolTipApp.left = (r.left - cr.left);
             vueToolTipApp.bottom = window.innerHeight - r.top;
@@ -739,6 +756,44 @@ let unlimited = true;
     ).mount('#recipeSelector');
 
     windowOrder.push(vueRecipeSelector);
+
+    function researchClickHandler(_technologies, i, evt){
+        console.log(`researchClickHandler: evt.ctrlKey: ${evt.ctrlKey}`);
+        const pos = sim.get_technologies();
+        if(sim.select_research(i)){
+            vueResearchSelector.visible = false;
+            if(vueToolTipApp.visible && vueToolTipApp.owner === "research")
+                vueToolTipApp.visible = false;
+        }
+        evt.preventDefault();
+    };
+
+    const researchMouseEnterHandler = (technologies, i, evt) => {
+        if(i < technologies.length){
+            const elem = evt.target;
+            const r = elem.getBoundingClientRect();
+            const cr = container.getBoundingClientRect();
+            vueToolTipApp.visible = true;
+            vueToolTipApp.owner = "research";
+            vueToolTipApp.drawMode = ResearchDraw;
+            vueToolTipApp.technology = technologies[i];
+            vueToolTipApp.left = (r.left - cr.left);
+            vueToolTipApp.bottom = window.innerHeight - r.top;
+        }
+    };
+
+    const vueResearchSelector = createApp(
+        ResearchSelectorWindow,
+        {
+            dragWindowMouseDown,
+            researchClickHandler,
+            researchMouseEnterHandler,
+            researchMouseLeaveHandler: () => vueToolTipApp.visible = false,
+            bringToTop: () => bringToTop(vueResearchSelector),
+        }
+    ).mount('#researchSelector');
+
+    windowOrder.push(vueResearchSelector);
 
     function dragWindowMouseDown(evt, elem, vueApp, pos, updatePos){
         pos = [evt.screenX, evt.screenY];
@@ -892,6 +947,20 @@ let unlimited = true;
             var recipes = sim.get_structure_recipes(...sel_pos);
             vueRecipeSelector.recipes = recipes;
         }
+    }
+
+    function showReserachSelect(evt){
+        evt.stopPropagation();
+        if(vueResearchSelector.visible){
+            vueResearchSelector.visible = false;
+            return;
+        }
+        vueResearchSelector.visible = true;
+        vueResearchSelector.placeCenter();
+        bringToTop(vueResearchSelector);
+        vueResearchSelector.research = sim.get_research();
+        const tech = sim.get_technologies();
+        vueResearchSelector.technologies = tech;
     }
 
     // Place a window element at the center of the container, assumes the windows have margin set in the middle.
@@ -1076,6 +1145,12 @@ let unlimited = true;
             }
             else if(event.ShowInventoryAt && event.ShowInventoryAt instanceof Object){
                 showInventory(event.ShowInventoryAt);
+            }
+            else if(event === "UpdateResearch") {
+                console.log("Receiving UpdateResearch evnt");
+                if(vueResearchSelector.visible) {
+                    vueResearchSelector.research = sim.get_research();
+                }
             }
         }
     }

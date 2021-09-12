@@ -13,6 +13,7 @@ import chest from "../img/chest.png";
 import mine from "../img/mine.png";
 import mineExit from "../img/ore-mine-exit.png";
 import assembler from "../img/assembler.png";
+import lab from "../img/lab.png";
 import furnace from "../img/furnace.png";
 import electricFurnace from "../img/electric-furnace.png";
 import waterWell from "../img/waterwell.png";
@@ -34,6 +35,7 @@ import copperPlate from "../img/copper-plate.png";
 import copperWire from "../img/copper-wire.png";
 import circuit from "../img/circuit.png";
 import gear from "../img/gear.png";
+import sciencePack1 from "../img/science-pack-1.png";
 import pipeItem from "../img/pipe-item.png";
 import undergroundPipeItem from "../img/underground-pipe-item.png";
 import steamEngine from "../img/steam-engine.png";
@@ -63,6 +65,7 @@ export let loadImages = [
     ["furnace", furnace],
     ["electricFurnace", electricFurnace],
     ["assembler", assembler],
+    ["lab", lab],
     ["boiler", boiler],
     ["steamEngine", steamEngine],
     ["electPole", electPole],
@@ -82,6 +85,7 @@ export let loadImages = [
     ["stoneOre", stoneOre],
     ["copperPlate", copperPlate],
     ["gear", gear],
+    ["sciencePack1", sciencePack1],
     ["copperWire", copperWire],
     ["circuit", circuit],
     ["undergroundBeltItem", undergroundBeltItem],
@@ -115,6 +119,8 @@ function getImageFileInt(type){
         return stoneOre;
     case 'Gear':
         return gear;
+    case 'Science Pack 1':
+        return sciencePack1;
     case 'Copper Wire':
         return copperWire;
     case 'Circuit':
@@ -137,6 +143,8 @@ function getImageFileInt(type){
         return [electricFurnace, 3];
     case 'Assembler':
         return [assembler, 4];
+    case 'Lab':
+        return [lab, 4];
     case 'Water Well':
         return waterWell;
     case 'Offshore Pump':
