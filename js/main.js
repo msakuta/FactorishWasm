@@ -1,6 +1,6 @@
 import rotateImage from "../img/rotate.png";
-import rightarrow from "../img/rightarrow.png";
 import inventory from "../img/inventory.png";
+import sciencePack1 from "../img/science-pack-1.png";
 
 import { loadImages, getImageFile } from "./images.js";
 import { FactorishState } from "../pkg/index.js";
@@ -437,7 +437,7 @@ let unlimited = true;
     researchButton.style.top = '4px';
     researchButton.style.left = (32.0 * i + 4) + 'px';
     researchButton.style.border = '1px blue solid';
-    researchButton.style.backgroundImage = `url(${inventory})`;
+    researchButton.style.backgroundImage = `url(${sciencePack1})`;
     researchButton.onmousedown = (evt) => {
         showReserachSelect(evt);
         vueResearchSelector.placeCenter();
@@ -1032,6 +1032,9 @@ let unlimited = true;
             sim.set_alt_mode(altModeBox.checked);
             event.preventDefault();
             return;
+        }
+        else if(event.keyCode === 84){
+            showReserachSelect(event);
         }
         const result = sim.on_key_down(event.keyCode);
         if(result){
