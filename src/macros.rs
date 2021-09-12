@@ -62,4 +62,23 @@ macro_rules! hash_map {
             m
         }
     };
+    { } => {
+        ::std::collections::HashMap::new()
+    }
+}
+
+#[macro_export]
+macro_rules! hash_set {
+    { $($key:expr),+ } => {
+        {
+            let mut m = ::std::collections::HashSet::new();
+            $(
+                m.insert($key);
+            )+
+            m
+        }
+    };
+    { } => {
+        ::std::collections::HashSet::new()
+    }
 }

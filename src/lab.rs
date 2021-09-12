@@ -6,14 +6,14 @@ use super::{
         ShaderBundle,
     },
     inventory::{filter_inventory, Inventory, InventoryTrait, InventoryType},
-    items::get_item_image_url,
-    research::TechnologyTag,
+    research::TECHNOLOGIES,
     serialize_impl,
     structure::{default_add_inventory, Structure, StructureDynIter, StructureId},
     FactorishState, FrameProcResult, ItemType, Position, Recipe, TILE_SIZE,
 };
 use cgmath::{Matrix3, Matrix4, Vector2, Vector3};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use wasm_bindgen::prelude::*;
 use web_sys::{CanvasRenderingContext2d, WebGlRenderingContext as GL};
 
@@ -29,174 +29,31 @@ fn generate_item_image(item_image: &str, icon_size: bool, count: usize) -> Strin
 }
 
 #[derive(Serialize, Deserialize)]
-pub(crate) struct Assembler {
+pub(crate) struct Lab {
     position: Position,
     input_inventory: Inventory,
-    output_inventory: Inventory,
     progress: Option<f64>,
     power: f64,
     max_power: f64,
     recipe: Option<Recipe>,
 }
 
-impl Assembler {
+impl Lab {
     pub(crate) fn new(position: &Position) -> Self {
-        Assembler {
+        Lab {
             position: *position,
             input_inventory: Inventory::new(),
-            output_inventory: Inventory::new(),
             progress: None,
             power: 0.,
             max_power: 20.,
             recipe: None,
         }
     }
-
-    pub(crate) fn get_recipes() -> &'static [Recipe] {
-        static RECIPES: once_cell::sync::Lazy<Vec<Recipe>> = once_cell::sync::Lazy::new(|| {
-            vec![
-                Recipe::new(
-                    hash_map!(ItemType::IronPlate => 2usize),
-                    hash_map!(ItemType::Gear => 1usize),
-                    20.,
-                    50.,
-                ),
-                Recipe::new_with_requires(
-                    hash_map!(ItemType::IronPlate => 1usize, ItemType::Gear => 1usize),
-                    hash_map!(ItemType::TransportBelt => 1usize),
-                    20.,
-                    50.,
-                    hash_set!(TechnologyTag::Transportation),
-                ),
-                Recipe::new_with_requires(
-                    hash_map!(ItemType::TransportBelt => 1, ItemType::Gear => 2),
-                    hash_map!(ItemType::UndergroundBelt => 1usize),
-                    20.,
-                    50.,
-                    hash_set!(TechnologyTag::Transportation),
-                ),
-                Recipe::new_with_requires(
-                    hash_map!(ItemType::TransportBelt => 2, ItemType::Gear => 2),
-                    hash_map!(ItemType::Splitter => 1),
-                    25.,
-                    40.,
-                    hash_set!(TechnologyTag::Transportation),
-                ),
-                Recipe::new(
-                    hash_map!(ItemType::IronPlate => 5usize),
-                    hash_map!(ItemType::Chest => 1usize),
-                    20.,
-                    50.,
-                ),
-                Recipe::new(
-                    hash_map!(ItemType::StoneOre => 5usize),
-                    hash_map!(ItemType::Furnace => 1usize),
-                    20.,
-                    20.,
-                ),
-                Recipe::new_with_requires(
-                    hash_map!(ItemType::SteelPlate => 5usize, ItemType::Furnace => 1),
-                    hash_map!(ItemType::ElectricFurnace => 1usize),
-                    20.,
-                    20.,
-                    hash_set!(TechnologyTag::SteelWorks),
-                ),
-                Recipe::new(
-                    hash_map!(ItemType::CopperPlate => 1usize),
-                    hash_map!(ItemType::CopperWire => 2usize),
-                    20.,
-                    20.,
-                ),
-                Recipe::new(
-                    hash_map!(ItemType::IronPlate => 1, ItemType::CopperWire => 3usize),
-                    hash_map!(ItemType::Circuit => 1usize),
-                    20.,
-                    50.,
-                ),
-                Recipe::new(
-                    hash_map!(ItemType::IronPlate => 5, ItemType::Gear => 5, ItemType::Circuit => 3),
-                    hash_map!(ItemType::Assembler => 1),
-                    20.,
-                    120.,
-                ),
-                Recipe::new(
-                    hash_map!(ItemType::IronPlate => 5, ItemType::Gear => 3, ItemType::CopperWire => 10),
-                    hash_map!(ItemType::Lab => 1),
-                    20.,
-                    120.,
-                ),
-                Recipe::new(
-                    hash_map!(ItemType::IronPlate => 1, ItemType::Gear => 1, ItemType::Circuit => 1),
-                    hash_map!(ItemType::Inserter => 1),
-                    20.,
-                    20.,
-                ),
-                Recipe::new(
-                    hash_map!(ItemType::IronPlate => 1, ItemType::Gear => 5, ItemType::Circuit => 3),
-                    hash_map!(ItemType::OreMine => 1),
-                    100.,
-                    100.,
-                ),
-                Recipe::new(
-                    hash_map!(ItemType::IronPlate => 2),
-                    hash_map!(ItemType::Pipe => 1),
-                    20.,
-                    20.,
-                ),
-                Recipe::new(
-                    hash_map!(ItemType::Pipe => 10),
-                    hash_map!(ItemType::UndergroundPipe => 2),
-                    20.,
-                    20.,
-                ),
-                Recipe::new(
-                    hash_map!(ItemType::IronPlate => 5, ItemType::Gear => 5),
-                    hash_map!(ItemType::OffshorePump => 1),
-                    150.,
-                    150.,
-                ),
-                Recipe::new(
-                    hash_map!(ItemType::IronPlate => 5, ItemType::CopperPlate => 5),
-                    hash_map!(ItemType::Boiler => 1),
-                    100.,
-                    100.,
-                ),
-                Recipe::new(
-                    hash_map!(ItemType::IronPlate => 5, ItemType::Gear => 5, ItemType::CopperPlate => 5),
-                    hash_map!(ItemType::SteamEngine => 1),
-                    200.,
-                    200.,
-                ),
-                Recipe::new_with_requires(
-                    hash_map!(ItemType::IronPlate => 2, ItemType::CopperWire => 2),
-                    hash_map!(ItemType::ElectPole => 1),
-                    20.,
-                    20.,
-                    hash_set!(TechnologyTag::Electricity),
-                ),
-                Recipe::new(
-                    hash_map!(ItemType::IronPlate => 1, ItemType::Gear => 1),
-                    hash_map!(ItemType::SciencePack1 => 1),
-                    50.,
-                    50.,
-                ),
-                Recipe::new_with_requires(
-                    hash_map!(ItemType::Inserter => 1, ItemType::TransportBelt => 1),
-                    hash_map!(ItemType::SciencePack2 => 1),
-                    150.,
-                    150.,
-                    hash_set!(TechnologyTag::Transportation),
-                ),
-            ]
-        });
-
-        &RECIPES[..]
-    }
 }
 
-impl Structure for Assembler {
+impl Structure for Lab {
     fn name(&self) -> &str {
-        "Assembler"
+        "Lab"
     }
 
     fn position(&self) -> &Position {
@@ -215,7 +72,7 @@ impl Structure for Assembler {
                 self.position.x as f64 * TILE_SIZE,
                 self.position.y as f64 * TILE_SIZE,
             );
-            match state.image_assembler.as_ref() {
+            match state.image_lab.as_ref() {
                 Some(img) => {
                     let sx = if self.progress.is_some() && 0. < self.power {
                         ((((state.sim_time * 5.) as isize) % 4) * 32) as f64
@@ -235,7 +92,7 @@ impl Structure for Assembler {
                             TILE_SIZE,
                         )?;
                 }
-                None => return Err(JsValue::from_str("assembler image not available")),
+                None => return Err(JsValue::from_str("lab image not available")),
             }
             return Ok(());
         }
@@ -283,7 +140,7 @@ impl Structure for Assembler {
             0 => {
                 let shader = get_shader()?;
                 gl.active_texture(GL::TEXTURE0);
-                gl.bind_texture(GL::TEXTURE_2D, Some(&state.assets.tex_assembler));
+                gl.bind_texture(GL::TEXTURE_2D, Some(&state.assets.tex_lab));
                 let sx = if self.progress.is_some() && 0. < self.power {
                     (((state.sim_time * 5.) as isize) % 4 + 1) as f32
                 } else {
@@ -312,7 +169,7 @@ impl Structure for Assembler {
 
     fn desc(&self, _state: &FactorishState) -> String {
         format!(
-            "{}<br>{}{}",
+            "{}<br>{}",
             if let Some(recipe) = &self.recipe {
                 // Progress bar
                 format!("{}{}{}{}",
@@ -325,16 +182,11 @@ impl Structure for Assembler {
                     self.power,
                     if 0. < self.max_power { (self.power) / self.max_power * 100. } else { 0. }),
                     )
-                + &generate_item_image(&_state.image_time.as_ref().unwrap().url, true, recipe.recipe_time as usize) + "<br>" +
-                "Outputs: <br>" +
-                &recipe.output.iter()
-                    .map(|item| format!("{}<br>", &generate_item_image(get_item_image_url(_state, &item.0), true, *item.1)))
-                    .fold::<String, _>("".to_string(), |a, s| a + &s)
+                + &generate_item_image(&_state.image_time.as_ref().unwrap().url, true, recipe.recipe_time as usize) + "<br>"
             } else {
                 String::from("No recipe")
             },
             format!("Input Items: <br>{}", self.input_inventory.describe()),
-            format!("Output Items: <br>{}", self.output_inventory.describe())
         )
     }
 
@@ -344,6 +196,22 @@ impl Structure for Assembler {
         state: &mut FactorishState,
         structures: &mut StructureDynIter,
     ) -> Result<FrameProcResult, ()> {
+        if let Some(ref research) = state.research {
+            if let Some(ref technology) = TECHNOLOGIES
+                .iter()
+                .find(|tech| tech.tag == research.technology)
+            {
+                self.recipe = Some(Recipe::new(
+                    technology.input.clone(),
+                    HashMap::new(),
+                    100.,
+                    100.,
+                ));
+            }
+        } else {
+            self.recipe = None;
+        }
+
         if let Some(recipe) = &self.recipe {
             let mut ret = FrameProcResult::None;
             // First, check if we need to refill the energy buffer in order to continue the current work.
@@ -396,13 +264,17 @@ impl Structure for Assembler {
                 if 1. <= prev_progress + progress {
                     self.progress = None;
 
-                    // Produce outputs into inventory
-                    for output_item in &recipe.output {
-                        self.output_inventory
-                            .add_items(&output_item.0, *output_item.1);
+                    if let Some(research) = state.research.as_mut() {
+                        let tag = research.technology;
+                        if let Some(technology) = TECHNOLOGIES.iter().find(|tech| tech.tag == tag) {
+                            research.progress += 1;
+                            if technology.steps <= research.progress {
+                                state.research = None;
+                                state.unlocked_technologies.insert(tag);
+                            }
+                            ret = FrameProcResult::UpdateResearch;
+                        }
                     }
-                    console_log!("outputting from Assembler {}", recipe.output.len());
-                    return Ok(FrameProcResult::InventoryChanged(self.position));
                 } else {
                     self.progress = Some(prev_progress + progress);
                     self.power -= progress * recipe.power_cost;
@@ -424,22 +296,9 @@ impl Structure for Assembler {
         Err(JsValue::from_str("Recipe is not initialized"))
     }
 
-    fn can_output(&self, _structures: &StructureDynIter) -> Inventory {
-        self.output_inventory.clone()
-    }
-
-    fn output(&mut self, _state: &mut FactorishState, item_type: &ItemType) -> Result<(), ()> {
-        if self.output_inventory.remove_item(item_type) {
-            Ok(())
-        } else {
-            Err(())
-        }
-    }
-
     fn inventory(&self, invtype: InventoryType) -> Option<&Inventory> {
         Some(match invtype {
             InventoryType::Input => &self.input_inventory,
-            InventoryType::Output => &self.output_inventory,
             _ => return None,
         })
     }
@@ -447,14 +306,12 @@ impl Structure for Assembler {
     fn inventory_mut(&mut self, invtype: InventoryType) -> Option<&mut Inventory> {
         Some(match invtype {
             InventoryType::Input => &mut self.input_inventory,
-            InventoryType::Output => &mut self.output_inventory,
             _ => return None,
         })
     }
 
     fn destroy_inventory(&mut self) -> Inventory {
         let mut ret = std::mem::take(&mut self.input_inventory);
-        ret.merge(std::mem::take(&mut self.output_inventory));
         // Return the ingredients if it was in the middle of processing a recipe.
         if let Some(mut recipe) = self.recipe.take() {
             if self.progress.is_some() {
@@ -465,7 +322,16 @@ impl Structure for Assembler {
     }
 
     fn get_recipes(&self) -> std::borrow::Cow<[Recipe]> {
-        std::borrow::Cow::from(Assembler::get_recipes())
+        static RECIPES: once_cell::sync::Lazy<Vec<Recipe>> = once_cell::sync::Lazy::new(|| {
+            vec![Recipe::new(
+                hash_map!(ItemType::SciencePack1 => 1usize),
+                HashMap::new(),
+                50.,
+                150.,
+            )]
+        });
+
+        std::borrow::Cow::from(&RECIPES[..])
     }
 
     fn select_recipe(
@@ -482,12 +348,6 @@ impl Structure for Assembler {
         self.input_inventory = filter_inventory(
             std::mem::take(&mut self.input_inventory),
             |item| recipe.input.contains_key(&item),
-            player_inventory,
-        );
-
-        self.output_inventory = filter_inventory(
-            std::mem::take(&mut self.output_inventory),
-            |item| recipe.output.contains_key(&item),
             player_inventory,
         );
 

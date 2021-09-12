@@ -84,6 +84,24 @@ impl InventoryTrait for Inventory {
     }
 }
 
+/// Filter given inventory with a function and return a copy of inventory with items that `filter` returned true.
+/// Filtered out items will be added to `residual`.
+pub(crate) fn filter_inventory(
+    inventory: Inventory,
+    filter: impl Fn(&ItemType) -> bool,
+    residual: &mut Inventory,
+) -> Inventory {
+    let mut ret = Inventory::new();
+    for (item, count) in inventory {
+        if filter(&item) {
+            ret.insert(item, count);
+        } else {
+            residual.add_items(&item, count);
+        }
+    }
+    ret
+}
+
 #[derive(PartialEq, Eq, Debug, Serialize, Deserialize, Clone, Copy)]
 pub(crate) enum InventoryType {
     Input,

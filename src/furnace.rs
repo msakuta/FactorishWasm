@@ -2,7 +2,10 @@ use super::{
     gl::utils::{enable_buffer, Flatten},
     inventory::InventoryType,
     items::item_to_str,
-    structure::{default_add_inventory, Structure, StructureDynIter, StructureId},
+    research::TechnologyTag,
+    structure::{
+        default_add_inventory, Structure, StructureDynIter, StructureId, RECIPE_CAPACITY_MULTIPLIER,
+    },
     DropItem, FactorishState, FrameProcResult, Inventory, InventoryTrait, ItemType, Position,
     Recipe, TempEnt, COAL_POWER,
 };
@@ -29,11 +32,12 @@ pub(crate) static RECIPES: Lazy<[Recipe; 3]> = Lazy::new(|| {
             20.,
             50.,
         ),
-        Recipe::new(
+        Recipe::new_with_requires(
             hash_map!(ItemType::IronPlate => 5usize),
             hash_map!(ItemType::SteelPlate => 1usize),
             100.,
             250.,
+            hash_set!(TechnologyTag::SteelWorks),
         ),
     ]
 });
@@ -309,7 +313,13 @@ impl Structure for Furnace {
             return true;
         }
         if let Some(recipe) = &self.recipe {
-            recipe.input.get(item_type).is_some()
+            recipe
+                .input
+                .get(item_type)
+                .map(|count| {
+                    self.input_inventory.count_item(item_type) < *count * RECIPE_CAPACITY_MULTIPLIER
+                })
+                .unwrap_or(false)
         } else {
             RECIPES
                 .iter()
@@ -392,6 +402,10 @@ impl Structure for Furnace {
 
     fn get_recipes(&self) -> std::borrow::Cow<[Recipe]> {
         std::borrow::Cow::from(&RECIPES[..])
+    }
+
+    fn auto_recipe(&self) -> bool {
+        true
     }
 
     fn get_selected_recipe(&self) -> Option<&Recipe> {
