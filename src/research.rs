@@ -1,4 +1,6 @@
 use crate::{
+    assembler::Assembler,
+    furnace::RECIPES,
     inventory::Inventory,
     items::{item_to_str, ItemType},
     FactorishState,
@@ -29,6 +31,7 @@ pub(crate) struct TechnologySerial {
     pub steps: usize,
     pub research_time: f64,
     pub unlocked: bool,
+    pub unlocks: Vec<String>,
 }
 
 impl TechnologySerial {
@@ -47,6 +50,12 @@ impl TechnologySerial {
             steps: tech.steps,
             research_time: tech.research_time,
             unlocked: state.unlocked_technologies.contains(&tech.tag),
+            unlocks: Assembler::get_recipes()
+                .iter()
+                .chain(RECIPES.iter())
+                .filter(|recipe| recipe.requires_technology.contains(&tech.tag))
+                .filter_map(|recipe| Some(item_to_str(recipe.output.keys().next()?)))
+                .collect(),
         }
     }
 }

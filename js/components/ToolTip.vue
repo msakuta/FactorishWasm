@@ -80,6 +80,16 @@ export default {
           </span>
         </span>
       </div>
+      <div>
+        Unlocks:
+      </div>
+      <div>
+        <span style="display: inline-block; width: 50%">
+          <span v-for="item in technology.unlocks" :key="item">
+            <item-icon :item="item" :noCount="true"></item-icon>
+          </span>
+        </span>
+      </div>
     </div>
   </div>
 </template>
