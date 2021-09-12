@@ -877,6 +877,10 @@ let unlimited = true;
     }
 
     function showInventory(event){
+        if(vueResearchSelector.visible){
+            vueResearchSelector.visible = false;
+            return;
+        }
         vueApp.inventoryVisible = !vueApp.inventoryVisible;
         if(!vueApp.inventoryVisible){
             if(vueRecipeSelector.visible)
@@ -916,6 +920,8 @@ let unlimited = true;
                 vueApp.hasStorage = false;
             }
             showBurnerStatus(pos);
+
+            bringToTop(vueApp);
         }
         else{
             vueApp.hasPosition = false;
@@ -953,6 +959,13 @@ let unlimited = true;
 
     function showReserachSelect(evt){
         evt.stopPropagation();
+        if(vueApp.inventoryVisible){
+            vueApp.inventoryVisible = false;
+            if(vueToolTipApp.visible && vueToolTipApp.owner === "inventory")
+                vueToolTipApp.visible = false;
+            vueRecipeSelector.visible = false;
+            sim.close_structure_inventory();
+        }
         if(vueResearchSelector.visible){
             vueResearchSelector.visible = false;
             return;
@@ -1029,23 +1042,25 @@ let unlimited = true;
     });
 
     function onKeyDown(event){
-        if(event.keyCode === 18){ // Alt key
+        switch(event.keyCode){
+        case 18: // Alt key
             altModeBox.checked = !altModeBox.checked;
             sim.set_alt_mode(altModeBox.checked);
             event.preventDefault();
             return;
-        }
-        else if(event.keyCode === 84){
+        case 69:
+            //'e'
+            showInventory();
+            return;
+        case 84:
+            // 't'
             showReserachSelect(event);
+            return;
         }
         const result = sim.on_key_down(event.keyCode);
         if(result){
             if(result[0] === "ShowInventory"){
                 showInventory();
-                vueApp.placeCenter();
-                if(vueApp.inventoryVisible){
-                    bringToTop(vueApp);
-                }
             }
             updateToolBarImage();
             updateToolCursor();

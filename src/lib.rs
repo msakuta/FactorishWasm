@@ -2005,6 +2005,11 @@ impl FactorishState {
         }
     }
 
+    pub fn close_structure_inventory(&mut self) -> Result<bool, JsValue> {
+        self.selected_structure_inventory = None;
+        Ok(true)
+    }
+
     /// Returns currently selected structure's coordinates in 2-array or `null` if none selected
     pub fn get_selected_inventory(&self) -> Result<JsValue, JsValue> {
         if let Some(pos) = self
