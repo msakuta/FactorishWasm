@@ -310,6 +310,7 @@ let unlimited = true;
         vueToolTipApp.owner = owner;
         vueToolTipApp.text = text;
         vueToolTipApp.left = (r.left - cr.left);
+        vueToolTipApp.top = undefined;
         vueToolTipApp.bottom = window.innerHeight - r.top;
     }
     const renderToolTip = (elem, idx) => {
@@ -422,10 +423,7 @@ let unlimited = true;
     inventoryButton.style.left = (32.0 * i++ + 4) + 'px';
     inventoryButton.style.border = '1px blue solid';
     inventoryButton.style.backgroundImage = `url(${inventory})`;
-    inventoryButton.onmousedown = () => {
-        showInventory();
-        vueApp.placeCenter();
-    };
+    inventoryButton.onmousedown = () => showInventory();
     inventoryButton.onmouseenter = (e) => setToolTip(e.target, "<b>Inventory</b><br><i>Shortcut: (E)</i>");
     inventoryButton.onmouseleave = () => vueToolTipApp.visible = false;
     toolBarElem.appendChild(inventoryButton);
@@ -438,10 +436,7 @@ let unlimited = true;
     researchButton.style.left = (32.0 * i + 4) + 'px';
     researchButton.style.border = '1px blue solid';
     researchButton.style.backgroundImage = `url(${sciencePack1})`;
-    researchButton.onmousedown = (evt) => {
-        showReserachSelect(evt);
-        vueResearchSelector.placeCenter();
-    };
+    researchButton.onmousedown = (evt) => showReserachSelect(evt);
     researchButton.onmouseenter = (e) => setToolTip(e.target, "<b>Research</b><br><i>Shortcut: (T)</i>");
     researchButton.onmouseleave = () => vueToolTipApp.visible = false;
     toolBarElem.appendChild(researchButton);
@@ -742,6 +737,7 @@ let unlimited = true;
             vueToolTipApp.drawMode = RecipeDraw;
             vueToolTipApp.recipe = recipes[i];
             vueToolTipApp.left = (r.left - cr.left);
+            vueToolTipApp.top = undefined;
             vueToolTipApp.bottom = window.innerHeight - r.top;
         }
     };
@@ -761,11 +757,8 @@ let unlimited = true;
 
     function researchClickHandler(_technologies, i, evt){
         console.log(`researchClickHandler: evt.ctrlKey: ${evt.ctrlKey}`);
-        const pos = sim.get_technologies();
         if(sim.select_research(i)){
-            vueResearchSelector.visible = false;
-            if(vueToolTipApp.visible && vueToolTipApp.owner === "research")
-                vueToolTipApp.visible = false;
+            vueResearchSelector.research = sim.get_research();
         }
         evt.preventDefault();
     };
@@ -780,7 +773,8 @@ let unlimited = true;
             vueToolTipApp.drawMode = ResearchDraw;
             vueToolTipApp.technology = technologies[i];
             vueToolTipApp.left = (r.left - cr.left);
-            vueToolTipApp.bottom = window.innerHeight - r.top;
+            vueToolTipApp.top = r.bottom;
+            vueToolTipApp.bottom = undefined;
         }
     };
 
@@ -878,6 +872,8 @@ let unlimited = true;
 
     function showInventory(event){
         if(vueResearchSelector.visible){
+            if(vueToolTipApp.visible && vueToolTipApp.owner === "research")
+                vueToolTipApp.visible = false;
             vueResearchSelector.visible = false;
             return;
         }
@@ -891,8 +887,6 @@ let unlimited = true;
         }
         else if(event){
             vueApp.hasPosition = true;
-            vueApp.placeCenter();
-            nextTick(() => bringToTop(vueApp));
             const pos = event.pos;
 
             const inputInventory = sim.get_structure_inventory(pos[0], pos[1], "Input");
@@ -921,11 +915,12 @@ let unlimited = true;
             }
             showBurnerStatus(pos);
 
-            bringToTop(vueApp);
         }
         else{
             vueApp.hasPosition = false;
         }
+        bringToTop(vueApp);
+        vueApp.placeCenter();
     }
 
     /// Convert a HTML element to string.
@@ -961,12 +956,14 @@ let unlimited = true;
         evt.stopPropagation();
         if(vueApp.inventoryVisible){
             vueApp.inventoryVisible = false;
-            if(vueToolTipApp.visible && vueToolTipApp.owner === "inventory")
+            if(vueToolTipApp.visible && (vueToolTipApp.owner === "inventory" || vueToolTipApp.owner === "recipe"))
                 vueToolTipApp.visible = false;
             vueRecipeSelector.visible = false;
             sim.close_structure_inventory();
         }
         if(vueResearchSelector.visible){
+            if(vueToolTipApp.visible && vueToolTipApp.owner === "research")
+                vueToolTipApp.visible = false;
             vueResearchSelector.visible = false;
             return;
         }

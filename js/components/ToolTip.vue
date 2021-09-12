@@ -30,6 +30,7 @@ export default {
       getImageFile,
       rightarrow,
       left: ref(0),
+      top: ref(undefined),
       bottom: ref(0),
       title: ref(""),
       text: ref(""),
@@ -46,7 +47,7 @@ export default {
 
 <template>
   <div v-if="visible" ref="tip" class="noselect tooltip"
-    :style="{zIndex: tootipZIndex, left: left + 'px', bottom: bottom + 'px'}"
+    :style="{zIndex: tootipZIndex, left: left + 'px', top: top !== undefined ? top + 'px' : undefined, bottom: bottom !== undefined ? bottom + 'px' : undefined}"
   >
     <div v-if="drawMode === HTMLDraw" v-html="text" />
     <div v-else-if="drawMode === RecipeDraw">
