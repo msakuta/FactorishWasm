@@ -1170,6 +1170,7 @@ let unlimited = true;
                 console.log("Receiving UpdateResearch evnt");
                 if(vueResearchSelector.visible) {
                     vueResearchSelector.research = sim.get_research();
+                    vueResearchSelector.technologies = sim.get_technologies();
                 }
             }
         }
