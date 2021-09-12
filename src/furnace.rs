@@ -396,6 +396,10 @@ impl Structure for Furnace {
         std::borrow::Cow::from(&RECIPES[..])
     }
 
+    fn auto_recipe(&self) -> bool {
+        true
+    }
+
     fn get_selected_recipe(&self) -> Option<&Recipe> {
         self.recipe.as_ref()
     }

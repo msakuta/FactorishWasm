@@ -195,9 +195,6 @@ pub(crate) enum RotateErr {
 /// Factories will have input inventory capacity of recipe ingredients enough to make this many products
 const RECIPE_CAPACITY_MULTIPLIER: usize = 3;
 
-/// If recipe was not selected for a furnace, it is allowed to insert any item, but limit the amount by this value.
-const DEFAULT_MAX_CAPACITY: usize = 50;
-
 /// Chest storage size, matching to Factorio
 const STORAGE_MAX_SLOTS: usize = 48;
 
@@ -211,10 +208,22 @@ pub(crate) fn default_add_inventory(
     if 0 < count {
         match inventory_type {
             InventoryType::Input => {
-                if let Some((recipe, inventory)) =
-                    s.get_selected_recipe().zip(s.inventory(inventory_type))
-                {
-                    let capacity = recipe.input.count_item(item_type) * RECIPE_CAPACITY_MULTIPLIER;
+                if let Some(inventory) = s.inventory(inventory_type) {
+                    let capacity = if let Some(recipe) = s.get_selected_recipe() {
+                        recipe.input.count_item(item_type) * RECIPE_CAPACITY_MULTIPLIER
+                    } else if s.auto_recipe() {
+                        if let Some(recipe) = s
+                            .get_recipes()
+                            .iter()
+                            .find(|recipe| recipe.input.contains_key(item_type))
+                        {
+                            recipe.input.count_item(item_type) * RECIPE_CAPACITY_MULTIPLIER
+                        } else {
+                            return 0;
+                        }
+                    } else {
+                        return 0;
+                    };
                     let existing_count = inventory.count_item(item_type);
                     if existing_count < capacity {
                         count = count.min((capacity - existing_count) as isize);
@@ -222,7 +231,7 @@ pub(crate) fn default_add_inventory(
                         count = 0;
                     }
                 } else {
-                    count = DEFAULT_MAX_CAPACITY as isize;
+                    return 0;
                 }
             }
             InventoryType::Storage => {
@@ -416,6 +425,9 @@ pub(crate) trait Structure {
     /// have static fixed list of recipes. In reality, all our structures return a fixed list though.
     fn get_recipes(&self) -> Cow<[Recipe]> {
         Cow::from(&[][..])
+    }
+    fn auto_recipe(&self) -> bool {
+        false
     }
     fn select_recipe(
         &mut self,

@@ -2284,13 +2284,14 @@ impl FactorishState {
         } else {
             if let Some(SelectedItem::PlayerInventory(item, count)) = self.selected_item {
                 let (structure, player) = self.find_structure_by_id_mut_and_player_err(id)?;
-                let mut try_move = |inventory: &mut Inventory, inventory_type| {
+                let mut try_move = |src_inventory: &mut Inventory, inventory_type| {
                     let count = if all {
-                        inventory.count_item(&item)
+                        src_inventory.count_item(&item)
                     } else {
-                        inventory.count_item(&item).min(count)
+                        src_inventory.count_item(&item).min(count)
                     };
-                    inventory.remove_items(
+                    console_log!("src_inventory Count: {}", count);
+                    src_inventory.remove_items(
                         &item,
                         structure
                             .add_inventory(inventory_type, &item, count as isize)
