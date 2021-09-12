@@ -722,7 +722,7 @@ let unlimited = true;
     function recipeClickHandler(recipes, i, evt){
         console.log(`onClick: evt.ctrlKey: ${evt.ctrlKey}`);
         const pos = sim.get_selected_inventory();
-        if(sim.select_recipe(...pos, recipes[i].index)){
+        if(i < recipes.length && sim.select_recipe(...pos, recipes[i].index)){
             updateVueInputInventory(sim.get_structure_inventory(...pos, "Input"));
             vueRecipeSelector.visible = false;
             if(vueToolTipApp.visible && vueToolTipApp.owner === "recipe")

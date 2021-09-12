@@ -17,6 +17,7 @@ pub(crate) enum ItemType {
     Circuit,
     SteelPlate,
     SciencePack1,
+    SciencePack2,
 
     TransportBelt,
     Chest,
@@ -50,6 +51,7 @@ pub(crate) fn item_to_str(type_: &ItemType) -> String {
         ItemType::Circuit => "Circuit".to_string(),
         ItemType::SteelPlate => "Steel Plate".to_string(),
         ItemType::SciencePack1 => "Science Pack 1".to_string(),
+        ItemType::SciencePack2 => "Science Pack 2".to_string(),
 
         ItemType::TransportBelt => "Transport Belt".to_string(),
         ItemType::Chest => "Chest".to_string(),
@@ -84,6 +86,7 @@ pub(crate) fn str_to_item(name: &str) -> Option<ItemType> {
         "Circuit" => Some(ItemType::Circuit),
         "Steel Plate" => Some(ItemType::SteelPlate),
         "Science Pack 1" => Some(ItemType::SciencePack1),
+        "Science Pack 2" => Some(ItemType::SciencePack2),
 
         "Transport Belt" => Some(ItemType::TransportBelt),
         "Chest" => Some(ItemType::Chest),
@@ -154,6 +157,7 @@ pub(crate) fn render_drop_item(
         ItemType::Circuit => render16(&state.image_circuit),
         ItemType::SteelPlate => render16(&state.image_steel_plate),
         ItemType::SciencePack1 => render16(&state.image_science_pack_1),
+        ItemType::SciencePack2 => render16(&state.image_science_pack_2),
 
         ItemType::TransportBelt => render16(&state.image_belt),
         ItemType::Chest => render16(&state.image_chest),
@@ -217,6 +221,7 @@ pub(crate) fn render_drop_item_mat_gl(
         ItemType::Circuit => render16(&state.assets.tex_circuit),
         ItemType::SteelPlate => render16(&state.assets.tex_steel_plate),
         ItemType::SciencePack1 => render16(&state.assets.tex_science_pack_1),
+        ItemType::SciencePack2 => render16(&state.assets.tex_science_pack_2),
 
         ItemType::TransportBelt => render16(&state.assets.tex_belt),
         ItemType::Chest => render16(&state.assets.tex_chest),
@@ -272,6 +277,7 @@ pub(crate) fn get_item_image_url<'a>(state: &'a FactorishState, item_type: &Item
         ItemType::Circuit => &state.image_circuit.as_ref().unwrap().url,
         ItemType::SteelPlate => &state.image_steel_plate.as_ref().unwrap().url,
         ItemType::SciencePack1 => &state.image_science_pack_1.as_ref().unwrap().url,
+        ItemType::SciencePack2 => &state.image_science_pack_2.as_ref().unwrap().url,
 
         ItemType::TransportBelt => &state.image_belt.as_ref().unwrap().url,
         ItemType::Chest => &state.image_chest.as_ref().unwrap().url,

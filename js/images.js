@@ -36,6 +36,7 @@ import copperWire from "../img/copper-wire.png";
 import circuit from "../img/circuit.png";
 import gear from "../img/gear.png";
 import sciencePack1 from "../img/science-pack-1.png";
+import sciencePack2 from "../img/science-pack-2.png";
 import pipeItem from "../img/pipe-item.png";
 import undergroundPipeItem from "../img/underground-pipe-item.png";
 import steamEngine from "../img/steam-engine.png";
@@ -86,6 +87,7 @@ export let loadImages = [
     ["copperPlate", copperPlate],
     ["gear", gear],
     ["sciencePack1", sciencePack1],
+    ["sciencePack2", sciencePack2],
     ["copperWire", copperWire],
     ["circuit", circuit],
     ["undergroundBeltItem", undergroundBeltItem],
@@ -121,6 +123,8 @@ function getImageFileInt(type){
         return gear;
     case 'Science Pack 1':
         return sciencePack1;
+    case 'Science Pack 2':
+        return sciencePack2;
     case 'Copper Wire':
         return copperWire;
     case 'Circuit':

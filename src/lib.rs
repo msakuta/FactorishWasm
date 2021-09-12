@@ -574,6 +574,7 @@ pub struct FactorishState {
     image_circuit: Option<ImageBundle>,
     image_steel_plate: Option<ImageBundle>,
     image_science_pack_1: Option<ImageBundle>,
+    image_science_pack_2: Option<ImageBundle>,
     image_time: Option<ImageBundle>,
     image_underground_belt_item: Option<ImageBundle>,
 
@@ -697,6 +698,7 @@ impl FactorishState {
             image_circuit: None,
             image_steel_plate: None,
             image_science_pack_1: None,
+            image_science_pack_2: None,
             image_time: None,
             image_underground_belt_item: None,
             board,
@@ -1067,14 +1069,20 @@ impl FactorishState {
 
         if let Ok(unlocked_technologies) = json_take(&mut json, "unlocked_technologies") {
             self.unlocked_technologies = from_value(unlocked_technologies)?;
+        } else {
+            self.unlocked_technologies = hash_set!();
         }
 
         if let Ok(pending_researches) = json_take(&mut json, "pending_researches") {
             self.pending_researches = from_value(pending_researches)?;
+        } else {
+            self.pending_researches = hash_map!();
         }
 
         if let Ok(research) = json_take(&mut json, "research") {
             self.research = from_value(research)?;
+        } else {
+            self.research = None;
         }
 
         // Redraw minimap
@@ -2882,6 +2890,7 @@ impl FactorishState {
         self.image_circuit = Some(load_image("circuit")?);
         self.image_steel_plate = Some(load_image("steelPlate")?);
         self.image_science_pack_1 = Some(load_image("sciencePack1")?);
+        self.image_science_pack_2 = Some(load_image("sciencePack2")?);
         self.image_time = Some(load_image("time")?);
         self.image_underground_belt_item = Some(load_image("undergroundBeltItem")?);
         Ok(())

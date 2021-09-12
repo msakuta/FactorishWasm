@@ -167,17 +167,25 @@ impl Assembler {
                     200.,
                     200.,
                 ),
-                Recipe::new(
+                Recipe::new_with_requires(
                     hash_map!(ItemType::IronPlate => 2, ItemType::CopperWire => 2),
                     hash_map!(ItemType::ElectPole => 1),
                     20.,
                     20.,
+                    hash_set!(TechnologyTag::Electricity),
                 ),
                 Recipe::new(
                     hash_map!(ItemType::IronPlate => 1, ItemType::Gear => 1),
                     hash_map!(ItemType::SciencePack1 => 1),
                     50.,
                     50.,
+                ),
+                Recipe::new_with_requires(
+                    hash_map!(ItemType::Inserter => 1, ItemType::TransportBelt => 1),
+                    hash_map!(ItemType::SciencePack2 => 1),
+                    150.,
+                    150.,
+                    hash_set!(TechnologyTag::Transportation),
                 ),
             ]
         });

@@ -12,6 +12,7 @@ use std::collections::HashMap;
 #[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Hash, Clone, Copy)]
 pub(crate) enum TechnologyTag {
     Transportation,
+    Electricity,
     SteelWorks,
 }
 
@@ -40,6 +41,7 @@ impl TechnologySerial {
             tag: tech.tag,
             image: match tech.tag {
                 TechnologyTag::Transportation => "Transport Belt",
+                TechnologyTag::Electricity => "Electric Pole",
                 TechnologyTag::SteelWorks => "Steel Plate",
             },
             input: tech
@@ -81,8 +83,14 @@ pub(crate) const TECHNOLOGIES: Lazy<Vec<Technology>> = Lazy::new(|| {
             research_time: 30.,
         },
         Technology {
-            tag: TechnologyTag::SteelWorks,
+            tag: TechnologyTag::Electricity,
             input: hash_map!(ItemType::SciencePack1 => 1),
+            steps: 30,
+            research_time: 30.,
+        },
+        Technology {
+            tag: TechnologyTag::SteelWorks,
+            input: hash_map!(ItemType::SciencePack1 => 1, ItemType::SciencePack2 => 1),
             steps: 50,
             research_time: 30.,
         },
