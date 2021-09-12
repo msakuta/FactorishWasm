@@ -1873,6 +1873,15 @@ impl FactorishState {
                         }
                     }
                 }
+            } else if inv_type == InventoryType::Output {
+                if let Some(recipe) = structure.get_selected_recipe() {
+                    let inventory = inventory.to_mut();
+                    for key in recipe.output.keys() {
+                        if !inventory.contains_key(key) {
+                            inventory.insert(*key, 0);
+                        }
+                    }
+                }
             }
             let mut v = inventory
                 .iter()
