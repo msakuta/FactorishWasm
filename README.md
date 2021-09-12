@@ -145,7 +145,7 @@ unlocked once this technology is researched.
 
 ![research-tooltip](readme-img/research-tooltip.png)
 
-Clickon on the research item will select it.
+Click on on the research item will select it.
 Selected research will be shown in the Research window along with its progress.
 
 ![research-selected](readme-img/research-selected.png)
