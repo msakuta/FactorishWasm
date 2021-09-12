@@ -2,6 +2,7 @@ use super::{
     gl::utils::{enable_buffer, Flatten},
     inventory::InventoryType,
     items::item_to_str,
+    research::TechnologyTag,
     structure::{default_add_inventory, Structure, StructureDynIter, StructureId},
     DropItem, FactorishState, FrameProcResult, Inventory, InventoryTrait, ItemType, Position,
     Recipe, TempEnt, COAL_POWER,
@@ -34,7 +35,7 @@ pub(crate) static RECIPES: Lazy<[Recipe; 3]> = Lazy::new(|| {
             hash_map!(ItemType::SteelPlate => 1usize),
             100.,
             250.,
-            hash_set!("SteelWorks".to_string()),
+            hash_set!(TechnologyTag::SteelWorks),
         ),
     ]
 });

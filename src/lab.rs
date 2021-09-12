@@ -6,6 +6,7 @@ use super::{
         ShaderBundle,
     },
     inventory::{Inventory, InventoryTrait, InventoryType},
+    research::TECHNOLOGIES,
     serialize_impl,
     structure::{default_add_inventory, Structure, StructureDynIter, StructureId},
     FactorishState, FrameProcResult, ItemType, Position, Recipe, TILE_SIZE,
@@ -196,10 +197,9 @@ impl Structure for Lab {
         structures: &mut StructureDynIter,
     ) -> Result<FrameProcResult, ()> {
         if let Some(ref research) = state.research {
-            if let Some(ref technology) = state
-                .technologies
+            if let Some(ref technology) = TECHNOLOGIES
                 .iter()
-                .find(|tech| tech.name == research.technology_name)
+                .find(|tech| tech.tag == research.technology)
             {
                 self.recipe = Some(Recipe::new(
                     technology.input.clone(),
@@ -265,18 +265,12 @@ impl Structure for Lab {
                     self.progress = None;
 
                     if let Some(research) = state.research.as_mut() {
-                        let name = research.technology_name;
-                        if let Some(technology) =
-                            state.technologies.iter().find(|tech| tech.name == name)
-                        {
+                        let tag = research.technology;
+                        if let Some(technology) = TECHNOLOGIES.iter().find(|tech| tech.tag == tag) {
                             research.progress += 1;
                             if technology.steps <= research.progress {
                                 state.research = None;
-                                if let Some(technology) =
-                                    state.technologies.iter_mut().find(|tech| tech.name == name)
-                                {
-                                    technology.unlocked = true;
-                                }
+                                state.unlocked_technologies.insert(tag);
                             }
                             ret = FrameProcResult::UpdateResearch;
                         }

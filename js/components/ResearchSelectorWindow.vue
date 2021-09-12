@@ -97,8 +97,9 @@ export default {
             Current research:
           </h4>
           <div v-if="research">
-            {{ research.technology_name }}
-            ({{ research.progress * 100 }}%)
+            {{ research.technology }}
+            ({{ (research.progress * 100).toFixed(0) }}%)
+            {{ research.unlocked ? "Research Completed!" : ""}}
             <div class="progressBarBack">
               <div class="progressBar" :style="{width: `${research.progress * 100}%`}"></div>
             </div>
@@ -124,6 +125,7 @@ export default {
               <item-icon
                 :item="technologies[i-1].image"
                 :noCount="true"
+                :transparent="technologies[i-1].unlocked"
               />
             </template>
           </div>

@@ -1,19 +1,29 @@
-use crate::{inventory::Inventory, items::item_to_str};
-use serde::Serialize;
+use crate::{
+    inventory::Inventory,
+    items::{item_to_str, ItemType},
+    FactorishState,
+};
+use once_cell::unsync::Lazy;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
+#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Hash, Clone, Copy)]
+pub(crate) enum TechnologyTag {
+    Transportation,
+    SteelWorks,
+}
+
+#[derive(Serialize, Deserialize)]
 pub(crate) struct Technology {
-    pub name: &'static str,
-    pub image: &'static str,
+    pub tag: TechnologyTag,
     pub input: Inventory,
     pub steps: usize,
     pub research_time: f64,
-    pub unlocked: bool,
 }
 
 #[derive(Serialize)]
 pub(crate) struct TechnologySerial {
-    pub name: &'static str,
+    pub tag: TechnologyTag,
     pub image: &'static str,
     pub input: HashMap<String, usize>,
     pub steps: usize,
@@ -21,11 +31,14 @@ pub(crate) struct TechnologySerial {
     pub unlocked: bool,
 }
 
-impl From<&Technology> for TechnologySerial {
-    fn from(tech: &Technology) -> Self {
+impl TechnologySerial {
+    pub(crate) fn from(tech: &Technology, state: &FactorishState) -> Self {
         Self {
-            name: tech.name,
-            image: tech.image,
+            tag: tech.tag,
+            image: match tech.tag {
+                TechnologyTag::Transportation => "Transport Belt",
+                TechnologyTag::SteelWorks => "Steel Plate",
+            },
             input: tech
                 .input
                 .iter()
@@ -33,18 +46,36 @@ impl From<&Technology> for TechnologySerial {
                 .collect(),
             steps: tech.steps,
             research_time: tech.research_time,
-            unlocked: tech.unlocked,
+            unlocked: state.unlocked_technologies.contains(&tech.tag),
         }
     }
 }
 
+#[derive(Serialize, Deserialize)]
 pub(crate) struct Research {
-    pub technology_name: &'static str,
+    pub technology: TechnologyTag,
     pub progress: usize,
 }
 
 #[derive(Serialize)]
 pub(crate) struct ResearchSerial {
-    pub technology_name: &'static str,
+    pub technology: TechnologyTag,
     pub progress: f64,
 }
+
+pub(crate) const TECHNOLOGIES: Lazy<Vec<Technology>> = Lazy::new(|| {
+    vec![
+        Technology {
+            tag: TechnologyTag::Transportation,
+            input: hash_map!(ItemType::SciencePack1 => 1),
+            steps: 20,
+            research_time: 30.,
+        },
+        Technology {
+            tag: TechnologyTag::SteelWorks,
+            input: hash_map!(ItemType::SciencePack1 => 1),
+            steps: 50,
+            research_time: 30.,
+        },
+    ]
+});

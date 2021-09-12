@@ -62,6 +62,9 @@ macro_rules! hash_map {
             m
         }
     };
+    { } => {
+        ::std::collections::HashMap::new()
+    }
 }
 
 #[macro_export]
@@ -75,4 +78,7 @@ macro_rules! hash_set {
             m
         }
     };
+    { } => {
+        ::std::collections::HashSet::new()
+    }
 }

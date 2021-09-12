@@ -70,12 +70,13 @@ export default {
     </div>
     <div v-else>
       <div style="display: inline-block; width = 10%">
-        {{technology.name}}
+        {{ technology.tag }}
+        {{ technology.unlocked ? "(Unlocked)" : "" }}
       </div>
       <div class="recipe-box" style="width: 200px">
         <span style="display: inline-block; width: 50%">
           <span v-for="count, item in technology.input" :key="item">
-            <item-icon :item="item" :count="count"></item-icon>
+            <item-icon :item="item" :count="count * technology.steps"></item-icon>
           </span>
         </span>
       </div>

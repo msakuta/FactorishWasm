@@ -76,7 +76,7 @@ use ore_mine::OreMine;
 use perlin_noise::Xor128;
 use pipe::Pipe;
 use power_network::{build_power_networks, PowerNetwork};
-use research::{Research, ResearchSerial, Technology, TechnologySerial};
+use research::{Research, ResearchSerial, TechnologySerial, TechnologyTag, TECHNOLOGIES};
 use splitter::Splitter;
 use steam_engine::SteamEngine;
 use structure::{
@@ -308,7 +308,7 @@ struct Recipe {
     power_cost: f64,
     recipe_time: f64,
     #[serde(default)]
-    requires_technology: HashSet<String>,
+    requires_technology: HashSet<TechnologyTag>,
 }
 
 impl Recipe {
@@ -329,7 +329,7 @@ impl Recipe {
         output: ItemSet,
         power_cost: f64,
         recipe_time: f64,
-        requires_technology: HashSet<String>,
+        requires_technology: HashSet<TechnologyTag>,
     ) -> Self {
         Recipe {
             input,
@@ -512,7 +512,8 @@ pub struct FactorishState {
     drop_items_index: DropItemIndex,
     tool_belt: [Option<ItemType>; 10],
     power_networks: Vec<PowerNetwork>,
-    technologies: Vec<Technology>,
+    unlocked_technologies: HashSet<TechnologyTag>,
+    pending_researches: HashMap<TechnologyTag, usize>,
     research: Option<Research>,
 
     selected_item: Option<SelectedItem>,
@@ -705,24 +706,8 @@ impl FactorishState {
             ore_harvesting: None,
             drop_items,
             drop_items_index: DropItemIndex::default(),
-            technologies: vec![
-                Technology {
-                    name: "Transportation",
-                    image: "Transport Belt",
-                    input: hash_map!(ItemType::SciencePack1 => 1),
-                    steps: 50,
-                    research_time: 30.,
-                    unlocked: false,
-                },
-                Technology {
-                    name: "SteelWorks",
-                    image: "Steel Plate",
-                    input: hash_map!(ItemType::SciencePack1 => 1),
-                    steps: 100,
-                    research_time: 30.,
-                    unlocked: false,
-                },
-            ],
+            unlocked_technologies: hash_set!(),
+            pending_researches: hash_map!(),
             research: None,
             on_player_update,
             on_popup_text,
@@ -868,6 +853,27 @@ impl FactorishState {
             )
             .map_err(|e| js_str!("Serialize error on board: {}", e))?,
         );
+
+        if let Some(ref research) = self.research {
+            map.insert(
+                "research".to_string(),
+                serde_json::to_value(research)
+                    .map_err(|e| js_str!("Research serialize error: {:?}", e))?,
+            );
+        }
+
+        map.insert(
+            "unlocked_technologies".to_string(),
+            serde_json::to_value(&self.unlocked_technologies)
+                .map_err(|e| js_str!("unlocked_technologies serialize error: {:?}", e))?,
+        );
+
+        map.insert(
+            "pending_researches".to_string(),
+            serde_json::to_value(&self.pending_researches)
+                .map_err(|e| js_str!("pending_researches serialize error: {:?}", e))?,
+        );
+
         serde_json::to_string(&map).map_err(|e| js_str!("Serialize error: {}", e))
     }
 
@@ -1058,6 +1064,18 @@ impl FactorishState {
         self.drop_items_index = build_index(&self.drop_items);
 
         self.tool_belt = from_value(json_take(&mut json, "tool_belt")?)?;
+
+        if let Ok(unlocked_technologies) = json_take(&mut json, "unlocked_technologies") {
+            self.unlocked_technologies = from_value(unlocked_technologies)?;
+        }
+
+        if let Ok(pending_researches) = json_take(&mut json, "pending_researches") {
+            self.pending_researches = from_value(pending_researches)?;
+        }
+
+        if let Ok(research) = json_take(&mut json, "research") {
+            self.research = from_value(research)?;
+        }
 
         // Redraw minimap
         self.render_minimap_data()?;
@@ -2082,13 +2100,10 @@ impl FactorishState {
                     .into_iter()
                     .enumerate()
                     .filter(|(_, recipe)| {
-                        let ret = recipe.requires_technology.iter().all(|tech| {
-                            self.technologies
-                                .iter()
-                                .find(|t| t.name == tech)
-                                .map(|tech| tech.unlocked)
-                                .expect("Failed to find technology")
-                        });
+                        let ret = recipe
+                            .requires_technology
+                            .iter()
+                            .all(|tech| self.unlocked_technologies.contains(tech));
                         console_log!("recipe {:?} can be used? {}", recipe.output, ret);
                         ret
                     })
@@ -2111,10 +2126,9 @@ impl FactorishState {
 
     pub fn get_technologies(&self) -> Result<JsValue, JsValue> {
         JsValue::from_serde(
-            &self
-                .technologies
+            &TECHNOLOGIES
                 .iter()
-                .map(TechnologySerial::from)
+                .map(|t| TechnologySerial::from(t, self))
                 .collect::<Vec<_>>(),
         )
         .map_err(|e| js_str!("Error: {:?}", e))
@@ -2122,18 +2136,17 @@ impl FactorishState {
 
     pub fn get_research(&self) -> Result<JsValue, JsValue> {
         if let Some(ref research) = self.research {
-            if let Some(tech) = self
-                .technologies
+            if let Some(tech) = TECHNOLOGIES
                 .iter()
-                .find(|tech| tech.name == research.technology_name)
+                .find(|tech| tech.tag == research.technology)
             {
                 JsValue::from_serde(&ResearchSerial {
-                    technology_name: research.technology_name,
+                    technology: research.technology,
                     progress: research.progress as f64 / tech.steps as f64,
                 })
                 .map_err(|e| js_str!("Error: {:?}", e))
             } else {
-                Err(js_str!("Technology {} not found", research.technology_name))
+                Err(js_str!("Technology {:?} not found", research.technology))
             }
         } else {
             Ok(JsValue::NULL)
@@ -2141,15 +2154,25 @@ impl FactorishState {
     }
 
     pub fn select_research(&mut self, index: usize) -> Result<bool, JsValue> {
-        if let Some(tech) = self.technologies.get(index) {
-            self.research = Some(Research {
-                technology_name: tech.name,
-                progress: 0,
-            });
-            Ok(true)
-        } else {
-            Ok(false)
+        if let Some(tech) = TECHNOLOGIES.get(index) {
+            if !self.unlocked_technologies.contains(&tech.tag) {
+                if let Some(ref research) = self.research {
+                    self.pending_researches
+                        .insert(research.technology, research.progress);
+                }
+
+                self.research = Some(Research {
+                    technology: tech.tag,
+                    progress: if let Some(pending) = self.pending_researches.get(&tech.tag) {
+                        *pending
+                    } else {
+                        0
+                    },
+                });
+                return Ok(true);
+            }
         }
+        Ok(false)
     }
 
     pub fn set_alt_mode(&mut self, value: bool) {
