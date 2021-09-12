@@ -5,7 +5,7 @@ use super::{
         utils::{enable_buffer, Flatten},
         ShaderBundle,
     },
-    inventory::{Inventory, InventoryTrait, InventoryType},
+    inventory::{filter_inventory, Inventory, InventoryTrait, InventoryType},
     items::get_item_image_url,
     research::TechnologyTag,
     serialize_impl,
@@ -468,13 +468,30 @@ impl Structure for Assembler {
         std::borrow::Cow::from(Assembler::get_recipes())
     }
 
-    fn select_recipe(&mut self, index: usize) -> Result<bool, JsValue> {
-        self.recipe = Some(
-            self.get_recipes()
-                .get(index)
-                .ok_or_else(|| js_str!("recipes index out of bound {:?}", index))?
-                .clone(),
+    fn select_recipe(
+        &mut self,
+        index: usize,
+        player_inventory: &mut Inventory,
+    ) -> Result<bool, JsValue> {
+        let recipe = self
+            .get_recipes()
+            .get(index)
+            .ok_or_else(|| js_str!("recipes index out of bound {:?}", index))?
+            .clone();
+
+        self.input_inventory = filter_inventory(
+            std::mem::take(&mut self.input_inventory),
+            |item| recipe.input.contains_key(&item),
+            player_inventory,
         );
+
+        self.output_inventory = filter_inventory(
+            std::mem::take(&mut self.output_inventory),
+            |item| recipe.output.contains_key(&item),
+            player_inventory,
+        );
+
+        self.recipe = Some(recipe);
         Ok(true)
     }
 

@@ -417,7 +417,11 @@ pub(crate) trait Structure {
     fn get_recipes(&self) -> Cow<[Recipe]> {
         Cow::from(&[][..])
     }
-    fn select_recipe(&mut self, _index: usize) -> Result<bool, JsValue> {
+    fn select_recipe(
+        &mut self,
+        _index: usize,
+        _player_inventory: &mut Inventory,
+    ) -> Result<bool, JsValue> {
         Err(JsValue::from_str("recipes not available"))
     }
     fn get_selected_recipe(&self) -> Option<&Recipe> {

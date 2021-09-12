@@ -250,7 +250,7 @@ impl FactorishState {
             .iter_mut()
             .filter_map(|s| s.dynamic.as_deref_mut())
         {
-            s.select_recipe(0).ok();
+            s.select_recipe(0, &mut self.player.inventory).ok();
         }
 
         let structures = std::mem::take(&mut self.structures);

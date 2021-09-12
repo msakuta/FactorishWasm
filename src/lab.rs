@@ -5,7 +5,7 @@ use super::{
         utils::{enable_buffer, Flatten},
         ShaderBundle,
     },
-    inventory::{Inventory, InventoryTrait, InventoryType},
+    inventory::{filter_inventory, Inventory, InventoryTrait, InventoryType},
     research::TECHNOLOGIES,
     serialize_impl,
     structure::{default_add_inventory, Structure, StructureDynIter, StructureId},
@@ -334,13 +334,24 @@ impl Structure for Lab {
         std::borrow::Cow::from(&RECIPES[..])
     }
 
-    fn select_recipe(&mut self, index: usize) -> Result<bool, JsValue> {
-        self.recipe = Some(
-            self.get_recipes()
-                .get(index)
-                .ok_or_else(|| js_str!("recipes index out of bound {:?}", index))?
-                .clone(),
+    fn select_recipe(
+        &mut self,
+        index: usize,
+        player_inventory: &mut Inventory,
+    ) -> Result<bool, JsValue> {
+        let recipe = self
+            .get_recipes()
+            .get(index)
+            .ok_or_else(|| js_str!("recipes index out of bound {:?}", index))?
+            .clone();
+
+        self.input_inventory = filter_inventory(
+            std::mem::take(&mut self.input_inventory),
+            |item| recipe.input.contains_key(&item),
+            player_inventory,
         );
+
+        self.recipe = Some(recipe);
         Ok(true)
     }
 

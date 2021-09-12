@@ -725,6 +725,7 @@ let unlimited = true;
         if(i < recipes.length && sim.select_recipe(...pos, recipes[i].index)){
             updateVueInputInventory(sim.get_structure_inventory(...pos, "Input"));
             updateVueOutputInventory(sim.get_structure_inventory(...pos, "Output"));
+            updateInventory(sim.get_player_inventory());
             vueRecipeSelector.visible = false;
             if(vueToolTipApp.visible && vueToolTipApp.owner === "recipe")
                 vueToolTipApp.visible = false;

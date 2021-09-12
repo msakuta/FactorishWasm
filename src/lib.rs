@@ -2134,8 +2134,15 @@ impl FactorishState {
     }
 
     pub fn select_recipe(&mut self, c: i32, r: i32, index: usize) -> Result<bool, JsValue> {
-        if let Some(structure) = self.find_structure_tile_mut(&[c, r]) {
-            structure.select_recipe(index)
+        if let Some(idx) = self.find_structure_tile_idx(&[c, r]) {
+            let mut structures = std::mem::take(&mut self.structures);
+            let ret = if let Some(dynamic) = structures[idx].dynamic.as_deref_mut() {
+                dynamic.select_recipe(index, &mut self.player.inventory)
+            } else {
+                Ok(false)
+            };
+            self.structures = structures;
+            ret
         } else {
             Err(JsValue::from_str("Structure is not found"))
         }
