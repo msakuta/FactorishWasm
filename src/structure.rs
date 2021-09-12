@@ -193,7 +193,7 @@ pub(crate) enum RotateErr {
 }
 
 /// Factories will have input inventory capacity of recipe ingredients enough to make this many products
-const RECIPE_CAPACITY_MULTIPLIER: usize = 3;
+pub(crate) const RECIPE_CAPACITY_MULTIPLIER: usize = 3;
 
 /// Chest storage size, matching to Factorio
 const STORAGE_MAX_SLOTS: usize = 48;

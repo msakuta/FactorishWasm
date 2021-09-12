@@ -1483,7 +1483,7 @@ impl FactorishState {
     }
 
     /// Mutable variant of find_structure_tile
-    fn find_structure_tile_mut(&mut self, tile: &[i32]) -> Option<&mut Box<dyn Structure>> {
+    fn _find_structure_tile_mut(&mut self, tile: &[i32]) -> Option<&mut Box<dyn Structure>> {
         self.structures
             .iter_mut()
             .filter_map(|s| s.dynamic.as_mut())

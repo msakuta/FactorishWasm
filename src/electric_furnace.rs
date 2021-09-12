@@ -7,7 +7,9 @@ use super::{
     inventory::InventoryType,
     items::item_to_str,
     serialize_impl,
-    structure::{default_add_inventory, Structure, StructureDynIter, StructureId},
+    structure::{
+        default_add_inventory, Structure, StructureDynIter, StructureId, RECIPE_CAPACITY_MULTIPLIER,
+    },
     DropItem, FactorishState, FrameProcResult, Inventory, InventoryTrait, ItemType, Position,
     Recipe, TILE_SIZE,
 };
@@ -34,7 +36,7 @@ impl ElectricFurnace {
             input_inventory: Inventory::new(),
             output_inventory: Inventory::new(),
             progress: None,
-            power: 20.,
+            power: 0.,
             max_power: 20.,
             recipe: None,
         }
@@ -280,7 +282,13 @@ impl Structure for ElectricFurnace {
 
     fn can_input(&self, item_type: &ItemType) -> bool {
         if let Some(recipe) = &self.recipe {
-            recipe.input.get(item_type).is_some()
+            recipe
+                .input
+                .get(item_type)
+                .map(|count| {
+                    self.input_inventory.count_item(item_type) < *count * RECIPE_CAPACITY_MULTIPLIER
+                })
+                .unwrap_or(false)
         } else {
             RECIPES
                 .iter()
