@@ -1497,8 +1497,10 @@ impl FactorishState {
     ///
     /// Because mutable version of find_structure_tile doesn't work.
     fn find_structure_tile_idx(&self, tile: &[i32]) -> Option<usize> {
-        self.structure_iter()
+        self.structures
+            .iter()
             .enumerate()
+            .filter_map(|(id, s)| Some((id, s.dynamic.as_deref()?)))
             .find(|(_, s)| s.position().x == tile[0] && s.position().y == tile[1])
             .map(|(idx, _)| idx)
     }
