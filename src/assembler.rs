@@ -6,7 +6,9 @@ use super::{
         ShaderBundle,
     },
     inventory::InventoryTrait,
+    inventory::{filter_inventory, Inventory, InventoryTrait, InventoryType},
     items::get_item_image_url,
+    research::TechnologyTag,
     serialize_impl,
     structure::{
         Energy, Structure, StructureBundle, StructureComponents, StructureDynIter, StructureId,
@@ -46,6 +48,147 @@ impl Assembler {
             Some(Factory::new()),
             vec![],
         )
+    }
+
+    pub(crate) fn get_recipes() -> &'static [Recipe] {
+        static RECIPES: once_cell::sync::Lazy<Vec<Recipe>> = once_cell::sync::Lazy::new(|| {
+            vec![
+                Recipe::new(
+                    hash_map!(ItemType::IronPlate => 2usize),
+                    hash_map!(ItemType::Gear => 1usize),
+                    20.,
+                    50.,
+                ),
+                Recipe::new_with_requires(
+                    hash_map!(ItemType::IronPlate => 1usize, ItemType::Gear => 1usize),
+                    hash_map!(ItemType::TransportBelt => 1usize),
+                    20.,
+                    50.,
+                    hash_set!(TechnologyTag::Transportation),
+                ),
+                Recipe::new_with_requires(
+                    hash_map!(ItemType::TransportBelt => 1, ItemType::Gear => 2),
+                    hash_map!(ItemType::UndergroundBelt => 1usize),
+                    20.,
+                    50.,
+                    hash_set!(TechnologyTag::Transportation),
+                ),
+                Recipe::new_with_requires(
+                    hash_map!(ItemType::TransportBelt => 2, ItemType::Gear => 2),
+                    hash_map!(ItemType::Splitter => 1),
+                    25.,
+                    40.,
+                    hash_set!(TechnologyTag::Transportation),
+                ),
+                Recipe::new(
+                    hash_map!(ItemType::IronPlate => 5usize),
+                    hash_map!(ItemType::Chest => 1usize),
+                    20.,
+                    50.,
+                ),
+                Recipe::new(
+                    hash_map!(ItemType::StoneOre => 5usize),
+                    hash_map!(ItemType::Furnace => 1usize),
+                    20.,
+                    20.,
+                ),
+                Recipe::new_with_requires(
+                    hash_map!(ItemType::SteelPlate => 5usize, ItemType::Furnace => 1),
+                    hash_map!(ItemType::ElectricFurnace => 1usize),
+                    20.,
+                    20.,
+                    hash_set!(TechnologyTag::SteelWorks),
+                ),
+                Recipe::new(
+                    hash_map!(ItemType::CopperPlate => 1usize),
+                    hash_map!(ItemType::CopperWire => 2usize),
+                    20.,
+                    20.,
+                ),
+                Recipe::new(
+                    hash_map!(ItemType::IronPlate => 1, ItemType::CopperWire => 3usize),
+                    hash_map!(ItemType::Circuit => 1usize),
+                    20.,
+                    50.,
+                ),
+                Recipe::new(
+                    hash_map!(ItemType::IronPlate => 5, ItemType::Gear => 5, ItemType::Circuit => 3),
+                    hash_map!(ItemType::Assembler => 1),
+                    20.,
+                    120.,
+                ),
+                Recipe::new(
+                    hash_map!(ItemType::IronPlate => 5, ItemType::Gear => 3, ItemType::CopperWire => 10),
+                    hash_map!(ItemType::Lab => 1),
+                    20.,
+                    120.,
+                ),
+                Recipe::new(
+                    hash_map!(ItemType::IronPlate => 1, ItemType::Gear => 1, ItemType::Circuit => 1),
+                    hash_map!(ItemType::Inserter => 1),
+                    20.,
+                    20.,
+                ),
+                Recipe::new(
+                    hash_map!(ItemType::IronPlate => 1, ItemType::Gear => 5, ItemType::Circuit => 3),
+                    hash_map!(ItemType::OreMine => 1),
+                    100.,
+                    100.,
+                ),
+                Recipe::new(
+                    hash_map!(ItemType::IronPlate => 2),
+                    hash_map!(ItemType::Pipe => 1),
+                    20.,
+                    20.,
+                ),
+                Recipe::new(
+                    hash_map!(ItemType::Pipe => 10),
+                    hash_map!(ItemType::UndergroundPipe => 2),
+                    20.,
+                    20.,
+                ),
+                Recipe::new(
+                    hash_map!(ItemType::IronPlate => 5, ItemType::Gear => 5),
+                    hash_map!(ItemType::OffshorePump => 1),
+                    150.,
+                    150.,
+                ),
+                Recipe::new(
+                    hash_map!(ItemType::IronPlate => 5, ItemType::CopperPlate => 5),
+                    hash_map!(ItemType::Boiler => 1),
+                    100.,
+                    100.,
+                ),
+                Recipe::new(
+                    hash_map!(ItemType::IronPlate => 5, ItemType::Gear => 5, ItemType::CopperPlate => 5),
+                    hash_map!(ItemType::SteamEngine => 1),
+                    200.,
+                    200.,
+                ),
+                Recipe::new_with_requires(
+                    hash_map!(ItemType::IronPlate => 2, ItemType::CopperWire => 2),
+                    hash_map!(ItemType::ElectPole => 1),
+                    20.,
+                    20.,
+                    hash_set!(TechnologyTag::Electricity),
+                ),
+                Recipe::new(
+                    hash_map!(ItemType::IronPlate => 1, ItemType::Gear => 1),
+                    hash_map!(ItemType::SciencePack1 => 1),
+                    50.,
+                    50.,
+                ),
+                Recipe::new_with_requires(
+                    hash_map!(ItemType::Inserter => 1, ItemType::TransportBelt => 1),
+                    hash_map!(ItemType::SciencePack2 => 1),
+                    150.,
+                    150.,
+                    hash_set!(TechnologyTag::Transportation),
+                ),
+            ]
+        });
+
+        &RECIPES[..]
     }
 }
 
@@ -273,129 +416,38 @@ impl Structure for Assembler {
     }
 
     fn get_recipes(&self) -> std::borrow::Cow<[Recipe]> {
-        static RECIPES: once_cell::sync::Lazy<Vec<Recipe>> = once_cell::sync::Lazy::new(|| {
-            vec![
-                Recipe::new(
-                    hash_map!(ItemType::IronPlate => 2usize),
-                    hash_map!(ItemType::Gear => 1usize),
-                    20.,
-                    50.,
-                ),
-                Recipe::new(
-                    hash_map!(ItemType::IronPlate => 1usize, ItemType::Gear => 1usize),
-                    hash_map!(ItemType::TransportBelt => 1usize),
-                    20.,
-                    50.,
-                ),
-                Recipe::new(
-                    hash_map!(ItemType::TransportBelt => 1, ItemType::Gear => 2),
-                    hash_map!(ItemType::UndergroundBelt => 1usize),
-                    20.,
-                    50.,
-                ),
-                Recipe::new(
-                    hash_map!(ItemType::TransportBelt => 2, ItemType::Gear => 2),
-                    hash_map!(ItemType::Splitter => 1),
-                    25.,
-                    40.,
-                ),
-                Recipe::new(
-                    hash_map!(ItemType::IronPlate => 5usize),
-                    hash_map!(ItemType::Chest => 1usize),
-                    20.,
-                    50.,
-                ),
-                Recipe::new(
-                    hash_map!(ItemType::StoneOre => 5usize),
-                    hash_map!(ItemType::Furnace => 1usize),
-                    20.,
-                    20.,
-                ),
-                Recipe::new(
-                    hash_map!(ItemType::SteelPlate => 5usize, ItemType::Furnace => 1),
-                    hash_map!(ItemType::ElectricFurnace => 1usize),
-                    20.,
-                    20.,
-                ),
-                Recipe::new(
-                    hash_map!(ItemType::CopperPlate => 1usize),
-                    hash_map!(ItemType::CopperWire => 2usize),
-                    20.,
-                    20.,
-                ),
-                Recipe::new(
-                    hash_map!(ItemType::IronPlate => 1, ItemType::CopperWire => 3usize),
-                    hash_map!(ItemType::Circuit => 1usize),
-                    20.,
-                    50.,
-                ),
-                Recipe::new(
-                    hash_map!(ItemType::IronPlate => 5, ItemType::Gear => 5, ItemType::Circuit => 3),
-                    hash_map!(ItemType::Assembler => 1),
-                    20.,
-                    120.,
-                ),
-                Recipe::new(
-                    hash_map!(ItemType::IronPlate => 1, ItemType::Gear => 1, ItemType::Circuit => 1),
-                    hash_map!(ItemType::Inserter => 1),
-                    20.,
-                    20.,
-                ),
-                Recipe::new(
-                    hash_map!(ItemType::IronPlate => 1, ItemType::Gear => 5, ItemType::Circuit => 3),
-                    hash_map!(ItemType::OreMine => 1),
-                    100.,
-                    100.,
-                ),
-                Recipe::new(
-                    hash_map!(ItemType::IronPlate => 2),
-                    hash_map!(ItemType::Pipe => 1),
-                    20.,
-                    20.,
-                ),
-                Recipe::new(
-                    hash_map!(ItemType::Pipe => 10),
-                    hash_map!(ItemType::UndergroundPipe => 2),
-                    20.,
-                    20.,
-                ),
-                Recipe::new(
-                    hash_map!(ItemType::IronPlate => 5, ItemType::Gear => 5),
-                    hash_map!(ItemType::OffshorePump => 1),
-                    150.,
-                    150.,
-                ),
-                Recipe::new(
-                    hash_map!(ItemType::IronPlate => 5, ItemType::CopperPlate => 5),
-                    hash_map!(ItemType::Boiler => 1),
-                    100.,
-                    100.,
-                ),
-                Recipe::new(
-                    hash_map!(ItemType::IronPlate => 5, ItemType::Gear => 5, ItemType::CopperPlate => 5),
-                    hash_map!(ItemType::SteamEngine => 1),
-                    200.,
-                    200.,
-                ),
-                Recipe::new(
-                    hash_map!(ItemType::IronPlate => 2, ItemType::CopperWire => 2),
-                    hash_map!(ItemType::ElectPole => 1),
-                    20.,
-                    20.,
-                ),
-            ]
-        });
-
-        std::borrow::Cow::from(&RECIPES[..])
+        std::borrow::Cow::from(Assembler::get_recipes())
     }
 
-    fn select_recipe(&mut self, factory: &mut Factory, index: usize) -> Result<bool, JsValue> {
-        factory.recipe = Some(
+    fn select_recipe(&mut self, factory: &mut Factory, index: usize, player_inventory: &mut Inventory) -> Result<bool, JsValue> {
+        let recipe =
             self.get_recipes()
                 .get(index)
                 .ok_or_else(|| js_str!("recipes index out of bound {:?}", index))?
-                .clone(),
+                .clone();
+    // fn select_recipe(
+    //     &mut self,
+    //     index: usize,
+    //     player_inventory: &mut Inventory,
+    // ) -> Result<bool, JsValue> {
+    //     let recipe = self
+    //         .get_recipes()
+    //         .get(index)
+    //         .ok_or_else(|| js_str!("recipes index out of bound {:?}", index))?
+    //         .clone();
+
+    //     self.input_inventory = filter_inventory(
+    //         std::mem::take(&mut self.input_inventory),
+    //         |item| recipe.input.contains_key(&item),
+    //         player_inventory,
+
+        factory.output_inventory = filter_inventory(
+            std::mem::take(&mut factory.output_inventory),
+            |item| recipe.output.contains_key(&item),
+            player_inventory,
         );
+
+        factory.recipe = Some(recipe);
         Ok(true)
     }
 

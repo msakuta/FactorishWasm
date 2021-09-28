@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 use web_sys::{CanvasRenderingContext2d, WebGlRenderingContext as GL};
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 #[derive(Serialize, Deserialize)]
 pub(crate) struct Boiler {
@@ -33,6 +33,7 @@ impl Boiler {
                     output_fluid: Some(FluidType::Steam),
                     power_cost: 100.,
                     recipe_time: 30.,
+                    requires_technology: HashSet::new(),
                 }),
             }),
             components: StructureComponents {

@@ -14,7 +14,7 @@ use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 use web_sys::{CanvasRenderingContext2d, WebGlRenderingContext as GL};
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 #[derive(Serialize, Deserialize)]
 pub(crate) struct SteamEngine {
@@ -33,6 +33,7 @@ impl SteamEngine {
                 output_fluid: None,
                 power_cost: -100.,
                 recipe_time: 100.,
+                requires_technology: HashSet::new(),
             }),
         };
         StructureBundle::new(

@@ -27,6 +27,7 @@ mod furnace;
 mod inserter;
 mod inventory;
 mod items;
+mod lab;
 mod minimap;
 mod offshore_pump;
 mod ore_mine;
@@ -34,6 +35,7 @@ mod perf;
 mod perlin_noise;
 mod pipe;
 mod power_network;
+mod research;
 mod scenarios;
 mod splitter;
 mod steam_engine;
@@ -80,11 +82,13 @@ use furnace::Furnace;
 use inserter::Inserter;
 use inventory::{Inventory, InventoryTrait, InventoryType, STACK_SIZE};
 use items::{item_to_str, str_to_item, ItemType};
+use lab::Lab;
 use offshore_pump::OffshorePump;
 use ore_mine::OreMine;
 use perlin_noise::Xor128;
 use pipe::Pipe;
 use power_network::{build_power_networks, PowerNetwork};
+use research::{Research, ResearchSerial, TechnologySerial, TechnologyTag, TECHNOLOGIES};
 use splitter::Splitter;
 use steam_engine::SteamEngine;
 use structure::{
@@ -98,7 +102,10 @@ use water_well::{FluidType, WaterWell};
 
 use serde::{Deserialize, Serialize};
 use std::hash::Hash;
-use std::{collections::HashMap, convert::TryFrom};
+use std::{
+    collections::{HashMap, HashSet},
+    convert::TryFrom,
+};
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
 use web_sys::{
@@ -163,6 +170,7 @@ enum JSEvent {
         recipe_enable: bool,
     },
     UpdateStructureInventory(i32, i32),
+    UpdateResearch,
 }
 
 #[derive(Copy, Clone, Serialize, Deserialize, PartialEq, Debug)]
@@ -311,6 +319,8 @@ pub(crate) struct Recipe {
     output_fluid: Option<FluidType>,
     power_cost: f64,
     recipe_time: f64,
+    #[serde(default)]
+    requires_technology: HashSet<TechnologyTag>,
 }
 
 impl Recipe {
@@ -322,21 +332,42 @@ impl Recipe {
             output_fluid: None,
             power_cost,
             recipe_time,
+            requires_technology: HashSet::new(),
+        }
+    }
+
+    fn new_with_requires(
+        input: ItemSet,
+        output: ItemSet,
+        power_cost: f64,
+        recipe_time: f64,
+        requires_technology: HashSet<TechnologyTag>,
+    ) -> Self {
+        Recipe {
+            input,
+            input_fluid: None,
+            output,
+            output_fluid: None,
+            power_cost,
+            recipe_time,
+            requires_technology,
         }
     }
 }
 
 #[derive(Serialize)]
 struct RecipeSerial {
+    index: usize,
     input: HashMap<String, usize>,
     output: HashMap<String, usize>,
     power_cost: f64,
     recipe_time: f64,
 }
 
-impl From<Recipe> for RecipeSerial {
-    fn from(o: Recipe) -> Self {
+impl From<(usize, Recipe)> for RecipeSerial {
+    fn from((index, o): (usize, Recipe)) -> Self {
         Self {
+            index,
             input: o.input.iter().map(|(k, v)| (item_to_str(k), *v)).collect(),
             output: o.output.iter().map(|(k, v)| (item_to_str(k), *v)).collect(),
             power_cost: o.power_cost,
@@ -493,6 +524,9 @@ pub struct FactorishState {
     drop_items_index: DropItemIndex,
     tool_belt: [Option<ItemType>; 10],
     power_networks: Vec<PowerNetwork>,
+    unlocked_technologies: HashSet<TechnologyTag>,
+    pending_researches: HashMap<TechnologyTag, usize>,
+    research: Option<Research>,
 
     selected_item: Option<SelectedItem>,
     ore_harvesting: Option<OreHarvesting>,
@@ -531,6 +565,7 @@ pub struct FactorishState {
     image_furnace: Option<ImageBundle>,
     image_electric_furnace: Option<ImageBundle>,
     image_assembler: Option<ImageBundle>,
+    image_lab: Option<ImageBundle>,
     image_boiler: Option<ImageBundle>,
     image_steam_engine: Option<ImageBundle>,
     image_water_well: Option<ImageBundle>,
@@ -550,6 +585,8 @@ pub struct FactorishState {
     image_copper_wire: Option<ImageBundle>,
     image_circuit: Option<ImageBundle>,
     image_steel_plate: Option<ImageBundle>,
+    image_science_pack_1: Option<ImageBundle>,
+    image_science_pack_2: Option<ImageBundle>,
     image_time: Option<ImageBundle>,
     image_underground_belt_item: Option<ImageBundle>,
 
@@ -652,6 +689,7 @@ impl FactorishState {
             image_furnace: None,
             image_electric_furnace: None,
             image_assembler: None,
+            image_lab: None,
             image_boiler: None,
             image_steam_engine: None,
             image_water_well: None,
@@ -671,6 +709,8 @@ impl FactorishState {
             image_copper_wire: None,
             image_circuit: None,
             image_steel_plate: None,
+            image_science_pack_1: None,
+            image_science_pack_2: None,
             image_time: None,
             image_underground_belt_item: None,
             board,
@@ -680,6 +720,9 @@ impl FactorishState {
             ore_harvesting: None,
             drop_items,
             drop_items_index: DropItemIndex::default(),
+            unlocked_technologies: hash_set!(),
+            pending_researches: hash_map!(),
+            research: None,
             on_player_update,
             on_popup_text,
             on_structure_destroy,
@@ -874,6 +917,27 @@ impl FactorishState {
             )
             .map_err(|e| js_str!("Serialize error on board: {}", e))?,
         );
+
+        if let Some(ref research) = self.research {
+            map.insert(
+                "research".to_string(),
+                serde_json::to_value(research)
+                    .map_err(|e| js_str!("Research serialize error: {:?}", e))?,
+            );
+        }
+
+        map.insert(
+            "unlocked_technologies".to_string(),
+            serde_json::to_value(&self.unlocked_technologies)
+                .map_err(|e| js_str!("unlocked_technologies serialize error: {:?}", e))?,
+        );
+
+        map.insert(
+            "pending_researches".to_string(),
+            serde_json::to_value(&self.pending_researches)
+                .map_err(|e| js_str!("pending_researches serialize error: {:?}", e))?,
+        );
+
         serde_json::to_string(&map).map_err(|e| js_str!("Serialize error: {}", e))
     }
 
@@ -1078,6 +1142,24 @@ impl FactorishState {
         self.drop_items_index = build_index(&self.drop_items);
 
         self.tool_belt = from_value(json_take(&mut json, "tool_belt")?)?;
+
+        if let Ok(unlocked_technologies) = json_take(&mut json, "unlocked_technologies") {
+            self.unlocked_technologies = from_value(unlocked_technologies)?;
+        } else {
+            self.unlocked_technologies = hash_set!();
+        }
+
+        if let Ok(pending_researches) = json_take(&mut json, "pending_researches") {
+            self.pending_researches = from_value(pending_researches)?;
+        } else {
+            self.pending_researches = hash_map!();
+        }
+
+        if let Ok(research) = json_take(&mut json, "research") {
+            self.research = from_value(research)?;
+        } else {
+            self.research = None;
+        }
 
         // Redraw minimap
         self.render_minimap_data()?;
@@ -1292,12 +1374,16 @@ impl FactorishState {
         // we need to accumulate events during simulation and return them as an array.
         let mut events = vec![];
 
-        let mut frame_proc_result_to_event = |result: Result<FrameProcResult, ()>| {
-            if let Ok(FrameProcResult::InventoryChanged(pos)) = result {
-                events.push(
-                    JsValue::from_serde(&JSEvent::UpdateStructureInventory(pos.x, pos.y)).unwrap(),
-                )
+        let mut frame_proc_result_to_event = |result: Result<FrameProcResult, ()>| match result {
+            Ok(FrameProcResult::None) => (),
+            Ok(FrameProcResult::InventoryChanged(pos)) => events.push(
+                JsValue::from_serde(&JSEvent::UpdateStructureInventory(pos.x, pos.y)).unwrap(),
+            ),
+            Ok(FrameProcResult::UpdateResearch) => {
+                console_log!("UpdateResearch event");
+                events.push(JsValue::from_serde(&JSEvent::UpdateResearch).unwrap())
             }
+            Err(e) => console_log!("frame_proc Error: {:?}", e),
         };
 
         self.ore_harvesting = (|| {
@@ -1602,8 +1688,10 @@ impl FactorishState {
     ///
     /// Because mutable version of find_structure_tile doesn't work.
     fn find_structure_tile_idx(&self, position: Position) -> Option<usize> {
-        self.structure_iter()
+        self.structures
+            .iter()
             .enumerate()
+            .filter_map(|(id, s)| Some((id, s.dynamic.as_deref()?)))
             .find(|(_, s)| s.dynamic.contains(&s.components, &position))
             .map(|(idx, _)| idx)
     }
@@ -1817,7 +1905,7 @@ impl FactorishState {
         Ok(())
     }
 
-    fn harvest(&mut self, position: &Position, clear_item: bool) -> Result<bool, JsValue> {
+    fn harvest_structure(&mut self, position: &Position) -> Result<(bool, String), JsValue> {
         let mut harvested_structure = false;
         let mut popup_text = String::new();
 
@@ -1925,6 +2013,21 @@ impl FactorishState {
 
             harvested_structure = true;
         }
+        Ok((harvested_structure, popup_text))
+    }
+
+    fn harvest(
+        &mut self,
+        position: &Position,
+        clear_structure: bool,
+        clear_item: bool,
+    ) -> Result<bool, JsValue> {
+        let (harvested_structure, mut popup_text) = if clear_structure {
+            self.harvest_structure(position)?
+        } else {
+            (false, String::new())
+        };
+
         let mut harvested_items = false;
         if !harvested_structure && clear_item {
             // Pick up dropped items in the cell
@@ -2000,6 +2103,15 @@ impl FactorishState {
                 {
                     let inventory = inventory.to_mut();
                     for key in recipe.input.keys() {
+                        if !inventory.contains_key(key) {
+                            inventory.insert(*key, 0);
+                        }
+                    }
+                }
+            } else if inv_type == InventoryType::Output {
+                if let Some(recipe) = structure.get_selected_recipe() {
+                    let inventory = inventory.to_mut();
+                    for key in recipe.output.keys() {
                         if !inventory.contains_key(key) {
                             inventory.insert(*key, 0);
                         }
@@ -2129,6 +2241,11 @@ impl FactorishState {
         }
     }
 
+    pub fn close_structure_inventory(&mut self) -> Result<bool, JsValue> {
+        self.selected_structure_inventory = None;
+        Ok(true)
+    }
+
     /// Returns currently selected structure's coordinates in 2-array or `null` if none selected
     pub fn get_selected_inventory(&self) -> Result<JsValue, JsValue> {
         if let Some(pos) = self
@@ -2246,6 +2363,15 @@ impl FactorishState {
                     .get_recipes()
                     .into_owned()
                     .into_iter()
+                    .enumerate()
+                    .filter(|(_, recipe)| {
+                        let ret = recipe
+                            .requires_technology
+                            .iter()
+                            .all(|tech| self.unlocked_technologies.contains(tech));
+                        console_log!("recipe {:?} can be used? {}", recipe.output, ret);
+                        ret
+                    })
                     .map(RecipeSerial::from)
                     .collect::<Vec<_>>(),
             )
@@ -2262,9 +2388,69 @@ impl FactorishState {
             } else {
                 js_err!("Structure cannot set recipe")
             }
+        // if let Some(idx) = self.find_structure_tile_idx(&[c, r]) {
+        //     let mut structures = std::mem::take(&mut self.structures);
+        //     let ret = if let Some(dynamic) = structures[idx].dynamic.as_deref_mut() {
+        //         dynamic.select_recipe(index, &mut self.player.inventory)
+        //     } else {
+        //         Ok(false)
+        //     };
+        //     self.structures = structures;
+        //     ret
         } else {
             Err(JsValue::from_str("Structure is not found"))
         }
+    }
+
+    pub fn get_technologies(&self) -> Result<JsValue, JsValue> {
+        JsValue::from_serde(
+            &TECHNOLOGIES
+                .iter()
+                .map(|t| TechnologySerial::from(t, self))
+                .collect::<Vec<_>>(),
+        )
+        .map_err(|e| js_str!("Error: {:?}", e))
+    }
+
+    pub fn get_research(&self) -> Result<JsValue, JsValue> {
+        if let Some(ref research) = self.research {
+            if let Some(tech) = TECHNOLOGIES
+                .iter()
+                .find(|tech| tech.tag == research.technology)
+            {
+                JsValue::from_serde(&ResearchSerial {
+                    technology: research.technology,
+                    progress: research.progress as f64 / tech.steps as f64,
+                })
+                .map_err(|e| js_str!("Error: {:?}", e))
+            } else {
+                Err(js_str!("Technology {:?} not found", research.technology))
+            }
+        } else {
+            Ok(JsValue::NULL)
+        }
+    }
+
+    pub fn select_research(&mut self, index: usize) -> Result<bool, JsValue> {
+        if let Some(tech) = TECHNOLOGIES.get(index) {
+            if !self.unlocked_technologies.contains(&tech.tag) {
+                if let Some(ref research) = self.research {
+                    self.pending_researches
+                        .insert(research.technology, research.progress);
+                }
+
+                self.research = Some(Research {
+                    technology: tech.tag,
+                    progress: if let Some(pending) = self.pending_researches.get(&tech.tag) {
+                        *pending
+                    } else {
+                        0
+                    },
+                });
+                return Ok(true);
+            }
+        }
+        Ok(false)
     }
 
     pub fn set_alt_mode(&mut self, value: bool) {
@@ -2350,13 +2536,14 @@ impl FactorishState {
         } else {
             if let Some(SelectedItem::PlayerInventory(item, count)) = self.selected_item {
                 let (structure, player) = self.find_structure_by_id_mut_and_player_err(id)?;
-                let mut try_move = |inventory: &mut Inventory, inventory_type| {
+                let mut try_move = |src_inventory: &mut Inventory, inventory_type| {
                     let count = if all {
-                        inventory.count_item(&item)
+                        src_inventory.count_item(&item)
                     } else {
-                        inventory.count_item(&item).min(count)
+                        src_inventory.count_item(&item).min(count)
                     };
-                    inventory.remove_items(
+                    console_log!("src_inventory Count: {}", count);
+                    src_inventory.remove_items(
                         &item,
                         structure
                             .add_inventory(inventory_type, &item, count as isize)
@@ -2467,6 +2654,7 @@ impl FactorishState {
             ItemType::Assembler => {
                 return Ok(Assembler::new(cursor));
             }
+            ItemType::Lab => Box::new(Lab::new(cursor)),
             ItemType::Boiler => return Ok(Boiler::new(cursor)),
             ItemType::WaterWell => return Ok(WaterWell::new(*cursor)),
             ItemType::OffshorePump => return Ok(OffshorePump::new(cursor)),
@@ -2524,6 +2712,7 @@ impl FactorishState {
                 Box::new(map_err(serde_json::from_value::<ElectricFurnace>(payload))?)
             }
             ItemType::Assembler => Box::new(map_err(serde_json::from_value::<Assembler>(payload))?),
+            ItemType::Lab => Box::new(map_err(serde_json::from_value::<Lab>(payload))?),
             ItemType::Boiler => Box::new(map_err(serde_json::from_value::<Boiler>(payload))?),
             ItemType::WaterWell => Box::new(map_err(serde_json::from_value::<WaterWell>(payload))?),
             ItemType::OffshorePump => {
@@ -2604,21 +2793,22 @@ impl FactorishState {
         };
 
         console_log!("mouse_down: {}, {}, button: {}", cursor.x, cursor.y, button);
-        if button == 2
-            && self.find_structure_tile(&[cursor.x, cursor.y]).is_none()
+        if button == 2 {
+            self.harvest(&cursor, false, true)?;
+            if self.find_structure_tile(&[cursor.x, cursor.y]).is_none()
             // Let the player pick up drop items before harvesting ore below.
             && !drop_item_iter(&self.drop_items).any(|item| {
                 item.x / TILE_SIZE_I == pos[0] as i32 / TILE_SIZE_I
                     && item.y / TILE_SIZE_I == pos[1] as i32 / TILE_SIZE_I
-            })
-        {
-            if let Some(tile) = self.tile_at(&cursor) {
-                if let Some(ore_type) = tile.get_ore_type() {
-                    self.ore_harvesting = Some(OreHarvesting {
-                        pos: cursor,
-                        ore_type,
-                        timer: 0,
-                    });
+            }) {
+                if let Some(tile) = self.tile_at(&cursor) {
+                    if let Some(ore_type) = tile.get_ore_type() {
+                        self.ore_harvesting = Some(OreHarvesting {
+                            pos: cursor,
+                            ore_type,
+                            timer: 0,
+                        });
+                    }
                 }
             }
         }
@@ -2651,7 +2841,7 @@ impl FactorishState {
                         if let Some(bbox) = new_s.dynamic.bounding_box(&new_s.components) {
                             for y in bbox.y0..bbox.y1 {
                                 for x in bbox.x0..bbox.x1 {
-                                    self.harvest(&Position { x, y }, !new_s.dynamic.movable())?;
+                                    self.harvest(&Position { x, y }, true, !new_s.dynamic.movable())?;
                                 }
                             }
                         }
@@ -2866,7 +3056,7 @@ impl FactorishState {
                 self.ore_harvesting = None;
             } else {
                 // Right click means explicit cleanup, so we pick up items no matter what.
-                self.harvest(&cursor, true)?;
+                self.harvest(&cursor, true, true)?;
                 events.push(JsValue::from_serde(&JSEvent::UpdatePlayerInventory).unwrap());
             }
         }
@@ -3079,6 +3269,7 @@ impl FactorishState {
         self.image_furnace = Some(load_image("furnace")?);
         self.image_electric_furnace = Some(load_image("electricFurnace")?);
         self.image_assembler = Some(load_image("assembler")?);
+        self.image_lab = Some(load_image("lab")?);
         self.image_boiler = Some(load_image("boiler")?);
         self.image_steam_engine = Some(load_image("steamEngine")?);
         self.image_water_well = Some(load_image("waterWell")?);
@@ -3098,6 +3289,8 @@ impl FactorishState {
         self.image_copper_wire = Some(load_image("copperWire")?);
         self.image_circuit = Some(load_image("circuit")?);
         self.image_steel_plate = Some(load_image("steelPlate")?);
+        self.image_science_pack_1 = Some(load_image("sciencePack1")?);
+        self.image_science_pack_2 = Some(load_image("sciencePack2")?);
         self.image_time = Some(load_image("time")?);
         self.image_underground_belt_item = Some(load_image("undergroundBeltItem")?);
         Ok(())

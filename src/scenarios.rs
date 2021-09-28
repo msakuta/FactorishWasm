@@ -245,9 +245,20 @@ impl FactorishState {
         }
 
         for bundle in self.structures.iter_mut().filter_map(|s| s.bundle.as_mut()) {
-            if let Some(factory) = bundle.components.factory.as_mut() {
-                bundle.dynamic.select_recipe(factory, 0).ok();
-            }
+            bundle
+                .dynamic
+                .select_recipe(
+                    bundle.components.factory.as_mut(),
+                    0,
+                    &mut self.player.inventory,
+                )
+                .ok();
+            // for s in self
+            //     .structures
+            //     .iter_mut()
+            //     .filter_map(|s| s.dynamic.as_deref_mut())
+            // {
+            //     s.select_recipe(0, &mut self.player.inventory).ok();
         }
 
         let structures = std::mem::take(&mut self.structures);

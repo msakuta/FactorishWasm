@@ -6,9 +6,11 @@ use super::{
         utils::{enable_buffer, Flatten},
     },
     serialize_impl,
-    structure::Energy,
-    structure::{Structure, StructureBundle, StructureComponents, StructureDynIter, StructureId},
-    FactorishState, FrameProcResult, InventoryTrait, Position, Recipe,
+    structure::{StructureBundle, StructureComponents, StructureId, Energy,
+        default_add_inventory, Structure, StructureDynIter, StructureId, RECIPE_CAPACITY_MULTIPLIER,
+    },
+    DropItem, FactorishState, FrameProcResult, Inventory, InventoryTrait, ItemType, Position,
+    Recipe, TILE_SIZE,
 };
 use cgmath::{Matrix3, Matrix4, Vector2, Vector3};
 use serde::{Deserialize, Serialize};
@@ -32,6 +34,16 @@ impl ElectricFurnace {
             Some(Factory::new()),
             vec![],
         )
+    // pub(crate) fn new(position: &Position) -> Self {
+    //     ElectricFurnace {
+    //         position: *position,
+    //         input_inventory: Inventory::new(),
+    //         output_inventory: Inventory::new(),
+    //         progress: None,
+    //         power: 0.,
+    //         max_power: 20.,
+    //         recipe: None,
+    //     }
     }
 }
 

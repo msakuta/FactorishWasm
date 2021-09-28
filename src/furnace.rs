@@ -3,11 +3,15 @@ use super::{
     factory::Factory,
     gl::utils::{enable_buffer, Flatten},
     serialize_impl,
+    inventory::InventoryType,
+    items::item_to_str,
+    research::TechnologyTag,
     structure::{
-        Energy, FrameProcResult, Structure, StructureBundle, StructureComponents, StructureDynIter,
-        StructureId,
+        Energy, FrameProcResult, StructureBundle, StructureComponents, 
+        default_add_inventory, Structure, StructureDynIter, StructureId, RECIPE_CAPACITY_MULTIPLIER,
     },
-    FactorishState, Inventory, InventoryTrait, ItemType, Position, Recipe,
+    DropItem, FactorishState, Inventory, InventoryTrait, ItemType, Position,
+    Recipe, TempEnt, COAL_POWER,
 };
 use cgmath::{Matrix3, Matrix4, Vector2, Vector3};
 use once_cell::sync::Lazy;
@@ -32,11 +36,12 @@ pub(crate) static RECIPES: Lazy<[Recipe; 3]> = Lazy::new(|| {
             20.,
             50.,
         ),
-        Recipe::new(
+        Recipe::new_with_requires(
             hash_map!(ItemType::IronPlate => 5usize),
             hash_map!(ItemType::SteelPlate => 1usize),
             100.,
             250.,
+            hash_set!(TechnologyTag::SteelWorks),
         ),
     ]
 });
