@@ -1439,17 +1439,21 @@ impl FactorishState {
         for i in 0..structures.len() {
             let (center, mut others) = StructureDynIter::new(&mut structures, i)?;
             if let Some(bundle) = center.bundle.as_mut() {
-                frame_proc_result_to_event(
-                    bundle.dynamic.frame_proc(
-                        StructureId {
-                            id: i as u32,
-                            gen: center.gen,
-                        },
-                        &mut bundle.components,
-                        self,
-                        &mut others,
-                    ), // dynamic.frame_proc(self, &mut Chained(MutRef(front), MutRef(last)))
-                );
+                let result = bundle.dynamic.frame_proc(
+                    StructureId {
+                        id: i as u32,
+                        gen: center.gen,
+                    },
+                    &mut bundle.components,
+                    self,
+                    &mut others,
+                ); // dynamic.frame_proc(self, &mut Chained(MutRef(front), MutRef(last)))
+                if let Err(_) = result {
+                    if let Some(position) = bundle.components.position {
+                        console_log!("frame_proc error at position: {:?}", position);
+                    }
+                }
+                frame_proc_result_to_event(result);
                 let components = &mut bundle.components;
                 if let Some(position) = &components.position {
                     for fbox in &mut components.fluid_boxes {
@@ -1663,7 +1667,7 @@ impl FactorishState {
     }
 
     /// Mutable variant of find_structure_tile
-    fn find_structure_tile_mut(&mut self, tile: &[i32]) -> Option<&mut StructureBundle> {
+    fn _find_structure_tile_mut(&mut self, tile: &[i32]) -> Option<&mut StructureBundle> {
         self.structures
             .iter_mut()
             .find(|s| {
@@ -1691,7 +1695,7 @@ impl FactorishState {
         self.structures
             .iter()
             .enumerate()
-            .filter_map(|(id, s)| Some((id, s.dynamic.as_deref()?)))
+            .filter_map(|(id, s)| Some((id, s.bundle.as_ref()?)))
             .find(|(_, s)| s.dynamic.contains(&s.components, &position))
             .map(|(idx, _)| idx)
     }
@@ -2382,9 +2386,13 @@ impl FactorishState {
     }
 
     pub fn select_recipe(&mut self, c: i32, r: i32, index: usize) -> Result<bool, JsValue> {
-        if let Some(structure) = self.find_structure_tile_mut(&[c, r]) {
-            if let Some(factory) = structure.components.factory.as_mut() {
-                structure.dynamic.select_recipe(factory, index)
+        if let Some(idx) = self.find_structure_tile_idx(Position::new(c, r)) {
+            if let Some(bundle) = self.structures[idx].bundle.as_mut() {
+                bundle.dynamic.select_recipe(
+                    bundle.components.factory.as_mut(),
+                    index,
+                    &mut self.player.inventory,
+                )
             } else {
                 js_err!("Structure cannot set recipe")
             }
@@ -2654,7 +2662,7 @@ impl FactorishState {
             ItemType::Assembler => {
                 return Ok(Assembler::new(cursor));
             }
-            ItemType::Lab => Box::new(Lab::new(cursor)),
+            ItemType::Lab => return Ok(Lab::new(cursor)),
             ItemType::Boiler => return Ok(Boiler::new(cursor)),
             ItemType::WaterWell => return Ok(WaterWell::new(*cursor)),
             ItemType::OffshorePump => return Ok(OffshorePump::new(cursor)),
@@ -2841,7 +2849,11 @@ impl FactorishState {
                         if let Some(bbox) = new_s.dynamic.bounding_box(&new_s.components) {
                             for y in bbox.y0..bbox.y1 {
                                 for x in bbox.x0..bbox.x1 {
-                                    self.harvest(&Position { x, y }, true, !new_s.dynamic.movable())?;
+                                    self.harvest(
+                                        &Position { x, y },
+                                        true,
+                                        !new_s.dynamic.movable(),
+                                    )?;
                                 }
                             }
                         }

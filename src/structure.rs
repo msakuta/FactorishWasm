@@ -199,6 +199,8 @@ pub(crate) const RECIPE_CAPACITY_MULTIPLIER: usize = 3;
 /// Chest storage size, matching to Factorio
 const STORAGE_MAX_SLOTS: usize = 48;
 
+const DEFAULT_MAX_CAPACITY: usize = 50;
+
 pub(crate) fn default_add_inventory(
     s: &mut (impl Structure + ?Sized),
     inventory_type: InventoryType,
@@ -450,7 +452,12 @@ pub(crate) trait Structure {
     fn auto_recipe(&self) -> bool {
         false
     }
-    fn select_recipe(&mut self, _factory: &mut Factory, _index: usize, _player_inventory: &mut Inventory) -> Result<bool, JsValue> {
+    fn select_recipe(
+        &mut self,
+        _factory: Option<&mut Factory>,
+        _index: usize,
+        _player_inventory: &mut Inventory,
+    ) -> Result<bool, JsValue> {
         Err(JsValue::from_str("recipes not available"))
     }
     fn get_selected_recipe(&self) -> Option<&Recipe> {
@@ -863,6 +870,15 @@ impl StructureBundle {
     pub(crate) fn set_rotation(&mut self, rotation: &Rotation) -> Result<(), ()> {
         self.components.rotation = Some(*rotation);
         Ok(())
+    }
+
+    pub(crate) fn get_selected_recipe(&self) -> Option<&Recipe> {
+        self.dynamic.get_selected_recipe().or_else(|| {
+            self.components
+                .factory
+                .as_ref()
+                .and_then(|factory| factory.recipe.as_ref())
+        })
     }
 }
 

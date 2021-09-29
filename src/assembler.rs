@@ -5,8 +5,7 @@ use super::{
         utils::{enable_buffer, Flatten},
         ShaderBundle,
     },
-    inventory::InventoryTrait,
-    inventory::{filter_inventory, Inventory, InventoryTrait, InventoryType},
+    inventory::{filter_inventory, Inventory, InventoryTrait},
     items::get_item_image_url,
     research::TechnologyTag,
     serialize_impl,
@@ -419,35 +418,42 @@ impl Structure for Assembler {
         std::borrow::Cow::from(Assembler::get_recipes())
     }
 
-    fn select_recipe(&mut self, factory: &mut Factory, index: usize, player_inventory: &mut Inventory) -> Result<bool, JsValue> {
-        let recipe =
-            self.get_recipes()
-                .get(index)
-                .ok_or_else(|| js_str!("recipes index out of bound {:?}", index))?
-                .clone();
-    // fn select_recipe(
-    //     &mut self,
-    //     index: usize,
-    //     player_inventory: &mut Inventory,
-    // ) -> Result<bool, JsValue> {
-    //     let recipe = self
-    //         .get_recipes()
-    //         .get(index)
-    //         .ok_or_else(|| js_str!("recipes index out of bound {:?}", index))?
-    //         .clone();
+    fn select_recipe(
+        &mut self,
+        factory: Option<&mut Factory>,
+        index: usize,
+        player_inventory: &mut Inventory,
+    ) -> Result<bool, JsValue> {
+        let recipe = self
+            .get_recipes()
+            .get(index)
+            .ok_or_else(|| js_str!("recipes index out of bound {:?}", index))?
+            .clone();
+        // fn select_recipe(
+        //     &mut self,
+        //     index: usize,
+        //     player_inventory: &mut Inventory,
+        // ) -> Result<bool, JsValue> {
+        //     let recipe = self
+        //         .get_recipes()
+        //         .get(index)
+        //         .ok_or_else(|| js_str!("recipes index out of bound {:?}", index))?
+        //         .clone();
 
-    //     self.input_inventory = filter_inventory(
-    //         std::mem::take(&mut self.input_inventory),
-    //         |item| recipe.input.contains_key(&item),
-    //         player_inventory,
+        //     self.input_inventory = filter_inventory(
+        //         std::mem::take(&mut self.input_inventory),
+        //         |item| recipe.input.contains_key(&item),
+        //         player_inventory,
 
-        factory.output_inventory = filter_inventory(
-            std::mem::take(&mut factory.output_inventory),
-            |item| recipe.output.contains_key(&item),
-            player_inventory,
-        );
+        if let Some(factory) = factory {
+            factory.output_inventory = filter_inventory(
+                std::mem::take(&mut factory.output_inventory),
+                |item| recipe.output.contains_key(&item),
+                player_inventory,
+            );
 
-        factory.recipe = Some(recipe);
+            factory.recipe = Some(recipe);
+        }
         Ok(true)
     }
 

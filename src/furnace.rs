@@ -2,16 +2,13 @@ use super::{
     burner::Burner,
     factory::Factory,
     gl::utils::{enable_buffer, Flatten},
-    serialize_impl,
-    inventory::InventoryType,
-    items::item_to_str,
     research::TechnologyTag,
+    serialize_impl,
     structure::{
-        Energy, FrameProcResult, StructureBundle, StructureComponents, 
-        default_add_inventory, Structure, StructureDynIter, StructureId, RECIPE_CAPACITY_MULTIPLIER,
+        Energy, FrameProcResult, Structure, StructureBundle, StructureComponents, StructureDynIter,
+        StructureId,
     },
-    DropItem, FactorishState, Inventory, InventoryTrait, ItemType, Position,
-    Recipe, TempEnt, COAL_POWER,
+    FactorishState, Inventory, InventoryTrait, ItemType, Position, Recipe,
 };
 use cgmath::{Matrix3, Matrix4, Vector2, Vector3};
 use once_cell::sync::Lazy;
