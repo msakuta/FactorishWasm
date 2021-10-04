@@ -124,14 +124,13 @@ impl Structure for Lab {
         depth: i32,
         is_ghost: bool,
     ) -> Result<(), JsValue> {
-        let (x, y) = if let Some(position) = &components.position {
-            (
-                position.x as f32 * TILE_SIZE_F,
-                position.y as f32 * TILE_SIZE_F,
-            )
-        } else {
-            (0., 0.)
-        };
+        let position = components
+            .position
+            .ok_or_else(|| js_str!("Assembler without Position"))?;
+        let (x, y) = (
+            position.x as f32 + state.viewport.x as f32,
+            position.y as f32 + state.viewport.y as f32,
+        );
 
         let get_shader = || -> Result<&ShaderBundle, JsValue> {
             let shader = state
