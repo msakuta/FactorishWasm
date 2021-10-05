@@ -13,7 +13,7 @@ use super::{
         default_add_inventory, Energy, Structure, StructureBundle, StructureComponents,
         StructureDynIter, StructureId,
     },
-    FactorishState, FrameProcResult, ItemType, Position, Recipe, TILE_SIZE, TILE_SIZE_F,
+    FactorishState, FrameProcResult, ItemType, Position, Recipe, TILE_SIZE,
 };
 use cgmath::{Matrix3, Matrix4, Vector2, Vector3};
 use serde::{Deserialize, Serialize};
