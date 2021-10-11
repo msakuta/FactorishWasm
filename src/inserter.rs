@@ -26,7 +26,7 @@ pub(crate) struct Inserter {
     output_structure: Option<StructureId>,
 }
 
-const INSERTER_TIME: f64 = 20.;
+const INSERTER_TIME: f64 = 50.;
 
 impl Inserter {
     pub(crate) fn new(x: i32, y: i32, rotation: Rotation) -> Self {
