@@ -1233,7 +1233,7 @@ let unlimited = true;
 
     updatePerfVisibility();
 
-    window.setInterval(function(){
+    function animate(){
         if(!paused)
             processEvents(sim.simulate(0.05));
         // let result = sim.render(ctx);
@@ -1279,6 +1279,9 @@ let unlimited = true;
             });
         }
         // console.log(result);
-    }, 50);
+        requestAnimationFrame(animate);
+    }
+
+    requestAnimationFrame(animate);
     // simulate()
 })();
