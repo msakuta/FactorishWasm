@@ -21,6 +21,8 @@ import offshorePump from "../img/offshore-pump.png";
 import boiler from "../img/boiler.png";
 import pipe from "../img/pipe.png";
 import inserter from "../img/inserter-base.png";
+import pumpjack from "../img/pumpjack.png";
+import oil from "../img/oil.png";
 import direction from "../img/direction.png";
 import sparseDirection from "../img/sparse-direction.png";
 import flowDirection from "../img/flow-direction.png";
@@ -75,6 +77,8 @@ export let loadImages = [
     ["offshorePump", offshorePump],
     ["pipe", pipe],
     ["inserter", inserter],
+    ["pumpjack", pumpjack],
+    ["oil", oil],
     ["direction", direction],
     ["flowDirection", flowDirection],
     ["sparseDirection", sparseDirection],
@@ -137,6 +141,10 @@ function getImageFileInt(type){
         return splitter;
     case 'Inserter':
         return [inserter, 2];
+    case 'Pumpjack':
+        return pumpjack;
+    case 'Oil':
+        return oil;
     case 'Chest':
         return chest;
     case 'Ore Mine':

@@ -167,6 +167,7 @@ enum Ore {
     Coal,
     Copper,
     Stone,
+    Oil,
 }
 
 #[derive(Copy, Clone, Serialize, Deserialize)]

@@ -586,6 +586,23 @@ impl FactorishState {
             bounds,
         )?;
 
+        // context.bind_texture(GL::TEXTURE_2D, Some(&self.assets.tex_oil));
+        // self.render_cells(
+        //     |x, y, cell| {
+        //         if cell.grass_image == 0 {
+        //             return Ok(());
+        //         }
+
+        //         apply_transform(x, y);
+        //         apply_texture_transform(1. / 8., 1., cell.grass_image as f32 + 1., 0.);
+        //         context.draw_arrays(GL::TRIANGLE_FAN, 0, 4);
+        //         draws += 1;
+        //         // cell_draws += 1;
+        //         Ok(())
+        //     },
+        //     bounds,
+        // )?;
+
         context.bind_texture(GL::TEXTURE_2D, Some(&self.assets.tex_weeds));
         self.render_cells(
             |x, y, cell| {
@@ -633,6 +650,7 @@ impl FactorishState {
         scan_ore(Ore::Coal, &self.assets.tex_coal)?;
         scan_ore(Ore::Copper, &self.assets.tex_copper)?;
         scan_ore(Ore::Stone, &self.assets.tex_stone)?;
+        scan_ore(Ore::Oil, &self.assets.tex_oil)?;
 
         console_log!("drawn: {}, bounds: {:?}", draws, bounds);
 
@@ -725,6 +743,7 @@ impl FactorishState {
             (Ore::Copper, &self.assets.tex_copper),
             (Ore::Coal, &self.assets.tex_coal),
             (Ore::Stone, &self.assets.tex_stone),
+            (Ore::Oil, &self.assets.tex_oil),
         ]
         .iter()
         {
