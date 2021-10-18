@@ -195,7 +195,7 @@ impl FactorishState {
         );
         gl.draw_arrays(GL::TRIANGLE_FAN, 0, 4);
 
-        if false && self.use_webgl_instancing && self.assets.instanced_arrays_ext.is_some() {
+        if self.use_webgl_instancing && self.assets.instanced_arrays_ext.is_some() {
             self.render_sprites_gl_instancing(&gl)?;
         } else {
             self.render_sprites_gl(&gl, shader)?;
@@ -738,18 +738,18 @@ impl FactorishState {
             &mut stats,
         )?;
 
-        for (ore_type, tex) in [
-            (Ore::Iron, &self.assets.tex_iron),
-            (Ore::Copper, &self.assets.tex_copper),
-            (Ore::Coal, &self.assets.tex_coal),
-            (Ore::Stone, &self.assets.tex_stone),
-            (Ore::Oil, &self.assets.tex_oil),
+        for (ore_type, tex, scale_x) in [
+            (Ore::Iron, &self.assets.tex_iron, 1. / 4.),
+            (Ore::Copper, &self.assets.tex_copper, 1. / 4.),
+            (Ore::Coal, &self.assets.tex_coal, 1. / 4.),
+            (Ore::Stone, &self.assets.tex_stone, 1. / 4.),
+            (Ore::Oil, &self.assets.tex_oil, 1.),
         ]
         .iter()
         {
             self.render_repeat_gl_instancing(
                 &gl,
-                1. / 4.,
+                *scale_x,
                 1.,
                 tex,
                 |x, y, cell, instance_buf| {
