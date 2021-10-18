@@ -1234,8 +1234,10 @@ let unlimited = true;
     updatePerfVisibility();
 
     function animate(){
-        if(!paused)
-            processEvents(sim.simulate(0.05));
+        if(!paused){
+            // Supposed to be 60FPS, but truth is we don't know.
+            processEvents(sim.simulate(1. / 60.));
+        }
         // let result = sim.render(ctx);
         let result = sim.render_gl(context);
 
