@@ -1233,10 +1233,15 @@ let unlimited = true;
 
     updatePerfVisibility();
 
+    let globalTime = performance.now();
+
     function animate(){
+        let nextTime = performance.now();
+        let deltaTime = nextTime - globalTime;
         if(!paused){
-            // Supposed to be 60FPS, but truth is we don't know.
-            processEvents(sim.simulate(1. / 60.));
+            // Supposed to be 60FPS, but truth is we don't know. requestAnimationFrame would schedule the rendering
+            // as fast as the device can.
+            processEvents(sim.simulate(deltaTime / 1000.));
         }
         // let result = sim.render(ctx);
         let result = sim.render_gl(context);
@@ -1280,6 +1285,9 @@ let unlimited = true;
                 perfLabel.appendChild(elem);
             });
         }
+
+        globalTime = nextTime;
+
         // console.log(result);
         requestAnimationFrame(animate);
     }
