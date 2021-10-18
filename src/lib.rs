@@ -147,6 +147,8 @@ const WIRE_ATTACH_X: f64 = 28.;
 const WIRE_ATTACH_Y: f64 = 8.;
 const WIRE_HANG: f64 = 0.15;
 
+const SIM_DELTA_TIME: f64 = 1. / 60.;
+
 /// Event types that can be communicated to the JavaScript code.
 /// It is serialized into a JavaScript Object through serde.
 #[derive(Serialize)]
@@ -205,7 +207,6 @@ impl Cell {
     }
 }
 
-const tilesize: i32 = 32;
 struct ToolDef {
     item_type: ItemType,
     desc: &'static str,
@@ -1278,8 +1279,6 @@ impl FactorishState {
             self.save_game()?;
         }
 
-        const SIM_DELTA_TIME: f64 = 1. / 60.;
-
         let mut ret = vec![];
         // let mut rendered_frames = 0;
         while self.sim_time < goal_time {
@@ -1405,10 +1404,10 @@ impl FactorishState {
             };
             let id = DropItemId::new(i as u32, entry.gen);
             if let Some(bounds) = self.bounds.as_ref() {
-                if !(0 < item.x
-                    && item.x < bounds.width * tilesize
-                    && 0 < item.y
-                    && item.y < bounds.height * tilesize)
+                if !(0. < item.x
+                    && item.x < bounds.width as f64 * TILE_SIZE
+                    && 0. < item.y
+                    && item.y < bounds.height as f64 * TILE_SIZE)
                 {
                     continue;
                 }
@@ -1418,8 +1417,8 @@ impl FactorishState {
                 .filter_map(|s| s.dynamic.as_mut())
                 .find(|s| {
                     s.contains(&Position {
-                        x: item.x.div_euclid(TILE_SIZE_I),
-                        y: item.y.div_euclid(TILE_SIZE_I),
+                        x: item.x.div_euclid(TILE_SIZE) as i32,
+                        y: item.y.div_euclid(TILE_SIZE) as i32,
                     })
                 })
                 .and_then(|structure| structure.item_response(item).ok())
@@ -1436,8 +1435,8 @@ impl FactorishState {
                             continue;
                         }
                         let position = Position {
-                            x: moved_x.div_euclid(TILE_SIZE_I),
-                            y: moved_y.div_euclid(TILE_SIZE_I),
+                            x: moved_x.div_euclid(TILE_SIZE) as i32,
+                            y: moved_y.div_euclid(TILE_SIZE) as i32,
                         };
                         if let Some(s) = structures
                             .iter()
@@ -1600,7 +1599,8 @@ impl FactorishState {
 
     fn find_item(&self, pos: &Position) -> Option<(DropItemId, &DropItem)> {
         drop_item_id_iter(&self.drop_items).find(|(_, item)| {
-            item.x.div_euclid(TILE_SIZE_I) == pos.x && item.y.div_euclid(TILE_SIZE_I) == pos.y
+            item.x.div_euclid(TILE_SIZE) as i32 == pos.x
+                && item.y.div_euclid(TILE_SIZE) as i32 == pos.y
         })
     }
 
@@ -1615,7 +1615,8 @@ impl FactorishState {
     fn _remove_item_pos(&mut self, pos: &Position) -> Option<DropItem> {
         if let Some(entry) = self.drop_items.iter_mut().find(|item| {
             if let Some(item) = item.item.as_ref() {
-                item.x / 32 == pos.x && item.y / 32 == pos.y
+                item.x.div_euclid(TILE_SIZE) as i32 == pos.x
+                    && item.y.div_euclid(TILE_SIZE) as i32 == pos.y
             } else {
                 false
             }
@@ -1841,8 +1842,8 @@ impl FactorishState {
                     continue;
                 };
 
-                if !(item.x.div_euclid(TILE_SIZE_I) == position.x
-                    && item.y.div_euclid(TILE_SIZE_I) == position.y)
+                if !(item.x.div_euclid(TILE_SIZE) as i32 == position.x
+                    && item.y.div_euclid(TILE_SIZE) as i32 == position.y)
                 {
                     continue;
                 }
@@ -2516,8 +2517,8 @@ impl FactorishState {
             if self.find_structure_tile(&[cursor.x, cursor.y]).is_none()
             // Let the player pick up drop items before harvesting ore below.
             && !drop_item_iter(&self.drop_items).any(|item| {
-                item.x / TILE_SIZE_I == pos[0] as i32 / TILE_SIZE_I
-                    && item.y / TILE_SIZE_I == pos[1] as i32 / TILE_SIZE_I
+                item.x.div_euclid(TILE_SIZE) == pos[0].div_euclid(TILE_SIZE)
+                    && item.y.div_euclid(TILE_SIZE) == pos[1].div_euclid(TILE_SIZE)
             }) {
                 if let Some(tile) = self.tile_at(&cursor) {
                     if let Some(ore_type) = tile.get_ore_type() {

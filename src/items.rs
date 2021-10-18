@@ -247,8 +247,8 @@ pub(crate) fn render_drop_item_gl(
     state: &FactorishState,
     gl: &GL,
     item_type: &ItemType,
-    x: i32,
-    y: i32,
+    x: f64,
+    y: f64,
 ) -> Result<(), JsValue> {
     render_drop_item_mat_gl(
         state,

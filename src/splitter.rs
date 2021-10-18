@@ -7,6 +7,7 @@ use super::{
     structure::{
         BoundingBox, ItemResponse, ItemResponseResult, RotateErr, Size, Structure, StructureDynIter,
     },
+    transport_belt::{TransportBelt, BELT_SPEED},
     FactorishState, Position, Rotation, TILE_SIZE,
 };
 use cgmath::{Matrix3, Matrix4, Rad, Vector2, Vector3};
@@ -182,17 +183,7 @@ impl Structure for Splitter {
         match depth {
             0 => {
                 let shader = get_shader()?;
-                gl.active_texture(GL::TEXTURE0);
-                gl.bind_texture(GL::TEXTURE_2D, Some(&state.assets.tex_belt));
-                enable_buffer(&gl, &state.assets.screen_buffer, 2, shader.vertex_position);
-                let sx = -((state.sim_time * 16.) % 32. / 32.) as f32;
-                gl.uniform_matrix3fv_with_f32_array(
-                    shader.tex_transform_loc.as_ref(),
-                    false,
-                    (Matrix3::from_nonuniform_scale(1., 2.)
-                        * Matrix3::from_translation(Vector2::new(sx, 0.)))
-                    .flatten(),
-                );
+                TransportBelt::belt_texture_gl(gl, &self.rotation, state, shader)?;
 
                 shape(shader)?;
 
@@ -238,8 +229,8 @@ impl Structure for Splitter {
     }
 
     fn item_response(&mut self, item: &DropItem) -> Result<ItemResponseResult, ()> {
-        let vx = self.rotation.delta().0;
-        let vy = self.rotation.delta().1;
+        let vx = self.rotation.delta().0 as f64 * BELT_SPEED;
+        let vy = self.rotation.delta().1 as f64 * BELT_SPEED;
         let mut ax = if self.rotation.is_vertcial() {
             (item.x as f64 / TILE_SIZE).floor() * TILE_SIZE + TILE_SIZE / 2.
         } else {
@@ -275,8 +266,8 @@ impl Structure for Splitter {
             self.direction = (self.direction + 1) % 2;
         }
 
-        let moved_x = ax as i32 + vx;
-        let moved_y = ay as i32 + vy;
+        let moved_x = ax + vx;
+        let moved_y = ay + vy;
         Ok((ItemResponse::Move(moved_x, moved_y), None))
     }
 
