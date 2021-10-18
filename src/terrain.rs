@@ -141,9 +141,18 @@ pub(crate) fn gen_chunk(position: Position, terrain_params: &TerrainParameters) 
         }
     }
 
-    if rng.next() < 0.5 {
-        let (x, y) = ((rng.nexti() as usize).rem_euclid(CHUNK_SIZE), (rng.nexti() as usize).rem_euclid(CHUNK_SIZE));
-        ret[(x + y * CHUNK_SIZE) as usize].ore = Some(OreValue(Ore::Oil, (rng.next() * 10000.) as u32 + 1000));
+    let mut rng2 = Xor128::new(
+        Xor128::new(rng.nexti() + position.x.wrapping_abs() as u32).nexti()
+            + position.y.wrapping_abs() as u32,
+    );
+    let die = rng2.next();
+    if die < 0.5 {
+        let (x, y) = (
+            (rng2.nexti() as usize).rem_euclid(CHUNK_SIZE),
+            (rng2.nexti() as usize).rem_euclid(CHUNK_SIZE),
+        );
+        ret[(x + y * CHUNK_SIZE) as usize].ore =
+            Some(OreValue(Ore::Oil, (rng2.next() * 10000.) as u32 + 1000));
         console_log!("Generated oil at {:?}", (x, y));
     }
 

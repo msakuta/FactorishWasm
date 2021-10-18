@@ -195,7 +195,7 @@ impl FactorishState {
         );
         gl.draw_arrays(GL::TRIANGLE_FAN, 0, 4);
 
-        if self.use_webgl_instancing && self.assets.instanced_arrays_ext.is_some() {
+        if false && self.use_webgl_instancing && self.assets.instanced_arrays_ext.is_some() {
             self.render_sprites_gl_instancing(&gl)?;
         } else {
             self.render_sprites_gl(&gl, shader)?;
@@ -620,24 +620,24 @@ impl FactorishState {
             bounds,
         )?;
 
-        let mut draw_ore = |x, y, ore: u32| -> Result<(), JsValue> {
+        let mut draw_ore = |x, y, ore: u32, x_scale| -> Result<(), JsValue> {
             if 0 < ore {
                 let idx = (ore / 10).min(3);
                 apply_transform(x, y);
-                apply_texture_transform(1. / 4., 1., idx as f32, 0.);
+                apply_texture_transform(x_scale, 1., idx as f32, 0.);
                 context.draw_arrays(GL::TRIANGLE_FAN, 0, 4);
                 draws += 1;
             }
             Ok(())
         };
 
-        let mut scan_ore = |ore, tex| -> Result<(), JsValue> {
+        let mut scan_ore = |ore, tex, x_scale| -> Result<(), JsValue> {
             context.bind_texture(GL::TEXTURE_2D, Some(tex));
             self.render_cells(
                 |x, y, cell| {
                     if let Some(OreValue(cell_ore, v)) = cell.ore {
                         if cell_ore == ore {
-                            draw_ore(x, y, v)?;
+                            draw_ore(x, y, v, x_scale)?;
                         }
                     };
                     Ok(())
@@ -646,11 +646,11 @@ impl FactorishState {
             )
         };
 
-        scan_ore(Ore::Iron, &self.assets.tex_iron)?;
-        scan_ore(Ore::Coal, &self.assets.tex_coal)?;
-        scan_ore(Ore::Copper, &self.assets.tex_copper)?;
-        scan_ore(Ore::Stone, &self.assets.tex_stone)?;
-        scan_ore(Ore::Oil, &self.assets.tex_oil)?;
+        scan_ore(Ore::Iron, &self.assets.tex_iron, 1. / 4.)?;
+        scan_ore(Ore::Coal, &self.assets.tex_coal, 1. / 4.)?;
+        scan_ore(Ore::Copper, &self.assets.tex_copper, 1. / 4.)?;
+        scan_ore(Ore::Stone, &self.assets.tex_stone, 1. / 4.)?;
+        scan_ore(Ore::Oil, &self.assets.tex_oil, 1.)?;
 
         console_log!("drawn: {}, bounds: {:?}", draws, bounds);
 
