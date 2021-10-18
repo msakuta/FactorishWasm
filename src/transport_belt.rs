@@ -52,9 +52,9 @@ impl TransportBelt {
     /// Apply transformation matrix for texture with belt scrolling.
     pub(crate) fn belt_texture_gl(
         gl: &GL,
-        rotation: &Rotation,
         state: &FactorishState,
         shader: &ShaderBundle,
+        transform: impl Fn(Matrix3<f32>) -> Matrix3<f32>,
     ) -> Result<(), JsValue> {
         gl.active_texture(GL::TEXTURE0);
         gl.bind_texture(GL::TEXTURE_2D, Some(&state.assets.tex_belt));
@@ -63,9 +63,7 @@ impl TransportBelt {
         gl.uniform_matrix3fv_with_f32_array(
             shader.tex_transform_loc.as_ref(),
             false,
-            (Matrix3::from_translation(Vector2::new(sx, 0.))
-                * Matrix3::from_angle_z(Rad(-rotation.angle_rad() as f32)))
-            .flatten(),
+            transform(Matrix3::from_translation(Vector2::new(sx, 0.))).flatten(),
         );
 
         Ok(())
@@ -141,7 +139,9 @@ impl Structure for TransportBelt {
             .ok_or_else(|| js_str!("Shader not found"))?;
         gl.use_program(Some(&shader.program));
         gl.uniform1f(shader.alpha_loc.as_ref(), if is_ghost { 0.5 } else { 1. });
-        TransportBelt::belt_texture_gl(gl, &self.rotation, state, shader)?;
+        TransportBelt::belt_texture_gl(gl, state, shader, |scroll| {
+            scroll * Matrix3::from_angle_z(Rad(-self.rotation.angle_rad() as f32))
+        })?;
 
         gl.uniform_matrix4fv_with_f32_array(
             shader.transform_loc.as_ref(),

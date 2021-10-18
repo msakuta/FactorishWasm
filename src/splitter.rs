@@ -183,7 +183,9 @@ impl Structure for Splitter {
         match depth {
             0 => {
                 let shader = get_shader()?;
-                TransportBelt::belt_texture_gl(gl, &self.rotation, state, shader)?;
+                TransportBelt::belt_texture_gl(gl, state, shader, |scroll| {
+                    Matrix3::from_nonuniform_scale(1., 2.) * scroll
+                })?;
 
                 shape(shader)?;
 
