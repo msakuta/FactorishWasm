@@ -498,6 +498,7 @@ pub struct FactorishState {
     #[allow(dead_code)]
     delta_time: f64,
     sim_time: f64,
+    goal_time: f64,
     width: u32,
     height: u32,
     bounds: Option<Bounds>,
@@ -617,6 +618,7 @@ impl FactorishState {
         let mut ret = FactorishState {
             delta_time: 0.1,
             sim_time: 0.0,
+            goal_time: 0.0,
             width: terrain_params.width,
             height: terrain_params.height,
             bounds: if terrain_params.unlimited {
@@ -944,6 +946,7 @@ impl FactorishState {
         self.sim_time = json_get(&json, "sim_time")?
             .as_f64()
             .ok_or_else(|| js_str!("sim_time is not float"))?;
+        self.goal_time = self.sim_time;
 
         self.player = from_value(json_take(&mut json, "player")?)?;
 
@@ -1265,17 +1268,47 @@ impl FactorishState {
 
     pub fn simulate(&mut self, delta_time: f64) -> Result<js_sys::Array, JsValue> {
         let start_simulate = performance().now();
-        // console_log!("simulating delta_time {}, {}", delta_time, self.sim_time);
+
+        // Prevent too slow computers from accumulating frames infinitely
+        let goal_time = self.goal_time + delta_time.min(1.);
+
         const SERIALIZE_PERIOD: f64 = 100.;
-        if (self.sim_time / SERIALIZE_PERIOD).floor()
-            < ((self.sim_time + delta_time) / SERIALIZE_PERIOD).floor()
-        {
+        // Don't serialize more than once
+        if (self.goal_time / SERIALIZE_PERIOD).floor() < (goal_time / SERIALIZE_PERIOD).floor() {
             self.save_game()?;
         }
 
-        self.delta_time = delta_time;
-        self.sim_time += delta_time;
+        const SIM_DELTA_TIME: f64 = 1. / 60.;
 
+        let mut ret = vec![];
+        let mut rendered_frames = 0;
+        while self.sim_time < goal_time {
+            self.delta_time = SIM_DELTA_TIME;
+            self.sim_time += SIM_DELTA_TIME;
+            ret.extend(self.simulate_step(SIM_DELTA_TIME)?.into_iter());
+            rendered_frames += 1;
+        }
+
+        // In order to keep constant frame rate in simulation and rendering according to rendering capability,
+        // we need to remember goal_tiem and sim_time separately.
+        // Note that we don't need to serialize goal_time in saved game, because it is only necessary to amortize
+        // frame time errors over time, so that we can just set goal_time = sim_time when we load a game.
+        self.goal_time = goal_time;
+
+        self.perf_simulate.add(performance().now() - start_simulate);
+
+        console_log!(
+            "simulating delta_time: {:.04}, sim_time: {:.04}, goal_time: {:.04}, rendered_frames: {}",
+            delta_time,
+            self.sim_time,
+            goal_time,
+            rendered_frames
+        );
+
+        Ok(ret.iter().collect())
+    }
+
+    fn simulate_step(&mut self, delta_time: f64) -> Result<Vec<JsValue>, JsValue> {
         // Since we cannot use callbacks to report events to the JavaScript environment,
         // we need to accumulate events during simulation and return them as an array.
         let mut events = vec![];
@@ -1449,11 +1482,9 @@ impl FactorishState {
             .filter(|ent| 0. < ent.life)
             .collect();
 
-        self.perf_simulate.add(performance().now() - start_simulate);
-
         // self.drop_items = drop_items;
         self.update_info();
-        Ok(events.iter().collect())
+        Ok(events)
     }
 
     fn tile_at(&self, tile: &Position) -> Option<Cell> {

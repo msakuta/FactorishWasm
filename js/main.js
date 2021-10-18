@@ -1236,8 +1236,9 @@ let unlimited = true;
     let globalTime = performance.now();
 
     function animate(){
-        let nextTime = performance.now();
-        let deltaTime = nextTime - globalTime;
+        // The performance counter may not be very accurate (could have 1ms error), but it won't accumulate over time
+        const nextTime = performance.now();
+        const deltaTime = nextTime - globalTime;
         if(!paused){
             // Supposed to be 60FPS, but truth is we don't know. requestAnimationFrame would schedule the rendering
             // as fast as the device can.
