@@ -1281,12 +1281,12 @@ impl FactorishState {
         const SIM_DELTA_TIME: f64 = 1. / 60.;
 
         let mut ret = vec![];
-        let mut rendered_frames = 0;
+        // let mut rendered_frames = 0;
         while self.sim_time < goal_time {
             self.delta_time = SIM_DELTA_TIME;
             self.sim_time += SIM_DELTA_TIME;
             ret.extend(self.simulate_step(SIM_DELTA_TIME)?.into_iter());
-            rendered_frames += 1;
+            // rendered_frames += 1;
         }
 
         // In order to keep constant frame rate in simulation and rendering according to rendering capability,
@@ -1297,13 +1297,13 @@ impl FactorishState {
 
         self.perf_simulate.add(performance().now() - start_simulate);
 
-        console_log!(
-            "simulating delta_time: {:.04}, sim_time: {:.04}, goal_time: {:.04}, rendered_frames: {}",
-            delta_time,
-            self.sim_time,
-            goal_time,
-            rendered_frames
-        );
+        // console_log!(
+        //     "simulating delta_time: {:.04}, sim_time: {:.04}, goal_time: {:.04}, rendered_frames: {}",
+        //     delta_time,
+        //     self.sim_time,
+        //     goal_time,
+        //     rendered_frames
+        // );
 
         Ok(ret.iter().collect())
     }
