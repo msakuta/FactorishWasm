@@ -120,25 +120,6 @@ let unlimited = true;
         sim.reset_viewport(canvas);
     };
     document.body.onresize = refreshSize;
-    const headerButton = document.getElementById("headerButton");
-    const headerContainer = document.getElementById("headerContainer");
-
-    function setHeaderVisible(v = "toggle"){
-        if(v === "toggle"){
-            v = headerContainer.style.display === "none";
-        }
-        headerContainer.style.display = v ? "block" : "none";
-        headerButton.classList = "headerButton " + (v ? "open" : "");
-        headerButton.innerHTML = v ? "^" : ""
-    }
-
-    if(headerButton){
-        headerButton.addEventListener("click", () => setHeaderVisible());
-        const viewSettings = JSON.parse(localStorage.getItem("FactorishWasmViewSettings"));
-        // Default visible
-        if(viewSettings && !viewSettings.headerVisible)
-            setHeaderVisible(false);
-    }
 
     const mainMenuTip = document.createElement("div");
     mainMenuTip.className = "mainMenuTip";
@@ -608,6 +589,8 @@ let unlimited = true;
     /// An array of window elements which holds order of z indices.
     const windowOrder = [];
 
+    const mainMenuViewSettings = JSON.parse(localStorage.getItem("FactorishWasmViewSettings"));
+
     const vueMainMenuWindowApp = createApp(
         MainMenuWindow,
         {
@@ -634,6 +617,11 @@ let unlimited = true;
     );
 
     const vueMainMenuWindow = vueMainMenuWindowApp.mount('#vueMainMenuWindow');
+    // Default true
+    if(!mainMenuViewSettings || mainMenuViewSettings.mainMenuVisible){
+        vueMainMenuWindow.visible = true;
+        vueMainMenuWindow.placeCenter();
+    }
 
     windowOrder.push(vueMainMenuWindow);
 
@@ -651,10 +639,6 @@ let unlimited = true;
 
     windowOrder.push(vueNewGameWindow);
 
-
-    const defaultViewSettings = {
-        altMode: false,
-    };
 
     const vueViewSettingsApp = createApp(
         ViewSettingsWindow,
@@ -1105,7 +1089,7 @@ let unlimited = true;
     window.addEventListener( "beforeunload", () => {
         sim.save_game();
         localStorage.setItem("FactorishWasmViewSettings", JSON.stringify({
-            "headerVisible": headerContainer.style.display !== "none",
+            "mainMenuVisible": vueMainMenuWindow.visible,
         }));
     });
 
