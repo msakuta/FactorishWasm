@@ -23,6 +23,40 @@ which is extremely easy to get started.
 If you have played Factorio, it should be straightforward.
 It is similar to Factorio's god mode, where there is no physical player but you can manipulate buildings directly.
 
+### Main menu
+
+There is a button to show the main menu on top left corner of the screen.
+
+![main menu icon](readme-img/main-menu-icon.png)
+
+Clicking this button will show the menu like below.
+
+![main menu](readme-img/main-menu.png)
+
+#### New game
+
+Clicking the button opens a window like below.
+
+As the name says, you can configure parameters and create a new game.
+
+![new game window](readme-img/new-game-window.png)
+
+#### View settings window
+
+Clicking the button opens a window like below.
+
+As the name says, you can configure view settings.
+
+![view settings window](readme-img/view-settings-window.png)
+
+#### Download save data
+
+Clicking this button will let you download the current game state into a local file.
+
+#### Load saved game
+
+Clicking this button will let you load previously saved data in your local file system.
+
 ### Cursor
 
 ![cursor](readme-img/cursor.png)
