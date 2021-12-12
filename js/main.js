@@ -1,12 +1,15 @@
 import rotateImage from "../img/rotate.png";
 import inventory from "../img/inventory.png";
 import sciencePack1 from "../img/science-pack-1.png";
+import menuIcon from "../img/menuIcon.png";
 
 import { loadImages, getImageFile } from "./images.js";
 import { FactorishState } from "../pkg/index.js";
 
 import { createApp, nextTick } from "vue";
 
+import MainMenuWindow from "./components/MainMenuWindow.vue";
+import NewGameWindow from "./components/NewGameWindow.vue";
 import InventoryWindow from "./components/InventoryWindow.vue";
 import RecipeSelectorWindow from "./components/RecipeSelectorWindow.vue";
 import ResearchSelectorWindow from "./components/ResearchSelectorWindow.vue";
@@ -27,76 +30,14 @@ let unlimited = true;
 
 (async function(){
 
-    function sliderInit(sliderId, labelId, writer, logarithmic=false){
-        const slider = document.getElementById(sliderId);
-        const label = document.getElementById(labelId);
-        label.innerHTML = slider.value;
-    
-        const sliderStats = () => {
-          const [minp, maxp] = ["min", "max"].map(attr => parseFloat(slider.getAttribute(attr)));
-          if(minp <= 0){
-            throw "Minimum value for logarithmic slider must not be 0";
-          }
-          const [minv, maxv] = [minp, maxp].map(Math.log);
-          // calculate adjustment factor
-          const scale = (maxv-minv) / (maxp-minp);
-          return {minp, maxp, minv, maxv, scale};
-        };
-    
-        const updateFromInput = (_event) => {
-          let value;
-          if(logarithmic){
-            const {minp, minv, scale} = sliderStats();
-            value = Math.exp(minv + scale*(parseFloat(slider.value) - minp));
-            label.innerHTML = value.toFixed(8);
-          }
-          else{
-            value = parseFloat(slider.value);
-            label.innerHTML = value;
-          }
-          writer(value);
-        }
-        const updateFromValue = (value) => {
-          if(logarithmic){
-            const {minp, scale, minv} = sliderStats();
-    
-            // Inverse of updateFromInput
-            slider.value = (Math.log(value) - minv) / scale + minp;
-            label.innerHTML = value.toFixed(8);
-          }
-          else{
-            slider.value = value;
-            label.innerHTML = value;
-          }
-          writer(value);
-        };
-        if(logarithmic){
-          // Update the UI according to logarithmic scale even before the user touches the slider
-          updateFromValue(parseFloat(slider.value));
-        }
-        slider.addEventListener("input", updateFromInput);
-        return {elem: slider, update: updateFromValue};
-    }
-
-    let terrainSeed = 8913095;
-    const seedElem = document.getElementById("seed");
-    if(seedElem){
-        seedElem.value = terrainSeed;
-        seedElem.addEventListener("input", _ => {
-            terrainSeed = parseInt(seedElem.value)
-        });
-    }
-
-    let waterNoiseThreshold = 0.28;
-    sliderInit("waterNoiseThreshold", "waterNoiseThresholdLabel", value => waterNoiseThreshold = value);
-    let resourceAmount = 1000.;
-    sliderInit("resourceAmount", "resourceAmountLabel", value => resourceAmount = value);
-    let noiseScale = 5.;
-    sliderInit("noiseScale", "noiseScaleLabel", value => noiseScale = value);
-    let noiseThreshold = 0.30;
-    sliderInit("noiseThreshold", "noiseThresholdLabel", value => noiseThreshold = value);
-    let noiseOctaves = 3;
-    sliderInit("noiseOctaves", "noiseOctavesLabel", value => noiseOctaves = value);
+    const defaultParams = {
+        terrainSeed: 8913095,
+        waterNoiseThreshold: 0.28,
+        resourceAmount: 1000.,
+        noiseScale: 5.,
+        noiseThreshold: 0.30,
+        noiseOctaves: 3,
+    };
 
     function initPane(buttonId, containerId){
         const button = document.getElementById(buttonId);
@@ -107,10 +48,7 @@ let unlimited = true;
             });
         }
     }
-    initPane("paramsButton", "paramsContainer");
     initPane("viewButton", "viewContainer");
-
-    const scenarioSelectElem = document.getElementById("scenarioSelect");
 
     let paused = false;
 
@@ -147,17 +85,17 @@ let unlimited = true;
             width: xsize,
             height: ysize,
             unlimited,
-            terrain_seed: terrainSeed,
-            water_noise_threshold: waterNoiseThreshold,
-            resource_amount: resourceAmount,
-            noise_scale: noiseScale,
-            noise_threshold: noiseThreshold,
-            noise_octaves: noiseOctaves,
+            terrain_seed: defaultParams.terrainSeed,
+            water_noise_threshold: defaultParams.waterNoiseThreshold,
+            resource_amount: defaultParams.resourceAmount,
+            noise_scale: defaultParams.noiseScale,
+            noise_threshold: defaultParams.noiseThreshold,
+            noise_octaves: defaultParams.noiseOctaves,
         },
         updateInventory,
         popupText,
         structureDestroyed,
-        scenarioSelectElem.value,
+        "default",
         context,
         loadedImages,
         );
@@ -200,6 +138,27 @@ let unlimited = true;
         if(viewSettings && !viewSettings.headerVisible)
             setHeaderVisible(false);
     }
+
+    const mainMenuTip = document.createElement("div");
+    mainMenuTip.className = "mainMenuTip";
+    mainMenuTip.innerHTML = "Main Menu";
+    document.body.appendChild(mainMenuTip);
+
+    const mainMenuIcon = document.createElement("img");
+    mainMenuIcon.src = menuIcon;
+    mainMenuIcon.style.position = "absolute";
+    mainMenuIcon.addEventListener("click", () => {
+        vueMainMenuWindow.visible = !vueMainMenuWindow.visible;
+        if(vueMainMenuWindow.visible)
+            vueMainMenuWindow.placeCenter();
+    });
+    mainMenuIcon.addEventListener("mouseenter", () => {
+        mainMenuTip.style.display = "block";
+    });
+    mainMenuIcon.addEventListener("mouseleave", () => {
+        mainMenuTip.style.display = "none";
+    })
+    document.body.appendChild(mainMenuIcon);
 
     let miniMapDrag = null;
     const tilesize = 32;
@@ -647,6 +606,38 @@ let unlimited = true;
 
     /// An array of window elements which holds order of z indices.
     const windowOrder = [];
+
+    const vueMainMenuWindowApp = createApp(
+        MainMenuWindow,
+        {
+            dragWindowMouseDown,
+            onShowNewGame: () => {
+                vueMainMenuWindow.visible = false;
+                vueNewGameWindow.visible = true;
+                vueNewGameWindow.placeCenter();
+                bringToTop(vueNewGameWindow);
+            },
+            bringToTop: () => bringToTop(vueMainMenuWindow),
+        }
+    );
+
+    const vueMainMenuWindow = vueMainMenuWindowApp.mount('#vueMainMenuWindow');
+
+    windowOrder.push(vueMainMenuWindow);
+
+    const vueNewGameWindowApp = createApp(
+        NewGameWindow,
+        {
+            defaultParams,
+            dragWindowMouseDown,
+            onNewGame: newGame,
+            bringToTop: () => bringToTop(vueNewGameWindow),
+        }
+    );
+
+    const vueNewGameWindow = vueNewGameWindowApp.mount('#vueNewGameWindow');
+
+    windowOrder.push(vueNewGameWindow);
 
     const vueApplication = createApp(
         InventoryWindow,
@@ -1173,9 +1164,7 @@ let unlimited = true;
         }
     }
 
-    const generateBoard = document.getElementById("generateBoard");
-    generateBoard.addEventListener("click", () => {
-        const sizeStr = document.getElementById("sizeSelect").value;
+    function newGame({sizeStr, scenario, terrainSeed, waterNoiseThreshold, resourceAmount, noiseScale, noiseThreshold, noiseOctaves}){
         if(sizeStr === "unlimited"){
             xsize = ysize = 128;
             unlimited = true;
@@ -1199,7 +1188,7 @@ let unlimited = true;
             updateInventory,
             popupText,
             structureDestroyed,
-            scenarioSelectElem.value,
+            scenario,
             context,
             loadedImages);
         try{
@@ -1209,7 +1198,7 @@ let unlimited = true;
             alert(`FactorishState.render_init failed: ${e}`);
         }
         updateInventory(sim.get_player_inventory());
-    });
+    }
 
     const altModeBox = document.getElementById("altModeBox");
     altModeBox.addEventListener("click", () => sim.set_alt_mode(altModeBox.checked));
