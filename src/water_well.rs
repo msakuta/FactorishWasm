@@ -11,6 +11,8 @@ use web_sys::{CanvasRenderingContext2d, WebGlRenderingContext as GL};
 
 use std::cmp::Eq;
 
+const FLOW_PER_PRESSURE: f64 = 0.1 / 0.05 / 60.;
+
 #[derive(Eq, PartialEq, Clone, Copy, Debug, Serialize, Deserialize)]
 pub(crate) enum FluidType {
     Water,
@@ -109,7 +111,7 @@ impl FluidBox {
                     if 0. < pressure {
                         continue;
                     }
-                    let flow_amount = pressure * 0.1;
+                    let flow_amount = pressure * FLOW_PER_PRESSURE;
                     // Check input/output valve state
                     if if flow_amount < 0. {
                         !self.output_enable
