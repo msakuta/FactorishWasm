@@ -624,6 +624,11 @@ let unlimited = true;
                 vueViewSettingsWindow.placeCenter();
                 bringToTop(vueViewSettingsWindow);
             },
+            serializer() { return sim.serialize_game(); },
+            deserializer(data) {
+                sim.deserialize_game(data);
+                updateInventory(sim.get_player_inventory());
+            },
             bringToTop: () => bringToTop(vueMainMenuWindow),
         }
     );
@@ -1104,64 +1109,12 @@ let unlimited = true;
         }));
     });
 
-    const copyButton = document.getElementById("copyButton");
-    copyButton.onclick = () => {
-        const copyText = document.getElementById('saveText');
-        copyText.value = sim.serialize_game();
-
-        copyText.select();
-        copyText.setSelectionRange(0, 99999); /*For mobile devices*/
-
-        document.execCommand("copy");
-    };
-
-    const saveButton = document.getElementById("saveButton");
-    saveButton.onclick = () => {
-        var textFileAsBlob = new Blob([sim.serialize_game()], {
-            type: 'text/json'
-        });
-        var fileNameToSaveAs = "save.json";
-    
-        var downloadLink = document.createElement("a");
-        downloadLink.download = fileNameToSaveAs;
-        downloadLink.innerHTML = "Download File";
-        let appended = false;
-        if (window.webkitURL != null) {
-            downloadLink.href = window.webkitURL.createObjectURL(textFileAsBlob);
-        }
-        else {
-            downloadLink.href = window.URL.createObjectURL(textFileAsBlob);
-            downloadLink.style.display = "none";
-            document.body.appendChild(downloadLink);
-            appended = true;
-        }
-        downloadLink.click();
-        if(appended) {
-            document.body.removeChild(downloadLink);
-        }
-    };
-
     const body = document.body;
     body.addEventListener("mousemove", (evt) => {
         let mousePos = [evt.clientX, evt.clientY];
         mouseIcon.style.left = `${mousePos[0]}px`;
         mouseIcon.style.top = `${mousePos[1]}px`;
     });
-
-    const loadFile = document.getElementById('loadFile');
-    loadFile.addEventListener('change', (event) => {
-        const reader = new FileReader();
-        reader.onload = (event) => {
-            sim.deserialize_game(event.target.result);
-            updateInventory(sim.get_player_inventory());
-        };
-        reader.readAsText(event.target.files[0]);
-    });
-
-    const loadButton = document.getElementById("loadButton");
-    loadButton.onclick = () => {
-        loadFile.click();
-    };
 
     updateToolBar();
 
