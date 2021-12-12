@@ -80,13 +80,22 @@ body {
     padding: 0.5em;
 }
 
-.paramsContainer {
+.windowFrame {
     position: absolute;
-    min-width: 400px;
-    min-height: 300px;
     border: 3px outset #666666;
     background-color: #7D7D7D;
     text-align: left;
+}
+
+.paramsContainer {
+    min-width: 400px;
+    min-height: 300px;
+}
+
+.largeButton {
+    display: block;
+    margin: 4px;
+    padding: 10px;
 }
 
 #container, #container2{

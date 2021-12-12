@@ -12,8 +12,7 @@ export default {
   props: {
     dragWindowMouseDown: Function,
     onShowNewGame: Function,
-    // researchMouseEnterHandler: Function,
-    // researchMouseLeaveHandler: Function,
+    onShowViewSettings: Function,
     bringToTop: Function,
   },
 
@@ -71,29 +70,20 @@ export default {
 
 <template>
   <div v-if="visible" ref="root"
-    :class="['noselect', 'recipeSelector']"
+    :class="['noselect', 'windowFrame']"
     :style="{left: `${left}px`, top: `${top}px`, height: '120px', zIndex}"
     @click="bringToTop"
   >
     <div ref="recipeTitle" class="inventoryTitle" @mousedown="dragWindow">Main Menu</div>
     <close-button @click="close"></close-button>
-    <div ref="recipeClient">
-      <div :style="{
+    <div ref="recipeClient" :style="{
           fontSize: '120%',
           fontWeight: '700',
           textAlign: 'center',
-          margin: '8px',
+          margin: '16px',
         }">
-        <button @click="onShowNewGame">New game</button>
-      </div>
-      <div :style="{
-          fontSize: '120%',
-          fontWeight: '700',
-          textAlign: 'center',
-          margin: '8px',
-        }">
-        <button>View Settings</button>
-      </div>
+      <button @click="onShowNewGame" class="largeButton">New game</button>
+      <button @click="onShowViewSettings" class="largeButton">View Settings</button>
     </div>
   </div>
 </template>

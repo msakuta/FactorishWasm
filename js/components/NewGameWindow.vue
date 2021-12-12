@@ -1,12 +1,10 @@
 <script>
 import CloseButton from "./CloseButton.vue";
-import ItemIcon from './ItemIcon.vue';
 import { nextTick, ref } from "vue";
 
 export default {
   components: {
     CloseButton,
-    ItemIcon,
   },
 
   props: {
@@ -106,7 +104,7 @@ export default {
 
 <template>
   <div v-if="visible" ref="root"
-    :class="['noselect', 'paramsContainer']"
+    :class="['noselect', 'windowFrame', 'paramsContainer']"
     :style="{left: `${left}px`, top: `${top}px`, zIndex}"
     @click="bringToTop"
   >
@@ -174,7 +172,3 @@ export default {
     </div>
   </div>
 </template>
-
-<style>
-
-</style>

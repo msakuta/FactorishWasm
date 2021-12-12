@@ -10,6 +10,7 @@ import { createApp, nextTick } from "vue";
 
 import MainMenuWindow from "./components/MainMenuWindow.vue";
 import NewGameWindow from "./components/NewGameWindow.vue";
+import ViewSettingsWindow from "./components/ViewSettingsWindow.vue";
 import InventoryWindow from "./components/InventoryWindow.vue";
 import RecipeSelectorWindow from "./components/RecipeSelectorWindow.vue";
 import ResearchSelectorWindow from "./components/ResearchSelectorWindow.vue";
@@ -617,6 +618,12 @@ let unlimited = true;
                 vueNewGameWindow.placeCenter();
                 bringToTop(vueNewGameWindow);
             },
+            onShowViewSettings: () => {
+                vueMainMenuWindow.visible = false;
+                vueViewSettingsWindow.visible = true;
+                vueViewSettingsWindow.placeCenter();
+                bringToTop(vueViewSettingsWindow);
+            },
             bringToTop: () => bringToTop(vueMainMenuWindow),
         }
     );
@@ -638,6 +645,29 @@ let unlimited = true;
     const vueNewGameWindow = vueNewGameWindowApp.mount('#vueNewGameWindow');
 
     windowOrder.push(vueNewGameWindow);
+
+
+    const defaultViewSettings = {
+        altMode: false,
+    };
+
+    const vueViewSettingsApp = createApp(
+        ViewSettingsWindow,
+        {
+            onAltMode(value) { sim.set_alt_mode(value) },
+            onShowDebugBBox(value) { sim.set_debug_bbox(value) },
+            onShowDebugFluidBox(value) { sim.set_debug_fluidbox(value) },
+            onShowDebugPowerNetwork(value) { sim.set_debug_power_network(value) },
+            onShowPerfGraph() { updatePerfVisibility() },
+            onUseWebGLInstancing(value) { sim.set_use_webgl_instancing(value) },
+            dragWindowMouseDown,
+            bringToTop: () => bringToTop(vueViewSettingsWindow),
+        }
+    );
+
+    const vueViewSettingsWindow = vueViewSettingsApp.mount('#vueViewSettingsWindow');
+
+    windowOrder.push(vueViewSettingsWindow);
 
     const vueApplication = createApp(
         InventoryWindow,
@@ -1032,8 +1062,7 @@ let unlimited = true;
     function onKeyDown(event){
         switch(event.keyCode){
         case 18: // Alt key
-            altModeBox.checked = !altModeBox.checked;
-            sim.set_alt_mode(altModeBox.checked);
+            vueViewSettingsWindow.altMode = !vueViewSettingsWindow.altMode;
             event.preventDefault();
             return;
         case 69:
@@ -1200,22 +1229,9 @@ let unlimited = true;
         updateInventory(sim.get_player_inventory());
     }
 
-    const altModeBox = document.getElementById("altModeBox");
-    altModeBox.addEventListener("click", () => sim.set_alt_mode(altModeBox.checked));
-    const showDebugBBox = document.getElementById("showDebugBBox");
-    showDebugBBox.addEventListener("click", () => sim.set_debug_bbox(showDebugBBox.checked));
-    const showDebugFluidBox = document.getElementById("showDebugFluidBox");
-    showDebugFluidBox.addEventListener("click", () => sim.set_debug_fluidbox(showDebugFluidBox.checked));
-    const showDebugPowerNetwork = document.getElementById("showDebugPowerNetwork");
-    showDebugPowerNetwork.addEventListener("click", () => sim.set_debug_power_network(showDebugPowerNetwork.checked));
-    const showPerfGraph = document.getElementById("showPerfGraph");
-    showPerfGraph.addEventListener("click", updatePerfVisibility);
-    const useWebGLInstancing = document.getElementById("useWebGLInstancing");
-    useWebGLInstancing.addEventListener("click", () => sim.set_use_webgl_instancing(useWebGLInstancing.checked));
-
     function updatePerfVisibility() {
-        perfElem.style.display = showPerfGraph.checked ? "block" : "none";
-        perfLabel.style.display = showPerfGraph.checked ? "block" : "none";
+        perfElem.style.display = vueViewSettingsWindow.showPerfGraph ? "block" : "none";
+        perfLabel.style.display = vueViewSettingsWindow.showPerfGraph ? "block" : "none";
     }
 
     container.style.display = "block";
@@ -1265,7 +1281,7 @@ let unlimited = true;
 
         animatePopupTexts();
 
-        if(showPerfGraph.checked){
+        if(vueViewSettingsWindow.showPerfGraph){
             const colors = ["#fff", "#ff3f3f", "#7f7fff", "#00ff00", "#ff00ff", "#fff"];
             while(perfLabel.firstChild) perfLabel.removeChild(perfLabel.firstChild);
             sim.render_perf(perfContext).forEach((text, idx) => {

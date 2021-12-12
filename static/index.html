@@ -17,18 +17,6 @@
 			<div id="headerContainer">
 				<h1>FactorishWasm</h1>
 				<p style="font-size: 80%; font-style: italic">- Factorio-style base building game with WebAssembly -</p>
-				<button id="viewButton">View Options</button>
-				<div style="position: relative;">
-					<div id="viewContainer" class="params" style="display: none;">
-						<div style="font-size: 120%; font-weight: 700">View settings</div>
-						<div><label><input type="checkbox" id="altModeBox">Alt mode (alt key)</label></div>
-						<div><label><input type="checkbox" id="showDebugBBox">Show Debug Bounding Box</label></div>
-						<div><label><input type="checkbox" id="showDebugFluidBox">Show Debug Fluid Box</label></div>
-						<div><label><input type="checkbox" id="showDebugPowerNetwork">Show Debug Power Network</label></div>
-						<div><label><input type="checkbox" id="showPerfGraph">Show performance graph</label></div>
-						<div><label><input type="checkbox" id="useWebGLInstancing" checked>Use WebGL instancing</label></div>
-					</div>
-				</div>
 				<hr>
 				<button id="copyButton">Copy save data to clipboard</button>
 				<button id="saveButton">Download save data</button>
@@ -39,10 +27,11 @@
 				<div>Source on <a href="https://github.com/msakuta/FactorishWasm">GitHub</a>.</div>
 			</div>
 			<div class="headerButton open" id="headerButton">^</div>
-			<div id="vueMainMenuWindow"></div>
-			<div id="vueNewGameWindow"></div>
 		</div>
 		<div>
+			<div id="vueMainMenuWindow"></div>
+			<div id="vueNewGameWindow"></div>
+			<div id="vueViewSettingsWindow"></div>
 			<div id="container2">
 				<div id="vueApp"></div>
 				<div id="toolTip"></div>
