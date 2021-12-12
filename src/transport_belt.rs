@@ -1,13 +1,18 @@
 use super::{
     drop_items::DropItem,
-    gl::utils::{enable_buffer, Flatten},
+    gl::{
+        utils::{enable_buffer, Flatten},
+        ShaderBundle,
+    },
     structure::{ItemResponse, ItemResponseResult, Structure, StructureDynIter},
-    FactorishState, Position, RotateErr, Rotation, TILE_SIZE,
+    FactorishState, Position, RotateErr, Rotation, SIM_DELTA_TIME, TILE_SIZE,
 };
 use cgmath::{Matrix3, Matrix4, Rad, Vector2, Vector3};
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 use web_sys::{CanvasRenderingContext2d, WebGlRenderingContext as GL};
+
+pub(crate) const BELT_SPEED: f64 = 0.25;
 
 #[derive(Serialize, Deserialize)]
 pub(crate) struct TransportBelt {
@@ -27,8 +32,8 @@ impl TransportBelt {
         rotation: Rotation,
         item: &DropItem,
     ) -> Result<ItemResponseResult, ()> {
-        let vx = rotation.delta().0;
-        let vy = rotation.delta().1;
+        let vx = rotation.delta().0 as f64 * BELT_SPEED;
+        let vy = rotation.delta().1 as f64 * BELT_SPEED;
         let ax = if rotation.is_vertcial() {
             (item.x as f64 / TILE_SIZE).floor() * TILE_SIZE + TILE_SIZE / 2.
         } else {
@@ -39,9 +44,29 @@ impl TransportBelt {
         } else {
             item.y as f64
         };
-        let moved_x = ax as i32 + vx;
-        let moved_y = ay as i32 + vy;
+        let moved_x = ax + vx;
+        let moved_y = ay + vy;
         Ok((ItemResponse::Move(moved_x, moved_y), None))
+    }
+
+    /// Apply transformation matrix for texture with belt scrolling.
+    pub(crate) fn belt_texture_gl(
+        gl: &GL,
+        state: &FactorishState,
+        shader: &ShaderBundle,
+        transform: impl Fn(Matrix3<f32>) -> Matrix3<f32>,
+    ) -> Result<(), JsValue> {
+        gl.active_texture(GL::TEXTURE0);
+        gl.bind_texture(GL::TEXTURE_2D, Some(&state.assets.tex_belt));
+        enable_buffer(&gl, &state.assets.screen_buffer, 2, shader.vertex_position);
+        let sx = -((state.sim_time / SIM_DELTA_TIME * BELT_SPEED / TILE_SIZE) % 1.) as f32;
+        gl.uniform_matrix3fv_with_f32_array(
+            shader.tex_transform_loc.as_ref(),
+            false,
+            transform(Matrix3::from_translation(Vector2::new(sx, 0.))).flatten(),
+        );
+
+        Ok(())
     }
 }
 
@@ -114,17 +139,9 @@ impl Structure for TransportBelt {
             .ok_or_else(|| js_str!("Shader not found"))?;
         gl.use_program(Some(&shader.program));
         gl.uniform1f(shader.alpha_loc.as_ref(), if is_ghost { 0.5 } else { 1. });
-        gl.active_texture(GL::TEXTURE0);
-        gl.bind_texture(GL::TEXTURE_2D, Some(&state.assets.tex_belt));
-        enable_buffer(&gl, &state.assets.screen_buffer, 2, shader.vertex_position);
-        let sx = -((state.sim_time * 16.) % 32. / 32.) as f32;
-        gl.uniform_matrix3fv_with_f32_array(
-            shader.tex_transform_loc.as_ref(),
-            false,
-            (Matrix3::from_translation(Vector2::new(sx, 0.))
-                * Matrix3::from_angle_z(Rad(-self.rotation.angle_rad() as f32)))
-            .flatten(),
-        );
+        TransportBelt::belt_texture_gl(gl, state, shader, |scroll| {
+            scroll * Matrix3::from_angle_z(Rad(-self.rotation.angle_rad() as f32))
+        })?;
 
         gl.uniform_matrix4fv_with_f32_array(
             shader.transform_loc.as_ref(),
@@ -135,6 +152,7 @@ impl Structure for TransportBelt {
             .flatten(),
         );
         gl.draw_arrays(GL::TRIANGLE_FAN, 0, 4);
+
         Ok(())
     }
 

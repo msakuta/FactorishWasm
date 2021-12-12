@@ -292,9 +292,10 @@ impl Structure for Inserter {
     ) -> Result<FrameProcResult, ()> {
         let input_position = self.position.add(self.rotation.delta_inv());
         let output_position = self.position.add(self.rotation.delta());
+        let delta_time = 1. / 0.05 / 60.;
 
         if self.hold_item.is_none() {
-            if self.cooldown <= 1. {
+            if self.cooldown <= delta_time {
                 self.cooldown = 0.;
                 let ret = FrameProcResult::None;
 
@@ -391,9 +392,9 @@ impl Structure for Inserter {
                 }
                 return Ok(ret);
             } else {
-                self.cooldown -= 1.;
+                self.cooldown -= delta_time;
             }
-        } else if self.cooldown < 1. {
+        } else if self.cooldown < delta_time {
             self.cooldown = 0.;
             if let Some(item_type) = self.hold_item {
                 let Self {
@@ -429,7 +430,7 @@ impl Structure for Inserter {
                 }
             }
         } else {
-            self.cooldown -= 1.;
+            self.cooldown -= delta_time;
         }
         Ok(FrameProcResult::None)
     }
