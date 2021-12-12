@@ -1271,7 +1271,7 @@ impl FactorishState {
         let start_simulate = performance().now();
 
         // Prevent too slow computers from accumulating frames infinitely
-        let goal_time = self.goal_time + delta_time.min(0.2);
+        let goal_time = self.goal_time + delta_time.min(0.1);
 
         const SERIALIZE_PERIOD: f64 = 100.;
         // Don't serialize more than once
