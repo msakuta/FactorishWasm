@@ -159,6 +159,8 @@ const WIRE_ATTACH_X: f64 = 28.;
 const WIRE_ATTACH_Y: f64 = 8.;
 const WIRE_HANG: f64 = 0.15;
 
+const SIM_DELTA_TIME: f64 = 1. / 60.;
+
 /// Event types that can be communicated to the JavaScript code.
 /// It is serialized into a JavaScript Object through serde.
 #[derive(Serialize)]
@@ -217,7 +219,6 @@ impl Cell {
     }
 }
 
-const tilesize: i32 = 32;
 struct ToolDef {
     item_type: ItemType,
     desc: &'static str,
@@ -510,6 +511,7 @@ pub struct FactorishState {
     #[allow(dead_code)]
     delta_time: f64,
     sim_time: f64,
+    goal_time: f64,
     width: u32,
     height: u32,
     bounds: Option<Bounds>,
@@ -629,6 +631,7 @@ impl FactorishState {
         let mut ret = FactorishState {
             delta_time: 0.1,
             sim_time: 0.0,
+            goal_time: 0.0,
             width: terrain_params.width,
             height: terrain_params.height,
             bounds: if terrain_params.unlimited {
@@ -1017,6 +1020,7 @@ impl FactorishState {
         self.sim_time = json_get(&json, "sim_time")?
             .as_f64()
             .ok_or_else(|| js_str!("sim_time is not float"))?;
+        self.goal_time = self.sim_time;
 
         self.player = from_value(json_take(&mut json, "player")?)?;
 
@@ -1359,17 +1363,45 @@ impl FactorishState {
 
     pub fn simulate(&mut self, delta_time: f64) -> Result<js_sys::Array, JsValue> {
         let start_simulate = performance().now();
-        // console_log!("simulating delta_time {}, {}", delta_time, self.sim_time);
+
+        // Prevent too slow computers from accumulating frames infinitely
+        let goal_time = self.goal_time + delta_time.min(0.1);
+
         const SERIALIZE_PERIOD: f64 = 100.;
-        if (self.sim_time / SERIALIZE_PERIOD).floor()
-            < ((self.sim_time + delta_time) / SERIALIZE_PERIOD).floor()
-        {
+        // Don't serialize more than once
+        if (self.goal_time / SERIALIZE_PERIOD).floor() < (goal_time / SERIALIZE_PERIOD).floor() {
             self.save_game()?;
         }
 
-        self.delta_time = delta_time;
-        self.sim_time += delta_time;
+        let mut ret = vec![];
+        // let mut rendered_frames = 0;
+        while self.sim_time < goal_time {
+            self.delta_time = SIM_DELTA_TIME;
+            self.sim_time += SIM_DELTA_TIME;
+            ret.extend(self.simulate_step(SIM_DELTA_TIME)?.into_iter());
+            // rendered_frames += 1;
+        }
 
+        // In order to keep constant frame rate in simulation and rendering according to rendering capability,
+        // we need to remember goal_tiem and sim_time separately.
+        // Note that we don't need to serialize goal_time in saved game, because it is only necessary to amortize
+        // frame time errors over time, so that we can just set goal_time = sim_time when we load a game.
+        self.goal_time = goal_time;
+
+        self.perf_simulate.add(performance().now() - start_simulate);
+
+        // console_log!(
+        //     "simulating delta_time: {:.04}, sim_time: {:.04}, goal_time: {:.04}, rendered_frames: {}",
+        //     delta_time,
+        //     self.sim_time,
+        //     goal_time,
+        //     rendered_frames
+        // );
+
+        Ok(ret.iter().collect())
+    }
+
+    fn simulate_step(&mut self, delta_time: f64) -> Result<Vec<JsValue>, JsValue> {
         // Since we cannot use callbacks to report events to the JavaScript environment,
         // we need to accumulate events during simulation and return them as an array.
         let mut events = vec![];
@@ -1539,10 +1571,10 @@ impl FactorishState {
             //                     }
             //                 } else {
             if let Some(bounds) = self.bounds.as_ref() {
-                if !(0 < item.x
-                    && item.x < bounds.width * tilesize
-                    && 0 < item.y
-                    && item.y < bounds.height * tilesize)
+                if !(0. < item.x
+                    && item.x < bounds.width as f64 * TILE_SIZE
+                    && 0. < item.y
+                    && item.y < bounds.height as f64 * TILE_SIZE)
                 {
                     continue;
                 }
@@ -1554,10 +1586,14 @@ impl FactorishState {
                     s.dynamic.contains(
                         &s.components,
                         &Position {
-                            x: item.x.div_euclid(TILE_SIZE_I),
-                            y: item.y.div_euclid(TILE_SIZE_I),
+                            x: item.x.div_euclid(TILE_SIZE) as i32,
+                            y: item.y.div_euclid(TILE_SIZE) as i32,
                         },
                     )
+                    // s.contains(&Position {
+                    //     x: item.x.div_euclid(TILE_SIZE) as i32,
+                    //     y: item.y.div_euclid(TILE_SIZE) as i32,
+                    // })
                 })
                 .and_then(|bundle| {
                     bundle
@@ -1578,8 +1614,8 @@ impl FactorishState {
                             continue;
                         }
                         let position = Position {
-                            x: moved_x.div_euclid(TILE_SIZE_I),
-                            y: moved_y.div_euclid(TILE_SIZE_I),
+                            x: moved_x.div_euclid(TILE_SIZE) as i32,
+                            y: moved_y.div_euclid(TILE_SIZE) as i32,
                         };
                         if let Some(s) = structures
                             .iter()
@@ -1625,11 +1661,9 @@ impl FactorishState {
             .filter(|ent| 0. < ent.life)
             .collect();
 
-        self.perf_simulate.add(performance().now() - start_simulate);
-
         // self.drop_items = drop_items;
         self.update_info();
-        Ok(events.iter().collect())
+        Ok(events)
     }
 
     fn tile_at(&self, tile: &Position) -> Option<Cell> {
@@ -1767,7 +1801,8 @@ impl FactorishState {
 
     fn find_item(&self, pos: &Position) -> Option<(DropItemId, &DropItem)> {
         drop_item_id_iter(&self.drop_items).find(|(_, item)| {
-            item.x.div_euclid(TILE_SIZE_I) == pos.x && item.y.div_euclid(TILE_SIZE_I) == pos.y
+            item.x.div_euclid(TILE_SIZE) as i32 == pos.x
+                && item.y.div_euclid(TILE_SIZE) as i32 == pos.y
         })
     }
 
@@ -1782,7 +1817,8 @@ impl FactorishState {
     fn _remove_item_pos(&mut self, pos: &Position) -> Option<DropItem> {
         if let Some(entry) = self.drop_items.iter_mut().find(|item| {
             if let Some(item) = item.item.as_ref() {
-                item.x / 32 == pos.x && item.y / 32 == pos.y
+                item.x.div_euclid(TILE_SIZE) as i32 == pos.x
+                    && item.y.div_euclid(TILE_SIZE) as i32 == pos.y
             } else {
                 false
             }
@@ -2043,8 +2079,8 @@ impl FactorishState {
                     continue;
                 };
 
-                if !(item.x.div_euclid(TILE_SIZE_I) == position.x
-                    && item.y.div_euclid(TILE_SIZE_I) == position.y)
+                if !(item.x.div_euclid(TILE_SIZE) as i32 == position.x
+                    && item.y.div_euclid(TILE_SIZE) as i32 == position.y)
                 {
                     continue;
                 }
@@ -2806,8 +2842,8 @@ impl FactorishState {
             if self.find_structure_tile(&[cursor.x, cursor.y]).is_none()
             // Let the player pick up drop items before harvesting ore below.
             && !drop_item_iter(&self.drop_items).any(|item| {
-                item.x / TILE_SIZE_I == pos[0] as i32 / TILE_SIZE_I
-                    && item.y / TILE_SIZE_I == pos[1] as i32 / TILE_SIZE_I
+                item.x.div_euclid(TILE_SIZE) == pos[0].div_euclid(TILE_SIZE)
+                    && item.y.div_euclid(TILE_SIZE) == pos[1].div_euclid(TILE_SIZE)
             }) {
                 if let Some(tile) = self.tile_at(&cursor) {
                     if let Some(ore_type) = tile.get_ore_type() {

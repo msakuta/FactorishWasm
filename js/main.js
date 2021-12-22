@@ -1,12 +1,16 @@
 import rotateImage from "../img/rotate.png";
 import inventory from "../img/inventory.png";
 import sciencePack1 from "../img/science-pack-1.png";
+import menuIcon from "../img/menuIcon.png";
 
 import { loadImages, getImageFile } from "./images.js";
 import { FactorishState } from "../pkg/index.js";
 
 import { createApp, nextTick } from "vue";
 
+import MainMenuWindow from "./components/MainMenuWindow.vue";
+import NewGameWindow from "./components/NewGameWindow.vue";
+import ViewSettingsWindow from "./components/ViewSettingsWindow.vue";
 import InventoryWindow from "./components/InventoryWindow.vue";
 import RecipeSelectorWindow from "./components/RecipeSelectorWindow.vue";
 import ResearchSelectorWindow from "./components/ResearchSelectorWindow.vue";
@@ -27,76 +31,14 @@ let unlimited = true;
 
 (async function(){
 
-    function sliderInit(sliderId, labelId, writer, logarithmic=false){
-        const slider = document.getElementById(sliderId);
-        const label = document.getElementById(labelId);
-        label.innerHTML = slider.value;
-    
-        const sliderStats = () => {
-          const [minp, maxp] = ["min", "max"].map(attr => parseFloat(slider.getAttribute(attr)));
-          if(minp <= 0){
-            throw "Minimum value for logarithmic slider must not be 0";
-          }
-          const [minv, maxv] = [minp, maxp].map(Math.log);
-          // calculate adjustment factor
-          const scale = (maxv-minv) / (maxp-minp);
-          return {minp, maxp, minv, maxv, scale};
-        };
-    
-        const updateFromInput = (_event) => {
-          let value;
-          if(logarithmic){
-            const {minp, minv, scale} = sliderStats();
-            value = Math.exp(minv + scale*(parseFloat(slider.value) - minp));
-            label.innerHTML = value.toFixed(8);
-          }
-          else{
-            value = parseFloat(slider.value);
-            label.innerHTML = value;
-          }
-          writer(value);
-        }
-        const updateFromValue = (value) => {
-          if(logarithmic){
-            const {minp, scale, minv} = sliderStats();
-    
-            // Inverse of updateFromInput
-            slider.value = (Math.log(value) - minv) / scale + minp;
-            label.innerHTML = value.toFixed(8);
-          }
-          else{
-            slider.value = value;
-            label.innerHTML = value;
-          }
-          writer(value);
-        };
-        if(logarithmic){
-          // Update the UI according to logarithmic scale even before the user touches the slider
-          updateFromValue(parseFloat(slider.value));
-        }
-        slider.addEventListener("input", updateFromInput);
-        return {elem: slider, update: updateFromValue};
-    }
-
-    let terrainSeed = 8913095;
-    const seedElem = document.getElementById("seed");
-    if(seedElem){
-        seedElem.value = terrainSeed;
-        seedElem.addEventListener("input", _ => {
-            terrainSeed = parseInt(seedElem.value)
-        });
-    }
-
-    let waterNoiseThreshold = 0.28;
-    sliderInit("waterNoiseThreshold", "waterNoiseThresholdLabel", value => waterNoiseThreshold = value);
-    let resourceAmount = 1000.;
-    sliderInit("resourceAmount", "resourceAmountLabel", value => resourceAmount = value);
-    let noiseScale = 5.;
-    sliderInit("noiseScale", "noiseScaleLabel", value => noiseScale = value);
-    let noiseThreshold = 0.30;
-    sliderInit("noiseThreshold", "noiseThresholdLabel", value => noiseThreshold = value);
-    let noiseOctaves = 3;
-    sliderInit("noiseOctaves", "noiseOctavesLabel", value => noiseOctaves = value);
+    const defaultParams = {
+        terrainSeed: 8913095,
+        waterNoiseThreshold: 0.28,
+        resourceAmount: 1000.,
+        noiseScale: 5.,
+        noiseThreshold: 0.30,
+        noiseOctaves: 3,
+    };
 
     function initPane(buttonId, containerId){
         const button = document.getElementById(buttonId);
@@ -107,10 +49,7 @@ let unlimited = true;
             });
         }
     }
-    initPane("paramsButton", "paramsContainer");
     initPane("viewButton", "viewContainer");
-
-    const scenarioSelectElem = document.getElementById("scenarioSelect");
 
     let paused = false;
 
@@ -147,17 +86,17 @@ let unlimited = true;
             width: xsize,
             height: ysize,
             unlimited,
-            terrain_seed: terrainSeed,
-            water_noise_threshold: waterNoiseThreshold,
-            resource_amount: resourceAmount,
-            noise_scale: noiseScale,
-            noise_threshold: noiseThreshold,
-            noise_octaves: noiseOctaves,
+            terrain_seed: defaultParams.terrainSeed,
+            water_noise_threshold: defaultParams.waterNoiseThreshold,
+            resource_amount: defaultParams.resourceAmount,
+            noise_scale: defaultParams.noiseScale,
+            noise_threshold: defaultParams.noiseThreshold,
+            noise_octaves: defaultParams.noiseOctaves,
         },
         updateInventory,
         popupText,
         structureDestroyed,
-        scenarioSelectElem.value,
+        "default",
         context,
         loadedImages,
         );
@@ -181,25 +120,27 @@ let unlimited = true;
         sim.reset_viewport(canvas);
     };
     document.body.onresize = refreshSize;
-    const headerButton = document.getElementById("headerButton");
-    const headerContainer = document.getElementById("headerContainer");
 
-    function setHeaderVisible(v = "toggle"){
-        if(v === "toggle"){
-            v = headerContainer.style.display === "none";
-        }
-        headerContainer.style.display = v ? "block" : "none";
-        headerButton.classList = "headerButton " + (v ? "open" : "");
-        headerButton.innerHTML = v ? "^" : ""
-    }
+    const mainMenuTip = document.createElement("div");
+    mainMenuTip.className = "mainMenuTip";
+    mainMenuTip.innerHTML = "Main Menu";
+    document.body.appendChild(mainMenuTip);
 
-    if(headerButton){
-        headerButton.addEventListener("click", () => setHeaderVisible());
-        const viewSettings = JSON.parse(localStorage.getItem("FactorishWasmViewSettings"));
-        // Default visible
-        if(viewSettings && !viewSettings.headerVisible)
-            setHeaderVisible(false);
-    }
+    const mainMenuIcon = document.createElement("img");
+    mainMenuIcon.src = menuIcon;
+    mainMenuIcon.style.position = "absolute";
+    mainMenuIcon.addEventListener("click", () => {
+        vueMainMenuWindow.visible = !vueMainMenuWindow.visible;
+        if(vueMainMenuWindow.visible)
+            vueMainMenuWindow.placeCenter();
+    });
+    mainMenuIcon.addEventListener("mouseenter", () => {
+        mainMenuTip.style.display = "block";
+    });
+    mainMenuIcon.addEventListener("mouseleave", () => {
+        mainMenuTip.style.display = "none";
+    })
+    document.body.appendChild(mainMenuIcon);
 
     let miniMapDrag = null;
     const tilesize = 32;
@@ -654,6 +595,75 @@ let unlimited = true;
     /// An array of window elements which holds order of z indices.
     const windowOrder = [];
 
+    const mainMenuViewSettings = JSON.parse(localStorage.getItem("FactorishWasmViewSettings"));
+
+    const vueMainMenuWindowApp = createApp(
+        MainMenuWindow,
+        {
+            dragWindowMouseDown,
+            onShowNewGame: () => {
+                vueMainMenuWindow.visible = false;
+                vueNewGameWindow.visible = true;
+                vueNewGameWindow.placeCenter();
+                bringToTop(vueNewGameWindow);
+            },
+            onShowViewSettings: () => {
+                vueMainMenuWindow.visible = false;
+                vueViewSettingsWindow.visible = true;
+                vueViewSettingsWindow.placeCenter();
+                bringToTop(vueViewSettingsWindow);
+            },
+            serializer() { return sim.serialize_game(); },
+            deserializer(data) {
+                sim.deserialize_game(data);
+                updateInventory(sim.get_player_inventory());
+            },
+            bringToTop: () => bringToTop(vueMainMenuWindow),
+        }
+    );
+
+    const vueMainMenuWindow = vueMainMenuWindowApp.mount('#vueMainMenuWindow');
+    // Default true
+    if(!mainMenuViewSettings || mainMenuViewSettings.mainMenuVisible){
+        vueMainMenuWindow.visible = true;
+        vueMainMenuWindow.placeCenter();
+    }
+
+    windowOrder.push(vueMainMenuWindow);
+
+    const vueNewGameWindowApp = createApp(
+        NewGameWindow,
+        {
+            defaultParams,
+            dragWindowMouseDown,
+            onNewGame: newGame,
+            bringToTop: () => bringToTop(vueNewGameWindow),
+        }
+    );
+
+    const vueNewGameWindow = vueNewGameWindowApp.mount('#vueNewGameWindow');
+
+    windowOrder.push(vueNewGameWindow);
+
+
+    const vueViewSettingsApp = createApp(
+        ViewSettingsWindow,
+        {
+            onAltMode(value) { sim.set_alt_mode(value) },
+            onShowDebugBBox(value) { sim.set_debug_bbox(value) },
+            onShowDebugFluidBox(value) { sim.set_debug_fluidbox(value) },
+            onShowDebugPowerNetwork(value) { sim.set_debug_power_network(value) },
+            onShowPerfGraph() { updatePerfVisibility() },
+            onUseWebGLInstancing(value) { sim.set_use_webgl_instancing(value) },
+            dragWindowMouseDown,
+            bringToTop: () => bringToTop(vueViewSettingsWindow),
+        }
+    );
+
+    const vueViewSettingsWindow = vueViewSettingsApp.mount('#vueViewSettingsWindow');
+
+    windowOrder.push(vueViewSettingsWindow);
+
     const vueApplication = createApp(
         InventoryWindow,
         {
@@ -1047,8 +1057,7 @@ let unlimited = true;
     function onKeyDown(event){
         switch(event.keyCode){
         case 18: // Alt key
-            altModeBox.checked = !altModeBox.checked;
-            sim.set_alt_mode(altModeBox.checked);
+            vueViewSettingsWindow.altMode = !vueViewSettingsWindow.altMode;
             event.preventDefault();
             return;
         case 69:
@@ -1086,46 +1095,9 @@ let unlimited = true;
     window.addEventListener( "beforeunload", () => {
         sim.save_game();
         localStorage.setItem("FactorishWasmViewSettings", JSON.stringify({
-            "headerVisible": headerContainer.style.display !== "none",
+            "mainMenuVisible": vueMainMenuWindow.visible,
         }));
     });
-
-    const copyButton = document.getElementById("copyButton");
-    copyButton.onclick = () => {
-        const copyText = document.getElementById('saveText');
-        copyText.value = sim.serialize_game();
-
-        copyText.select();
-        copyText.setSelectionRange(0, 99999); /*For mobile devices*/
-
-        document.execCommand("copy");
-    };
-
-    const saveButton = document.getElementById("saveButton");
-    saveButton.onclick = () => {
-        var textFileAsBlob = new Blob([sim.serialize_game()], {
-            type: 'text/json'
-        });
-        var fileNameToSaveAs = "save.json";
-    
-        var downloadLink = document.createElement("a");
-        downloadLink.download = fileNameToSaveAs;
-        downloadLink.innerHTML = "Download File";
-        let appended = false;
-        if (window.webkitURL != null) {
-            downloadLink.href = window.webkitURL.createObjectURL(textFileAsBlob);
-        }
-        else {
-            downloadLink.href = window.URL.createObjectURL(textFileAsBlob);
-            downloadLink.style.display = "none";
-            document.body.appendChild(downloadLink);
-            appended = true;
-        }
-        downloadLink.click();
-        if(appended) {
-            document.body.removeChild(downloadLink);
-        }
-    };
 
     const body = document.body;
     body.addEventListener("mousemove", (evt) => {
@@ -1133,21 +1105,6 @@ let unlimited = true;
         mouseIcon.style.left = `${mousePos[0]}px`;
         mouseIcon.style.top = `${mousePos[1]}px`;
     });
-
-    const loadFile = document.getElementById('loadFile');
-    loadFile.addEventListener('change', (event) => {
-        const reader = new FileReader();
-        reader.onload = (event) => {
-            sim.deserialize_game(event.target.result);
-            updateInventory(sim.get_player_inventory());
-        };
-        reader.readAsText(event.target.files[0]);
-    });
-
-    const loadButton = document.getElementById("loadButton");
-    loadButton.onclick = () => {
-        loadFile.click();
-    };
 
     updateToolBar();
 
@@ -1179,9 +1136,7 @@ let unlimited = true;
         }
     }
 
-    const generateBoard = document.getElementById("generateBoard");
-    generateBoard.addEventListener("click", () => {
-        const sizeStr = document.getElementById("sizeSelect").value;
+    function newGame({sizeStr, scenario, terrainSeed, waterNoiseThreshold, resourceAmount, noiseScale, noiseThreshold, noiseOctaves}){
         if(sizeStr === "unlimited"){
             xsize = ysize = 128;
             unlimited = true;
@@ -1205,7 +1160,7 @@ let unlimited = true;
             updateInventory,
             popupText,
             structureDestroyed,
-            scenarioSelectElem.value,
+            scenario,
             context,
             loadedImages);
         try{
@@ -1215,33 +1170,29 @@ let unlimited = true;
             alert(`FactorishState.render_init failed: ${e}`);
         }
         updateInventory(sim.get_player_inventory());
-    });
-
-    const altModeBox = document.getElementById("altModeBox");
-    altModeBox.addEventListener("click", () => sim.set_alt_mode(altModeBox.checked));
-    const showDebugBBox = document.getElementById("showDebugBBox");
-    showDebugBBox.addEventListener("click", () => sim.set_debug_bbox(showDebugBBox.checked));
-    const showDebugFluidBox = document.getElementById("showDebugFluidBox");
-    showDebugFluidBox.addEventListener("click", () => sim.set_debug_fluidbox(showDebugFluidBox.checked));
-    const showDebugPowerNetwork = document.getElementById("showDebugPowerNetwork");
-    showDebugPowerNetwork.addEventListener("click", () => sim.set_debug_power_network(showDebugPowerNetwork.checked));
-    const showPerfGraph = document.getElementById("showPerfGraph");
-    showPerfGraph.addEventListener("click", updatePerfVisibility);
-    const useWebGLInstancing = document.getElementById("useWebGLInstancing");
-    useWebGLInstancing.addEventListener("click", () => sim.set_use_webgl_instancing(useWebGLInstancing.checked));
+    }
 
     function updatePerfVisibility() {
-        perfElem.style.display = showPerfGraph.checked ? "block" : "none";
-        perfLabel.style.display = showPerfGraph.checked ? "block" : "none";
+        perfElem.style.display = vueViewSettingsWindow.showPerfGraph ? "block" : "none";
+        perfLabel.style.display = vueViewSettingsWindow.showPerfGraph ? "block" : "none";
     }
 
     container.style.display = "block";
 
     updatePerfVisibility();
 
-    window.setInterval(function(){
-        if(!paused)
-            processEvents(sim.simulate(0.05));
+    let globalTime = performance.now();
+
+    function animate(){
+        // The performance counter may not be very accurate (could have 1ms error), but it won't accumulate over time
+        const nextTime = performance.now();
+        const deltaTime = nextTime - globalTime;
+        if(!paused){
+            // Supposed to be 60FPS, but truth is we don't know. requestAnimationFrame would schedule the rendering
+            // as fast as the device can.
+            processEvents(sim.simulate(deltaTime / 1000.));
+        }
+        // let result = sim.render(ctx);
         try{
             let result = sim.render_gl(context);
         }
@@ -1278,7 +1229,7 @@ let unlimited = true;
 
         animatePopupTexts();
 
-        if(showPerfGraph.checked){
+        if(vueViewSettingsWindow.showPerfGraph){
             const colors = ["#fff", "#ff3f3f", "#7f7fff", "#00ff00", "#ff00ff", "#fff"];
             while(perfLabel.firstChild) perfLabel.removeChild(perfLabel.firstChild);
             sim.render_perf(perfContext).forEach((text, idx) => {
@@ -1288,7 +1239,13 @@ let unlimited = true;
                 perfLabel.appendChild(elem);
             });
         }
+
+        globalTime = nextTime;
+
         // console.log(result);
-    }, 50);
+        requestAnimationFrame(animate);
+    }
+
+    requestAnimationFrame(animate);
     // simulate()
 })();

@@ -10,6 +10,8 @@ use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 use web_sys::{CanvasRenderingContext2d, WebGlRenderingContext as GL};
 
+const PUMP_RATE: f64 = 1. / 3.;
+
 #[derive(Serialize, Deserialize)]
 pub(crate) struct OffshorePump;
 
@@ -125,7 +127,8 @@ impl Structure for OffshorePump {
         _structures: &mut StructureDynIter,
     ) -> Result<FrameProcResult, ()> {
         let output_fluid_box = components.fluid_boxes.get_mut(0).ok_or_else(|| ())?;
-        output_fluid_box.amount = (output_fluid_box.amount + 1.).min(output_fluid_box.max_amount);
+        output_fluid_box.amount =
+            (output_fluid_box.amount + PUMP_RATE).min(output_fluid_box.max_amount);
         Ok(FrameProcResult::None)
     }
 

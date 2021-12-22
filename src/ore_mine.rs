@@ -12,7 +12,6 @@ use super::{
         StructureId,
     },
     DropItem, FactorishState, FrameProcResult, Position, Recipe, Rotation, TempEnt, TILE_SIZE,
-    TILE_SIZE_I,
 };
 use cgmath::{Matrix3, Matrix4, Vector2, Vector3};
 use serde::{Deserialize, Serialize};
@@ -345,8 +344,8 @@ impl Structure for OreMine {
                                 structure
                                     .input(&DropItem {
                                         type_: *item.0,
-                                        x: output_position.x,
-                                        y: output_position.y,
+                                        x: output_position.x as f64 * TILE_SIZE,
+                                        y: output_position.y as f64 * TILE_SIZE,
                                     })
                                     .map_err(|_| ())?;
                                 if val == 0 {
@@ -365,8 +364,8 @@ impl Structure for OreMine {
                         return Ok(FrameProcResult::None);
                     }
                 }
-                let drop_x = output_position.x * TILE_SIZE_I + TILE_SIZE_I / 2;
-                let drop_y = output_position.y * TILE_SIZE_I + TILE_SIZE_I / 2;
+                let drop_x = output_position.x as f64 * TILE_SIZE + TILE_SIZE / 2.;
+                let drop_y = output_position.y as f64 * TILE_SIZE + TILE_SIZE / 2.;
                 if !hit_check(&state.drop_items, drop_x, drop_y, None)
                     && state
                         .tile_at(&output_position)

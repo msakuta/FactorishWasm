@@ -14,35 +14,16 @@ body {
     text-align:center;
 }
 
-.header {
+.mainMenuTip {
     position: absolute;
-    left: 50%;
-    width: 33em;
-    margin-left: -16.5em;
-    z-index: 100;
-    background-color: rgba(191, 191, 191, 0.8);
-    padding: 0.5em;
-}
-
-.headerButton {
-    position: relative;
-    left: 50%;
-    margin-left: -2.5em;
-    width: 5em;
-    height: 0.8em;
-    background-color: #3f3f3f;
-    border: #070707 solid 1px;
-    color: white;
-}
-
-.headerButton.open {
-    margin-top: 0.5em;
-}
-
-.headerButton:hover {
-    background-color: yellow;
-    color: black;
-    cursor: pointer;
+    font-size: 16px;
+    padding: 4px;
+    left: 0px;
+    top: 48px;
+    display: none;
+    color: #fff;
+    background-color: #000;
+    pointer-events: none;
 }
 
 .footer {
@@ -66,6 +47,23 @@ body {
     width: 30em;
     text-align: justify;
     padding: 0.5em;
+}
+
+.windowFrame {
+    position: absolute;
+    border: 3px outset #666666;
+    background-color: #7D7D7D;
+    text-align: left;
+}
+
+.paramsContainer {
+    min-width: 400px;
+}
+
+.largeButton {
+    display: block;
+    margin: 4px;
+    padding: 6px;
 }
 
 #container, #container2{

@@ -52,6 +52,7 @@ impl<'a> DynIterMut for StructureEntryIterator<'a> {
 
 pub(crate) use self::iter::StructureDynIter;
 
+/// Position in tiles
 #[derive(Eq, PartialEq, Hash, Copy, Clone, Debug, Serialize, Deserialize)]
 pub(crate) struct Position {
     pub x: i32,
@@ -180,7 +181,7 @@ pub(crate) enum FrameProcResult {
 
 pub(crate) enum ItemResponse {
     None,
-    Move(i32, i32),
+    Move(f64, f64),
     Consume,
 }
 
