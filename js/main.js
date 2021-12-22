@@ -386,7 +386,11 @@ let unlimited = true;
         for(var i = 0; i < toolBarCanvases.length; i++){
             var canvasElem = toolBarCanvases[i];
             var context = canvasElem.getContext('2d');
-            sim.render_tool(i, context);
+            try{
+                sim.render_tool(i, context);
+            } catch(e) {
+                console.error(e);
+            }
         }
     }
 
@@ -467,6 +471,8 @@ let unlimited = true;
         img.style.width = size + 'px';
         img.style.height = size + 'px';
         img.style.backgroundSize = size * imageFile.widthFactor + 'px ' + size * imageFile.heightFactor + 'px';
+        img.setAttribute('draggable', 'false');
+        return img;
     }
 
     const inventoryClickHandler = (getItems, invtype) => (i, evt, rightClick) => {
@@ -1187,7 +1193,12 @@ let unlimited = true;
             processEvents(sim.simulate(deltaTime / 1000.));
         }
         // let result = sim.render(ctx);
-        let result = sim.render_gl(context);
+        try{
+            let result = sim.render_gl(context);
+        }
+        catch(e){
+            console.error(e);
+        }
 
         const selPos = sim.get_selected_inventory();
         if(selPos){

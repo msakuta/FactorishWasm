@@ -1,8 +1,8 @@
 use super::{
     gl::utils::{enable_buffer, Flatten},
-    structure::{Structure, StructureDynIter, StructureId},
+    structure::{Position, Structure, StructureBundle, StructureComponents},
     water_well::FluidBox,
-    FactorishState, FrameProcResult, Position, Rotation, TILE_SIZE, TILE_SIZE_I,
+    FactorishState, Rotation, TILE_SIZE, TILE_SIZE_I,
 };
 use cgmath::{Matrix3, Matrix4, Rad, Vector2, Vector3};
 use serde::{Deserialize, Serialize};
@@ -10,21 +10,24 @@ use wasm_bindgen::prelude::*;
 use web_sys::{CanvasRenderingContext2d, WebGlRenderingContext as GL};
 
 #[derive(Serialize, Deserialize)]
-pub(crate) struct Pipe {
-    position: Position,
-    fluid_box: FluidBox,
-}
+pub(crate) struct Pipe;
 
 impl Pipe {
-    pub(crate) fn new(position: &Position) -> Self {
-        Pipe {
-            position: *position,
-            fluid_box: FluidBox::new(true, true),
-        }
+    pub(crate) fn new(position: Position) -> StructureBundle {
+        StructureBundle::new(
+            Box::new(Pipe),
+            Some(position),
+            None,
+            None,
+            None,
+            None,
+            vec![FluidBox::new(true, true)],
+        )
     }
 
     pub(crate) fn draw_int(
-        structure: &dyn Structure,
+        _structure: &dyn Structure,
+        components: &StructureComponents,
         state: &FactorishState,
         context: &CanvasRenderingContext2d,
         depth: i32,
@@ -33,24 +36,24 @@ impl Pipe {
         if depth != 0 {
             return Ok(());
         };
-        let position = structure.position();
-        let (x, y) = (position.x as f64 * TILE_SIZE, position.y as f64 * TILE_SIZE);
+        let (x, y) = if let Some(position) = components.position.as_ref() {
+            (position.x as f64 * TILE_SIZE, position.y as f64 * TILE_SIZE)
+        } else {
+            (0., 0.)
+        };
         match state.image_pipe.as_ref() {
             Some(img) => {
-                let connections = structure
-                    .fluid_box()
-                    .map(|fluid_boxes| {
-                        Some(
-                            fluid_boxes
-                                .first()?
-                                .connect_to
-                                .iter()
-                                .enumerate()
-                                .filter(|(_, b)| b.is_some())
-                                .fold(0, |acc, (i, _)| acc | (1 << i)),
-                        )
+                let connections = components
+                    .fluid_boxes
+                    .first()
+                    .map(|fluid_box| {
+                        fluid_box
+                            .connect_to
+                            .iter()
+                            .enumerate()
+                            .filter(|(_, b)| b.is_some())
+                            .fold(0, |acc, (i, _)| acc | (1 << i))
                     })
-                    .flatten()
                     .unwrap_or(0);
                 // Skip drawing center dot? if there are no connections
                 if !draw_center && connections == 0 {
@@ -77,7 +80,8 @@ impl Pipe {
     }
 
     pub(crate) fn draw_gl_int(
-        structure: &dyn Structure,
+        dynamic: &dyn Structure,
+        components: &StructureComponents,
         state: &FactorishState,
         gl: &GL,
         depth: i32,
@@ -86,46 +90,40 @@ impl Pipe {
     ) -> Result<(), JsValue> {
         match depth {
             0 => {
-                Self::draw_pipe_gl(gl, structure, state, draw_center, is_ghost)?;
+                Self::draw_pipe_gl(gl, dynamic, components, state, draw_center, is_ghost)?;
             }
             2 => {
                 if state.alt_mode {
-                    Self::draw_flow_overlay_gl(gl, structure, state)?;
+                    Self::draw_flow_overlay_gl(gl, dynamic, components, state)?;
                 }
             }
             _ => (),
         }
-
         Ok(())
     }
 
     fn draw_pipe_gl(
         gl: &GL,
-        structure: &dyn Structure,
+        dynamic: &dyn Structure,
+        components: &StructureComponents,
         state: &FactorishState,
         draw_center: bool,
         is_ghost: bool,
     ) -> Result<(), JsValue> {
-        let position = structure.position();
+        let position = components.get_position(dynamic)?;
         let (x, y) = (
             position.x as f32 + state.viewport.x as f32,
             position.y as f32 + state.viewport.y as f32,
         );
-        let connections = structure
-            .fluid_box()
-            .map(|fluid_boxes| {
-                Some(
-                    fluid_boxes
-                        .first()?
-                        .connect_to
-                        .iter()
-                        .enumerate()
-                        .filter(|(_, b)| b.is_some())
-                        .fold(0, |acc, (i, _)| acc | (1 << i)),
-                )
-            })
-            .flatten()
-            .unwrap_or(0);
+
+        let connections = components.fluid_boxes.iter().fold(0, |con, fluid_box| {
+            con | fluid_box
+                .connect_to
+                .iter()
+                .enumerate()
+                .filter(|(_, b)| b.is_some())
+                .fold(0, |acc, (i, _)| acc | (1 << i))
+        });
         // Skip drawing center dot? if there are no connections
         if !draw_center && connections == 0 {
             return Ok(());
@@ -164,10 +162,11 @@ impl Pipe {
 
     fn draw_flow_overlay_gl(
         gl: &GL,
-        structure: &dyn Structure,
+        dynamic: &dyn Structure,
+        components: &StructureComponents,
         state: &FactorishState,
     ) -> Result<(), JsValue> {
-        let position = structure.position();
+        let position = components.get_position(dynamic)?;
         let (x, y) = (
             position.x as f32 + state.viewport.x as f32,
             position.y as f32 + state.viewport.y as f32,
@@ -187,9 +186,10 @@ impl Pipe {
             (Matrix3::from_scale(0.5) * Matrix3::from_translation(Vector2::new(1., 1.))).flatten(),
         );
 
-        if let Some(flows) = structure
-            .fluid_box()
-            .and_then(|fluid_boxes| Some(fluid_boxes.first()?.flow))
+        if let Some(flows) = components
+            .fluid_boxes
+            .first()
+            .and_then(|fluid_box| Some(fluid_box.flow))
         {
             const ROTATIONS: [Rotation; 4] = [
                 Rotation::Left,
@@ -229,57 +229,41 @@ impl Pipe {
 }
 
 impl Structure for Pipe {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "Pipe"
-    }
-
-    fn position(&self) -> &Position {
-        &self.position
     }
 
     fn draw(
         &self,
+        components: &StructureComponents,
         state: &FactorishState,
         context: &CanvasRenderingContext2d,
         depth: i32,
         _is_toolbar: bool,
     ) -> Result<(), JsValue> {
-        Self::draw_int(self, state, context, depth, true)
+        Self::draw_int(self, components, state, context, depth, true)
     }
 
     fn draw_gl(
         &self,
+        components: &StructureComponents,
         state: &FactorishState,
         gl: &GL,
         depth: i32,
         is_ghost: bool,
     ) -> Result<(), JsValue> {
-        Self::draw_gl_int(self, state, gl, depth, true, is_ghost)
+        Self::draw_gl_int(self, components, state, gl, depth, true, is_ghost)
     }
 
-    fn desc(&self, _state: &FactorishState) -> String {
-        self.fluid_box.desc()
+    fn desc(&self, components: &StructureComponents, _state: &FactorishState) -> String {
+        components
+            .fluid_boxes
+            .iter()
+            .map(|p| p.desc())
+            .fold("".to_string(), |acc, s| acc + &s)
         // getHTML(generateItemImage("time", true, this.recipe.time), true) + "<br>" +
         // "Outputs: <br>" +
         // getHTML(generateItemImage(this.recipe.output, true, 1), true) + "<br>";
-    }
-
-    fn frame_proc(
-        &mut self,
-        _me: StructureId,
-        _state: &mut FactorishState,
-        structures: &mut StructureDynIter,
-    ) -> Result<FrameProcResult, ()> {
-        self.fluid_box.simulate(structures);
-        Ok(FrameProcResult::None)
-    }
-
-    fn fluid_box(&self) -> Option<Vec<&FluidBox>> {
-        Some(vec![&self.fluid_box])
-    }
-
-    fn fluid_box_mut(&mut self) -> Option<Vec<&mut FluidBox>> {
-        Some(vec![&mut self.fluid_box])
     }
 
     crate::serialize_impl!();

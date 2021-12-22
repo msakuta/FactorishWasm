@@ -1,15 +1,17 @@
 use super::{
-    drop_items::DropItem,
+    factory::Factory,
     gl::{
         draw_electricity_alarm_gl,
         utils::{enable_buffer, Flatten},
         ShaderBundle,
     },
-    inventory::{filter_inventory, Inventory, InventoryTrait, InventoryType},
+    inventory::{filter_inventory, Inventory, InventoryTrait},
     items::get_item_image_url,
     research::TechnologyTag,
     serialize_impl,
-    structure::{default_add_inventory, Structure, StructureDynIter, StructureId},
+    structure::{
+        Energy, Structure, StructureBundle, StructureComponents, StructureDynIter, StructureId,
+    },
     FactorishState, FrameProcResult, ItemType, Position, Recipe, TILE_SIZE,
 };
 use cgmath::{Matrix3, Matrix4, Vector2, Vector3};
@@ -29,27 +31,22 @@ fn generate_item_image(item_image: &str, icon_size: bool, count: usize) -> Strin
 }
 
 #[derive(Serialize, Deserialize)]
-pub(crate) struct Assembler {
-    position: Position,
-    input_inventory: Inventory,
-    output_inventory: Inventory,
-    progress: Option<f64>,
-    power: f64,
-    max_power: f64,
-    recipe: Option<Recipe>,
-}
+pub(crate) struct Assembler {}
 
 impl Assembler {
-    pub(crate) fn new(position: &Position) -> Self {
-        Assembler {
-            position: *position,
-            input_inventory: Inventory::new(),
-            output_inventory: Inventory::new(),
-            progress: None,
-            power: 0.,
-            max_power: 20.,
-            recipe: None,
-        }
+    pub(crate) fn new(position: &Position) -> StructureBundle {
+        StructureBundle::new(
+            Box::new(Assembler {}),
+            Some(*position),
+            None,
+            None,
+            Some(Energy {
+                value: 0.,
+                max: 100.,
+            }),
+            Some(Factory::new()),
+            vec![],
+        )
     }
 
     pub(crate) fn get_recipes() -> &'static [Recipe] {
@@ -195,30 +192,34 @@ impl Assembler {
 }
 
 impl Structure for Assembler {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "Assembler"
-    }
-
-    fn position(&self) -> &Position {
-        &self.position
     }
 
     fn draw(
         &self,
+        components: &StructureComponents,
         state: &FactorishState,
         context: &CanvasRenderingContext2d,
         depth: i32,
         _is_toolbar: bool,
     ) -> Result<(), JsValue> {
+        let (x, y) = if let Some(position) = &components.position {
+            (position.x as f64 * TILE_SIZE, position.y as f64 * TILE_SIZE)
+        } else {
+            (0., 0.)
+        };
         if depth == 0 {
-            let (x, y) = (
-                self.position.x as f64 * TILE_SIZE,
-                self.position.y as f64 * TILE_SIZE,
-            );
             match state.image_assembler.as_ref() {
                 Some(img) => {
-                    let sx = if self.progress.is_some() && 0. < self.power {
-                        ((((state.sim_time * 5.) as isize) % 4) * 32) as f64
+                    let sx = if let Some((energy, factory)) =
+                        components.energy.as_ref().zip(components.factory.as_ref())
+                    {
+                        if factory.progress.is_some() && 0. < energy.value {
+                            ((((state.sim_time * 5.) as isize) % 4) * 32) as f64
+                        } else {
+                            0.
+                        }
                     } else {
                         0.
                     };
@@ -239,20 +240,31 @@ impl Structure for Assembler {
             }
             return Ok(());
         }
-
         Ok(())
     }
 
     fn draw_gl(
         &self,
+        components: &StructureComponents,
         state: &FactorishState,
         gl: &GL,
         depth: i32,
         is_ghost: bool,
     ) -> Result<(), JsValue> {
+        let position = components
+            .position
+            .ok_or_else(|| js_str!("Assembler without Position"))?;
+        let factory = components
+            .factory
+            .as_ref()
+            .ok_or_else(|| js_str!("Assembler without Factory"))?;
+        let energy = components
+            .energy
+            .as_ref()
+            .ok_or_else(|| js_str!("Assembler without Energy"))?;
         let (x, y) = (
-            self.position.x as f32 + state.viewport.x as f32,
-            self.position.y as f32 + state.viewport.y as f32,
+            position.x as f32 + state.viewport.x as f32,
+            position.y as f32 + state.viewport.y as f32,
         );
 
         let get_shader = || -> Result<&ShaderBundle, JsValue> {
@@ -284,7 +296,7 @@ impl Structure for Assembler {
                 let shader = get_shader()?;
                 gl.active_texture(GL::TEXTURE0);
                 gl.bind_texture(GL::TEXTURE_2D, Some(&state.assets.tex_assembler));
-                let sx = if self.progress.is_some() && 0. < self.power {
+                let sx = if factory.progress.is_some() && 0. < energy.value {
                     (((state.sim_time * 5.) as isize) % 4 + 1) as f32
                 } else {
                     0.
@@ -301,8 +313,17 @@ impl Structure for Assembler {
                 gl.draw_arrays(GL::TRIANGLE_FAN, 0, 4);
             }
             2 => {
-                if !is_ghost && self.recipe.is_some() && self.power == 0. {
-                    draw_electricity_alarm_gl((x, y), state, gl)?;
+                if let Some((
+                    energy,
+                    Factory {
+                        recipe: Some(_recipe),
+                        ..
+                    },
+                )) = components.energy.as_ref().zip(components.factory.as_ref())
+                {
+                    if !is_ghost && energy.value == 0. {
+                        draw_electricity_alarm_gl((x, y), state, gl)?;
+                    }
                 }
             }
             _ => (),
@@ -310,20 +331,26 @@ impl Structure for Assembler {
         Ok(())
     }
 
-    fn desc(&self, _state: &FactorishState) -> String {
+    fn desc(&self, components: &StructureComponents, _state: &FactorishState) -> String {
+        let (energy, factory) =
+            if let Some(bundle) = components.energy.as_ref().zip(components.factory.as_ref()) {
+                bundle
+            } else {
+                return "Energy or Factory component not found".to_string();
+            };
         format!(
             "{}<br>{}{}",
-            if let Some(recipe) = &self.recipe {
+            if let Some(recipe) = &factory.recipe {
                 // Progress bar
                 format!("{}{}{}{}",
-                    format!("Progress: {:.0}%<br>", self.progress.unwrap_or(0.) * 100.),
+                    format!("Progress: {:.0}%<br>", factory.progress.unwrap_or(0.) * 100.),
                     "<div style='position: relative; width: 100px; height: 10px; background-color: #001f1f; margin: 2px; border: 1px solid #3f3f3f'>",
                     format!("<div style='position: absolute; width: {}px; height: 10px; background-color: #ff00ff'></div></div>",
-                        self.progress.unwrap_or(0.) * 100.),
+                        factory.progress.unwrap_or(0.) * 100.),
                     format!(r#"Power: {:.1}kJ <div style='position: relative; width: 100px; height: 10px; background-color: #001f1f; margin: 2px; border: 1px solid #3f3f3f'>
                     <div style='position: absolute; width: {}px; height: 10px; background-color: #ff00ff'></div></div>"#,
-                    self.power,
-                    if 0. < self.max_power { (self.power) / self.max_power * 100. } else { 0. }),
+                    energy.value,
+                    if 0. < energy.max { energy.value / energy.max * 100. } else { 0. }),
                     )
                 + &generate_item_image(&_state.image_time.as_ref().unwrap().url, true, recipe.recipe_time as usize) + "<br>" +
                 "Outputs: <br>" +
@@ -333,22 +360,33 @@ impl Structure for Assembler {
             } else {
                 String::from("No recipe")
             },
-            format!("Input Items: <br>{}", self.input_inventory.describe()),
-            format!("Output Items: <br>{}", self.output_inventory.describe())
+            format!("Input Items: <br>{}", factory.input_inventory.describe()),
+            format!("Output Items: <br>{}", factory.output_inventory.describe())
         )
     }
 
     fn frame_proc(
         &mut self,
         me: StructureId,
+        components: &mut StructureComponents,
         state: &mut FactorishState,
         structures: &mut StructureDynIter,
     ) -> Result<FrameProcResult, ()> {
-        if let Some(recipe) = &self.recipe {
+        if let StructureComponents {
+            position: Some(position),
+            energy: Some(energy),
+            factory:
+                Some(Factory {
+                    recipe: Some(recipe),
+                    ..
+                }),
+            ..
+        } = components
+        {
             let mut ret = FrameProcResult::None;
             // First, check if we need to refill the energy buffer in order to continue the current work.
             // Refill the energy from the fuel
-            if self.power < recipe.power_cost {
+            if energy.value < recipe.power_cost {
                 let mut accumulated = 0.;
                 for network in &state
                     .power_networks
@@ -357,111 +395,23 @@ impl Structure for Assembler {
                 {
                     for id in network.sources.iter() {
                         if let Some(source) = structures.get_mut(*id) {
-                            let demand = self.max_power - self.power - accumulated;
-                            if let Some(energy) = source.power_outlet(demand) {
+                            let demand = energy.max - energy.value - accumulated;
+                            if let Some(energy) =
+                                source.dynamic.power_outlet(&mut source.components, demand)
+                            {
                                 accumulated += energy;
                                 // console_log!("draining {:?}kJ of energy with {:?} demand, from {:?}, accumulated {:?}", energy, demand, structure.name(), accumulated);
                             }
                         }
                     }
                 }
-                self.power += accumulated;
+                energy.value += accumulated;
+                ret = FrameProcResult::InventoryChanged(*position);
             }
 
-            if self.progress.is_none() {
-                // First, check if we have enough ingredients to finish this recipe.
-                // If we do, consume the ingredients and start the progress timer.
-                // We can't start as soon as the recipe is set because we may not have enough ingredients
-                // at the point we set the recipe.
-                if recipe
-                    .input
-                    .iter()
-                    .map(|(item, count)| count <= &self.input_inventory.count_item(item))
-                    .all(|b| b)
-                {
-                    for (item, count) in &recipe.input {
-                        self.input_inventory.remove_items(item, *count);
-                    }
-                    self.progress = Some(0.);
-                    console_log!("inputting from Assembler {}", recipe.output.len());
-                    ret = FrameProcResult::InventoryChanged(self.position);
-                }
-            }
-
-            if let Some(prev_progress) = self.progress {
-                // Proceed only if we have sufficient energy in the buffer.
-                let progress = (self.power / recipe.power_cost)
-                    .min(1. / recipe.recipe_time)
-                    .min(1.);
-                if 1. <= prev_progress + progress {
-                    self.progress = None;
-
-                    // Produce outputs into inventory
-                    for output_item in &recipe.output {
-                        self.output_inventory
-                            .add_items(&output_item.0, *output_item.1);
-                    }
-                    console_log!("outputting from Assembler {}", recipe.output.len());
-                    return Ok(FrameProcResult::InventoryChanged(self.position));
-                } else {
-                    self.progress = Some(prev_progress + progress);
-                    self.power -= progress * recipe.power_cost;
-                }
-            }
             return Ok(ret);
         }
         Ok(FrameProcResult::None)
-    }
-
-    fn input(&mut self, o: &DropItem) -> Result<(), JsValue> {
-        if self.recipe.is_some() {
-            if 0 < default_add_inventory(self, InventoryType::Input, &o.type_, 1) {
-                return Ok(());
-            } else {
-                return Err(JsValue::from_str("Item is not part of recipe"));
-            }
-        }
-        Err(JsValue::from_str("Recipe is not initialized"))
-    }
-
-    fn can_output(&self, _structures: &StructureDynIter) -> Inventory {
-        self.output_inventory.clone()
-    }
-
-    fn output(&mut self, _state: &mut FactorishState, item_type: &ItemType) -> Result<(), ()> {
-        if self.output_inventory.remove_item(item_type) {
-            Ok(())
-        } else {
-            Err(())
-        }
-    }
-
-    fn inventory(&self, invtype: InventoryType) -> Option<&Inventory> {
-        Some(match invtype {
-            InventoryType::Input => &self.input_inventory,
-            InventoryType::Output => &self.output_inventory,
-            _ => return None,
-        })
-    }
-
-    fn inventory_mut(&mut self, invtype: InventoryType) -> Option<&mut Inventory> {
-        Some(match invtype {
-            InventoryType::Input => &mut self.input_inventory,
-            InventoryType::Output => &mut self.output_inventory,
-            _ => return None,
-        })
-    }
-
-    fn destroy_inventory(&mut self) -> Inventory {
-        let mut ret = std::mem::take(&mut self.input_inventory);
-        ret.merge(std::mem::take(&mut self.output_inventory));
-        // Return the ingredients if it was in the middle of processing a recipe.
-        if let Some(mut recipe) = self.recipe.take() {
-            if self.progress.is_some() {
-                ret.merge(std::mem::take(&mut recipe.input));
-            }
-        }
-        ret
     }
 
     fn get_recipes(&self) -> std::borrow::Cow<[Recipe]> {
@@ -470,6 +420,7 @@ impl Structure for Assembler {
 
     fn select_recipe(
         &mut self,
+        factory: Option<&mut Factory>,
         index: usize,
         player_inventory: &mut Inventory,
     ) -> Result<bool, JsValue> {
@@ -478,29 +429,32 @@ impl Structure for Assembler {
             .get(index)
             .ok_or_else(|| js_str!("recipes index out of bound {:?}", index))?
             .clone();
+        // fn select_recipe(
+        //     &mut self,
+        //     index: usize,
+        //     player_inventory: &mut Inventory,
+        // ) -> Result<bool, JsValue> {
+        //     let recipe = self
+        //         .get_recipes()
+        //         .get(index)
+        //         .ok_or_else(|| js_str!("recipes index out of bound {:?}", index))?
+        //         .clone();
 
-        self.input_inventory = filter_inventory(
-            std::mem::take(&mut self.input_inventory),
-            |item| recipe.input.contains_key(&item),
-            player_inventory,
-        );
+        //     self.input_inventory = filter_inventory(
+        //         std::mem::take(&mut self.input_inventory),
+        //         |item| recipe.input.contains_key(&item),
+        //         player_inventory,
 
-        self.output_inventory = filter_inventory(
-            std::mem::take(&mut self.output_inventory),
-            |item| recipe.output.contains_key(&item),
-            player_inventory,
-        );
+        if let Some(factory) = factory {
+            factory.output_inventory = filter_inventory(
+                std::mem::take(&mut factory.output_inventory),
+                |item| recipe.output.contains_key(&item),
+                player_inventory,
+            );
 
-        self.recipe = Some(recipe);
+            factory.recipe = Some(recipe);
+        }
         Ok(true)
-    }
-
-    fn get_selected_recipe(&self) -> Option<&Recipe> {
-        self.recipe.as_ref()
-    }
-
-    fn get_progress(&self) -> Option<f64> {
-        self.progress
     }
 
     fn power_sink(&self) -> bool {

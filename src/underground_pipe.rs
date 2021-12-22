@@ -1,7 +1,6 @@
 use super::{
     gl::utils::{enable_buffer, Flatten},
-    pipe::Pipe,
-    structure::{Structure, StructureDynIter, StructureId},
+    structure::{Structure, StructureBundle, StructureComponents, StructureDynIter, StructureId},
     water_well::FluidBox,
     FactorishState, FrameProcResult, Position, Rotation, TILE_SIZE,
 };
@@ -13,28 +12,25 @@ use web_sys::{CanvasRenderingContext2d, WebGlRenderingContext as GL};
 const UNDERGROUND_REACH: i32 = 10;
 
 #[derive(Serialize, Deserialize)]
-pub(crate) struct UndergroundPipe {
-    position: Position,
-    rotation: Rotation,
-
-    /// Items in the underground belt. First value is the absolute position in the underground belt
-    /// from the entrance.
-    fluid_box: FluidBox,
-}
+pub(crate) struct UndergroundPipe {}
 
 impl UndergroundPipe {
-    pub(crate) fn new(position: Position, rotation: Rotation) -> Self {
-        Self {
-            position,
-            rotation,
-            fluid_box: FluidBox::new(true, true),
+    pub(crate) fn new(position: Position, rotation: Rotation) -> StructureBundle {
+        StructureBundle {
+            dynamic: Box::new(Self {}),
+            components: StructureComponents {
+                position: Some(position),
+                rotation: Some(rotation),
+                fluid_boxes: vec![FluidBox::new(true, true)],
+                ..StructureComponents::default()
+            },
         }
     }
 
     /// Distance to possibly connecting underground belt.
-    fn distance(&self, target: &Position) -> Option<i32> {
-        let src = self.position;
-        if !match self.rotation {
+    fn distance(&self, components: &StructureComponents, target: &Position) -> Option<i32> {
+        let src = components.position?;
+        if !match components.rotation? {
             Rotation::Left | Rotation::Right => target.y == src.y,
             Rotation::Top | Rotation::Bottom => target.x == src.x,
         } {
@@ -42,7 +38,7 @@ impl UndergroundPipe {
         }
         let dx = target.x - src.x;
         let dy = target.y - src.y;
-        Some(match self.rotation {
+        Some(match components.rotation? {
             Rotation::Left => dx,
             Rotation::Right => -dx,
             Rotation::Top => dy,
@@ -52,20 +48,13 @@ impl UndergroundPipe {
 }
 
 impl Structure for UndergroundPipe {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "Underground Pipe"
-    }
-
-    fn position(&self) -> &Position {
-        &self.position
-    }
-
-    fn rotation(&self) -> Option<Rotation> {
-        Some(self.rotation)
     }
 
     fn draw(
         &self,
+        components: &StructureComponents,
         state: &FactorishState,
         context: &CanvasRenderingContext2d,
         depth: i32,
@@ -74,12 +63,14 @@ impl Structure for UndergroundPipe {
         if depth != 0 && depth != 1 {
             return Ok(());
         };
+        let position = components.get_position(self)?;
+        let rotation = components.get_rotation(self)?;
         match state.image_pipe.as_ref() {
             Some(img) => {
                 context.save();
                 context.draw_image_with_image_bitmap_and_sw_and_sh_and_dx_and_dy_and_dw_and_dh(
                     &img.bitmap,
-                    match self.rotation {
+                    match rotation {
                         Rotation::Left => 0.,
                         Rotation::Top => 1.,
                         Rotation::Right => 2.,
@@ -88,8 +79,8 @@ impl Structure for UndergroundPipe {
                     TILE_SIZE * 4.,
                     TILE_SIZE,
                     TILE_SIZE,
-                    self.position.x as f64 * TILE_SIZE,
-                    self.position.y as f64 * TILE_SIZE,
+                    position.x as f64 * TILE_SIZE,
+                    position.y as f64 * TILE_SIZE,
                     TILE_SIZE,
                     TILE_SIZE,
                 )?;
@@ -103,14 +94,22 @@ impl Structure for UndergroundPipe {
 
     fn draw_gl(
         &self,
+        components: &StructureComponents,
         state: &FactorishState,
         gl: &GL,
         depth: i32,
         is_ghost: bool,
     ) -> Result<(), JsValue> {
+        let position = components
+            .position
+            .ok_or_else(|| js_str!("Underground belt without Position"))?;
+        let rotation = components
+            .rotation
+            .ok_or_else(|| js_str!("Underground belt without Rotation"))?;
+
         let (x, y) = (
-            self.position.x as f32 + state.viewport.x as f32,
-            self.position.y as f32 + state.viewport.y as f32,
+            position.x as f32 + state.viewport.x as f32,
+            position.y as f32 + state.viewport.y as f32,
         );
         match depth {
             0 => {
@@ -123,7 +122,7 @@ impl Structure for UndergroundPipe {
                 gl.uniform1f(shader.alpha_loc.as_ref(), if is_ghost { 0.5 } else { 1. });
                 gl.active_texture(GL::TEXTURE0);
                 gl.bind_texture(GL::TEXTURE_2D, Some(&state.assets.tex_pipe));
-                let sx = ((self.rotation.angle_4() + 2) % 4) as f32;
+                let sx = ((rotation.angle_4() + 2) % 4) as f32;
                 gl.uniform_matrix3fv_with_f32_array(
                     shader.tex_transform_loc.as_ref(),
                     false,
@@ -144,14 +143,13 @@ impl Structure for UndergroundPipe {
                 gl.draw_arrays(GL::TRIANGLE_FAN, 0, 4);
             }
             2 => {
-                Pipe::draw_gl_int(self, state, gl, 2, false, is_ghost)?;
-                let on_cursor = state.cursor == Some([self.position.x, self.position.y]);
-                if state.alt_mode && matches!(self.rotation, Rotation::Left | Rotation::Top)
-                    || on_cursor
+                let fluid_box = components.get_fluid_box_first(self)?;
+                let on_cursor = state.cursor == Some([position.x, position.y]);
+                if state.alt_mode && matches!(rotation, Rotation::Left | Rotation::Top) || on_cursor
                 {
-                    if let Some(dist) = self.fluid_box.connect_to[self.rotation.angle_4() as usize]
+                    if let Some(dist) = fluid_box.connect_to[rotation.angle_4() as usize]
                         .and_then(|id| state.get_structure(id))
-                        .and_then(|s| self.distance(s.position()))
+                        .and_then(|s| self.distance(components, &s.components.position?))
                     {
                         let shader = state
                             .assets
@@ -163,17 +161,17 @@ impl Structure for UndergroundPipe {
                         gl.bind_texture(GL::TEXTURE_2D, Some(&state.assets.tex_connect_overlay));
 
                         let scales = ((dist + 1) as f32, 1.);
-                        let (scale_x, scale_y) = if self.rotation.is_horizontal() {
+                        let (scale_x, scale_y) = if rotation.is_horizontal() {
                             (scales.0, scales.1)
                         } else {
                             (scales.1, scales.0)
                         };
-                        let x = if self.rotation == Rotation::Right {
+                        let x = if rotation == Rotation::Right {
                             x - dist as f32
                         } else {
                             x
                         };
-                        let y = if self.rotation == Rotation::Bottom {
+                        let y = if rotation == Rotation::Bottom {
                             y - dist as f32
                         } else {
                             y
@@ -182,7 +180,7 @@ impl Structure for UndergroundPipe {
                         gl.uniform_matrix3fv_with_f32_array(
                             shader.tex_transform_loc.as_ref(),
                             false,
-                            (Matrix3::from_angle_z(Rad(self.rotation.angle_rad() as f32))
+                            (Matrix3::from_angle_z(Rad(rotation.angle_rad() as f32))
                                 * Matrix3::from_nonuniform_scale(scale_x, scale_y))
                             .flatten(),
                         );
@@ -206,29 +204,36 @@ impl Structure for UndergroundPipe {
         Ok(())
     }
 
+    fn desc(&self, components: &StructureComponents, _state: &FactorishState) -> String {
+        components
+            .fluid_boxes
+            .iter()
+            .map(|p| p.desc())
+            .fold("".to_string(), |acc, s| acc + &s)
+        // getHTML(generateItemImage("time", true, this.recipe.time), true) + "<br>" +
+        // "Outputs: <br>" +
+        // getHTML(generateItemImage(this.recipe.output, true, 1), true) + "<br>";
+    }
+
     fn frame_proc(
         &mut self,
         _me: StructureId,
-        _state: &mut FactorishState,
+        components: &mut StructureComponents,
+        state: &mut FactorishState,
         structures: &mut StructureDynIter,
     ) -> Result<FrameProcResult, ()> {
-        self.fluid_box.simulate(structures);
+        let position = components.position.ok_or(())?;
+        for fb in &mut components.fluid_boxes {
+            fb.simulate(&position, state, structures);
+        }
         Ok(FrameProcResult::None)
-    }
-
-    fn set_rotation(&mut self, rotation: &Rotation) -> Result<(), ()> {
-        self.rotation = *rotation;
-        Ok(())
-    }
-
-    fn desc(&self, _state: &FactorishState) -> String {
-        self.fluid_box.desc()
     }
 
     fn on_construction(
         &mut self,
+        components: &mut StructureComponents,
         other_id: StructureId,
-        other: &dyn Structure,
+        other: &StructureBundle,
         others: &StructureDynIter,
         construct: bool,
     ) -> Result<(), JsValue> {
@@ -236,18 +241,29 @@ impl Structure for UndergroundPipe {
             return Ok(());
         }
 
-        if other.rotation() != Some(self.rotation.next().next()) {
+        let other_rotation = if let Ok(orot) = other.components.get_rotation(other.dynamic.as_ref())
+        {
+            orot
+        } else {
+            return Ok(());
+        };
+
+        let rotation = components.get_rotation(self)?;
+        if other_rotation != rotation.next().next() {
             return Ok(());
         }
 
-        let underground_reach = if let Some(reach) = other.under_pipe_reach() {
+        let underground_reach = if let Some(reach) = other.dynamic.under_pipe_reach() {
             reach.min(UNDERGROUND_REACH)
         } else {
             return Ok(());
         };
 
-        let opos = *other.position();
-        let d = if let Some(d) = self.distance(&opos) {
+        let d = if let Some(d) = other
+            .components
+            .position
+            .and_then(|opos| self.distance(components, &opos))
+        {
             d
         } else {
             return Ok(());
@@ -257,21 +273,24 @@ impl Structure for UndergroundPipe {
             return Ok(());
         }
 
-        let connect_index = self.rotation.angle_4() as usize;
+        let connect_index = rotation.angle_4() as usize;
+        let fluid_box = components.get_fluid_box_first(self)?;
 
         // If there is already an underground belt with shorter distance, don't connect to the new one.
         if let Some(target) =
-            self.fluid_box.connect_to[connect_index].and_then(|target| others.get(target))
+            fluid_box.connect_to[connect_index].and_then(|target| others.get(target))
         {
-            let target_pos = target.position();
-            if let Some(target_d) = self.distance(target_pos) {
+            let target_pos = target.components.get_position(self)?;
+            if let Some(target_d) = self.distance(components, &target_pos) {
                 if 0 < target_d && target_d < d {
                     return Ok(());
                 }
             }
         }
 
-        self.fluid_box.connect_to[connect_index] = Some(other_id);
+        if let Some(fluid_box) = components.fluid_boxes.first_mut() {
+            fluid_box.connect_to[connect_index] = Some(other_id);
+        }
 
         Ok(())
     }
@@ -279,68 +298,77 @@ impl Structure for UndergroundPipe {
     fn on_construction_self(
         &mut self,
         _id: StructureId,
+        components: &mut StructureComponents,
         others: &StructureDynIter,
         _construct: bool,
     ) -> Result<(), JsValue> {
-        let connect_index = self.rotation.angle_4() as usize;
+        let rotation = components.get_rotation(self)?;
+        let connect_index = rotation.angle_4() as usize;
 
-        if let Some((id, _)) = others.dyn_iter_id().find(|(_, other)| {
-            if other.rotation() != Some(self.rotation.next().next()) {
-                return false;
-            }
+        if let Some((id, _)) =
+            others.dyn_iter_id().find(|(_, other)| {
+                if other.components.rotation != Some(rotation.next().next()) {
+                    return false;
+                }
 
-            let underground_reach = if let Some(reach) = other.under_pipe_reach() {
-                reach.min(UNDERGROUND_REACH)
-            } else {
-                return false;
-            };
+                let underground_reach = if let Some(reach) = other.dynamic.under_pipe_reach() {
+                    reach.min(UNDERGROUND_REACH)
+                } else {
+                    return false;
+                };
 
-            let opos = *other.position();
-            let d = if let Some(d) = self.distance(&opos) {
-                d
-            } else {
-                return false;
-            };
+                let opos = if let Some(pos) = other.components.position {
+                    pos
+                } else {
+                    return false;
+                };
+                let d = if let Some(d) = self.distance(components, &opos) {
+                    d
+                } else {
+                    return false;
+                };
 
-            if d < 1 || underground_reach < d {
-                return false;
-            }
+                if d < 1 || underground_reach < d {
+                    return false;
+                }
 
-            // If there is already an underground belt with shorter distance, don't connect to the new one.
-            if let Some(target) =
-                self.fluid_box.connect_to[connect_index].and_then(|target| others.get(target))
-            {
-                let target_pos = target.position();
-                if let Some(target_d) = self.distance(target_pos) {
-                    if 0 < target_d && target_d < d {
-                        return false;
+                // If there is already an underground belt with shorter distance, don't connect to the new one.
+                if let Some(target) = components.fluid_boxes.first().and_then(|fb| {
+                    fb.connect_to[connect_index].and_then(|target| others.get(target))
+                }) {
+                    if let Some(target_d) = target
+                        .components
+                        .position
+                        .and_then(|pos| self.distance(components, &pos))
+                    {
+                        if 0 < target_d && target_d < d {
+                            return false;
+                        }
                     }
                 }
-            }
 
-            true
-        }) {
-            self.fluid_box.connect_to[connect_index] = Some(id);
+                true
+            })
+        {
+            if let Some(fb) = components.fluid_boxes.first_mut() {
+                fb.connect_to[connect_index] = Some(id);
+            }
         }
         Ok(())
     }
 
-    fn fluid_connections(&self) -> [bool; 4] {
-        let mut ret = [false; 4];
-        ret[self.rotation.angle_4() as usize] = true;
-        ret
+    fn fluid_connections(&self, components: &StructureComponents) -> [bool; 4] {
+        if let Some(rotation) = components.rotation {
+            let mut ret = [false; 4];
+            ret[rotation.angle_4() as usize] = true;
+            ret
+        } else {
+            [true; 4]
+        }
     }
 
     fn under_pipe_reach(&self) -> Option<i32> {
         Some(UNDERGROUND_REACH)
-    }
-
-    fn fluid_box(&self) -> Option<Vec<&FluidBox>> {
-        Some(vec![&self.fluid_box])
-    }
-
-    fn fluid_box_mut(&mut self) -> Option<Vec<&mut FluidBox>> {
-        Some(vec![&mut self.fluid_box])
     }
 
     crate::serialize_impl!();

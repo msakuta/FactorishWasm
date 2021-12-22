@@ -2,9 +2,12 @@ use super::{
     gl::utils::{enable_buffer, Flatten},
     pipe::Pipe,
     serialize_impl,
-    structure::{Structure, StructureDynIter, StructureId},
+    structure::{
+        Energy, Position, Structure, StructureBundle, StructureComponents, StructureDynIter,
+        StructureId,
+    },
     water_well::{FluidBox, FluidType},
-    FactorishState, FrameProcResult, Position, Recipe,
+    FactorishState, FrameProcResult, Recipe,
 };
 use cgmath::{Matrix3, Matrix4, Vector2, Vector3};
 use serde::{Deserialize, Serialize};
@@ -15,21 +18,14 @@ use std::collections::{HashMap, HashSet};
 
 #[derive(Serialize, Deserialize)]
 pub(crate) struct SteamEngine {
-    position: Position,
     progress: Option<f64>,
-    power: f64,
-    max_power: f64,
     recipe: Option<Recipe>,
-    input_fluid_box: FluidBox,
 }
 
 impl SteamEngine {
-    pub(crate) fn new(position: &Position) -> Self {
-        SteamEngine {
-            position: *position,
+    pub(crate) fn new(position: Position) -> StructureBundle {
+        let entity = SteamEngine {
             progress: None,
-            power: 0.,
-            max_power: 100.,
             recipe: Some(Recipe {
                 input: HashMap::new(),
                 input_fluid: Some(FluidType::Steam),
@@ -39,18 +35,35 @@ impl SteamEngine {
                 recipe_time: 100.,
                 requires_technology: HashSet::new(),
             }),
-            input_fluid_box: FluidBox::new(true, false),
-        }
+        };
+        StructureBundle::new(
+            Box::new(entity),
+            Some(position),
+            None,
+            None,
+            Some(Energy {
+                value: 0.,
+                max: 100.,
+            }),
+            None,
+            vec![FluidBox::new(true, false)],
+        )
     }
 
     const FLUID_PER_PROGRESS: f64 = 100.;
     const COMBUSTION_EPSILON: f64 = 1e-6;
 
-    fn combustion_rate(&self) -> f64 {
+    fn combustion_rate(&self, components: &StructureComponents) -> f64 {
+        assert!(!components.fluid_boxes.is_empty());
+        let energy = if let Some(ref energy) = components.energy {
+            energy
+        } else {
+            return 0.;
+        };
         if let Some(ref recipe) = self.recipe {
-            ((self.max_power - self.power) / recipe.power_cost.abs())
+            ((energy.max - energy.value) / recipe.power_cost.abs())
                 .min(1. / recipe.recipe_time)
-                .min(self.input_fluid_box.amount / Self::FLUID_PER_PROGRESS)
+                .min(components.fluid_boxes[0].amount / Self::FLUID_PER_PROGRESS)
                 .min(1.)
                 .max(0.)
         } else {
@@ -60,16 +73,13 @@ impl SteamEngine {
 }
 
 impl Structure for SteamEngine {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "Steam Engine"
-    }
-
-    fn position(&self) -> &Position {
-        &self.position
     }
 
     fn draw(
         &self,
+        components: &StructureComponents,
         state: &FactorishState,
         context: &CanvasRenderingContext2d,
         depth: i32,
@@ -78,12 +88,16 @@ impl Structure for SteamEngine {
         if depth != 0 {
             return Ok(());
         };
-        Pipe::draw_int(self, state, context, depth, false)?;
-        let (x, y) = (self.position.x as f64 * 32., self.position.y as f64 * 32.);
+        Pipe::draw_int(self, components, state, context, depth, false)?;
+        let (x, y) = if let Some(position) = &components.position {
+            (position.x as f64 * 32., position.y as f64 * 32.)
+        } else {
+            (0., 0.)
+        };
         match state.image_steam_engine.as_ref() {
             Some(img) => {
                 let sx = if self.progress.is_some()
-                    && Self::COMBUSTION_EPSILON < self.combustion_rate()
+                    && Self::COMBUSTION_EPSILON < self.combustion_rate(components)
                 {
                     ((((state.sim_time * 5.) as isize) % 2 + 1) * 32) as f64
                 } else {
@@ -109,15 +123,20 @@ impl Structure for SteamEngine {
 
     fn draw_gl(
         &self,
+        components: &StructureComponents,
         state: &FactorishState,
         gl: &GL,
         depth: i32,
         is_ghost: bool,
     ) -> Result<(), JsValue> {
-        Pipe::draw_gl_int(self, state, gl, depth, false, is_ghost)?;
+        let position = components
+            .position
+            .ok_or_else(|| js_str!("SteamEngine without Position"))?;
+
+        Pipe::draw_gl_int(self, components, state, gl, depth, false, is_ghost)?;
         let (x, y) = (
-            self.position.x as f32 + state.viewport.x as f32,
-            self.position.y as f32 + state.viewport.y as f32,
+            position.x as f32 + state.viewport.x as f32,
+            position.y as f32 + state.viewport.y as f32,
         );
         if depth != 0 {
             return Ok(());
@@ -131,7 +150,9 @@ impl Structure for SteamEngine {
         gl.uniform1f(shader.alpha_loc.as_ref(), if is_ghost { 0.5 } else { 1. });
         gl.active_texture(GL::TEXTURE0);
         gl.bind_texture(GL::TEXTURE_2D, Some(&state.assets.tex_steam_engine));
-        let sx = if self.progress.is_some() && Self::COMBUSTION_EPSILON < self.combustion_rate() {
+        let sx = if self.progress.is_some()
+            && Self::COMBUSTION_EPSILON < self.combustion_rate(components)
+        {
             (((state.sim_time * 5.) as isize) % 2 + 1) as f32
         } else {
             0.
@@ -157,8 +178,14 @@ impl Structure for SteamEngine {
         Ok(())
     }
 
-    fn desc(&self, _state: &FactorishState) -> String {
+    fn desc(&self, components: &StructureComponents, _state: &FactorishState) -> String {
         if self.recipe.is_some() {
+            let energy = if let Some(ref energy) = components.energy {
+                energy
+            } else {
+                return "No energy component!".to_string();
+            };
+            assert!(!components.fluid_boxes.is_empty());
             // Progress bar
             format!("{}{}{}{}{}Input fluid: {}",
                 format!("Progress: {:.0}%<br>", self.progress.unwrap_or(0.) * 100.),
@@ -167,10 +194,10 @@ impl Structure for SteamEngine {
                     self.progress.unwrap_or(0.) * 100.),
                 format!(r#"Power: {:.1}kJ <div style='position: relative; width: 100px; height: 10px; background-color: #001f1f; margin: 2px; border: 1px solid #3f3f3f'>
                 <div style='position: absolute; width: {}px; height: 10px; background-color: #ff00ff'></div></div>"#,
-                self.power,
-                if 0. < self.max_power { (self.power) / self.max_power * 100. } else { 0. }),
-                format!("<div>Combustion rate: {:.1}</div>", self.combustion_rate()),
-                self.input_fluid_box.desc())
+                energy.value,
+                if 0. < energy.max { (energy.value) / energy.max * 100. } else { 0. }),
+                format!("<div>Combustion rate: {:.1}</div>", self.combustion_rate(components)),
+                components.fluid_boxes[0].desc())
         // getHTML(generateItemImage("time", true, this.recipe.time), true) + "<br>" +
         // "Outputs: <br>" +
         // getHTML(generateItemImage(this.recipe.output, true, 1), true) + "<br>";
@@ -182,26 +209,30 @@ impl Structure for SteamEngine {
     fn frame_proc(
         &mut self,
         _me: StructureId,
+        components: &mut StructureComponents,
         _state: &mut FactorishState,
-        structures: &mut StructureDynIter,
+        _structures: &mut StructureDynIter,
     ) -> Result<FrameProcResult, ()> {
-        self.input_fluid_box.simulate(structures);
+        let position = components.position.as_ref().ok_or(())?;
+        let input_fluid_box = components.fluid_boxes.first().ok_or(())?;
         if let Some(recipe) = &self.recipe {
-            if self.input_fluid_box.type_ == recipe.input_fluid {
+            if input_fluid_box.type_ == recipe.input_fluid {
                 self.progress = Some(0.);
             }
             let ret = FrameProcResult::None;
 
             if let Some(prev_progress) = self.progress {
                 // Proceed only if we have sufficient energy in the buffer.
-                let progress = self.combustion_rate();
+                let progress = self.combustion_rate(components);
+                let energy = components.energy.as_mut().ok_or(())?;
                 if 1. <= prev_progress + progress {
                     self.progress = None;
-                    return Ok(FrameProcResult::InventoryChanged(self.position));
+                    return Ok(FrameProcResult::InventoryChanged(*position));
                 } else if Self::COMBUSTION_EPSILON < progress {
                     self.progress = Some(prev_progress + progress);
-                    self.power -= progress * recipe.power_cost;
-                    self.input_fluid_box.amount -= progress * Self::FLUID_PER_PROGRESS;
+                    energy.value -= progress * recipe.power_cost;
+                    components.fluid_boxes.first_mut().ok_or(())?.amount -=
+                        progress * Self::FLUID_PER_PROGRESS;
                 }
             }
             return Ok(ret);
@@ -213,21 +244,14 @@ impl Structure for SteamEngine {
         self.recipe.as_ref()
     }
 
-    fn fluid_box(&self) -> Option<Vec<&FluidBox>> {
-        Some(vec![&self.input_fluid_box])
-    }
-
-    fn fluid_box_mut(&mut self) -> Option<Vec<&mut FluidBox>> {
-        Some(vec![&mut self.input_fluid_box])
-    }
-
     fn power_source(&self) -> bool {
         true
     }
 
-    fn power_outlet(&mut self, demand: f64) -> Option<f64> {
-        let energy = demand.min(self.power);
-        self.power -= energy;
+    fn power_outlet(&mut self, components: &mut StructureComponents, demand: f64) -> Option<f64> {
+        let energy_comp = components.energy.as_mut()?;
+        let energy = demand.min(energy_comp.value);
+        energy_comp.value -= energy;
         Some(energy)
     }
 

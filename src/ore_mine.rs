@@ -1,15 +1,17 @@
 use super::{
+    burner::Burner,
     draw_direction_arrow,
     drop_items::hit_check,
     gl::{
         draw_direction_arrow_gl,
         utils::{enable_buffer, Flatten},
     },
-    inventory::{Inventory, InventoryTrait, InventoryType},
-    items::ItemType,
-    structure::{RotateErr, Structure, StructureDynIter, StructureId},
-    DropItem, FactorishState, FrameProcResult, Position, Recipe, Rotation, TempEnt, COAL_POWER,
-    TILE_SIZE,
+    inventory::Inventory,
+    structure::{
+        Energy, RotateErr, Structure, StructureBundle, StructureComponents, StructureDynIter,
+        StructureId,
+    },
+    DropItem, FactorishState, FrameProcResult, Position, Recipe, Rotation, TempEnt, TILE_SIZE,
 };
 use cgmath::{Matrix3, Matrix4, Vector2, Vector3};
 use serde::{Deserialize, Serialize};
@@ -21,67 +23,86 @@ const FUEL_CAPACITY: usize = 10;
 
 #[derive(Serialize, Deserialize)]
 pub(crate) struct OreMine {
-    position: Position,
-    rotation: Rotation,
     progress: f64,
-    power: f64,
-    max_power: f64,
     recipe: Option<Recipe>,
-    input_inventory: Inventory,
     output_structure: Option<StructureId>,
     #[serde(skip)]
     digging: bool,
 }
 
 impl OreMine {
-    pub(crate) fn new(x: i32, y: i32, rotation: Rotation) -> Self {
-        OreMine {
-            position: Position { x, y },
-            rotation,
-            progress: 0.,
-            power: 25., // TODO: Have some initial energy for debugging, should be zero
-            max_power: 25.,
-            recipe: None,
-            input_inventory: Inventory::new(),
-            output_structure: None,
-            digging: false,
-        }
+    pub(crate) fn new(x: i32, y: i32, rotation: Rotation) -> StructureBundle {
+        StructureBundle::new(
+            Box::new(OreMine {
+                progress: 0.,
+                recipe: None,
+                output_structure: None,
+                digging: false,
+            }),
+            Some(Position { x, y }),
+            Some(rotation),
+            Some(Burner {
+                inventory: Inventory::new(),
+                capacity: FUEL_CAPACITY,
+            }),
+            Some(Energy {
+                value: 25.,
+                max: 100.,
+            }),
+            None,
+            vec![],
+        )
     }
 
     fn on_construction_common(
         &mut self,
+        components: &StructureComponents,
         other_id: StructureId,
-        other: &dyn Structure,
+        other: &StructureBundle,
         construct: bool,
     ) -> Result<(), JsValue> {
-        let output_position = self.position.add(self.rotation.delta());
-        if *other.position() == output_position {
+        let position = components
+            .position
+            .ok_or_else(|| js_str!("OreMine without Position"))?;
+        let rotation = components
+            .rotation
+            .ok_or_else(|| js_str!("OreMine without Rotation"))?;
+        let output_position = position.add(rotation.delta());
+        let other_position = other
+            .components
+            .position
+            .ok_or_else(|| js_str!("Other without Position"))?;
+        if other_position == output_position {
             self.output_structure = if construct { Some(other_id) } else { None };
+            console_log!(
+                "OreMine{:?}: {} output_structure {:?}",
+                position,
+                if construct { "set" } else { "unset" },
+                other_id
+            );
         }
         Ok(())
     }
 }
 
 impl Structure for OreMine {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "Ore Mine"
-    }
-
-    fn position(&self) -> &Position {
-        &self.position
     }
 
     fn draw(
         &self,
+        components: &StructureComponents,
         state: &FactorishState,
         context: &CanvasRenderingContext2d,
         depth: i32,
         _is_toolbar: bool,
     ) -> Result<(), JsValue> {
-        let (x, y) = (
-            self.position.x as f64 * TILE_SIZE,
-            self.position.y as f64 * TILE_SIZE,
-        );
+        let (x, y) = if let Some(position) = components.position.as_ref() {
+            (position.x as f64 * TILE_SIZE, position.y as f64 * TILE_SIZE)
+        } else {
+            (0., 0.)
+        };
         match depth {
             0 => match state.image_mine.as_ref() {
                 Some(img) => {
@@ -106,7 +127,12 @@ impl Structure for OreMine {
                 None => return Err(JsValue::from_str("mine image not available")),
             },
             2 => {
-                draw_direction_arrow((x, y), &self.rotation, state, context)?;
+                draw_direction_arrow(
+                    (x, y),
+                    &components.rotation.unwrap_or(Rotation::Left),
+                    state,
+                    context,
+                )?;
             }
             _ => (),
         }
@@ -116,14 +142,25 @@ impl Structure for OreMine {
 
     fn draw_gl(
         &self,
+        components: &StructureComponents,
         state: &FactorishState,
         gl: &GL,
         depth: i32,
         is_ghost: bool,
     ) -> Result<(), JsValue> {
+        let position = components
+            .position
+            .ok_or_else(|| js_str!("OreMine without Position"))?;
+        let rotation = components
+            .rotation
+            .ok_or_else(|| js_str!("OreMine without Rotation"))?;
+        let energy = components
+            .energy
+            .as_ref()
+            .ok_or_else(|| js_str!("OreMine without Energy"))?;
         let (x, y) = (
-            self.position.x as f32 + state.viewport.x as f32,
-            self.position.y as f32 + state.viewport.y as f32,
+            position.x as f32 + state.viewport.x as f32,
+            position.y as f32 + state.viewport.y as f32,
         );
         match depth {
             0 => {
@@ -149,7 +186,7 @@ impl Structure for OreMine {
 
                 let draw_exit = || {
                     gl.bind_texture(GL::TEXTURE_2D, Some(&state.assets.tex_ore_mine_exit));
-                    let sx = self.rotation.angle_4() as f32 / 4.;
+                    let sx = rotation.angle_4() as f32 / 4.;
                     gl.uniform_matrix3fv_with_f32_array(
                         shader.tex_transform_loc.as_ref(),
                         false,
@@ -160,7 +197,7 @@ impl Structure for OreMine {
                     gl.draw_arrays(GL::TRIANGLE_FAN, 0, 4);
                 };
 
-                if self.rotation != Rotation::Bottom {
+                if rotation != Rotation::Bottom {
                     draw_exit();
                 }
 
@@ -180,16 +217,18 @@ impl Structure for OreMine {
 
                 gl.draw_arrays(GL::TRIANGLE_FAN, 0, 4);
 
-                if self.rotation == Rotation::Bottom {
+                if rotation == Rotation::Bottom {
                     draw_exit();
                 }
             }
             2 => {
                 if state.alt_mode {
-                    draw_direction_arrow_gl((x, y), &self.rotation, state, gl)?;
+                    draw_direction_arrow_gl((x, y), &rotation, state, gl)?;
                 }
                 if !is_ghost {
-                    crate::draw_fuel_alarm_gl_impl!(self, state, gl);
+                    if self.recipe.is_some() && energy.value == 0. {
+                        crate::gl::draw_fuel_alarm_gl(components, state, gl)?;
+                    }
                 }
             }
             _ => (),
@@ -197,8 +236,14 @@ impl Structure for OreMine {
         Ok(())
     }
 
-    fn desc(&self, state: &FactorishState) -> String {
-        let tile = if let Some(tile) = state.tile_at(&self.position) {
+    fn desc(&self, components: &StructureComponents, state: &FactorishState) -> String {
+        let (position, energy) =
+            if let Some(energy) = components.position.as_ref().zip(components.energy.as_ref()) {
+                energy
+            } else {
+                return "Position or Energy not found".to_string();
+            };
+        let tile = if let Some(tile) = state.tile_at(position) {
             tile
         } else {
             return "Cell not found".to_string();
@@ -212,8 +257,8 @@ impl Structure for OreMine {
                     self.progress * 100.),
                 format!(r#"Power: {:.1}kJ <div style='position: relative; width: 100px; height: 10px; background-color: #001f1f; margin: 2px; border: 1px solid #3f3f3f'>
                  <div style='position: absolute; width: {}px; height: 10px; background-color: #ff00ff'></div></div>"#,
-                    self.power,
-                    if 0. < self.max_power { (self.power) / self.max_power * 100. } else { 0. }),
+                    energy.value,
+                    if 0. < energy.max { (energy.value) / energy.max * 100. } else { 0. }),
                 format!("Expected output: {}", tile.ore.map(|ore| ore.1).unwrap_or(0)))
         // getHTML(generateItemImage("time", true, this.recipe.time), true) + "<br>" +
         // "Outputs: <br>" +
@@ -226,16 +271,21 @@ impl Structure for OreMine {
     fn frame_proc(
         &mut self,
         _me: StructureId,
+        components: &mut StructureComponents,
         state: &mut FactorishState,
         structures: &mut StructureDynIter,
     ) -> Result<FrameProcResult, ()> {
-        let otile = &state.tile_at(&self.position);
+        let position = components.position.as_ref().ok_or(())?;
+        let rotation = components.rotation.as_ref().ok_or(())?;
+        let energy = components.energy.as_mut().ok_or(())?;
+
+        let otile = &state.tile_at(position);
         if otile.is_none() {
             return Ok(FrameProcResult::None);
         }
         let tile = otile.unwrap();
 
-        let mut ret = FrameProcResult::None;
+        let ret = FrameProcResult::None;
 
         if self.recipe.is_none() {
             if let Some(item_type) = tile.get_ore_type() {
@@ -258,14 +308,6 @@ impl Structure for OreMine {
             //         this.removeItem("Coal Ore");
             //     }
             // }
-            if let Some(amount) = self.input_inventory.get_mut(&ItemType::CoalOre) {
-                if 0 < *amount && self.power == 0. {
-                    self.input_inventory.remove_item(&ItemType::CoalOre);
-                    self.power += COAL_POWER;
-                    self.max_power = self.max_power.max(self.power);
-                    ret = FrameProcResult::InventoryChanged(self.position);
-                }
-            }
 
             let output = |state: &mut FactorishState, _item, position: &Position| {
                 let tile = state.tile_at_mut(&position).ok_or(())?;
@@ -284,11 +326,11 @@ impl Structure for OreMine {
             };
 
             // Proceed only if we have sufficient energy in the buffer.
-            let progress = (self.power / recipe.power_cost)
+            let progress = (energy.value / recipe.power_cost)
                 .min(1. / recipe.recipe_time)
                 .min(1. - self.progress);
             if 1. <= self.progress + progress {
-                let output_position = self.position.add(self.rotation.delta());
+                let output_position = position.add(rotation.delta());
                 if let Some(structure) = self
                     .output_structure
                     .map(|id| structures.get_mut(id))
@@ -298,7 +340,7 @@ impl Structure for OreMine {
                     if let Some(item) = it.next() {
                         // Check whether we can input first
                         if structure.can_input(item.0) {
-                            if let Ok(val) = output(state, *item.0, &self.position) {
+                            if let Ok(val) = output(state, *item.0, position) {
                                 structure
                                     .input(&DropItem {
                                         type_: *item.0,
@@ -317,7 +359,7 @@ impl Structure for OreMine {
                             };
                         }
                     }
-                    if !structure.movable() {
+                    if !structure.dynamic.movable() {
                         self.digging = false;
                         return Ok(FrameProcResult::None);
                     }
@@ -336,7 +378,7 @@ impl Structure for OreMine {
                         assert!(it.next().is_none());
                         if let Err(_code) = state.new_object(&output_position, *item.0) {
                             // console_log!("Failed to create object: {:?}", code);
-                        } else if let Ok(val) = output(state, *item.0, &self.position) {
+                        } else if let Ok(val) = output(state, *item.0, position) {
                             if val == 0 {
                                 self.recipe = None;
                             }
@@ -353,7 +395,7 @@ impl Structure for OreMine {
                 }
             } else {
                 self.progress += progress;
-                self.power -= progress * recipe.power_cost;
+                energy.value -= progress * recipe.power_cost;
                 self.digging = 0. < progress;
             }
 
@@ -361,7 +403,7 @@ impl Structure for OreMine {
             if state.rng.next() < progress * 5. {
                 state
                     .temp_ents
-                    .push(TempEnt::new(&mut state.rng, self.position));
+                    .push(TempEnt::new(&mut state.rng, *position));
             }
         } else {
             self.digging = false;
@@ -371,116 +413,83 @@ impl Structure for OreMine {
 
     fn rotate(
         &mut self,
+        components: &mut StructureComponents,
         _state: &mut FactorishState,
         others: &StructureDynIter,
     ) -> Result<(), RotateErr> {
-        self.rotation = self.rotation.next();
-        self.output_structure = None;
-        for (id, s) in others.dyn_iter_id() {
-            self.on_construction_common(id, s, true)
-                .map_err(RotateErr::Other)?;
+        if let Some(ref mut rotation) = components.rotation {
+            *rotation = rotation.next();
+            self.output_structure = None;
+            for (id, s) in others.dyn_iter_id() {
+                self.on_construction_common(components, id, s, true)
+                    .map_err(|e| RotateErr::Other(e))?;
+            }
         }
         Ok(())
     }
 
-    fn set_rotation(&mut self, rotation: &Rotation) -> Result<(), ()> {
-        self.rotation = *rotation;
-        Ok(())
-    }
-
-    fn input(&mut self, item: &DropItem) -> Result<(), JsValue> {
-        // Fuels are always welcome.
-        if item.type_ == ItemType::CoalOre
-            && self.input_inventory.count_item(&ItemType::CoalOre) < FUEL_CAPACITY
-        {
-            self.input_inventory.add_item(&ItemType::CoalOre);
-            return Ok(());
+    fn set_rotation(
+        &mut self,
+        components: &mut StructureComponents,
+        rotation: &Rotation,
+    ) -> Result<(), ()> {
+        if let Some(ref mut self_rotation) = components.rotation {
+            *self_rotation = *rotation;
+            Ok(())
+        } else {
+            Err(())
         }
-        Err(JsValue::from_str("not inputtable to ore mine"))
-    }
-
-    fn can_input(&self, item_type: &ItemType) -> bool {
-        *item_type == ItemType::CoalOre
-            && self.input_inventory.count_item(&ItemType::CoalOre) < FUEL_CAPACITY
     }
 
     fn on_construction(
         &mut self,
+        components: &mut StructureComponents,
         other_id: StructureId,
-        other: &dyn Structure,
+        other: &StructureBundle,
         _others: &StructureDynIter,
         construct: bool,
     ) -> Result<(), JsValue> {
-        self.on_construction_common(other_id, other, construct)
+        self.on_construction_common(components, other_id, other, construct)
     }
 
     fn on_construction_self(
         &mut self,
         _self_id: StructureId,
+        components: &mut StructureComponents,
         others: &StructureDynIter,
         construct: bool,
     ) -> Result<(), JsValue> {
         for (id, s) in others.dyn_iter_id() {
-            self.on_construction_common(id, s, construct)?;
+            self.on_construction_common(components, id, s, construct)?;
         }
         Ok(())
     }
 
-    fn add_inventory(
-        &mut self,
-        inventory_type: InventoryType,
-        item_type: &ItemType,
-        amount: isize,
-    ) -> isize {
-        if inventory_type != InventoryType::Burner {
-            return 0;
-        }
-        if amount < 0 {
-            let existing = self.input_inventory.count_item(item_type);
-            let removed = existing.min((-amount) as usize);
-            self.input_inventory.remove_items(item_type, removed);
-            -(removed as isize)
-        } else if *item_type == ItemType::CoalOre {
-            let add_amount = amount.min(
-                (FUEL_CAPACITY - self.input_inventory.count_item(&ItemType::CoalOre)) as isize,
-            );
-            self.input_inventory
-                .add_items(item_type, add_amount as usize);
-            add_amount
-        } else {
-            0
-        }
-    }
-
-    fn burner_energy(&self) -> Option<(f64, f64)> {
-        Some((self.power, self.max_power))
-    }
-
-    fn inventory(&self, invtype: InventoryType) -> Option<&Inventory> {
-        Some(match invtype {
-            InventoryType::Burner => &self.input_inventory,
-            _ => return None,
-        })
-    }
-
-    fn inventory_mut(&mut self, invtype: InventoryType) -> Option<&mut Inventory> {
-        Some(match invtype {
-            InventoryType::Burner => &mut self.input_inventory,
-            _ => return None,
-        })
-    }
-
-    fn destroy_inventory(&mut self) -> Inventory {
-        // Return the ingredients if it was in the middle of processing a recipe.
-        if let Some(recipe) = self.recipe.take() {
-            if 0. < self.progress {
-                let mut ret = std::mem::take(&mut self.input_inventory);
-                ret.merge(recipe.input);
-                return ret;
-            }
-        }
-        std::mem::take(&mut self.input_inventory)
-    }
+    // fn add_inventory(
+    //     &mut self,
+    //     inventory_type: InventoryType,
+    //     item_type: &ItemType,
+    //     amount: isize,
+    // ) -> isize {
+    //     if inventory_type != InventoryType::Burner {
+    //         return 0;
+    //     }
+    //     if amount < 0 {
+    //         let existing = self.input_inventory.count_item(item_type);
+    //         let removed = existing.min((-amount) as usize);
+    //         self.input_inventory.remove_items(item_type, removed);
+    //         -(removed as isize)
+    //     } else if *item_type == ItemType::CoalOre {
+    //         let add_amount = amount.min(
+    //             (FUEL_CAPACITY - self.input_inventory.count_item(&ItemType::CoalOre)) as isize,
+    //         );
+    //         self.input_inventory
+    //             .add_items(item_type, add_amount as usize);
+    //         add_amount
+    //     } else {
+    //         0
+    //     }
+    // }
 
     crate::serialize_impl!();
 }

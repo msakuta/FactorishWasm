@@ -1,5 +1,6 @@
 use super::{
     drop_items::DropItem,
+    factory::Factory,
     gl::{
         draw_electricity_alarm_gl,
         utils::{enable_buffer, Flatten},
@@ -8,7 +9,10 @@ use super::{
     inventory::{filter_inventory, Inventory, InventoryTrait, InventoryType},
     research::TECHNOLOGIES,
     serialize_impl,
-    structure::{default_add_inventory, Structure, StructureDynIter, StructureId},
+    structure::{
+        default_add_inventory, Energy, Structure, StructureBundle, StructureComponents,
+        StructureDynIter, StructureId,
+    },
     FactorishState, FrameProcResult, ItemType, Position, Recipe, TILE_SIZE,
 };
 use cgmath::{Matrix3, Matrix4, Vector2, Vector3};
@@ -30,51 +34,63 @@ fn generate_item_image(item_image: &str, icon_size: bool, count: usize) -> Strin
 
 #[derive(Serialize, Deserialize)]
 pub(crate) struct Lab {
-    position: Position,
     input_inventory: Inventory,
     progress: Option<f64>,
-    power: f64,
-    max_power: f64,
     recipe: Option<Recipe>,
 }
 
 impl Lab {
-    pub(crate) fn new(position: &Position) -> Self {
-        Lab {
-            position: *position,
-            input_inventory: Inventory::new(),
-            progress: None,
-            power: 0.,
-            max_power: 20.,
-            recipe: None,
+    pub(crate) fn new(position: &Position) -> StructureBundle {
+        StructureBundle {
+            dynamic: Box::new(Lab {
+                input_inventory: Inventory::new(),
+                progress: None,
+                recipe: None,
+            }),
+            components: StructureComponents {
+                position: Some(*position),
+                rotation: None,
+                energy: Some(Energy {
+                    value: 0.,
+                    max: 20.,
+                }),
+                burner: None,
+                factory: None,
+                fluid_boxes: vec![],
+            },
         }
     }
 }
 
 impl Structure for Lab {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "Lab"
-    }
-
-    fn position(&self) -> &Position {
-        &self.position
     }
 
     fn draw(
         &self,
+        components: &StructureComponents,
         state: &FactorishState,
         context: &CanvasRenderingContext2d,
         depth: i32,
         _is_toolbar: bool,
     ) -> Result<(), JsValue> {
+        let (x, y) = if let Some(position) = &components.position {
+            (position.x as f64 * TILE_SIZE, position.y as f64 * TILE_SIZE)
+        } else {
+            (0., 0.)
+        };
         if depth == 0 {
-            let (x, y) = (
-                self.position.x as f64 * TILE_SIZE,
-                self.position.y as f64 * TILE_SIZE,
-            );
             match state.image_lab.as_ref() {
                 Some(img) => {
-                    let sx = if self.progress.is_some() && 0. < self.power {
+                    let sx = if self.progress.is_some()
+                        && 0.
+                            < components
+                                .energy
+                                .as_ref()
+                                .map(|energy| energy.value)
+                                .unwrap_or(0.)
+                    {
                         ((((state.sim_time * 5.) as isize) % 4) * 32) as f64
                     } else {
                         0.
@@ -102,14 +118,18 @@ impl Structure for Lab {
 
     fn draw_gl(
         &self,
+        components: &StructureComponents,
         state: &FactorishState,
         gl: &GL,
         depth: i32,
         is_ghost: bool,
     ) -> Result<(), JsValue> {
+        let position = components
+            .position
+            .ok_or_else(|| js_str!("Assembler without Position"))?;
         let (x, y) = (
-            self.position.x as f32 + state.viewport.x as f32,
-            self.position.y as f32 + state.viewport.y as f32,
+            position.x as f32 + state.viewport.x as f32,
+            position.y as f32 + state.viewport.y as f32,
         );
 
         let get_shader = || -> Result<&ShaderBundle, JsValue> {
@@ -141,7 +161,14 @@ impl Structure for Lab {
                 let shader = get_shader()?;
                 gl.active_texture(GL::TEXTURE0);
                 gl.bind_texture(GL::TEXTURE_2D, Some(&state.assets.tex_lab));
-                let sx = if self.progress.is_some() && 0. < self.power {
+                let sx = if self.progress.is_some()
+                    && 0.
+                        < components
+                            .energy
+                            .as_ref()
+                            .map(|energy| energy.value)
+                            .unwrap_or(0.)
+                {
                     (((state.sim_time * 5.) as isize) % 4 + 1) as f32
                 } else {
                     0.
@@ -158,8 +185,12 @@ impl Structure for Lab {
                 gl.draw_arrays(GL::TRIANGLE_FAN, 0, 4);
             }
             2 => {
-                if !is_ghost && self.recipe.is_some() && self.power == 0. {
-                    draw_electricity_alarm_gl((x, y), state, gl)?;
+                if !is_ghost && self.recipe.is_some() {
+                    if let Some(energy) = components.energy.as_ref() {
+                        if energy.value == 0. {
+                            draw_electricity_alarm_gl((x, y), state, gl)?;
+                        }
+                    }
                 }
             }
             _ => (),
@@ -167,7 +198,7 @@ impl Structure for Lab {
         Ok(())
     }
 
-    fn desc(&self, _state: &FactorishState) -> String {
+    fn desc(&self, components: &StructureComponents, _state: &FactorishState) -> String {
         format!(
             "{}<br>{}",
             if let Some(recipe) = &self.recipe {
@@ -177,11 +208,14 @@ impl Structure for Lab {
                     "<div style='position: relative; width: 100px; height: 10px; background-color: #001f1f; margin: 2px; border: 1px solid #3f3f3f'>",
                     format!("<div style='position: absolute; width: {}px; height: 10px; background-color: #ff00ff'></div></div>",
                         self.progress.unwrap_or(0.) * 100.),
-                    format!(r#"Power: {:.1}kJ <div style='position: relative; width: 100px; height: 10px; background-color: #001f1f; margin: 2px; border: 1px solid #3f3f3f'>
-                    <div style='position: absolute; width: {}px; height: 10px; background-color: #ff00ff'></div></div>"#,
-                    self.power,
-                    if 0. < self.max_power { (self.power) / self.max_power * 100. } else { 0. }),
-                    )
+                    if let Some(energy) = components.energy.as_ref() {
+                        format!(r#"Power: {:.1}kJ <div style='position: relative; width: 100px; height: 10px; background-color: #001f1f; margin: 2px; border: 1px solid #3f3f3f'>
+                        <div style='position: absolute; width: {}px; height: 10px; background-color: #ff00ff'></div></div>"#,
+                        energy.value,
+                        if 0. < energy.max { energy.value / energy.max * 100. } else { 0. })
+                    } else {
+                        String::from("No energy")
+                    })
                 + &generate_item_image(&_state.image_time.as_ref().unwrap().url, true, recipe.recipe_time as usize) + "<br>"
             } else {
                 String::from("No recipe")
@@ -193,6 +227,7 @@ impl Structure for Lab {
     fn frame_proc(
         &mut self,
         me: StructureId,
+        components: &mut StructureComponents,
         state: &mut FactorishState,
         structures: &mut StructureDynIter,
     ) -> Result<FrameProcResult, ()> {
@@ -212,11 +247,11 @@ impl Structure for Lab {
             self.recipe = None;
         }
 
-        if let Some(recipe) = &self.recipe {
+        if let Some((recipe, energy)) = self.recipe.as_ref().zip(components.energy.as_mut()) {
             let mut ret = FrameProcResult::None;
             // First, check if we need to refill the energy buffer in order to continue the current work.
             // Refill the energy from the fuel
-            if self.power < recipe.power_cost {
+            if energy.value < recipe.power_cost {
                 let mut accumulated = 0.;
                 for network in &state
                     .power_networks
@@ -225,15 +260,17 @@ impl Structure for Lab {
                 {
                     for id in network.sources.iter() {
                         if let Some(source) = structures.get_mut(*id) {
-                            let demand = self.max_power - self.power - accumulated;
-                            if let Some(energy) = source.power_outlet(demand) {
+                            let demand = energy.max - energy.value - accumulated;
+                            if let Some(energy) =
+                                source.dynamic.power_outlet(&mut source.components, demand)
+                            {
                                 accumulated += energy;
                                 // console_log!("draining {:?}kJ of energy with {:?} demand, from {:?}, accumulated {:?}", energy, demand, structure.name(), accumulated);
                             }
                         }
                     }
                 }
-                self.power += accumulated;
+                energy.value += accumulated;
             }
 
             if self.progress.is_none() {
@@ -252,13 +289,15 @@ impl Structure for Lab {
                     }
                     self.progress = Some(0.);
                     console_log!("inputting from Assembler {}", recipe.output.len());
-                    ret = FrameProcResult::InventoryChanged(self.position);
+                    if let Some(position) = components.position {
+                        ret = FrameProcResult::InventoryChanged(position);
+                    }
                 }
             }
 
-            if let Some(prev_progress) = self.progress {
+            if let Some((prev_progress, energy)) = self.progress.zip(components.energy.as_mut()) {
                 // Proceed only if we have sufficient energy in the buffer.
-                let progress = (self.power / recipe.power_cost)
+                let progress = (energy.value / recipe.power_cost)
                     .min(1. / recipe.recipe_time)
                     .min(1.);
                 if 1. <= prev_progress + progress {
@@ -277,7 +316,7 @@ impl Structure for Lab {
                     }
                 } else {
                     self.progress = Some(prev_progress + progress);
-                    self.power -= progress * recipe.power_cost;
+                    energy.value -= progress * recipe.power_cost;
                 }
             }
             return Ok(ret);
@@ -285,7 +324,11 @@ impl Structure for Lab {
         Ok(FrameProcResult::None)
     }
 
-    fn input(&mut self, o: &DropItem) -> Result<(), JsValue> {
+    fn input(
+        &mut self,
+        _components: &mut StructureComponents,
+        o: &DropItem,
+    ) -> Result<(), JsValue> {
         if self.recipe.is_some() {
             if 0 < default_add_inventory(self, InventoryType::Input, &o.type_, 1) {
                 return Ok(());
@@ -336,6 +379,7 @@ impl Structure for Lab {
 
     fn select_recipe(
         &mut self,
+        _factory: Option<&mut Factory>,
         index: usize,
         player_inventory: &mut Inventory,
     ) -> Result<bool, JsValue> {

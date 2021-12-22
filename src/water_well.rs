@@ -1,7 +1,7 @@
 use super::{
     gl::utils::{enable_buffer, Flatten},
     pipe::Pipe,
-    structure::{Structure, StructureDynIter, StructureId},
+    structure::{Structure, StructureBundle, StructureComponents, StructureDynIter, StructureId},
     FactorishState, FrameProcResult, Position,
 };
 use cgmath::{Matrix3, Matrix4, Vector3};
@@ -82,7 +82,12 @@ impl FluidBox {
             )
     }
 
-    pub(crate) fn simulate(&mut self, structures: &mut StructureDynIter) {
+    pub(crate) fn simulate(
+        &mut self,
+        _position: &Position,
+        _state: &mut FactorishState,
+        structures: &mut StructureDynIter,
+    ) {
         let mut _biggest_flow_idx = -1;
         let mut biggest_flow_amount = 1e-3; // At least this amount of flow is required for displaying flow direction
                                             // In an unlikely event, a fluid box without either input or output ports has nothing to do
@@ -97,8 +102,8 @@ impl FluidBox {
             .enumerate()
             .filter_map(|(i, (c, f))| Some((i, ((*c)?, f))));
         for (i, (id, flow)) in connect_list {
-            if let Some(fluid_boxes) = structures.get_mut(id).map(|s| s.fluid_box_mut()).flatten() {
-                for fluid_box in fluid_boxes {
+            if let Some(bundle) = structures.get_mut(id) {
+                for fluid_box in &mut bundle.components.fluid_boxes {
                     // Different types of fluids won't mix
                     if 0. < fluid_box.amount
                         && 0. < self.amount
@@ -143,31 +148,30 @@ impl FluidBox {
 }
 
 #[derive(Serialize, Deserialize)]
-pub(crate) struct WaterWell {
-    position: Position,
-    output_fluid_box: FluidBox,
-}
+pub(crate) struct WaterWell;
 
 impl WaterWell {
-    pub(crate) fn new(position: &Position) -> Self {
-        WaterWell {
-            position: *position,
-            output_fluid_box: FluidBox::new(false, true).set_type(&FluidType::Water),
-        }
+    pub(crate) fn new(position: Position) -> StructureBundle {
+        StructureBundle::new(
+            Box::new(WaterWell),
+            Some(position),
+            None,
+            None,
+            None,
+            None,
+            vec![FluidBox::new(false, true).set_type(&FluidType::Water)],
+        )
     }
 }
 
 impl Structure for WaterWell {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "Water Well"
-    }
-
-    fn position(&self) -> &Position {
-        &self.position
     }
 
     fn draw(
         &self,
+        components: &StructureComponents,
         state: &FactorishState,
         context: &CanvasRenderingContext2d,
         depth: i32,
@@ -176,8 +180,12 @@ impl Structure for WaterWell {
         if depth != 0 {
             return Ok(());
         };
-        Pipe::draw_int(self, state, context, depth, false)?;
-        let (x, y) = (self.position.x as f64 * 32., self.position.y as f64 * 32.);
+        Pipe::draw_int(self, components, state, context, depth, false)?;
+        let (x, y) = if let Some(position) = components.position {
+            (position.x as f64 * 32., position.y as f64 * 32.)
+        } else {
+            (0., 0.)
+        };
         match state.image_water_well.as_ref() {
             Some(img) => {
                 context.draw_image_with_image_bitmap(&img.bitmap, x, y)?;
@@ -190,6 +198,7 @@ impl Structure for WaterWell {
 
     fn draw_gl(
         &self,
+        components: &StructureComponents,
         state: &FactorishState,
         gl: &GL,
         depth: i32,
@@ -198,10 +207,13 @@ impl Structure for WaterWell {
         if depth != 0 {
             return Ok(());
         };
-        Pipe::draw_gl_int(self, state, gl, depth, false, is_ghost)?;
+        let position = components
+            .position
+            .ok_or_else(|| js_str!("Furnace without Position"))?;
+        Pipe::draw_gl_int(self, components, state, gl, depth, false, is_ghost)?;
         let (x, y) = (
-            self.position.x as f32 + state.viewport.x as f32,
-            self.position.y as f32 + state.viewport.y as f32,
+            position.x as f32 + state.viewport.x as f32,
+            position.y as f32 + state.viewport.y as f32,
         );
         let shader = state
             .assets
@@ -231,10 +243,14 @@ impl Structure for WaterWell {
         Ok(())
     }
 
-    fn desc(&self, _state: &FactorishState) -> String {
+    fn desc(&self, components: &StructureComponents, _state: &FactorishState) -> String {
         format!(
             "{}<br>{}",
-            self.output_fluid_box.desc(),
+            components
+                .fluid_boxes
+                .first()
+                .map(|fb| fb.desc())
+                .unwrap_or("".to_string()),
             "Outputs: Water<br>",
         )
     }
@@ -242,22 +258,14 @@ impl Structure for WaterWell {
     fn frame_proc(
         &mut self,
         _me: StructureId,
+        components: &mut StructureComponents,
         _state: &mut FactorishState,
-        structures: &mut StructureDynIter,
+        _structures: &mut StructureDynIter,
     ) -> Result<FrameProcResult, ()> {
-        structures.get_mut(StructureId { id: 0, gen: 0 });
-        self.output_fluid_box.amount =
-            (self.output_fluid_box.amount + 1.).min(self.output_fluid_box.max_amount);
-        self.output_fluid_box.simulate(structures);
+        assert!(components.fluid_boxes.len() > 0);
+        let output_fluid_box = &mut components.fluid_boxes[0];
+        output_fluid_box.amount = (output_fluid_box.amount + 1.).min(output_fluid_box.max_amount);
         Ok(FrameProcResult::None)
-    }
-
-    fn fluid_box(&self) -> Option<Vec<&FluidBox>> {
-        Some(vec![&self.output_fluid_box])
-    }
-
-    fn fluid_box_mut(&mut self) -> Option<Vec<&mut FluidBox>> {
-        Some(vec![&mut self.output_fluid_box])
     }
 
     crate::serialize_impl!();

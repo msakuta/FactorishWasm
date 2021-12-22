@@ -6,7 +6,9 @@ use super::{
         utils::{enable_buffer, Flatten},
     },
     items::{render_drop_item, render_drop_item_mat_gl, ItemType},
-    structure::{RotateErr, Structure, StructureDynIter, StructureId},
+    structure::{
+        RotateErr, Structure, StructureBundle, StructureComponents, StructureDynIter, StructureId,
+    },
     FactorishState, FrameProcResult, Inventory, InventoryTrait, Position, Rotation,
 };
 use cgmath::{Matrix3, Matrix4, Rad, Vector2, Vector3};
@@ -16,8 +18,6 @@ use web_sys::{CanvasRenderingContext2d, WebGlRenderingContext as GL};
 
 #[derive(Serialize, Deserialize)]
 pub(crate) struct Inserter {
-    position: Position,
-    rotation: Rotation,
     cooldown: f64,
     hold_item: Option<ItemType>,
     #[serde(skip)]
@@ -29,64 +29,90 @@ pub(crate) struct Inserter {
 const INSERTER_TIME: f64 = 20.;
 
 impl Inserter {
-    pub(crate) fn new(x: i32, y: i32, rotation: Rotation) -> Self {
-        Inserter {
-            position: Position { x, y },
-            rotation,
-            cooldown: 0.,
-            hold_item: None,
-            input_structure: None,
-            output_structure: None,
+    pub(crate) fn new(position: Position, rotation: Rotation) -> StructureBundle {
+        StructureBundle {
+            dynamic: Box::new(Inserter {
+                cooldown: 0.,
+                hold_item: None,
+                input_structure: None,
+                output_structure: None,
+            }),
+            components: StructureComponents::new_with_position_and_rotation(position, rotation),
         }
     }
 
-    fn get_arm_angles(&self) -> (f64, f64) {
+    fn get_arm_angles(&self, components: &StructureComponents) -> (f64, f64) {
         let phase = if self.hold_item.is_some() {
             self.cooldown / INSERTER_TIME
         } else {
             (INSERTER_TIME - self.cooldown) / INSERTER_TIME
         };
+        let rotation = components.rotation.unwrap_or(Rotation::Left);
         (
-            self.rotation.angle_rad() + (phase * 0.8 + 0.5) * std::f64::consts::PI,
-            self.rotation.angle_rad() + ((1. - phase) * 0.8 + 0.2 - 0.5) * std::f64::consts::PI,
+            rotation.angle_rad() + (phase * 0.8 + 0.5) * std::f64::consts::PI,
+            rotation.angle_rad() + ((1. - phase) * 0.8 + 0.2 - 0.5) * std::f64::consts::PI,
         )
     }
 
     fn on_construction_common(
         &mut self,
+        components: &mut StructureComponents,
         other_id: StructureId,
-        other: &dyn Structure,
+        other: &StructureBundle,
         construct: bool,
     ) -> Result<(), JsValue> {
-        let input_position = self.position.add(self.rotation.delta_inv());
-        let output_position = self.position.add(self.rotation.delta());
-        if *other.position() == input_position {
+        let position = components
+            .position
+            .ok_or_else(|| js_str!("Inserter without position"))?;
+        let rotation = components
+            .rotation
+            .ok_or_else(|| js_str!("Inserter without rotation"))?;
+        let input_position = position.add(rotation.delta_inv());
+        let output_position = position.add(rotation.delta());
+        let other_position = other
+            .components
+            .position
+            .ok_or_else(|| js_str!("Others do not have position"))?;
+        if other_position == input_position {
             self.input_structure = if construct { Some(other_id) } else { None };
+            console_log!(
+                "Inserter{:?}: {} input_structure {:?}",
+                position,
+                if construct { "set" } else { "unset" },
+                other_id
+            );
         }
-        if *other.position() == output_position {
+        if other_position == output_position {
             self.output_structure = if construct { Some(other_id) } else { None };
+            console_log!(
+                "Inserter{:?}: {} output_structure {:?}",
+                position,
+                if construct { "set" } else { "unset" },
+                other_id
+            );
         }
         Ok(())
     }
 }
 
 impl Structure for Inserter {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "Inserter"
-    }
-
-    fn position(&self) -> &Position {
-        &self.position
     }
 
     fn draw(
         &self,
+        components: &StructureComponents,
         state: &FactorishState,
         context: &CanvasRenderingContext2d,
         depth: i32,
         _is_toolbar: bool,
     ) -> Result<(), JsValue> {
-        let (x, y) = (self.position.x as f64 * 32., self.position.y as f64 * 32.);
+        let (x, y) = if let Some(position) = &components.position {
+            (position.x as f64 * 32., position.y as f64 * 32.)
+        } else {
+            (0., 0.)
+        };
         match depth {
             0 => match state.image_inserter.as_ref() {
                 Some(img) => {
@@ -107,7 +133,7 @@ impl Structure for Inserter {
             },
             1 => match state.image_inserter.as_ref() {
                 Some(img) => {
-                    let angles = self.get_arm_angles();
+                    let angles = self.get_arm_angles(components);
                     context.save();
                     context.translate(x + 16., y + 16.)?;
                     context.rotate(angles.0)?;
@@ -149,7 +175,15 @@ impl Structure for Inserter {
                 }
                 None => return Err(JsValue::from_str("inserter-arm image not available")),
             },
-            2 => draw_direction_arrow((x, y), &self.rotation, state, context)?,
+            2 => draw_direction_arrow(
+                (x, y),
+                components
+                    .rotation
+                    .as_ref()
+                    .ok_or_else(|| js_str!("Inserter without rotation"))?,
+                state,
+                context,
+            )?,
             _ => panic!(),
         }
 
@@ -158,14 +192,21 @@ impl Structure for Inserter {
 
     fn draw_gl(
         &self,
+        components: &StructureComponents,
         state: &FactorishState,
         gl: &GL,
         depth: i32,
         is_ghost: bool,
     ) -> Result<(), JsValue> {
+        let position = components
+            .position
+            .ok_or_else(|| js_str!("Inserter without Position"))?;
+        let rotation = components
+            .rotation
+            .ok_or_else(|| js_str!("Inserter without Rotation"))?;
         let (x, y) = (
-            self.position.x as f32 + state.viewport.x as f32,
-            self.position.y as f32 + state.viewport.y as f32,
+            position.x as f32 + state.viewport.x as f32,
+            position.y as f32 + state.viewport.y as f32,
         );
         match depth {
             0 => {
@@ -208,7 +249,7 @@ impl Structure for Inserter {
 
                 enable_buffer(&gl, &state.assets.screen_buffer, 2, shader.vertex_position);
 
-                let angles = self.get_arm_angles();
+                let angles = self.get_arm_angles(components);
 
                 const JOINT_POS: (f32, f32) = (0.5, 0.625);
 
@@ -275,7 +316,7 @@ impl Structure for Inserter {
             }
             2 => {
                 if state.alt_mode {
-                    draw_direction_arrow_gl((x, y), &self.rotation, state, gl)?
+                    draw_direction_arrow_gl((x, y), &rotation, state, gl)?
                 }
             }
             _ => panic!("render depth not covered: {}", depth),
@@ -287,11 +328,14 @@ impl Structure for Inserter {
     fn frame_proc(
         &mut self,
         _me: StructureId,
+        components: &mut StructureComponents,
         state: &mut FactorishState,
         structures: &mut StructureDynIter,
     ) -> Result<FrameProcResult, ()> {
-        let input_position = self.position.add(self.rotation.delta_inv());
-        let output_position = self.position.add(self.rotation.delta());
+        let position = components.position.as_ref().ok_or(())?;
+        let rotation = components.rotation.as_ref().ok_or(())?;
+        let input_position = position.add(rotation.delta_inv());
+        let output_position = position.add(rotation.delta());
         let delta_time = 1. / 0.05 / 60.;
 
         if self.hold_item.is_none() {
@@ -302,7 +346,7 @@ impl Structure for Inserter {
                 let mut try_hold = |structures: &mut StructureDynIter, type_| -> bool {
                     if let Some(structure) = self.output_structure.and_then(|id| structures.get(id))
                     {
-                        if structure.can_input(&type_) || structure.movable() {
+                        if structure.can_input(&type_) || structure.dynamic.movable() {
                             // ret = FrameProcResult::InventoryChanged(output_position);
                             self.hold_item = Some(type_);
                             self.cooldown += INSERTER_TIME;
@@ -351,7 +395,7 @@ impl Structure for Inserter {
                             //     output_position.y
                             // );
                             for item in output_items {
-                                if structure.can_input(&item.0) || structure.movable() {
+                                if structure.can_input(&item.0) || structure.dynamic.movable() {
                                     // ret = FrameProcResult::InventoryChanged(output_position);
                                     self.hold_item = Some(item.0);
                                     self.cooldown += INSERTER_TIME;
@@ -422,7 +466,7 @@ impl Structure for Inserter {
                         *cooldown += INSERTER_TIME;
                         *hold_item = None;
                         return Ok(FrameProcResult::InventoryChanged(output_position));
-                    } else if structure.movable() {
+                    } else if structure.dynamic.movable() {
                         try_move(state)
                     }
                 } else {
@@ -437,34 +481,36 @@ impl Structure for Inserter {
 
     fn on_construction(
         &mut self,
+        components: &mut StructureComponents,
         other_id: StructureId,
-        other: &dyn Structure,
+        other: &StructureBundle,
         _others: &StructureDynIter,
         construct: bool,
     ) -> Result<(), JsValue> {
-        self.on_construction_common(other_id, other, construct)
+        self.on_construction_common(components, other_id, other, construct)
     }
 
     fn on_construction_self(
         &mut self,
         _self_id: StructureId,
+        components: &mut StructureComponents,
         others: &StructureDynIter,
         construct: bool,
     ) -> Result<(), JsValue> {
         for (id, s) in others.dyn_iter_id() {
-            self.on_construction_common(id, s, construct)?;
+            self.on_construction_common(components, id, s, construct)?;
         }
         Ok(())
     }
 
-    fn desc(&self, state: &FactorishState) -> String {
+    fn desc(&self, _components: &StructureComponents, state: &FactorishState) -> String {
         format!(
             "Input: {:?} {}<br>Output: {:?}",
             self.input_structure,
             self.input_structure
                 .and_then(|id| state.structures.get(id.id as usize))
-                .and_then(|s| s.dynamic.as_deref())
-                .map(|d| d.name())
+                .and_then(|s| s.bundle.as_ref())
+                .map(|bundle| bundle.dynamic.name())
                 .unwrap_or("Not found"),
             self.output_structure
         )
@@ -472,20 +518,33 @@ impl Structure for Inserter {
 
     fn rotate(
         &mut self,
+        components: &mut StructureComponents,
         _state: &mut FactorishState,
         others: &StructureDynIter,
     ) -> Result<(), RotateErr> {
-        self.rotation = self.rotation.next();
-        for (id, s) in others.dyn_iter_id() {
-            self.on_construction_common(id, s, true)
-                .map_err(RotateErr::Other)?;
+        if let Some(ref mut rotation) = components.rotation {
+            *rotation = rotation.next();
+            for (id, s) in others.dyn_iter_id() {
+                self.on_construction_common(components, id, s, true)
+                    .map_err(|e| RotateErr::Other(e))?;
+            }
+            Ok(())
+        } else {
+            Err(RotateErr::NotSupported)
         }
-        Ok(())
     }
 
-    fn set_rotation(&mut self, rotation: &Rotation) -> Result<(), ()> {
-        self.rotation = *rotation;
-        Ok(())
+    fn set_rotation(
+        &mut self,
+        components: &mut StructureComponents,
+        rotation: &Rotation,
+    ) -> Result<(), ()> {
+        if let Some(ref mut self_rotation) = components.rotation {
+            *self_rotation = *rotation;
+            Ok(())
+        } else {
+            Err(())
+        }
     }
 
     fn destroy_inventory(&mut self) -> Inventory {

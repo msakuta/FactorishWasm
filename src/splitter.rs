@@ -5,7 +5,8 @@ use super::{
         ShaderBundle,
     },
     structure::{
-        BoundingBox, ItemResponse, ItemResponseResult, RotateErr, Size, Structure, StructureDynIter,
+        BoundingBox, ItemResponse, ItemResponseResult, RotateErr, Size, Structure, StructureBundle,
+        StructureComponents, StructureDynIter,
     },
     transport_belt::{TransportBelt, BELT_SPEED},
     FactorishState, Position, Rotation, TILE_SIZE,
@@ -17,28 +18,21 @@ use web_sys::{CanvasRenderingContext2d, WebGlRenderingContext as GL};
 
 #[derive(Serialize, Deserialize)]
 pub(crate) struct Splitter {
-    position: Position,
-    rotation: Rotation,
     direction: i8,
 }
 
 impl Splitter {
-    pub(crate) fn new(x: i32, y: i32, rotation: Rotation) -> Self {
-        Splitter {
-            position: Position { x, y },
-            rotation,
-            direction: 0,
+    pub(crate) fn new(position: Position, rotation: Rotation) -> StructureBundle {
+        StructureBundle {
+            dynamic: Box::new(Splitter { direction: 0 }),
+            components: StructureComponents::new_with_position_and_rotation(position, rotation),
         }
     }
 }
 
 impl Structure for Splitter {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "Splitter"
-    }
-
-    fn position(&self) -> &Position {
-        &self.position
     }
 
     fn size(&self) -> Size {
@@ -48,9 +42,18 @@ impl Structure for Splitter {
         }
     }
 
-    fn bounding_box(&self) -> BoundingBox {
-        let position = self.position();
-        match self.rotation {
+    fn bounding_box(&self, components: &StructureComponents) -> Option<BoundingBox> {
+        let (position, rotation) = if let StructureComponents {
+            position: Some(position),
+            rotation: Some(rotation),
+            ..
+        } = components
+        {
+            (position, rotation)
+        } else {
+            return None;
+        };
+        Some(match *rotation {
             Rotation::Left => BoundingBox {
                 x0: position.x,
                 y0: position.y - 1,
@@ -75,11 +78,12 @@ impl Structure for Splitter {
                 x1: position.x + 1,
                 y1: position.y + 1,
             },
-        }
+        })
     }
 
     fn draw(
         &self,
+        components: &StructureComponents,
         state: &FactorishState,
         context: &CanvasRenderingContext2d,
         depth: i32,
@@ -89,10 +93,14 @@ impl Structure for Splitter {
             return Ok(());
         }
         let mut ret = Ok(());
-        let (x, y) = (self.position.x as f64 * 32., self.position.y as f64 * 32.);
+        let (x, y) = if let Some(position) = &components.position {
+            (position.x as f64 * 32., position.y as f64 * 32.)
+        } else {
+            (0., 0.)
+        };
         context.save();
         context.translate(x + 16., y + 16.)?;
-        context.rotate(self.rotation.angle_rad())?;
+        context.rotate(components.rotation.map(|r| r.angle_rad()).unwrap_or(0.))?;
         context.translate(-(x + 16.), -(y + 16.))?;
         if depth == 0 {
             if let Some(belt) = state.image_belt.as_ref() {
@@ -105,8 +113,8 @@ impl Structure for Splitter {
                                 0.,
                                 32.,
                                 32.,
-                                self.position.x as f64 * 32.,
-                                self.position.y as f64 * 32. + n as f64 * TILE_SIZE,
+                                x,
+                                y + n as f64 * TILE_SIZE,
                                 32.,
                                 32.,
                             )?;
@@ -118,16 +126,16 @@ impl Structure for Splitter {
         } else if depth == 1 {
             if let Some(splitter) = state.image_splitter.as_ref() {
                 if depth == 1 {
-                    for x in 0..2 {
+                    for ix in 0..2 {
                         context
                             .draw_image_with_image_bitmap_and_sw_and_sh_and_dx_and_dy_and_dw_and_dh(
                                 &splitter.bitmap,
                                 0.,
-                                (if self.direction == 0 { 1 - x } else { x }) as f64 * TILE_SIZE,
+                                (if self.direction == 0 { 1 - ix } else { ix }) as f64 * TILE_SIZE,
                                 TILE_SIZE,
                                 TILE_SIZE,
-                                self.position.x as f64 * TILE_SIZE,
-                                (self.position.y + x) as f64 * TILE_SIZE,
+                                x,
+                                y + ix as f64 * TILE_SIZE,
                                 TILE_SIZE,
                                 TILE_SIZE,
                             )?;
@@ -144,14 +152,22 @@ impl Structure for Splitter {
 
     fn draw_gl(
         &self,
+        components: &StructureComponents,
         state: &FactorishState,
         gl: &GL,
         depth: i32,
         is_ghost: bool,
     ) -> Result<(), JsValue> {
+        let position = components
+            .position
+            .ok_or_else(|| js_str!("Splitter without Position"))?;
+        let rotation = components
+            .rotation
+            .ok_or_else(|| js_str!("Splitter without Rotation"))?;
+
         let (x, y) = (
-            self.position.x as f32 + state.viewport.x as f32,
-            self.position.y as f32 + state.viewport.y as f32,
+            position.x as f32 + state.viewport.x as f32,
+            position.y as f32 + state.viewport.y as f32,
         );
 
         let get_shader = || -> Result<&ShaderBundle, JsValue> {
@@ -172,7 +188,7 @@ impl Structure for Splitter {
                 (state.get_world_transform()?
                     * Matrix4::from_scale(2.)
                     * Matrix4::from_translation(Vector3::new(x + 0.5, y + 0.5, 0.))
-                    * Matrix4::from_angle_z(Rad(self.rotation.angle_rad() as f32))
+                    * Matrix4::from_angle_z(Rad(rotation.angle_rad() as f32))
                     * Matrix4::from_translation(Vector3::new(-0.5, -0.5, 0.))
                     * Matrix4::from_nonuniform_scale(1., 2., 1.))
                 .flatten(),
@@ -218,36 +234,60 @@ impl Structure for Splitter {
 
     fn rotate(
         &mut self,
+        components: &mut StructureComponents,
         _state: &mut FactorishState,
         _others: &StructureDynIter,
     ) -> Result<(), RotateErr> {
-        self.rotation = self.rotation.next();
+        let rotation = components
+            .rotation
+            .as_mut()
+            .ok_or(RotateErr::NotSupported)?;
+        let position = components
+            .position
+            .as_mut()
+            .ok_or(RotateErr::NotSupported)?;
+        *position = position.add(rotation.next().delta());
+        *rotation = rotation.next().next();
         Ok(())
     }
 
-    fn set_rotation(&mut self, rotation: &Rotation) -> Result<(), ()> {
-        self.rotation = *rotation;
+    fn set_rotation(
+        &mut self,
+        components: &mut StructureComponents,
+        rotation: &Rotation,
+    ) -> Result<(), ()> {
+        *components.rotation.as_mut().ok_or(())? = *rotation;
         Ok(())
     }
 
-    fn item_response(&mut self, item: &DropItem) -> Result<ItemResponseResult, ()> {
-        let vx = self.rotation.delta().0 as f64 * BELT_SPEED;
-        let vy = self.rotation.delta().1 as f64 * BELT_SPEED;
-        let mut ax = if self.rotation.is_vertcial() {
+    fn item_response(
+        &mut self,
+        components: &mut StructureComponents,
+        item: &DropItem,
+    ) -> Result<ItemResponseResult, JsValue> {
+        let rotation = components
+            .rotation
+            .as_ref()
+            .ok_or_else(|| js_str!("Splitter without Rotation component"))?;
+        let vx = rotation.delta().0 as f64 * BELT_SPEED;
+        let vy = rotation.delta().1 as f64 * BELT_SPEED;
+        let mut ax = if rotation.is_vertical() {
             (item.x as f64 / TILE_SIZE).floor() * TILE_SIZE + TILE_SIZE / 2.
         } else {
             item.x as f64
         };
-        let mut ay = if self.rotation.is_horizontal() {
+        let mut ay = if rotation.is_horizontal() {
             (item.y as f64 / TILE_SIZE).floor() * TILE_SIZE + TILE_SIZE / 2.
         } else {
             item.y as f64
         };
-        let Position { x: tx, y: ty } = self.position;
+        let Position { x: tx, y: ty } = components
+            .position
+            .ok_or_else(|| js_str!("Splitter without Position component"))?;
         let halftilesize = TILE_SIZE / 2.;
         let mut postdirection = false;
-        let shift_direction = self.rotation.clone().next().delta();
-        if self.rotation.is_horizontal() {
+        let shift_direction = rotation.clone().next().delta();
+        if rotation.is_horizontal() {
             // Detect the point where the item passes over the mid point of this entity.
             if ((ax + halftilesize) / TILE_SIZE).floor()
                 != ((ax + vx as f64 + halftilesize) / TILE_SIZE).floor()

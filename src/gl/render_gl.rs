@@ -5,8 +5,8 @@ use super::{
 };
 use crate::{
     apply_bounds, drop_item_iter, elect_pole::draw_wire_gl, items::render_drop_item_gl,
-    performance, structure::Structure, Cell, FactorishState, FluidType, Ore, OreValue, Position,
-    PowerWire, Rotation, CHUNK_SIZE, CHUNK_SIZE_I, DROP_ITEM_SIZE, INDEX_CHUNK_SIZE,
+    performance, structure::StructureComponents, Cell, FactorishState, FluidType, Ore, OreValue,
+    Position, PowerWire, Rotation, CHUNK_SIZE, CHUNK_SIZE_I, DROP_ITEM_SIZE, INDEX_CHUNK_SIZE,
     ORE_HARVEST_TIME, TILE_SIZE, TILE_SIZE_F,
 };
 use cgmath::{Matrix3, Matrix4, Rad, Vector2, Vector3};
@@ -101,7 +101,7 @@ pub(crate) fn draw_electricity_alarm_gl(
 }
 
 pub(crate) fn draw_fuel_alarm_gl(
-    this: &dyn Structure,
+    this: &StructureComponents,
     state: &FactorishState,
     gl: &GL,
 ) -> Result<(), JsValue> {
@@ -114,7 +114,7 @@ pub(crate) fn draw_fuel_alarm_gl(
         gl.use_program(Some(&shader.program));
         gl.active_texture(GL::TEXTURE0);
         gl.bind_texture(GL::TEXTURE_2D, Some(&state.assets.tex_fuel_alarm));
-        let position = this.position();
+        let position = this.position.ok_or_else(|| js_str!("Position not found"))?;
         let (x, y) = (
             position.x as f32 + state.viewport.x as f32,
             position.y as f32 + state.viewport.y as f32,
@@ -203,7 +203,9 @@ impl FactorishState {
 
         let draw_structures = |depth| -> Result<(), JsValue> {
             for structure in self.structure_iter() {
-                structure.draw_gl(&self, &gl, depth, false)?;
+                structure
+                    .dynamic
+                    .draw_gl(&structure.components, &self, &gl, depth, false)?;
             }
             Ok(())
         };
@@ -236,9 +238,10 @@ impl FactorishState {
                 for PowerWire(first, second) in wires {
                     let first = self.get_structure(*first);
                     let second = self.get_structure(*second);
-                    if let Some((first, second)) = first.zip(second) {
-                        let first = *first.position();
-                        let second = *second.position();
+                    if let Some((first, second)) = first
+                        .and_then(|b| b.components.position)
+                        .zip(second.and_then(|b| b.components.position))
+                    {
                         let min = (first.x.min(second.x), first.y.min(second.y));
                         let max = (first.x.max(second.x), first.y.max(second.y));
                         if -self.viewport.x <= max.0 as f64
@@ -338,7 +341,7 @@ impl FactorishState {
                 enable_buffer(&gl, &self.assets.screen_buffer, 2, shader.vertex_position);
                 gl.uniform4fv_with_f32_array(shader.color_loc.as_ref(), &[1., 0., 0., 1.]);
                 for structure in self.structure_iter() {
-                    let bb = structure.bounding_box();
+                    let bb = try_continue!(structure.bounding_box());
                     set_transform(
                         shader,
                         (bb.x0 as f32, bb.y0 as f32),
@@ -382,49 +385,41 @@ impl FactorishState {
                 enable_buffer(&gl, &self.assets.screen_buffer, 2, shader.vertex_position);
 
                 for structure in self.structure_iter() {
-                    if let Some(fluid_boxes) = structure.fluid_box() {
-                        let bb = structure.bounding_box();
-                        for (i, fb) in fluid_boxes.iter().enumerate() {
-                            const BAR_MARGIN: f32 = 0.15;
-                            const BAR_WIDTH: f32 = 0.15;
+                    let bb = try_continue!(structure.bounding_box());
+                    for (i, fb) in structure.components.fluid_boxes.iter().enumerate() {
+                        const BAR_MARGIN: f32 = 0.15;
+                        const BAR_WIDTH: f32 = 0.15;
 
-                            let frame_trans = (
-                                bb.x0 as f32 + 0.2 * i as f32 + BAR_MARGIN,
-                                bb.y0 as f32 + BAR_MARGIN,
-                            );
-                            let frame_size = (BAR_WIDTH, (bb.y1 - bb.y0) as f32 - BAR_MARGIN * 2.);
+                        let frame_trans = (
+                            bb.x0 as f32 + 0.2 * i as f32 + BAR_MARGIN,
+                            bb.y0 as f32 + BAR_MARGIN,
+                        );
+                        let frame_size = (BAR_WIDTH, (bb.y1 - bb.y0) as f32 - BAR_MARGIN * 2.);
 
-                            set_transform(shader, frame_trans, frame_size)?;
-                            gl.uniform4fv_with_f32_array(
-                                shader.color_loc.as_ref(),
-                                &[0., 0., 0., 1.],
-                            );
-                            gl.draw_arrays(GL::TRIANGLE_FAN, 0, 4);
+                        set_transform(shader, frame_trans, frame_size)?;
+                        gl.uniform4fv_with_f32_array(shader.color_loc.as_ref(), &[0., 0., 0., 1.]);
+                        gl.draw_arrays(GL::TRIANGLE_FAN, 0, 4);
 
-                            let bar_height = (fb.amount / fb.max_amount) as f32
-                                * ((bb.y1 - bb.y0) as f32 - BAR_MARGIN * 2.);
-                            set_transform(
-                                shader,
-                                (frame_trans.0, frame_trans.1 + frame_size.1 - bar_height),
-                                (BAR_WIDTH, bar_height),
-                            )?;
-                            gl.uniform4fv_with_f32_array(
-                                shader.color_loc.as_ref(),
-                                match fb.type_ {
-                                    Some(FluidType::Water) => &[0., 1., 1., 1.],
-                                    Some(FluidType::Steam) => &[0.75, 0.75, 0.75, 1.],
-                                    _ => &[0.5, 0.5, 0.5, 1.],
-                                },
-                            );
-                            gl.draw_arrays(GL::TRIANGLE_FAN, 0, 4);
+                        let bar_height = (fb.amount / fb.max_amount) as f32
+                            * ((bb.y1 - bb.y0) as f32 - BAR_MARGIN * 2.);
+                        set_transform(
+                            shader,
+                            (frame_trans.0, frame_trans.1 + frame_size.1 - bar_height),
+                            (BAR_WIDTH, bar_height),
+                        )?;
+                        gl.uniform4fv_with_f32_array(
+                            shader.color_loc.as_ref(),
+                            match fb.type_ {
+                                Some(FluidType::Water) => &[0., 1., 1., 1.],
+                                Some(FluidType::Steam) => &[0.75, 0.75, 0.75, 1.],
+                                _ => &[0.5, 0.5, 0.5, 1.],
+                            },
+                        );
+                        gl.draw_arrays(GL::TRIANGLE_FAN, 0, 4);
 
-                            set_transform(shader, frame_trans, frame_size)?;
-                            gl.uniform4fv_with_f32_array(
-                                shader.color_loc.as_ref(),
-                                &[1., 0., 0., 1.],
-                            );
-                            gl.draw_arrays(GL::LINE_LOOP, 0, 4);
-                        }
+                        set_transform(shader, frame_trans, frame_size)?;
+                        gl.uniform4fv_with_f32_array(shader.color_loc.as_ref(), &[1., 0., 0., 1.]);
+                        gl.draw_arrays(GL::LINE_LOOP, 0, 4);
                     }
                 }
             }
@@ -433,12 +428,12 @@ impl FactorishState {
         if let Some((ref cursor, shader)) = self.cursor.zip(self.assets.flat_shader.as_ref()) {
             let (x, y) = (cursor[0] as f32, cursor[1] as f32);
 
-            if let Some((selected_tool, _)) = self.get_selected_tool_or_item_opt() {
-                if let Ok(mut tool) = self.new_structure(&selected_tool, &Position::from(cursor)) {
-                    tool.set_rotation(&self.tool_rotation).ok();
-                    for depth in 0..3 {
-                        tool.draw_gl(self, &gl, depth, true)?;
-                    }
+            if let Some(selected_tool) = self.get_selected_tool_or_item_opt() {
+                let mut tool = self.new_structure(&selected_tool.0, &Position::from(cursor))?;
+                tool.set_rotation(&self.tool_rotation).ok();
+                for depth in 0..3 {
+                    tool.dynamic
+                        .draw_gl(&tool.components, self, &gl, depth, true)?;
                 }
             }
 

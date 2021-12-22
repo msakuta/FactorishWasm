@@ -3,7 +3,10 @@ use super::{
     gl::utils::{enable_buffer, Flatten},
     inventory::InventoryTrait,
     items::ItemType,
-    structure::{ItemResponse, ItemResponseResult, Structure, StructureDynIter, StructureId},
+    structure::{
+        ItemResponse, ItemResponseResult, Structure, StructureBundle, StructureComponents,
+        StructureDynIter, StructureId,
+    },
     transport_belt::TransportBelt,
     window, DropItem, FactorishState, FrameProcResult, Inventory, Position, RotateErr, Rotation,
     TILE_SIZE, TILE_SIZE_I,
@@ -27,8 +30,6 @@ use UnderDirection::*;
 
 #[derive(Serialize, Deserialize)]
 pub(crate) struct UndergroundBelt {
-    position: Position,
-    rotation: Rotation,
     direction: UnderDirection,
     target: Option<StructureId>,
 
@@ -38,20 +39,25 @@ pub(crate) struct UndergroundBelt {
 }
 
 impl UndergroundBelt {
-    pub(crate) fn new(x: i32, y: i32, rotation: Rotation, direction: UnderDirection) -> Self {
-        Self {
-            position: Position { x, y },
-            rotation,
-            direction,
-            target: None,
-            items: VecDeque::new(),
+    pub(crate) fn new(
+        position: Position,
+        rotation: Rotation,
+        direction: UnderDirection,
+    ) -> StructureBundle {
+        StructureBundle {
+            dynamic: Box::new(Self {
+                direction,
+                target: None,
+                items: VecDeque::new(),
+            }),
+            components: StructureComponents::new_with_position_and_rotation(position, rotation),
         }
     }
 
     /// Distance to possibly connecting underground belt.
-    fn distance(&self, target: &Position) -> Option<i32> {
-        let src = self.position;
-        if !match self.rotation {
+    fn distance(&self, components: &StructureComponents, target: &Position) -> Option<i32> {
+        let src = components.position?;
+        if !match components.rotation? {
             Rotation::Left | Rotation::Right => target.y == src.y,
             Rotation::Top | Rotation::Bottom => target.x == src.x,
         } {
@@ -59,7 +65,7 @@ impl UndergroundBelt {
         }
         let dx = target.x - src.x;
         let dy = target.y - src.y;
-        Some(match self.rotation {
+        Some(match components.rotation? {
             Rotation::Left => -dx,
             Rotation::Right => dx,
             Rotation::Top => -dy,
@@ -69,16 +75,8 @@ impl UndergroundBelt {
 }
 
 impl Structure for UndergroundBelt {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "Underground Belt"
-    }
-
-    fn position(&self) -> &Position {
-        &self.position
-    }
-
-    fn rotation(&self) -> Option<Rotation> {
-        Some(self.rotation)
     }
 
     fn under_direction(&self) -> Option<self::UnderDirection> {
@@ -87,6 +85,7 @@ impl Structure for UndergroundBelt {
 
     fn draw(
         &self,
+        components: &StructureComponents,
         state: &FactorishState,
         context: &CanvasRenderingContext2d,
         depth: i32,
@@ -95,12 +94,14 @@ impl Structure for UndergroundBelt {
         if depth != 0 && depth != 1 {
             return Ok(());
         };
+        let position = components.get_position(self)?;
+        let rotation = components.get_rotation(self)?;
         match state.image_underground_belt.as_ref() {
             Some(img) => {
                 context.save();
                 context.draw_image_with_image_bitmap_and_sw_and_sh_and_dx_and_dy_and_dw_and_dh(
                     &img.bitmap,
-                    match self.rotation {
+                    match rotation {
                         Rotation::Left => 0.,
                         Rotation::Top => 1.,
                         Rotation::Right => 2.,
@@ -112,8 +113,8 @@ impl Structure for UndergroundBelt {
                     } + depth as f64 * 128.,
                     TILE_SIZE,
                     TILE_SIZE * 2.,
-                    self.position.x as f64 * TILE_SIZE,
-                    self.position.y as f64 * TILE_SIZE - TILE_SIZE,
+                    position.x as f64 * TILE_SIZE,
+                    position.y as f64 * TILE_SIZE - TILE_SIZE,
                     TILE_SIZE,
                     TILE_SIZE * 2.,
                 )?;
@@ -127,14 +128,17 @@ impl Structure for UndergroundBelt {
 
     fn draw_gl(
         &self,
+        components: &StructureComponents,
         state: &FactorishState,
         gl: &GL,
         depth: i32,
         is_ghost: bool,
     ) -> Result<(), JsValue> {
+        let position = components.get_position(self)?;
+        let rotation = components.get_rotation(self)?;
         let (x, y) = (
-            self.position.x as f32 + state.viewport.x as f32,
-            self.position.y as f32 + state.viewport.y as f32,
+            position.x as f32 + state.viewport.x as f32,
+            position.y as f32 + state.viewport.y as f32,
         );
         match depth {
             0 | 1 => {
@@ -147,7 +151,7 @@ impl Structure for UndergroundBelt {
                 gl.uniform1f(shader.alpha_loc.as_ref(), if is_ghost { 0.5 } else { 1. });
                 gl.active_texture(GL::TEXTURE0);
                 gl.bind_texture(GL::TEXTURE_2D, Some(&state.assets.tex_underground_belt));
-                let sx = ((self.rotation.angle_4() + 2) % 4) as f32;
+                let sx = ((rotation.angle_4() + 2) % 4) as f32;
                 gl.uniform_matrix3fv_with_f32_array(
                     shader.tex_transform_loc.as_ref(),
                     false,
@@ -175,12 +179,12 @@ impl Structure for UndergroundBelt {
                 gl.draw_arrays(GL::TRIANGLE_FAN, 0, 4);
             }
             2 => {
-                let on_cursor = state.cursor == Some([self.position.x, self.position.y]);
+                let on_cursor = state.cursor == Some([position.x, position.y]);
                 if state.alt_mode && self.direction == UnderDirection::ToGround || on_cursor {
                     if let Some(dist) = self
                         .target
                         .and_then(|id| state.get_structure(id))
-                        .and_then(|s| self.distance(s.position()))
+                        .and_then(|s| self.distance(components, &s.components.position?))
                     {
                         let shader = state
                             .assets
@@ -192,23 +196,23 @@ impl Structure for UndergroundBelt {
                         gl.bind_texture(GL::TEXTURE_2D, Some(&state.assets.tex_connect_overlay));
 
                         let scale = (dist + 1) as f32;
-                        let (scale_x, scale_y) = if self.rotation.is_horizontal() {
+                        let (scale_x, scale_y) = if rotation.is_horizontal() {
                             (scale, 1.)
                         } else {
                             (1., scale)
                         };
-                        let x = if self.rotation == Rotation::Left {
+                        let x = if rotation == Rotation::Left {
                             x - dist as f32
                         } else {
                             x
                         };
-                        let y = if self.rotation == Rotation::Top {
+                        let y = if rotation == Rotation::Top {
                             y - dist as f32
                         } else {
                             y
                         };
 
-                        let mut arrow_rotation = self.rotation;
+                        let mut arrow_rotation = rotation;
                         if self.direction == UnderDirection::ToGround {
                             arrow_rotation = arrow_rotation.next().next();
                         }
@@ -216,7 +220,7 @@ impl Structure for UndergroundBelt {
                         gl.uniform_matrix3fv_with_f32_array(
                             shader.tex_transform_loc.as_ref(),
                             false,
-                            (Matrix3::from_angle_z(Rad(self.rotation.angle_rad() as f32))
+                            (Matrix3::from_angle_z(Rad(rotation.angle_rad() as f32))
                                 * Matrix3::from_nonuniform_scale(scale_x, scale_y))
                             .flatten(),
                         );
@@ -244,7 +248,7 @@ impl Structure for UndergroundBelt {
                             .flatten(),
                         );
 
-                        let (x, y, scale_x, scale_y) = if self.rotation.is_horizontal() {
+                        let (x, y, scale_x, scale_y) = if rotation.is_horizontal() {
                             (x, y + 0.25, scale, 0.5)
                         } else {
                             (x + 0.25, y, 0.5, scale)
@@ -272,6 +276,7 @@ impl Structure for UndergroundBelt {
     fn frame_proc(
         &mut self,
         _me: StructureId,
+        components: &mut StructureComponents,
         state: &mut FactorishState,
         structures: &mut StructureDynIter,
     ) -> Result<FrameProcResult, ()> {
@@ -288,13 +293,15 @@ impl Structure for UndergroundBelt {
                     // Note that we don't have to worry about ToSurface vs. ToSurface because ToSurface will
                     // not run this branch, but this logic will also disable motion if we did.
                     if target
+                        .dynamic
                         .under_direction()
                         .map(|d| d == self.direction)
                         .unwrap_or(true)
                     {
                         None
                     } else {
-                        Some((*target.position(), self.distance(target.position())?))
+                        let tpos = target.components.position?;
+                        Some((tpos, self.distance(components, &tpos)?))
                     }
                 })
         {
@@ -331,6 +338,7 @@ impl Structure for UndergroundBelt {
 
     fn rotate(
         &mut self,
+        _components: &mut StructureComponents,
         state: &mut FactorishState,
         _others: &StructureDynIter,
     ) -> Result<(), RotateErr> {
@@ -348,40 +356,55 @@ impl Structure for UndergroundBelt {
         Ok(())
     }
 
-    fn set_rotation(&mut self, rotation: &Rotation) -> Result<(), ()> {
-        self.rotation = *rotation;
+    fn set_rotation(
+        &mut self,
+        components: &mut StructureComponents,
+        rotation: &Rotation,
+    ) -> Result<(), ()> {
+        if let Some(ref mut my_rotation) = components.rotation {
+            *my_rotation = *rotation;
+        }
         Ok(())
     }
 
-    fn item_response(&mut self, item: &DropItem) -> Result<ItemResponseResult, ()> {
+    fn item_response(
+        &mut self,
+        components: &mut StructureComponents,
+        item: &DropItem,
+    ) -> Result<ItemResponseResult, JsValue> {
         if self.direction == ToGround {
             if self.target.is_some() {
                 if let Some(first_item) = self.items.front() {
                     // Do not insert if the underground buffer is full
                     if first_item.0 < DROP_ITEM_SIZE_I {
-                        return Err(());
+                        return Err(js_str!("Item stuck"));
                     }
                 }
                 self.items.push_front((0, item.type_));
                 Ok((ItemResponse::Consume, None))
             } else {
-                Err(())
+                Err(js_str!("Underground belt not connected"))
             }
         } else {
-            TransportBelt::transport_item(self.rotation.next().next(), item)
+            TransportBelt::transport_item(components.get_rotation(self)?.next().next(), item)
         }
     }
 
-    fn can_input(&self, _item_type: &ItemType) -> bool {
+    fn can_input(&self, _components: &StructureComponents, _item_type: &ItemType) -> bool {
         self.direction == ToGround
     }
 
-    fn can_output(&self, structures: &StructureDynIter) -> Inventory {
+    fn can_output(
+        &self,
+        components: &StructureComponents,
+        structures: &StructureDynIter,
+    ) -> Inventory {
         if self.direction == ToSurface {
             if let Some(distance) = self
                 .target
                 .and_then(|id| structures.get(id))
-                .and_then(|target| self.distance(target.position()))
+                .and_then(|target| target.components.position)
+                .and_then(|tpos| self.distance(components, &tpos))
             {
                 return self
                     .items
@@ -399,14 +422,15 @@ impl Structure for UndergroundBelt {
         Inventory::new()
     }
 
-    fn desc(&self, _state: &FactorishState) -> String {
+    fn desc(&self, _components: &StructureComponents, _state: &FactorishState) -> String {
         format!("Connection: {:?}<br>Items: {:?}", self.target, self.items)
     }
 
     fn on_construction(
         &mut self,
+        components: &mut StructureComponents,
         other_id: StructureId,
-        other: &dyn Structure,
+        other: &StructureBundle,
         others: &StructureDynIter,
         construct: bool,
     ) -> Result<(), JsValue> {
@@ -417,11 +441,14 @@ impl Structure for UndergroundBelt {
             }
             return Ok(());
         }
-        if other.name() != self.name() || other.rotation() != Some(self.rotation.next().next()) {
+        let rotation = components.get_rotation(self)?;
+        if other.dynamic.name() != self.name()
+            || other.components.rotation != Some(rotation.next().next())
+        {
             return Ok(());
         }
-        let opos = *other.position();
-        let d = if let Some(d) = self.distance(&opos) {
+        let opos = other.components.get_position(other.dynamic.as_ref())?;
+        let d = if let Some(d) = self.distance(components, &opos) {
             d
         } else {
             return Ok(());
@@ -433,8 +460,11 @@ impl Structure for UndergroundBelt {
 
         // If there is already an underground belt with shorter distance, don't connect to the new one.
         if let Some(target) = self.target.and_then(|target| others.get(target)) {
-            let target_pos = target.position();
-            if let Some(target_d) = self.distance(target_pos) {
+            if let Some(target_d) = target
+                .components
+                .position
+                .and_then(|tpos| self.distance(components, &tpos))
+            {
                 if target_d < d {
                     return Ok(());
                 }
@@ -449,17 +479,24 @@ impl Structure for UndergroundBelt {
     fn on_construction_self(
         &mut self,
         _id: StructureId,
+        components: &mut StructureComponents,
         others: &StructureDynIter,
         _construct: bool,
     ) -> Result<(), JsValue> {
+        let rotation = components.get_rotation(self)?;
         if let Some((id, _)) = others.dyn_iter_id().find(|(_, other)| {
-            if other.name() != self.name() || other.rotation() != Some(self.rotation.next().next())
+            if other.dynamic.name() != self.name()
+                || other.components.rotation != Some(rotation.next().next())
             {
                 return false;
             }
 
-            let opos = *other.position();
-            let d = if let Some(d) = self.distance(&opos) {
+            let opos = if let Some(opos) = other.components.position {
+                opos
+            } else {
+                return false;
+            };
+            let d = if let Some(d) = self.distance(components, &opos) {
                 d
             } else {
                 return false;
@@ -471,8 +508,11 @@ impl Structure for UndergroundBelt {
 
             // If there is already an underground belt with shorter distance, don't connect to the new one.
             if let Some(target) = self.target.and_then(|target| others.get(target)) {
-                let target_pos = target.position();
-                if let Some(target_d) = self.distance(target_pos) {
+                if let Some(target_d) = target
+                    .components
+                    .position
+                    .and_then(|pos| self.distance(components, &pos))
+                {
                     if target_d < d {
                         return false;
                     }

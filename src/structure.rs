@@ -1,11 +1,11 @@
 mod iter;
 
-use crate::inventory::STACK_SIZE;
-
 use super::{
+    burner::Burner,
     drop_items::DropItem,
     dyn_iter::{DynIter, DynIterMut},
-    inventory::InventoryType,
+    factory::Factory,
+    inventory::{InventoryType, STACK_SIZE},
     items::ItemType,
     underground_belt::UnderDirection,
     water_well::FluidBox,
@@ -20,7 +20,7 @@ use web_sys::CanvasRenderingContext2d;
 #[macro_export]
 macro_rules! serialize_impl {
     () => {
-        fn serialize(&self) -> serde_json::Result<serde_json::Value> {
+        fn js_serialize(&self) -> serde_json::Result<serde_json::Value> {
             serde_json::to_value(self)
         }
     };
@@ -168,7 +168,7 @@ impl Rotation {
         matches!(self, Rotation::Left | Rotation::Right)
     }
 
-    pub fn is_vertcial(&self) -> bool {
+    pub fn is_vertical(&self) -> bool {
         !self.is_horizontal()
     }
 }
@@ -180,6 +180,7 @@ pub(crate) enum FrameProcResult {
 }
 
 pub(crate) enum ItemResponse {
+    None,
     Move(f64, f64),
     Consume,
 }
@@ -198,6 +199,8 @@ pub(crate) const RECIPE_CAPACITY_MULTIPLIER: usize = 3;
 
 /// Chest storage size, matching to Factorio
 const STORAGE_MAX_SLOTS: usize = 48;
+
+const DEFAULT_MAX_CAPACITY: usize = 50;
 
 pub(crate) fn default_add_inventory(
     s: &mut (impl Structure + ?Sized),
@@ -263,11 +266,7 @@ pub(crate) fn default_add_inventory(
 }
 
 pub(crate) trait Structure {
-    fn name(&self) -> &str;
-    fn position(&self) -> &Position;
-    fn rotation(&self) -> Option<Rotation> {
-        None
-    }
+    fn name(&self) -> &'static str;
 
     /// Specialized method to get underground belt direction.
     /// We don't like to put this to Structure trait method, but we don't have an option
@@ -283,21 +282,24 @@ pub(crate) trait Structure {
             height: 1,
         }
     }
-    fn bounding_box(&self) -> BoundingBox {
-        let (position, size) = (self.position(), self.size());
-        BoundingBox {
+    fn bounding_box(&self, components: &StructureComponents) -> Option<BoundingBox> {
+        let position = &components.position?;
+        let (position, size) = (position, self.size());
+        Some(BoundingBox {
             x0: position.x,
             y0: position.y,
             x1: position.x + size.width,
             y1: position.y + size.height,
-        }
+        })
     }
-    fn contains(&self, pos: &Position) -> bool {
-        let bb = self.bounding_box();
-        bb.x0 <= pos.x && pos.x < bb.x1 && bb.y0 <= pos.y && pos.y < bb.y1
+    fn contains(&self, components: &StructureComponents, pos: &Position) -> bool {
+        self.bounding_box(components)
+            .map(|bb| bb.x0 <= pos.x && pos.x < bb.x1 && bb.y0 <= pos.y && pos.y < bb.y1)
+            .unwrap_or(false)
     }
     fn draw(
         &self,
+        _components: &StructureComponents,
         state: &FactorishState,
         context: &CanvasRenderingContext2d,
         depth: i32,
@@ -305,6 +307,7 @@ pub(crate) trait Structure {
     ) -> Result<(), JsValue>;
     fn draw_gl(
         &self,
+        _components: &StructureComponents,
         _state: &FactorishState,
         _gl: &web_sys::WebGlRenderingContext,
         _depth: i32,
@@ -312,12 +315,13 @@ pub(crate) trait Structure {
     ) -> Result<(), JsValue> {
         Ok(())
     }
-    fn desc(&self, _state: &FactorishState) -> String {
+    fn desc(&self, _components: &StructureComponents, _state: &FactorishState) -> String {
         String::from("")
     }
     fn frame_proc(
         &mut self,
         _me: StructureId,
+        _components: &mut StructureComponents,
         _state: &mut FactorishState,
         _structures: &mut StructureDynIter,
     ) -> Result<FrameProcResult, ()> {
@@ -326,8 +330,9 @@ pub(crate) trait Structure {
     /// event handler for costruction events around the structure.
     fn on_construction(
         &mut self,
+        _components: &mut StructureComponents,
         _other_id: StructureId,
-        _other: &dyn Structure,
+        _other: &StructureBundle,
         _others: &StructureDynIter,
         _construct: bool,
     ) -> Result<(), JsValue> {
@@ -337,6 +342,7 @@ pub(crate) trait Structure {
     fn on_construction_self(
         &mut self,
         _id: StructureId,
+        _components: &mut StructureComponents,
         _others: &StructureDynIter,
         _construct: bool,
     ) -> Result<(), JsValue> {
@@ -347,24 +353,37 @@ pub(crate) trait Structure {
     }
     fn rotate(
         &mut self,
+        _components: &mut StructureComponents,
         _state: &mut FactorishState,
         _others: &StructureDynIter,
     ) -> Result<(), RotateErr> {
         Err(RotateErr::NotSupported)
     }
-    fn set_rotation(&mut self, _rotation: &Rotation) -> Result<(), ()> {
+    fn set_rotation(
+        &mut self,
+        _components: &mut StructureComponents,
+        _rotation: &Rotation,
+    ) -> Result<(), ()> {
         Err(())
     }
     /// Called every frame for each item that is on this structure.
-    fn item_response(&mut self, _item: &DropItem) -> Result<ItemResponseResult, ()> {
-        Err(())
+    fn item_response(
+        &mut self,
+        _components: &mut StructureComponents,
+        _item: &DropItem,
+    ) -> Result<ItemResponseResult, JsValue> {
+        Err(js_str!("ItemResponse not implemented"))
     }
-    fn input(&mut self, _o: &DropItem) -> Result<(), JsValue> {
+    fn input(
+        &mut self,
+        _components: &mut StructureComponents,
+        _o: &DropItem,
+    ) -> Result<(), JsValue> {
         Err(JsValue::from_str("Not supported"))
     }
     /// Returns wheter the structure can accept an item as the input. If this structure is a factory
     /// that returns recipes by get_selected_recipe(), it will check if it's in the inputs.
-    fn can_input(&self, item_type: &ItemType) -> bool {
+    fn can_input(&self, _components: &StructureComponents, item_type: &ItemType) -> bool {
         if let Some(recipe) = self.get_selected_recipe() {
             if let Some(inventory) = self.inventory(InventoryType::Input) {
                 // Two times the product requirements
@@ -378,7 +397,11 @@ pub(crate) trait Structure {
     }
     /// Query a set of items that this structure can output. Actual output would not happen until `output()`, thus
     /// this method is immutable. It should return empty Inventory if it cannot output anything.
-    fn can_output(&self, _structures: &StructureDynIter) -> Inventory {
+    fn can_output(
+        &self,
+        _components: &StructureComponents,
+        _structures: &StructureDynIter,
+    ) -> Inventory {
         Inventory::new()
     }
     /// Perform actual output. The operation should always succeed since the output-tability is checked beforehand
@@ -432,6 +455,7 @@ pub(crate) trait Structure {
     }
     fn select_recipe(
         &mut self,
+        _factory: Option<&mut Factory>,
         _index: usize,
         _player_inventory: &mut Inventory,
     ) -> Result<bool, JsValue> {
@@ -443,24 +467,24 @@ pub(crate) trait Structure {
     fn get_progress(&self) -> Option<f64> {
         None
     }
-    fn fluid_connections(&self) -> [bool; 4] {
+    fn fluid_connections(&self, _components: &StructureComponents) -> [bool; 4] {
         [true; 4]
     }
     /// Method to return underground pipe reach length.
     fn under_pipe_reach(&self) -> Option<i32> {
         None
     }
-    fn fluid_box(&self) -> Option<Vec<&FluidBox>> {
-        None
-    }
-    fn fluid_box_mut(&mut self) -> Option<Vec<&mut FluidBox>> {
-        None
-    }
     fn connection(
         &self,
+        components: &StructureComponents,
         state: &FactorishState,
         structures: &dyn DynIter<Item = StructureEntry>,
     ) -> [bool; 4] {
+        let position = if let Some(position) = components.position.as_ref() {
+            position
+        } else {
+            return [false; 4];
+        };
         // let mut structures_copy = structures.clone();
         let has_fluid_box = |x, y| {
             if x < 0 || state.width <= x as u32 || y < 0 || state.height <= y as u32 {
@@ -468,16 +492,16 @@ pub(crate) trait Structure {
             }
             if let Some(structure) = structures
                 .dyn_iter()
-                .filter_map(|s| s.dynamic.as_deref())
-                .find(|s| *s.position() == Position { x, y })
+                .filter_map(|s| s.bundle.as_ref())
+                .find(|s| s.components.position == Some(Position { x, y }))
             {
-                return structure.fluid_box().is_some();
+                return !structure.components.fluid_boxes.is_empty();
             }
             false
         };
 
         // Fluid containers connect to other containers
-        let Position { x, y } = *self.position();
+        let Position { x, y } = *position;
         let l = has_fluid_box(x - 1, y);
         let t = has_fluid_box(x, y - 1);
         let r = has_fluid_box(x + 1, y);
@@ -495,18 +519,371 @@ pub(crate) trait Structure {
     /// Try to drain power from this structure.
     /// @param demand in kilojoules.
     /// @returns None if it does not support power supply.
-    fn power_outlet(&mut self, _demand: f64) -> Option<f64> {
+    fn power_outlet(&mut self, _components: &mut StructureComponents, _demand: f64) -> Option<f64> {
         None
     }
     fn wire_reach(&self) -> u32 {
         3
     }
-    fn serialize(&self) -> serde_json::Result<serde_json::Value>;
+    fn js_serialize(&self) -> serde_json::Result<serde_json::Value>;
+}
+
+#[derive(Serialize, Deserialize)]
+pub(crate) struct Energy {
+    pub value: f64,
+    pub max: f64,
+}
+
+pub(crate) struct ComponentError {
+    structure: &'static str,
+    component: &'static str,
+}
+
+impl From<ComponentError> for JsValue {
+    fn from(ce: ComponentError) -> Self {
+        js_str!("{} without {} component", ce.structure, ce.component)
+    }
+}
+
+pub(crate) struct StructureComponents {
+    pub position: Option<Position>,
+    pub rotation: Option<Rotation>,
+    pub burner: Option<Burner>,
+    pub energy: Option<Energy>,
+    pub factory: Option<Factory>,
+    pub fluid_boxes: Vec<FluidBox>,
+}
+
+impl StructureComponents {
+    pub fn new_with_position(position: Position) -> Self {
+        Self {
+            position: Some(position),
+            rotation: None,
+            burner: None,
+            energy: None,
+            factory: None,
+            fluid_boxes: vec![],
+        }
+    }
+
+    pub fn new_with_position_and_rotation(position: Position, rotation: Rotation) -> Self {
+        Self {
+            position: Some(position),
+            rotation: Some(rotation),
+            burner: None,
+            energy: None,
+            factory: None,
+            fluid_boxes: vec![],
+        }
+    }
+
+    pub fn get_position(&self, dynamic: &dyn Structure) -> Result<Position, ComponentError> {
+        self.position.ok_or_else(|| ComponentError {
+            structure: dynamic.name(),
+            component: "Position",
+        })
+    }
+
+    pub fn get_rotation(&self, dynamic: &dyn Structure) -> Result<Rotation, ComponentError> {
+        self.rotation.ok_or_else(|| ComponentError {
+            structure: dynamic.name(),
+            component: "Rotation",
+        })
+    }
+
+    pub fn get_fluid_box_first(
+        &self,
+        dynamic: &dyn Structure,
+    ) -> Result<&FluidBox, ComponentError> {
+        self.fluid_boxes.first().ok_or_else(|| ComponentError {
+            structure: dynamic.name(),
+            component: "FluidBox",
+        })
+    }
+}
+
+impl Default for StructureComponents {
+    fn default() -> Self {
+        Self {
+            position: None,
+            rotation: None,
+            burner: None,
+            energy: None,
+            factory: None,
+            fluid_boxes: vec![],
+        }
+    }
 }
 
 pub(crate) type StructureBoxed = Box<dyn Structure>;
 
+pub(crate) struct StructureBundle {
+    pub dynamic: StructureBoxed,
+    pub components: StructureComponents,
+}
+
+impl StructureBundle {
+    pub(crate) fn new(
+        dynamic: Box<dyn Structure>,
+        position: Option<Position>,
+        rotation: Option<Rotation>,
+        burner: Option<Burner>,
+        energy: Option<Energy>,
+        factory: Option<Factory>,
+        fluid_boxes: Vec<FluidBox>,
+    ) -> Self {
+        Self {
+            dynamic,
+            components: StructureComponents {
+                position,
+                rotation,
+                burner,
+                energy,
+                factory,
+                fluid_boxes,
+            },
+        }
+    }
+
+    pub(crate) fn bounding_box(&self) -> Option<BoundingBox> {
+        self.dynamic.bounding_box(&self.components)
+    }
+
+    pub(crate) fn input(&mut self, item: &DropItem) -> Result<(), JsValue> {
+        self.dynamic
+            .input(&mut self.components, item)
+            .or_else(|e| {
+                if let Some(burner) = self.components.burner.as_mut() {
+                    burner.input(item)
+                } else {
+                    Err(e)
+                }
+            })
+            .or_else(|_| {
+                if let Some(factory) = self.components.factory.as_mut() {
+                    if self.dynamic.auto_recipe() {
+                        factory.recipe = self
+                            .dynamic
+                            .get_recipes()
+                            .iter()
+                            .find(|recipe| recipe.input.contains_key(&item.type_))
+                            .cloned();
+                    }
+                    factory.input(item)
+                } else {
+                    js_err!("No input inventory")
+                }
+            })
+    }
+
+    pub(crate) fn can_input(&self, item_type: &ItemType) -> bool {
+        self.dynamic.can_input(&self.components, item_type)
+            || self
+                .components
+                .burner
+                .as_ref()
+                .map(|burner| burner.can_input(item_type))
+                .unwrap_or(false)
+            || self.factory_can_input(item_type, 1) == 1
+    }
+
+    pub(crate) fn can_output(&self, others: &StructureDynIter) -> Inventory {
+        let mut ret = self.dynamic.can_output(&self.components, others);
+        if let Some(factory) = self.components.factory.as_ref() {
+            ret.merge(factory.can_output());
+        }
+        ret
+    }
+
+    pub(crate) fn output(
+        &mut self,
+        state: &mut FactorishState,
+        item_type: &ItemType,
+    ) -> Result<(), ()> {
+        if let Ok(ret) = self.dynamic.output(state, item_type) {
+            return Ok(ret);
+        }
+        if let Some(factory) = self.components.factory.as_mut() {
+            if let Ok(()) = factory.output(state, item_type) {
+                return Ok(());
+            }
+        }
+        Err(())
+    }
+
+    pub(crate) fn inventory(&self, inventory_type: InventoryType) -> Option<&Inventory> {
+        if let Some(inventory) = self.dynamic.inventory(inventory_type) {
+            return Some(inventory);
+        } else {
+            self.components
+                .factory
+                .as_ref()
+                .and_then(|factory| factory.inventory(inventory_type))
+                .or_else(|| {
+                    if inventory_type == InventoryType::Burner {
+                        self.components
+                            .burner
+                            .as_ref()
+                            .map(|burner| &burner.inventory)
+                    } else {
+                        None
+                    }
+                })
+        }
+    }
+
+    pub(crate) fn inventory_mut(
+        &mut self,
+        inventory_type: InventoryType,
+    ) -> Option<&mut Inventory> {
+        if let Some(inventory) = self.dynamic.inventory_mut(inventory_type) {
+            return Some(inventory);
+        } else {
+            self.components
+                .factory
+                .as_mut()
+                .map(|factory| factory.inventory_mut(inventory_type))?
+        }
+    }
+
+    /// Return whether an item can be inserted to Factory component.
+    ///
+    /// Negative `count` means removing items.
+    ///
+    /// It is separated in a function because the logic is a bit complex.
+    fn factory_can_input(&self, item_type: &ItemType, count: isize) -> isize {
+        let factory = if let Some(ref factory) = self.components.factory {
+            factory
+        } else {
+            return 0;
+        };
+        let mut count = count;
+        let mut try_move = |inventory: &Inventory, recipe: &Recipe| {
+            let existing_count = inventory.count_item(item_type);
+            if 0 < count {
+                let capacity = recipe.input.count_item(item_type) * RECIPE_CAPACITY_MULTIPLIER;
+                if existing_count < capacity {
+                    count = count.min((capacity - existing_count) as isize);
+                } else {
+                    count = 0;
+                }
+            } else {
+                count = -count.abs().min(existing_count as isize);
+            }
+        };
+        if let Some(ref recipe) = factory.recipe {
+            try_move(&factory.input_inventory, recipe);
+        } else if self.dynamic.auto_recipe() {
+            for recipe in self.dynamic.get_recipes().as_ref() {
+                if recipe.input.contains_key(item_type) {
+                    try_move(&factory.input_inventory, recipe);
+                    break;
+                }
+            }
+        } else {
+            count = DEFAULT_MAX_CAPACITY as isize;
+        }
+        count
+    }
+
+    /// Try to add items to a structure's inventory and return items actually moved.
+    /// The sign is positive if they are added to inventory and negative if they are removed.
+    pub(crate) fn add_inventory(
+        &mut self,
+        inventory_type: InventoryType,
+        item_type: &ItemType,
+        amount: isize,
+    ) -> isize {
+        let real_move = |inventory: &mut Inventory, count: isize| {
+            if 0 < count {
+                inventory.add_items(item_type, count as usize);
+                count
+            } else {
+                -(inventory.remove_items(item_type, count.abs() as usize) as isize)
+            }
+        };
+
+        match inventory_type {
+            InventoryType::Burner => {
+                if let Some(ref mut burner) = self.components.burner {
+                    burner.add_burner_inventory(item_type, amount)
+                } else {
+                    return 0;
+                }
+            }
+            InventoryType::Input => {
+                let count = self.factory_can_input(item_type, amount);
+                if 0 != count {
+                    if let Some(ref mut factory) = self.components.factory {
+                        return real_move(&mut factory.input_inventory, count);
+                    }
+                }
+                default_add_inventory(self.dynamic.as_mut(), inventory_type, item_type, amount)
+            }
+            InventoryType::Output => {
+                if let Some(ref mut factory) = self.components.factory {
+                    let mut count = amount;
+                    let inventory = &mut factory.output_inventory;
+                    let existing_count = inventory.count_item(item_type);
+                    if 0 < count {
+                        if let Some(ref mut recipe) = factory.recipe {
+                            let capacity =
+                                recipe.output.count_item(item_type) * RECIPE_CAPACITY_MULTIPLIER;
+                            if existing_count < capacity {
+                                count = count.min((capacity - existing_count) as isize);
+                            } else {
+                                count = 0;
+                            }
+                        } else {
+                            count = DEFAULT_MAX_CAPACITY as isize;
+                        }
+                    } else {
+                        count = -count.abs().min(existing_count as isize);
+                    }
+                    real_move(&mut factory.output_inventory, count)
+                } else {
+                    default_add_inventory(self.dynamic.as_mut(), inventory_type, item_type, amount)
+                }
+            }
+            InventoryType::Storage => {
+                default_add_inventory(self.dynamic.as_mut(), inventory_type, item_type, amount)
+            }
+        }
+    }
+
+    pub(crate) fn rotate(
+        &mut self,
+        state: &mut FactorishState,
+        others: &StructureDynIter,
+    ) -> Result<(), RotateErr> {
+        let result = self.dynamic.rotate(&mut self.components, state, others);
+        if result.is_ok() {
+            return Ok(());
+        }
+        if let Some(ref mut rotation) = self.components.rotation {
+            *rotation = rotation.next();
+            Ok(())
+        } else {
+            result
+        }
+    }
+
+    pub(crate) fn set_rotation(&mut self, rotation: &Rotation) -> Result<(), ()> {
+        self.components.rotation = Some(*rotation);
+        Ok(())
+    }
+
+    pub(crate) fn get_selected_recipe(&self) -> Option<&Recipe> {
+        self.dynamic.get_selected_recipe().or_else(|| {
+            self.components
+                .factory
+                .as_ref()
+                .and_then(|factory| factory.recipe.as_ref())
+        })
+    }
+}
+
 pub(crate) struct StructureEntry {
     pub gen: u32,
-    pub dynamic: Option<StructureBoxed>,
+    pub bundle: Option<StructureBundle>,
 }

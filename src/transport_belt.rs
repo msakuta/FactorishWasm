@@ -4,7 +4,10 @@ use super::{
         utils::{enable_buffer, Flatten},
         ShaderBundle,
     },
-    structure::{ItemResponse, ItemResponseResult, Structure, StructureDynIter},
+    structure::{
+        ItemResponse, ItemResponseResult, Structure, StructureBundle, StructureComponents,
+        StructureDynIter,
+    },
     FactorishState, Position, RotateErr, Rotation, SIM_DELTA_TIME, TILE_SIZE,
 };
 use cgmath::{Matrix3, Matrix4, Rad, Vector2, Vector3};
@@ -15,26 +18,23 @@ use web_sys::{CanvasRenderingContext2d, WebGlRenderingContext as GL};
 pub(crate) const BELT_SPEED: f64 = 0.25;
 
 #[derive(Serialize, Deserialize)]
-pub(crate) struct TransportBelt {
-    position: Position,
-    rotation: Rotation,
-}
+pub(crate) struct TransportBelt {}
 
 impl TransportBelt {
-    pub(crate) fn new(x: i32, y: i32, rotation: Rotation) -> Self {
-        TransportBelt {
-            position: Position { x, y },
-            rotation,
+    pub(crate) fn new(position: Position, rotation: Rotation) -> StructureBundle {
+        StructureBundle {
+            dynamic: Box::new(TransportBelt {}),
+            components: StructureComponents::new_with_position_and_rotation(position, rotation),
         }
     }
 
     pub(crate) fn transport_item(
         rotation: Rotation,
         item: &DropItem,
-    ) -> Result<ItemResponseResult, ()> {
+    ) -> Result<ItemResponseResult, JsValue> {
         let vx = rotation.delta().0 as f64 * BELT_SPEED;
         let vy = rotation.delta().1 as f64 * BELT_SPEED;
-        let ax = if rotation.is_vertcial() {
+        let ax = if rotation.is_vertical() {
             (item.x as f64 / TILE_SIZE).floor() * TILE_SIZE + TILE_SIZE / 2.
         } else {
             item.x as f64
@@ -71,16 +71,13 @@ impl TransportBelt {
 }
 
 impl Structure for TransportBelt {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "Transport Belt"
-    }
-
-    fn position(&self) -> &Position {
-        &self.position
     }
 
     fn draw(
         &self,
+        components: &StructureComponents,
         state: &FactorishState,
         context: &CanvasRenderingContext2d,
         depth: i32,
@@ -91,10 +88,16 @@ impl Structure for TransportBelt {
         };
         match state.image_belt.as_ref() {
             Some(img) => {
-                let (x, y) = (self.position.x as f64 * 32., self.position.y as f64 * 32.);
+                let (x, y) = if let Some(position) = components.position.as_ref() {
+                    (position.x as f64 * 32., position.y as f64 * 32.)
+                } else {
+                    (0., 0.)
+                };
                 context.save();
                 context.translate(x + 16., y + 16.)?;
-                context.rotate(self.rotation.angle_rad())?;
+                components
+                    .rotation
+                    .map(|rotation| context.rotate(rotation.angle_rad()));
                 context.translate(-(x + 16.), -(y + 16.))?;
                 for i in 0..2 {
                     context
@@ -104,8 +107,8 @@ impl Structure for TransportBelt {
                             0.,
                             32.,
                             32.,
-                            self.position.x as f64 * 32.,
-                            self.position.y as f64 * 32.,
+                            x,
+                            y,
                             32.,
                             32.,
                         )?;
@@ -120,15 +123,20 @@ impl Structure for TransportBelt {
 
     fn draw_gl(
         &self,
+        components: &StructureComponents,
         state: &FactorishState,
         gl: &GL,
         depth: i32,
         is_ghost: bool,
     ) -> Result<(), JsValue> {
+        let position = components.get_position(self)?;
+        let rotation = components.get_rotation(self)?;
+
         let (x, y) = (
-            self.position.x as f32 + state.viewport.x as f32,
-            self.position.y as f32 + state.viewport.y as f32,
+            position.x as f32 + state.viewport.x as f32,
+            position.y as f32 + state.viewport.y as f32,
         );
+
         if depth != 0 {
             return Ok(());
         }
@@ -140,7 +148,7 @@ impl Structure for TransportBelt {
         gl.use_program(Some(&shader.program));
         gl.uniform1f(shader.alpha_loc.as_ref(), if is_ghost { 0.5 } else { 1. });
         TransportBelt::belt_texture_gl(gl, state, shader, |scroll| {
-            scroll * Matrix3::from_angle_z(Rad(-self.rotation.angle_rad() as f32))
+            scroll * Matrix3::from_angle_z(Rad(-rotation.angle_rad() as f32))
         })?;
 
         gl.uniform_matrix4fv_with_f32_array(
@@ -162,20 +170,40 @@ impl Structure for TransportBelt {
 
     fn rotate(
         &mut self,
+        components: &mut StructureComponents,
         _state: &mut FactorishState,
         _others: &StructureDynIter,
     ) -> Result<(), RotateErr> {
-        self.rotation = self.rotation.next();
+        if let Some(ref mut rotation) = components.rotation {
+            *rotation = rotation.next();
+            Ok(())
+        } else {
+            Err(RotateErr::NotSupported)
+        }
+    }
+
+    fn set_rotation(
+        &mut self,
+        components: &mut StructureComponents,
+        rotation: &Rotation,
+    ) -> Result<(), ()> {
+        if let Some(ref mut self_rotation) = components.rotation {
+            *self_rotation = *rotation;
+        }
         Ok(())
     }
 
-    fn set_rotation(&mut self, rotation: &Rotation) -> Result<(), ()> {
-        self.rotation = *rotation;
-        Ok(())
-    }
-
-    fn item_response(&mut self, item: &DropItem) -> Result<ItemResponseResult, ()> {
-        Self::transport_item(self.rotation, item)
+    fn item_response(
+        &mut self,
+        components: &mut StructureComponents,
+        item: &DropItem,
+    ) -> Result<ItemResponseResult, JsValue> {
+        Self::transport_item(
+            components
+                .rotation
+                .ok_or_else(|| js_str!("TransportBelt without Rotation component"))?,
+            item,
+        )
     }
 
     crate::serialize_impl!();

@@ -1,4 +1,4 @@
-use super::{Structure, StructureEntry, StructureId};
+use super::{StructureBundle, StructureEntry, StructureId};
 use crate::dyn_iter::{DynIter, DynIterMut};
 use smallvec::{smallvec, SmallVec};
 use wasm_bindgen::prelude::*;
@@ -110,13 +110,7 @@ impl<'a> StructureDynIter<'a> {
     pub(crate) fn exclude_id<'b>(
         &'b mut self,
         id: StructureId,
-    ) -> Result<
-        (
-            Option<&'b mut (dyn Structure + 'static)>,
-            StructureDynIter<'b>,
-        ),
-        JsValue,
-    >
+    ) -> Result<(Option<&'b mut StructureBundle>, StructureDynIter<'b>), JsValue>
     where
         'a: 'b,
     {
@@ -129,7 +123,7 @@ impl<'a> StructureDynIter<'a> {
         {
             let slice_borrow = &self.0[slice_idx];
             let entry = &slice_borrow.slice[idx - slice_borrow.start];
-            if entry.gen != id.gen || entry.dynamic.is_none() {
+            if entry.gen != id.gen || entry.bundle.is_none() {
                 return Ok((
                     None,
                     StructureDynIter(self.0.iter_mut().map(|i| i.clone()).collect()),
@@ -164,7 +158,7 @@ impl<'a> StructureDynIter<'a> {
                 slice: right,
             });
             slices.extend(right_slices.iter_mut().map(|i| i.clone()));
-            Ok((center.dynamic.as_deref_mut(), StructureDynIter(slices)))
+            Ok((center.bundle.as_mut(), StructureDynIter(slices)))
         } else {
             js_err!("Strucutre slices out of range")
         }
@@ -190,7 +184,7 @@ impl<'a> StructureDynIter<'a> {
 
     /// Accessor with generation checking.
     #[allow(dead_code)]
-    pub(crate) fn get(&self, id: StructureId) -> Option<&dyn Structure> {
+    pub(crate) fn get(&self, id: StructureId) -> Option<&StructureBundle> {
         let idx = id.id as usize;
         self.0
             .iter()
@@ -200,12 +194,12 @@ impl<'a> StructureDynIter<'a> {
                     .slice
                     .get(idx - slice.start)
                     .filter(|s| s.gen == id.gen)
-                    .and_then(|s| s.dynamic.as_deref())
+                    .and_then(|s| s.bundle.as_ref())
             })
     }
 
     /// Mutable accessor with generation checking.
-    pub(crate) fn get_mut(&mut self, id: StructureId) -> Option<&mut (dyn Structure + '_)> {
+    pub(crate) fn get_mut(&mut self, id: StructureId) -> Option<&mut StructureBundle> {
         let idx = id.id as usize;
         self.0
             .iter_mut()
@@ -215,13 +209,13 @@ impl<'a> StructureDynIter<'a> {
                     .slice
                     .get_mut(idx - slice.start)
                     .filter(|s| s.gen == id.gen)
-                    .and_then(|s| s.dynamic.as_deref_mut().map(|s| s as &mut dyn Structure))
+                    .and_then(|s| s.bundle.as_mut())
                 // Interestingly, we need .map(|s| s as &mut dyn Structure) to compile.
                 // .map(|s| s.dynamic.as_deref_mut())
             })
     }
 
-    pub(crate) fn dyn_iter_id(&self) -> impl Iterator<Item = (StructureId, &dyn Structure)> + '_ {
+    pub(crate) fn dyn_iter_id(&self) -> impl Iterator<Item = (StructureId, &StructureBundle)> + '_ {
         self.0
             .iter()
             .flat_map(move |slice| {
@@ -238,19 +232,19 @@ impl<'a> StructureDynIter<'a> {
                         id: id as u32,
                         gen: val.gen,
                     },
-                    val.dynamic.as_deref()?,
+                    val.bundle.as_ref()?,
                 ))
             })
     }
 }
 
 impl<'a> DynIter for StructureDynIter<'a> {
-    type Item = dyn Structure;
+    type Item = StructureBundle;
     fn dyn_iter(&self) -> Box<dyn Iterator<Item = &Self::Item> + '_> {
         Box::new(
             self.0
                 .iter()
-                .flat_map(|slice| slice.slice.iter().filter_map(|s| s.dynamic.as_deref())),
+                .flat_map(|slice| slice.slice.iter().filter_map(|s| s.bundle.as_ref())),
         )
     }
     fn as_dyn_iter(&self) -> &dyn DynIter<Item = Self::Item> {
@@ -260,11 +254,10 @@ impl<'a> DynIter for StructureDynIter<'a> {
 
 impl<'a> DynIterMut for StructureDynIter<'a> {
     fn dyn_iter_mut(&mut self) -> Box<dyn Iterator<Item = &mut Self::Item> + '_> {
-        Box::new(self.0.iter_mut().flat_map(|slice| {
-            slice
-                .slice
+        Box::new(
+            self.0
                 .iter_mut()
-                .filter_map(|s| s.dynamic.as_deref_mut())
-        }))
+                .flat_map(|slice| slice.slice.iter_mut().filter_map(|s| s.bundle.as_mut())),
+        )
     }
 }

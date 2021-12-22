@@ -85,7 +85,11 @@ impl FactorishState {
         // context.set_fill_style(&JsValue::from_str("#00ff7f"));
         let color = [0x00, 0xff, 0x7f];
         for structure in self.structure_iter() {
-            let Position { x, y } = *structure.position();
+            let Position { x, y } = if let Some(pos) = structure.components.position {
+                pos
+            } else {
+                continue;
+            };
             if chunk_pos.x * CHUNK_SIZE_I <= x
                 && x < (chunk_pos.x + 1) * CHUNK_SIZE_I
                 && chunk_pos.y * CHUNK_SIZE_I <= y
@@ -107,9 +111,9 @@ impl FactorishState {
             .iter()
             .find(|structure| {
                 structure
-                    .dynamic
-                    .as_deref()
-                    .map(|s| *s.position() == *position)
+                    .bundle
+                    .as_ref()
+                    .map(|s| s.components.position == Some(*position))
                     .unwrap_or(false)
             })
             .map(|_| [0x00, 0xff, 0x7f])

@@ -3,7 +3,7 @@ use super::{
         assets::WIRE_SEGMENTS,
         utils::{enable_buffer, vertex_buffer_data, Flatten},
     },
-    structure::Structure,
+    structure::{Structure, StructureBundle, StructureComponents},
     FactorishState, Position, TILE_SIZE_F, WIRE_ATTACH_X, WIRE_ATTACH_Y, WIRE_HANG,
 };
 use cgmath::{Matrix3, Matrix4, Vector3};
@@ -16,30 +16,26 @@ const WIRE_WIDTH: f32 = 0.5;
 
 #[derive(Serialize, Deserialize)]
 pub(crate) struct ElectPole {
-    position: Position,
     power: f64,
 }
 
 impl ElectPole {
-    pub(crate) fn new(position: &Position) -> Self {
-        ElectPole {
-            position: *position,
-            power: 0.,
+    pub(crate) fn new(position: Position) -> StructureBundle {
+        StructureBundle {
+            dynamic: Box::new(ElectPole { power: 0. }),
+            components: StructureComponents::new_with_position(position),
         }
     }
 }
 
 impl Structure for ElectPole {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "Electric Pole"
-    }
-
-    fn position(&self) -> &Position {
-        &self.position
     }
 
     fn draw(
         &self,
+        components: &StructureComponents,
         state: &FactorishState,
         context: &CanvasRenderingContext2d,
         depth: i32,
@@ -48,8 +44,11 @@ impl Structure for ElectPole {
         if depth != 0 {
             return Ok(());
         };
-        let position = self.position;
-        let (x, y) = (position.x as f64 * 32., position.y as f64 * 32.);
+        let (x, y) = if let Some(position) = &components.position {
+            (position.x as f64 * 32., position.y as f64 * 32.)
+        } else {
+            (0., 0.)
+        };
         match state.image_elect_pole.as_ref() {
             Some(img) => {
                 // let (front, mid) = state.structures.split_at_mut(i);
@@ -68,6 +67,7 @@ impl Structure for ElectPole {
 
     fn draw_gl(
         &self,
+        components: &StructureComponents,
         state: &FactorishState,
         gl: &GL,
         depth: i32,
@@ -76,9 +76,12 @@ impl Structure for ElectPole {
         if depth != 0 {
             return Ok(());
         }
+        let position = components
+            .position
+            .ok_or_else(|| js_str!("OreMine without Position"))?;
         let (x, y) = (
-            self.position.x as f32 + state.viewport.x as f32,
-            self.position.y as f32 + state.viewport.y as f32,
+            position.x as f32 + state.viewport.x as f32,
+            position.y as f32 + state.viewport.y as f32,
         );
         let shader = state
             .assets
@@ -117,9 +120,10 @@ impl Structure for ElectPole {
         true
     }
 
-    fn power_outlet(&mut self, demand: f64) -> Option<f64> {
-        let power = demand.min(self.power);
-        self.power -= power;
+    fn power_outlet(&mut self, components: &mut StructureComponents, demand: f64) -> Option<f64> {
+        let energy = components.energy.as_mut()?;
+        let power = demand.min(energy.value);
+        energy.value -= power;
         Some(power)
     }
 
