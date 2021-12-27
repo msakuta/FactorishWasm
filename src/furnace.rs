@@ -1,3 +1,5 @@
+use crate::structure::get_powered_progress;
+
 use super::{
     gl::utils::{enable_buffer, Flatten},
     inventory::InventoryType,
@@ -250,9 +252,7 @@ impl Structure for Furnace {
 
             if let Some(prev_progress) = self.progress {
                 // Proceed only if we have sufficient energy in the buffer.
-                let progress = (self.power / recipe.power_cost)
-                    .min(1. / recipe.recipe_time)
-                    .min(1.);
+                let progress = get_powered_progress(self.power, prev_progress, recipe);
                 if state.rng.next() < progress * 10. {
                     state
                         .temp_ents

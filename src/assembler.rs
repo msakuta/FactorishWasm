@@ -9,7 +9,9 @@ use super::{
     items::get_item_image_url,
     research::TechnologyTag,
     serialize_impl,
-    structure::{default_add_inventory, Structure, StructureDynIter, StructureId},
+    structure::{
+        default_add_inventory, get_powered_progress, Structure, StructureDynIter, StructureId,
+    },
     FactorishState, FrameProcResult, ItemType, Position, Recipe, TILE_SIZE,
 };
 use cgmath::{Matrix3, Matrix4, Vector2, Vector3};
@@ -390,9 +392,7 @@ impl Structure for Assembler {
 
             if let Some(prev_progress) = self.progress {
                 // Proceed only if we have sufficient energy in the buffer.
-                let progress = (self.power / recipe.power_cost)
-                    .min(1. / recipe.recipe_time)
-                    .min(1.);
+                let progress = get_powered_progress(self.power, prev_progress, recipe);
                 if 1. <= prev_progress + progress {
                     self.progress = None;
 

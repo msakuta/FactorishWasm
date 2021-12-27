@@ -8,7 +8,8 @@ use super::{
     items::item_to_str,
     serialize_impl,
     structure::{
-        default_add_inventory, Structure, StructureDynIter, StructureId, RECIPE_CAPACITY_MULTIPLIER,
+        default_add_inventory, get_powered_progress, Structure, StructureDynIter, StructureId,
+        RECIPE_CAPACITY_MULTIPLIER,
     },
     DropItem, FactorishState, FrameProcResult, Inventory, InventoryTrait, ItemType, Position,
     Recipe, TILE_SIZE,
@@ -237,9 +238,7 @@ impl Structure for ElectricFurnace {
 
             if let Some(prev_progress) = self.progress {
                 // Proceed only if we have sufficient energy in the buffer.
-                let progress = (self.power / recipe.power_cost)
-                    .min(1. / recipe.recipe_time)
-                    .min(1.);
+                let progress = get_powered_progress(self.power, prev_progress, recipe);
                 if 1. <= prev_progress + progress {
                     self.progress = None;
 

@@ -504,6 +504,12 @@ pub(crate) trait Structure {
     fn serialize(&self) -> serde_json::Result<serde_json::Value>;
 }
 
+pub(crate) fn get_powered_progress(power: f64, progress: f64, recipe: &Recipe) -> f64 {
+    (power / recipe.power_cost)
+        .min(1. / recipe.recipe_time / 3.)
+        .min(1. - progress)
+}
+
 pub(crate) type StructureBoxed = Box<dyn Structure>;
 
 pub(crate) struct StructureEntry {

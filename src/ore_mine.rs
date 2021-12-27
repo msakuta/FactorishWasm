@@ -7,7 +7,7 @@ use super::{
     },
     inventory::{Inventory, InventoryTrait, InventoryType},
     items::ItemType,
-    structure::{RotateErr, Structure, StructureDynIter, StructureId},
+    structure::{get_powered_progress, RotateErr, Structure, StructureDynIter, StructureId},
     DropItem, FactorishState, FrameProcResult, Position, Recipe, Rotation, TempEnt, COAL_POWER,
     TILE_SIZE,
 };
@@ -284,9 +284,7 @@ impl Structure for OreMine {
             };
 
             // Proceed only if we have sufficient energy in the buffer.
-            let progress = (self.power / recipe.power_cost)
-                .min(1. / recipe.recipe_time)
-                .min(1. - self.progress);
+            let progress = get_powered_progress(self.power, self.progress, recipe);
             if 1. <= self.progress + progress {
                 let output_position = self.position.add(self.rotation.delta());
                 if let Some(structure) = self
