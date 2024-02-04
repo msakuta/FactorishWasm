@@ -79,5 +79,10 @@ module.exports = {
   },
   experiments: {
     syncWebAssembly: true
+  },
+  performance: {
+    hints: false,
+    maxEntrypointSize: 512000,
+    maxAssetSize: 1024000
   }
 };
