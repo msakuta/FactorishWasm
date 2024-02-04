@@ -3,6 +3,7 @@ const CopyPlugin = require("copy-webpack-plugin");
 const WasmPackPlugin = require("@wasm-tool/wasm-pack-plugin");
 const HtmlWebpackPlugin = require('html-webpack-plugin');
 const { VueLoaderPlugin } = require('vue-loader');
+const MiniCssExtractPlugin = require("mini-css-extract-plugin");
 
 const dist = path.resolve(__dirname, "dist");
 
@@ -13,6 +14,7 @@ module.exports = {
   },
   output: {
     path: dist,
+    publicPath: '',
     filename: "[name].js"
   },
   devServer: {
@@ -35,16 +37,22 @@ module.exports = {
       __VUE_OPTIONS_API__: true,
       __VUE_PROD_DEVTOOLS__: false
     }),
+
+    new MiniCssExtractPlugin(),
   ],
   module: {
     rules: [
+      {
+        test: /\.vue$/,
+        loader: 'vue-loader'
+      },
       {
         test: /\.html$/i,
         loader: 'html-loader',
       },
       {
         test: /\.css$/i,
-        use: ["file-loader"],
+        use: [MiniCssExtractPlugin.loader, "css-loader"],
       },
       {
         test: /\.(png|jpe?g|gif)$/i,
@@ -57,15 +65,14 @@ module.exports = {
           },
         ],
       },
-      {
-        test: /\.vue$/,
-        loader: 'vue-loader'
-      },
     ]
   },
   resolve: {
     alias: {
       'vue$': "vue/dist/vue.esm-bundler.js"
     }
+  },
+  experiments: {
+    syncWebAssembly: true
   }
 };
