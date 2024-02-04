@@ -24,6 +24,9 @@ module.exports = {
     // new CopyPlugin([
     //   path.resolve(__dirname, "static")
     // ]),
+    new CopyPlugin([
+      path.resolve(__dirname, "static/main.css")
+    ]),
 
     new WasmPackPlugin({
       crateDirectory: __dirname,
@@ -47,13 +50,13 @@ module.exports = {
         loader: 'vue-loader'
       },
       {
-        test: /\.html$/i,
-        loader: 'html-loader',
-      },
-      {
         test: /\.css$/i,
         use: [MiniCssExtractPlugin.loader, "css-loader"],
       },
+      // {
+      //   test: /\.html$/i,
+      //   loader: 'html-loader',
+      // },
       {
         test: /\.(png|jpe?g|gif)$/i,
         use: [
