@@ -194,7 +194,7 @@ impl Structure for ElectricFurnace {
         if let Some(recipe) = &self.recipe {
             if self.power < recipe.power_cost {
                 let mut accumulated = 0.;
-                for network in &state
+                if let Some(network) = state
                     .power_networks
                     .iter()
                     .find(|network| network.sinks.contains(&me))

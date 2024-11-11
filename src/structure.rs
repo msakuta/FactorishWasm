@@ -32,6 +32,7 @@ pub(crate) struct StructureId {
     pub gen: u32,
 }
 
+#[allow(dead_code)]
 pub(crate) struct StructureEntryIterator<'a>(&'a mut [StructureEntry], &'a mut [StructureEntry]);
 
 impl<'a> DynIter for StructureEntryIterator<'a> {
@@ -456,6 +457,7 @@ pub(crate) trait Structure {
     fn fluid_box_mut(&mut self) -> Option<Vec<&mut FluidBox>> {
         None
     }
+    #[allow(dead_code)]
     fn connection(
         &self,
         state: &FactorishState,
