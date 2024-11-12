@@ -1,4 +1,4 @@
-use crate::structure::get_powered_progress;
+use crate::{inventory::ItemEntry, structure::get_powered_progress};
 
 use super::{
     gl::utils::{enable_buffer, Flatten},
@@ -299,7 +299,7 @@ impl Structure for Furnace {
             }
         }
 
-        if 0 < default_add_inventory(self, InventoryType::Input, &o.type_, 1) {
+        if 0 < default_add_inventory(self, InventoryType::Input, &o.type_, ItemEntry::ONE) {
             Ok(())
         } else {
             Err(JsValue::from_str("Item is not part of recipe"))
@@ -343,22 +343,23 @@ impl Structure for Furnace {
         &mut self,
         inventory_type: InventoryType,
         item_type: &ItemType,
-        count: isize,
+        entry: ItemEntry,
     ) -> isize {
         if inventory_type != InventoryType::Burner {
-            return default_add_inventory(self, inventory_type, item_type, count);
+            return default_add_inventory(self, inventory_type, item_type, entry);
         }
-        if count < 0 {
-            let existing = self.burner_inventory.count_item(item_type);
-            let removed = existing.min((-count) as usize);
-            self.burner_inventory.remove_items(item_type, removed);
-            -(removed as isize)
-        } else if *item_type == ItemType::CoalOre {
-            let add_amount = count.min(
-                (FUEL_CAPACITY - self.burner_inventory.count_item(&ItemType::CoalOre)) as isize,
-            );
+        // if entry < 0 {
+        //     let existing = self.burner_inventory.count_item(item_type);
+        //     let removed = existing.min((-entry) as usize);
+        //     self.burner_inventory.remove_items(item_type, removed);
+        //     -(removed as isize)
+        // } else
+        if *item_type == ItemType::CoalOre {
+            let add_amount = entry
+                .count
+                .min(FUEL_CAPACITY - self.burner_inventory.count_item(&ItemType::CoalOre));
             self.burner_inventory
-                .add_items(item_type, add_amount as usize);
+                .add_items(item_type, ItemEntry::new(add_amount as usize, 0.));
             add_amount as isize
         } else {
             0
@@ -392,9 +393,15 @@ impl Structure for Furnace {
         ret.merge(std::mem::take(&mut self.output_inventory));
         ret.merge(std::mem::take(&mut self.burner_inventory));
         // Return the ingredients if it was in the middle of processing a recipe.
-        if let Some(mut recipe) = self.recipe.take() {
+        if let Some(recipe) = self.recipe.take() {
             if self.progress.is_some() {
-                ret.merge(std::mem::take(&mut recipe.input));
+                ret.merge(
+                    recipe
+                        .input
+                        .into_iter()
+                        .map(|(ty, count)| (ty, ItemEntry::new(count, 0.)))
+                        .collect(),
+                );
             }
         }
         ret

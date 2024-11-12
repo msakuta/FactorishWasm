@@ -3,7 +3,7 @@ use crate::{
     furnace::RECIPES,
     inventory::Inventory,
     items::{item_to_str, ItemType},
-    FactorishState,
+    FactorishState, ItemSet,
 };
 use once_cell::unsync::Lazy;
 use serde::{Deserialize, Serialize};
@@ -19,7 +19,7 @@ pub(crate) enum TechnologyTag {
 #[derive(Serialize, Deserialize)]
 pub(crate) struct Technology {
     pub tag: TechnologyTag,
-    pub input: Inventory,
+    pub input: ItemSet,
     pub steps: usize,
     pub research_time: f64,
 }

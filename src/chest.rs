@@ -1,3 +1,5 @@
+use crate::inventory::ItemEntry;
+
 use super::{
     drop_items::DropItem,
     gl::utils::{enable_buffer, Flatten},
@@ -105,13 +107,13 @@ impl Structure for Chest {
             "Items: \n{}",
             self.inventory
                 .iter()
-                .map(|item| format!("{:?}: {}<br>", item.0, item.1))
+                .map(|item| format!("{:?}: {}<br>", item.0, item.1.count))
                 .fold(String::from(""), |accum, item| accum + &item)
         )
     }
 
     fn item_response(&mut self, _item: &DropItem) -> Result<ItemResponseResult, ()> {
-        if 0 < self.add_inventory(InventoryType::Storage, &_item.type_, 1) {
+        if 0 < self.add_inventory(InventoryType::Storage, &_item.type_, ItemEntry::ONE) {
             Ok((
                 ItemResponse::Consume,
                 Some(FrameProcResult::InventoryChanged(self.position)),

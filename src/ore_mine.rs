@@ -1,3 +1,5 @@
+use crate::inventory::{item_set_to_inventory, ItemEntry};
+
 use super::{
     draw_direction_arrow,
     drop_items::hit_check,
@@ -258,8 +260,8 @@ impl Structure for OreMine {
             //         this.removeItem("Coal Ore");
             //     }
             // }
-            if let Some(amount) = self.input_inventory.get_mut(&ItemType::CoalOre) {
-                if 0 < *amount && self.power == 0. {
+            if let Some(entry) = self.input_inventory.get_mut(&ItemType::CoalOre) {
+                if 0 < entry.count && self.power == 0. {
                     self.input_inventory.remove_item(&ItemType::CoalOre);
                     self.power += COAL_POWER;
                     self.max_power = self.max_power.max(self.power);
@@ -428,23 +430,24 @@ impl Structure for OreMine {
         &mut self,
         inventory_type: InventoryType,
         item_type: &ItemType,
-        amount: isize,
+        entry: ItemEntry,
     ) -> isize {
         if inventory_type != InventoryType::Burner {
             return 0;
         }
-        if amount < 0 {
-            let existing = self.input_inventory.count_item(item_type);
-            let removed = existing.min((-amount) as usize);
-            self.input_inventory.remove_items(item_type, removed);
-            -(removed as isize)
-        } else if *item_type == ItemType::CoalOre {
-            let add_amount = amount.min(
-                (FUEL_CAPACITY - self.input_inventory.count_item(&ItemType::CoalOre)) as isize,
-            );
+        // if entry.count < 0 {
+        //     let existing = self.input_inventory.count_item(item_type);
+        //     let removed = existing.min((-entry.count) as usize);
+        //     self.input_inventory.remove_items(item_type, removed);
+        //     -(removed as isize)
+        // } else
+        if *item_type == ItemType::CoalOre {
+            let add_amount = entry
+                .count
+                .min((FUEL_CAPACITY - self.input_inventory.count_item(&ItemType::CoalOre)));
             self.input_inventory
-                .add_items(item_type, add_amount as usize);
-            add_amount
+                .add_items(item_type, ItemEntry::new(add_amount, 0.));
+            add_amount as isize
         } else {
             0
         }
@@ -473,7 +476,7 @@ impl Structure for OreMine {
         if let Some(recipe) = self.recipe.take() {
             if 0. < self.progress {
                 let mut ret = std::mem::take(&mut self.input_inventory);
-                ret.merge(recipe.input);
+                ret.merge(item_set_to_inventory(recipe.input));
                 return ret;
             }
         }

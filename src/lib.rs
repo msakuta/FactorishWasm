@@ -68,7 +68,10 @@ use elect_pole::ElectPole;
 use electric_furnace::ElectricFurnace;
 use furnace::Furnace;
 use inserter::Inserter;
-use inventory::{Inventory, InventoryTrait, InventoryType, STACK_SIZE};
+use inventory::{
+    inventory_to_counts, inventory_to_vec, Inventory, InventoryTrait, InventoryType, ItemEntry,
+    STACK_SIZE,
+};
 use items::{item_to_str, str_to_item, ItemType};
 use lab::Lab;
 use offshore_pump::OffshorePump;
@@ -300,6 +303,16 @@ fn draw_direction_arrow(
 
 type ItemSet = HashMap<ItemType, usize>;
 
+trait ItemSetTrait {
+    fn count_item(&self, item: &ItemType) -> usize;
+}
+
+impl ItemSetTrait for ItemSet {
+    fn count_item(&self, item: &ItemType) -> usize {
+        *self.get(item).unwrap_or(&0)
+    }
+}
+
 #[derive(Clone, Serialize, Deserialize)]
 struct Recipe {
     input: ItemSet,
@@ -371,8 +384,8 @@ struct Player {
 }
 
 impl Player {
-    fn add_item(&mut self, name: &ItemType, count: usize) {
-        self.inventory.add_items(name, count);
+    fn add_item(&mut self, name: &ItemType, entry: ItemEntry) {
+        self.inventory.add_items(name, entry);
     }
 }
 
@@ -656,7 +669,7 @@ impl FactorishState {
                     (ItemType::UndergroundBelt, 5usize),
                 ]
                 .iter()
-                .copied()
+                .map(|(k, v)| (*k, ItemEntry::new(*v, 0.)))
                 .collect(),
             },
             info_elem: None,
@@ -1347,7 +1360,8 @@ impl FactorishState {
                         tile.ore = None;
                         ret = false;
                     }
-                    self.player.add_item(&ore_harvesting.ore_type, 1);
+                    self.player
+                        .add_item(&ore_harvesting.ore_type, ItemEntry::new(1, 0.));
                     self.on_player_update
                         .call1(&window(), &JsValue::from(self.get_player_inventory().ok()?))
                         .unwrap_or_else(|_| JsValue::from(true));
@@ -1794,9 +1808,9 @@ impl FactorishState {
             let mut chunks = std::mem::take(&mut self.board);
             self.render_minimap_data_pixel(&mut chunks, &position);
             self.board = chunks;
-            for (item_type, count) in structure.destroy_inventory() {
-                popup_text += &format!("+{} {}\n", count, &item_to_str(&item_type));
-                self.player.add_item(&item_type, count)
+            for (item_type, entry) in structure.destroy_inventory() {
+                popup_text += &format!("+{} {}\n", entry.count, &item_to_str(&item_type));
+                self.player.add_item(&item_type, entry)
             }
 
             self.power_networks = build_power_networks(
@@ -1850,7 +1864,7 @@ impl FactorishState {
                 let item_type = item.type_;
                 entry.item = None;
                 picked_items.add_item(&item_type);
-                self.player.add_item(&item_type, 1);
+                self.player.add_item(&item_type, ItemEntry::new(1, 0.));
                 harvested_items = true;
             }
             for (item_type, count) in picked_items {
@@ -1890,10 +1904,7 @@ impl FactorishState {
             return None;
         };
         Some(if inv_type == InventoryType::Storage {
-            let mut v = inventory
-                .iter()
-                .map(|(item, count)| (*item, *count))
-                .collect::<Vec<_>>();
+            let mut v = inventory_to_counts(inventory);
             v.sort();
             Self::flatten_inventory(&v)
         } else {
@@ -1903,7 +1914,7 @@ impl FactorishState {
                     let inventory = inventory.to_mut();
                     for key in recipe.input.keys() {
                         if !inventory.contains_key(key) {
-                            inventory.insert(*key, 0);
+                            inventory.insert(*key, ItemEntry::new(0, 0.));
                         }
                     }
                 }
@@ -1912,15 +1923,12 @@ impl FactorishState {
                     let inventory = inventory.to_mut();
                     for key in recipe.output.keys() {
                         if !inventory.contains_key(key) {
-                            inventory.insert(*key, 0);
+                            inventory.insert(*key, ItemEntry::new(0, 0.));
                         }
                     }
                 }
             }
-            let mut v = inventory
-                .iter()
-                .map(|(item, count)| (*item, *count))
-                .collect::<Vec<_>>();
+            let mut v = inventory_to_counts(inventory.as_ref());
             v.sort();
             v
         })
@@ -1938,10 +1946,7 @@ impl FactorishState {
         selected_item: &Option<ItemType>,
         flatten: bool,
     ) -> Result<js_sys::Array, JsValue> {
-        let mut v = inventory
-            .iter()
-            .map(|(item, count)| (*item, *count))
-            .collect::<Vec<_>>();
+        let mut v = inventory_to_counts(inventory);
         v.sort();
         if flatten {
             self.vec_to_js(&Self::flatten_inventory(&v), selected_item)
@@ -2007,7 +2012,7 @@ impl FactorishState {
             .player
             .inventory
             .iter()
-            .map(|(item, count)| (*item, *count))
+            .map(|(item, entry)| (*item, entry.count))
             .collect::<Vec<_>>();
         v.sort();
         let flat_inv = Self::flatten_inventory(&v);
@@ -2307,9 +2312,16 @@ impl FactorishState {
                 };
                 player.inventory.add_items(
                     &item,
-                    structure
-                        .add_inventory(sel_inventory_type, &item, -(count as isize))
-                        .abs() as usize,
+                    ItemEntry::new(
+                        structure
+                            .add_inventory(
+                                sel_inventory_type,
+                                &item,
+                                ItemEntry::new(-(count as isize) as usize, 0.),
+                            )
+                            .abs() as usize,
+                        0.,
+                    ),
                 );
                 self.on_player_update
                     .call1(&window(), &JsValue::from(self.get_player_inventory()?))?;
@@ -2328,7 +2340,7 @@ impl FactorishState {
                     src_inventory.remove_items(
                         &item,
                         structure
-                            .add_inventory(inventory_type, &item, count as isize)
+                            .add_inventory(inventory_type, &item, ItemEntry::new(count, 0.))
                             .abs() as usize,
                     )
                 };
@@ -2337,18 +2349,18 @@ impl FactorishState {
                     let try_order = Self::inventory_move_order(&item);
 
                     for invtype in try_order {
-                        let moved_count = try_move(&mut player.inventory, invtype);
-                        if moved_count != 0 {
+                        let moved_entry = try_move(&mut player.inventory, invtype);
+                        if moved_entry.count != 0 {
                             self.on_player_update
                                 .call1(&window(), &JsValue::from(self.get_player_inventory()?))?;
-                            return Ok(moved_count != 0);
+                            return Ok(true);
                         }
                     }
                 } else {
-                    let moved_count = try_move(&mut player.inventory, inventory_type);
+                    let moved_entry = try_move(&mut player.inventory, inventory_type);
                     self.on_player_update
                         .call1(&window(), &JsValue::from(self.get_player_inventory()?))?;
-                    return Ok(moved_count != 0);
+                    return Ok(moved_entry.count != 0);
                 }
             }
         }
@@ -2386,19 +2398,24 @@ impl FactorishState {
                 .iter()
                 .map(|(item, count)| (*item, *count))
                 .collect::<Vec<_>>();
-            for (item, count) in items {
+            for (item, entry) in items {
                 let try_order = Self::inventory_move_order(&item);
 
                 for invtype in try_order {
-                    let moved_count = structure.add_inventory(invtype, &item, count as isize);
+                    let moved_count = structure.add_inventory(invtype, &item, entry);
                     if moved_count == 0 {
                         continue;
                     }
-                    if player.inventory.remove_items(&item, moved_count as usize) != 0 {
+                    if player
+                        .inventory
+                        .remove_items(&item, moved_count as usize)
+                        .count
+                        != 0
+                    {
                         ret = true;
                         break;
                     } else {
-                        panic!("We have checked player has {} {:?}, no?", count, item);
+                        panic!("We have checked player has {} {:?}, no?", entry.count, item);
                     }
                 }
             }
@@ -2548,10 +2565,10 @@ impl FactorishState {
         if button == 0 {
             if let Some((selected_tool, _)) = self.get_selected_tool_or_item_opt() {
                 let cell = self.tile_at(&cursor);
-                if let Some((count, cell)) =
+                if let Some((entry, cell)) =
                     self.player.inventory.get(&selected_tool).zip(cell.as_ref())
                 {
-                    if 1 <= *count && cell.water ^ (selected_tool != ItemType::OffshorePump) {
+                    if 1 <= entry.count && cell.water ^ (selected_tool != ItemType::OffshorePump) {
                         let mut new_s = if let Ok(s) = self.new_structure(&selected_tool, &cursor) {
                             s
                         } else {
@@ -2676,8 +2693,8 @@ impl FactorishState {
                         self.render_minimap_data_pixel(&mut chunks, &cursor);
                         self.board = chunks;
 
-                        if let Some(count) = self.player.inventory.get_mut(&selected_tool) {
-                            *count -= 1;
+                        if let Some(entry) = self.player.inventory.get_mut(&selected_tool) {
+                            entry.count -= 1;
                         }
                         self.on_player_update
                             .call1(&window(), &JsValue::from(self.get_player_inventory()?))
@@ -2970,9 +2987,9 @@ impl FactorishState {
             [
                 JsValue::from(selected_tool as f64),
                 JsValue::from(
-                    *self.tool_belt[selected_tool]
+                    self.tool_belt[selected_tool]
                         .and_then(|item| self.player.inventory.get(&item))
-                        .unwrap_or(&0) as f64,
+                        .map_or(0, |entry| entry.count) as f64,
                 ),
             ]
             .iter()
@@ -2985,7 +3002,12 @@ impl FactorishState {
     /// Returns count of selected item or null
     pub fn get_selected_item(&self) -> JsValue {
         if let Some(SelectedItem::PlayerInventory(selected_item, _)) = self.selected_item {
-            JsValue::from_f64(*self.player.inventory.get(&selected_item).unwrap_or(&0) as f64)
+            JsValue::from_f64(
+                self.player
+                    .inventory
+                    .get(&selected_item)
+                    .map_or(0, |entry| entry.count) as f64,
+            )
         } else {
             JsValue::null()
         }
@@ -3131,9 +3153,8 @@ impl FactorishState {
             .iter()
             .map(|item| {
                 JsValue::from(
-                    *item
-                        .and_then(|item| self.player.inventory.get(&item))
-                        .unwrap_or(&0) as f64,
+                    item.and_then(|item| self.player.inventory.get(&item))
+                        .map_or(0, |entry| entry.count) as f64,
                 )
             })
             .collect()

@@ -1,6 +1,9 @@
 mod iter;
 
-use crate::inventory::STACK_SIZE;
+use crate::{
+    inventory::{ItemEntry, STACK_SIZE},
+    ItemSetTrait,
+};
 
 use super::{
     drop_items::DropItem,
@@ -204,9 +207,9 @@ pub(crate) fn default_add_inventory(
     s: &mut (impl Structure + ?Sized),
     inventory_type: InventoryType,
     item_type: &ItemType,
-    count: isize,
+    input: ItemEntry,
 ) -> isize {
-    let mut count = count;
+    let mut count = input.count as isize;
     if 0 < count {
         match inventory_type {
             InventoryType::Input => {
@@ -253,10 +256,12 @@ pub(crate) fn default_add_inventory(
     }
     if let Some(inventory) = s.inventory_mut(inventory_type) {
         if 0 < count {
-            inventory.add_items(item_type, count as usize);
+            inventory.add_items(item_type, ItemEntry::new(count as usize, 0.));
             count
         } else {
-            -(inventory.remove_items(item_type, count.abs() as usize) as isize)
+            -(inventory
+                .remove_items(item_type, count.abs() as usize)
+                .count as isize)
         }
     } else {
         0
@@ -394,9 +399,9 @@ pub(crate) trait Structure {
         &mut self,
         inventory_type: InventoryType,
         item_type: &ItemType,
-        count: isize,
+        input: ItemEntry,
     ) -> isize {
-        default_add_inventory(self, inventory_type, item_type, count)
+        default_add_inventory(self, inventory_type, item_type, input)
     }
     fn burner_energy(&self) -> Option<(f64, f64)> {
         None

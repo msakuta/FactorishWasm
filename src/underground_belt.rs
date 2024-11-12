@@ -1,3 +1,5 @@
+use crate::inventory::ItemEntry;
+
 use super::{
     drop_items::DROP_ITEM_SIZE_I,
     gl::utils::{enable_buffer, Flatten},
@@ -388,7 +390,7 @@ impl Structure for UndergroundBelt {
                     .iter()
                     .filter_map(|item| {
                         if distance * TILE_SIZE_I < item.0 {
-                            Some((item.1, 1))
+                            Some((item.1, ItemEntry::new(1, 0.)))
                         } else {
                             None
                         }
@@ -489,7 +491,7 @@ impl Structure for UndergroundBelt {
     fn destroy_inventory(&mut self) -> Inventory {
         let mut ret = Inventory::new();
         for (_, item) in std::mem::take(&mut self.items) {
-            *ret.entry(item).or_default() += 1;
+            ret.entry(item).or_default().count += 1;
         }
         ret
     }

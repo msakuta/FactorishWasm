@@ -1,3 +1,5 @@
+use crate::inventory::ItemEntry;
+
 use super::pipe::Pipe;
 use super::{
     drop_items::DropItem,
@@ -204,7 +206,7 @@ impl Structure for Boiler {
                 "Items: \n{}",
                 self.inventory
                     .iter()
-                    .map(|item| format!("{:?}: {}<br>", item.0, item.1))
+                    .map(|item| format!("{:?}: {}<br>", item.0, item.1.count))
                     .fold(String::from(""), |accum, item| accum + &item)
             )
         )
@@ -292,20 +294,23 @@ impl Structure for Boiler {
         &mut self,
         inventory_type: InventoryType,
         item_type: &ItemType,
-        amount: isize,
+        entry: ItemEntry,
     ) -> isize {
         if inventory_type != InventoryType::Burner {
             return 0;
         }
-        if amount < 0 {
-            let existing = self.inventory.count_item(item_type);
-            let removed = existing.min((-amount) as usize);
-            self.inventory.remove_items(item_type, removed);
-            -(removed as isize)
-        } else if *item_type == ItemType::CoalOre {
-            let add_amount = amount
-                .min((FUEL_CAPACITY - self.inventory.count_item(&ItemType::CoalOre)) as isize);
-            self.inventory.add_items(item_type, add_amount as usize);
+        // if entry.count < 0 {
+        //     let existing = self.inventory.count_item(item_type);
+        //     let removed = existing.min((-entry.count) as usize);
+        //     self.inventory.remove_items(item_type, removed);
+        //     -(removed as isize)
+        // } else
+        if *item_type == ItemType::CoalOre {
+            let add_amount = entry
+                .count
+                .min(FUEL_CAPACITY - self.inventory.count_item(&ItemType::CoalOre));
+            self.inventory
+                .add_items(item_type, ItemEntry::new(add_amount as usize, 0.));
             add_amount as isize
         } else {
             0
@@ -335,7 +340,13 @@ impl Structure for Boiler {
         if let Some(recipe) = self.recipe.take() {
             if self.progress.is_some() {
                 let mut ret = std::mem::take(&mut self.inventory);
-                ret.merge(recipe.input);
+                ret.merge(
+                    recipe
+                        .input
+                        .into_iter()
+                        .map(|(ty, count)| (ty, ItemEntry::new(count, 0.)))
+                        .collect(),
+                );
                 return ret;
             }
         }

@@ -1,3 +1,5 @@
+use crate::inventory::{item_set_to_inventory, ItemEntry};
+
 use super::{
     drop_items::DropItem,
     gl::{
@@ -287,7 +289,7 @@ impl Structure for Lab {
 
     fn input(&mut self, o: &DropItem) -> Result<(), JsValue> {
         if self.recipe.is_some() {
-            if 0 < default_add_inventory(self, InventoryType::Input, &o.type_, 1) {
+            if 0 < default_add_inventory(self, InventoryType::Input, &o.type_, ItemEntry::ONE) {
                 return Ok(());
             } else {
                 return Err(JsValue::from_str("Item is not part of recipe"));
@@ -313,9 +315,9 @@ impl Structure for Lab {
     fn destroy_inventory(&mut self) -> Inventory {
         let mut ret = std::mem::take(&mut self.input_inventory);
         // Return the ingredients if it was in the middle of processing a recipe.
-        if let Some(mut recipe) = self.recipe.take() {
+        if let Some(recipe) = self.recipe.take() {
             if self.progress.is_some() {
-                ret.merge(std::mem::take(&mut recipe.input));
+                ret.merge(item_set_to_inventory(recipe.input));
             }
         }
         ret

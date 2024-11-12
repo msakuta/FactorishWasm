@@ -1,3 +1,5 @@
+use crate::inventory::ItemEntry;
+
 use super::{
     drop_items::DropItem,
     gl::{
@@ -399,7 +401,7 @@ impl Structure for Assembler {
                     // Produce outputs into inventory
                     for output_item in &recipe.output {
                         self.output_inventory
-                            .add_items(&output_item.0, *output_item.1);
+                            .add_items(&output_item.0, ItemEntry::new(*output_item.1, 0.));
                     }
                     console_log!("outputting from Assembler {}", recipe.output.len());
                     return Ok(FrameProcResult::InventoryChanged(self.position));
@@ -415,7 +417,7 @@ impl Structure for Assembler {
 
     fn input(&mut self, o: &DropItem) -> Result<(), JsValue> {
         if self.recipe.is_some() {
-            if 0 < default_add_inventory(self, InventoryType::Input, &o.type_, 1) {
+            if 0 < default_add_inventory(self, InventoryType::Input, &o.type_, ItemEntry::ONE) {
                 return Ok(());
             } else {
                 return Err(JsValue::from_str("Item is not part of recipe"));
@@ -456,9 +458,15 @@ impl Structure for Assembler {
         let mut ret = std::mem::take(&mut self.input_inventory);
         ret.merge(std::mem::take(&mut self.output_inventory));
         // Return the ingredients if it was in the middle of processing a recipe.
-        if let Some(mut recipe) = self.recipe.take() {
+        if let Some(recipe) = self.recipe.take() {
             if self.progress.is_some() {
-                ret.merge(std::mem::take(&mut recipe.input));
+                ret.merge(
+                    recipe
+                        .input
+                        .into_iter()
+                        .map(|(ty, count)| (ty, ItemEntry::new(count, 0.)))
+                        .collect(),
+                );
             }
         }
         ret

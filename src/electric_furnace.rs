@@ -1,3 +1,5 @@
+use crate::inventory::ItemEntry;
+
 use super::{
     furnace::RECIPES,
     gl::{
@@ -272,7 +274,7 @@ impl Structure for ElectricFurnace {
             }
         }
 
-        if 0 < default_add_inventory(self, InventoryType::Input, &o.type_, 1) {
+        if 0 < default_add_inventory(self, InventoryType::Input, &o.type_, ItemEntry::ONE) {
             Ok(())
         } else {
             Err(JsValue::from_str("Item is not part of recipe"))
@@ -327,9 +329,15 @@ impl Structure for ElectricFurnace {
         let mut ret = std::mem::take(&mut self.input_inventory);
         ret.merge(std::mem::take(&mut self.output_inventory));
         // Return the ingredients if it was in the middle of processing a recipe.
-        if let Some(mut recipe) = self.recipe.take() {
+        if let Some(recipe) = self.recipe.take() {
             if self.progress.is_some() {
-                ret.merge(std::mem::take(&mut recipe.input));
+                ret.merge(
+                    recipe
+                        .input
+                        .into_iter()
+                        .map(|(ty, count)| (ty, ItemEntry::new(count, 0.)))
+                        .collect(),
+                );
             }
         }
         ret
