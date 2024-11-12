@@ -29,6 +29,7 @@ import ore from "../img/ore.png";
 import coalOre from "../img/coal-ore.png";
 import copperOre from "../img/copper-ore.png";
 import stoneOre from "../img/stone-ore.png";
+import spoilage from "../img/spoilage.png";
 import ironPlate from "../img/metal.png";
 import steelPlate from "../img/steel-plate.png";
 import copperPlate from "../img/copper-plate.png";
@@ -84,6 +85,7 @@ export let loadImages = [
     ["ironPlate", ironPlate],
     ["copperOre", copperOre],
     ["stoneOre", stoneOre],
+    ["spoilage", spoilage],
     ["copperPlate", copperPlate],
     ["gear", gear],
     ["sciencePack1", sciencePack1],
@@ -119,6 +121,8 @@ function getImageFileInt(type){
         return coalOre;
     case 'Stone Ore':
         return stoneOre;
+    case 'Spoilage':
+        return spoilage;
     case 'Gear':
         return gear;
     case 'Science Pack 1':

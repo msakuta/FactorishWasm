@@ -582,6 +582,7 @@ pub struct FactorishState {
     image_coal_ore: Option<ImageBundle>,
     image_copper_ore: Option<ImageBundle>,
     image_stone_ore: Option<ImageBundle>,
+    image_spoilage: Option<ImageBundle>,
     image_iron_plate: Option<ImageBundle>,
     image_copper_plate: Option<ImageBundle>,
     image_gear: Option<ImageBundle>,
@@ -707,6 +708,7 @@ impl FactorishState {
             image_coal_ore: None,
             image_copper_ore: None,
             image_stone_ore: None,
+            image_spoilage: None,
             image_iron_plate: None,
             image_copper_plate: None,
             image_gear: None,
@@ -1331,7 +1333,7 @@ impl FactorishState {
         // );
 
         ret.iter()
-            .map(|evt| JsValue::from_serde(&evt))
+            .map(JsValue::from_serde)
             .collect::<Result<js_sys::Array, _>>()
             .map_err(|e| JsValue::from_str(&e.to_string()))
     }
@@ -1401,6 +1403,15 @@ impl FactorishState {
                 None
             }
         })();
+
+        let sim_time = self.sim_time;
+        self.player.inventory.retain(|_ty, item| {
+            if item.spoil_time == 0. {
+                true
+            } else {
+                sim_time < item.spoil_time
+            }
+        });
 
         let start_structures = performance().now();
         // This is silly way to avoid borrow checker that temporarily move the structures
