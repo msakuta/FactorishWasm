@@ -1116,7 +1116,7 @@ let unlimited = true;
                 updateStructureInventory(event.UpdateStructureInventory);
             }
             if(event === "UpdatePlayerInventory"){
-                console.log("UpdatePlayerInventory event received");
+                // console.log("UpdatePlayerInventory event received");
                 updateInventory(sim.get_player_inventory());
                 updateToolBar();
             }
