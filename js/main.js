@@ -578,7 +578,9 @@ let unlimited = true;
     const playerMouseEnterHandler = (i, evt) => {
         const items = vueApp.playerItems.value;
         if(i < items.length){
-            setToolTip(evt.target, `${items[i].name} (${items[i].count})`, "inventory");
+            const item = items[i];
+            setToolTip(evt.target, `${items[i].name} (${items[i].count})` +
+                (item.spoil ? `(spoil: ${(item.spoil * 100).toFixed()}%)` : ``), "inventory");
         }
     };
 

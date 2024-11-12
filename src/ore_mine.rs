@@ -444,7 +444,7 @@ impl Structure for OreMine {
         if *item_type == ItemType::CoalOre {
             let add_amount = entry
                 .count
-                .min((FUEL_CAPACITY - self.input_inventory.count_item(&ItemType::CoalOre)));
+                .min(FUEL_CAPACITY - self.input_inventory.count_item(&ItemType::CoalOre));
             self.input_inventory
                 .add_items(item_type, ItemEntry::new(add_amount, 0.));
             add_amount as isize

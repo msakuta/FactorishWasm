@@ -1,5 +1,3 @@
-use crate::ItemSet;
-
 use super::ItemType;
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, convert::TryFrom, iter::IntoIterator};
@@ -53,7 +51,7 @@ pub(crate) fn inventory_to_vec(items: &Inventory) -> Vec<(ItemType, ItemEntry)> 
         .collect::<Vec<_>>()
 }
 
-pub(crate) fn inventory_to_counts(items: &Inventory) -> Vec<(ItemType, usize)> {
+pub(crate) fn _inventory_to_counts(items: &Inventory) -> Vec<(ItemType, usize)> {
     items
         .iter()
         .map(|(item, entry)| (*item, entry.count))

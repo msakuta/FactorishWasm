@@ -69,8 +69,7 @@ use electric_furnace::ElectricFurnace;
 use furnace::Furnace;
 use inserter::Inserter;
 use inventory::{
-    inventory_to_counts, inventory_to_vec, Inventory, InventoryTrait, InventoryType, ItemEntry,
-    STACK_SIZE,
+    inventory_to_vec, Inventory, InventoryTrait, InventoryType, ItemEntry, STACK_SIZE,
 };
 use items::{item_to_str, str_to_item, ItemType};
 use lab::Lab;
@@ -145,6 +144,7 @@ const TILE_SIZE_I: i32 = TILE_SIZE as i32;
 const COAL_POWER: f64 = 100.; // kilojoules
 const SAVE_VERSION: i64 = 5;
 const ORE_HARVEST_TIME: i32 = 20;
+const ORE_SPOIL: f64 = 100.;
 
 const WIRE_ATTACH_X: f64 = 28.;
 const WIRE_ATTACH_Y: f64 = 8.;
@@ -1298,6 +1298,19 @@ impl FactorishState {
             self.delta_time = SIM_DELTA_TIME;
             self.sim_time += SIM_DELTA_TIME;
             ret.extend(self.simulate_step(SIM_DELTA_TIME)?.into_iter());
+
+            // If the player has a spoilable item in the inventory, update it every rendering.
+            if !ret
+                .iter()
+                .any(|evt| matches!(evt, JSEvent::UpdatePlayerInventory))
+                && self
+                    .player
+                    .inventory
+                    .iter()
+                    .any(|(_ty, item)| item.spoil_time != 0.)
+            {
+                ret.push(JSEvent::UpdatePlayerInventory);
+            }
             // rendered_frames += 1;
         }
 
@@ -1317,22 +1330,25 @@ impl FactorishState {
         //     rendered_frames
         // );
 
-        Ok(ret.iter().collect())
+        ret.iter()
+            .map(|evt| JsValue::from_serde(&evt))
+            .collect::<Result<js_sys::Array, _>>()
+            .map_err(|e| JsValue::from_str(&e.to_string()))
     }
 
-    fn simulate_step(&mut self, delta_time: f64) -> Result<Vec<JsValue>, JsValue> {
+    fn simulate_step(&mut self, delta_time: f64) -> Result<Vec<JSEvent>, JsValue> {
         // Since we cannot use callbacks to report events to the JavaScript environment,
         // we need to accumulate events during simulation and return them as an array.
         let mut events = vec![];
 
         let mut frame_proc_result_to_event = |result: Result<FrameProcResult, ()>| match result {
             Ok(FrameProcResult::None) => (),
-            Ok(FrameProcResult::InventoryChanged(pos)) => events.push(
-                JsValue::from_serde(&JSEvent::UpdateStructureInventory(pos.x, pos.y)).unwrap(),
-            ),
+            Ok(FrameProcResult::InventoryChanged(pos)) => {
+                events.push(JSEvent::UpdateStructureInventory(pos.x, pos.y))
+            }
             Ok(FrameProcResult::UpdateResearch) => {
                 console_log!("UpdateResearch event");
-                events.push(JsValue::from_serde(&JSEvent::UpdateResearch).unwrap())
+                events.push(JSEvent::UpdateResearch)
             }
             Err(e) => console_log!("frame_proc Error: {:?}", e),
         };
@@ -1360,8 +1376,10 @@ impl FactorishState {
                         tile.ore = None;
                         ret = false;
                     }
-                    self.player
-                        .add_item(&ore_harvesting.ore_type, ItemEntry::new(1, 0.));
+                    self.player.add_item(
+                        &ore_harvesting.ore_type,
+                        ItemEntry::new(1, self.sim_time + ORE_SPOIL),
+                    );
                     self.on_player_update
                         .call1(&window(), &JsValue::from(self.get_player_inventory().ok()?))
                         .unwrap_or_else(|_| JsValue::from(true));
@@ -1885,7 +1903,10 @@ impl FactorishState {
         let mut ret = vec![];
         for (ty, mut entry) in inventory {
             while STACK_SIZE < entry.count {
-                ret.push((*ty, ItemEntry::new(entry.count.min(STACK_SIZE), entry.spoil_time)));
+                ret.push((
+                    *ty,
+                    ItemEntry::new(entry.count.min(STACK_SIZE), entry.spoil_time),
+                ));
                 entry.count -= STACK_SIZE;
             }
             ret.push((*ty, entry));
@@ -1972,10 +1993,15 @@ impl FactorishState {
                 inventory
                     .iter()
                     .map(|(type_, entry)| {
+                        let spoil = if entry.spoil_time != 0. {
+                            ((entry.spoil_time - self.sim_time) / ORE_SPOIL).clamp(0., 1.)
+                        } else {
+                            0.
+                        };
                         js_sys::Array::of3(
                             &JsValue::from_str(&item_to_str(type_)),
                             &JsValue::from_f64(entry.count as f64),
-                            &JsValue::from_f64(entry.spoil_time),
+                            &JsValue::from_f64(spoil),
                         )
                     })
                     .collect::<js_sys::Array>()
@@ -2009,16 +2035,21 @@ impl FactorishState {
         idx: usize,
         right_click: bool,
     ) -> Result<(), JsValue> {
-        let mut v = inventory_to_vec(&self
-            .player
-            .inventory);
+        let mut v = inventory_to_vec(&self.player.inventory);
         v.sort_by_key(|(ty, _)| *ty);
         let flat_inv = Self::flatten_inventory(&v);
         self.selected_item = Some(
             flat_inv
                 .get(idx)
                 .map(|(ty, entry)| {
-                    SelectedItem::PlayerInventory(*ty, if right_click { entry.count / 2 } else { entry.count })
+                    SelectedItem::PlayerInventory(
+                        *ty,
+                        if right_click {
+                            entry.count / 2
+                        } else {
+                            entry.count
+                        },
+                    )
                 })
                 .ok_or_else(|| JsValue::from_str("Item name not identified"))?,
         );
@@ -2129,7 +2160,11 @@ impl FactorishState {
             id,
             inv_type,
             item.0,
-            if right_click { item.1.count / 2 } else { item.1.count },
+            if right_click {
+                item.1.count / 2
+            } else {
+                item.1.count
+            },
         ));
         Ok(())
     }

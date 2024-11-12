@@ -1,7 +1,6 @@
 use crate::{
     assembler::Assembler,
     furnace::RECIPES,
-    inventory::Inventory,
     items::{item_to_str, ItemType},
     FactorishState, ItemSet,
 };

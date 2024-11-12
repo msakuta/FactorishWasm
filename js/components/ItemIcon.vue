@@ -37,7 +37,7 @@ export default {
         };
       },
       spoilBar: () => ({
-        width: "32px",
+        width: `${props.spoil * 32}px`,
         position: "absolute",
         left: "0px",
         bottom: "0px",
