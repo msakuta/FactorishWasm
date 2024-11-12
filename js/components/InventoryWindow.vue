@@ -227,6 +227,7 @@ export default {
                 <item-icon
                   :item="playerItems.value[i-1].name"
                   :count="playerItems.value[i-1].count"
+                  :spoil="playerItems.value[i-1].spoil"
                 >
                 </item-icon>
               </template>

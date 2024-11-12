@@ -1881,15 +1881,14 @@ impl FactorishState {
         Ok(harvested_structure || harvested_items)
     }
 
-    fn flatten_inventory(inventory: &[(ItemType, usize)]) -> Vec<(ItemType, usize)> {
+    fn flatten_inventory(inventory: &[(ItemType, ItemEntry)]) -> Vec<(ItemType, ItemEntry)> {
         let mut ret = vec![];
-        for pair in inventory {
-            let mut amount = pair.1;
-            while STACK_SIZE < amount {
-                ret.push((pair.0, amount.min(STACK_SIZE)));
-                amount -= STACK_SIZE;
+        for (ty, mut entry) in inventory {
+            while STACK_SIZE < entry.count {
+                ret.push((*ty, ItemEntry::new(entry.count.min(STACK_SIZE), entry.spoil_time)));
+                entry.count -= STACK_SIZE;
             }
-            ret.push((pair.0, amount));
+            ret.push((*ty, entry));
         }
         ret
     }
@@ -1897,15 +1896,15 @@ impl FactorishState {
     fn inventory_to_vec(
         structure: &dyn Structure,
         inv_type: InventoryType,
-    ) -> Option<Vec<(ItemType, usize)>> {
+    ) -> Option<Vec<(ItemType, ItemEntry)>> {
         let inventory = if let Some(inv) = structure.inventory(inv_type) {
             inv
         } else {
             return None;
         };
         Some(if inv_type == InventoryType::Storage {
-            let mut v = inventory_to_counts(inventory);
-            v.sort();
+            let mut v = inventory_to_vec(inventory);
+            v.sort_by_key(|(k, _)| *k);
             Self::flatten_inventory(&v)
         } else {
             let mut inventory = std::borrow::Cow::Borrowed(inventory);
@@ -1928,8 +1927,8 @@ impl FactorishState {
                     }
                 }
             }
-            let mut v = inventory_to_counts(inventory.as_ref());
-            v.sort();
+            let mut v = inventory_to_vec(inventory.as_ref());
+            v.sort_by_key(|(ty, _)| *ty);
             v
         })
     }
@@ -1946,8 +1945,8 @@ impl FactorishState {
         selected_item: &Option<ItemType>,
         flatten: bool,
     ) -> Result<js_sys::Array, JsValue> {
-        let mut v = inventory_to_counts(inventory);
-        v.sort();
+        let mut v = inventory_to_vec(inventory);
+        v.sort_by_key(|(ty, _)| *ty);
         if flatten {
             self.vec_to_js(&Self::flatten_inventory(&v), selected_item)
         } else {
@@ -1961,20 +1960,22 @@ impl FactorishState {
     ///          * inventory (array), each of which element consists of
     ///              * name (string)
     ///              * count (int)
+    ///              * spoil_time (float)
     ///          * selected item (string)
     fn vec_to_js(
         &self,
-        inventory: &[(ItemType, usize)],
+        inventory: &[(ItemType, ItemEntry)],
         selected_item: &Option<ItemType>,
     ) -> Result<js_sys::Array, JsValue> {
         Ok(js_sys::Array::of2(
             &JsValue::from({
                 inventory
                     .iter()
-                    .map(|(type_, count)| {
-                        js_sys::Array::of2(
+                    .map(|(type_, entry)| {
+                        js_sys::Array::of3(
                             &JsValue::from_str(&item_to_str(type_)),
-                            &JsValue::from_f64(*count as f64),
+                            &JsValue::from_f64(entry.count as f64),
+                            &JsValue::from_f64(entry.spoil_time),
                         )
                     })
                     .collect::<js_sys::Array>()
@@ -1988,7 +1989,7 @@ impl FactorishState {
         ))
     }
 
-    /// Returns [[itemName, itemCount]*, selectedItemName]
+    /// Returns [[itemName, itemCount, spoil]*, selectedItemName]
     pub fn get_player_inventory(&self) -> Result<js_sys::Array, JsValue> {
         self.inventory_to_js(
             &self.player.inventory,
@@ -2008,19 +2009,16 @@ impl FactorishState {
         idx: usize,
         right_click: bool,
     ) -> Result<(), JsValue> {
-        let mut v = self
+        let mut v = inventory_to_vec(&self
             .player
-            .inventory
-            .iter()
-            .map(|(item, entry)| (*item, entry.count))
-            .collect::<Vec<_>>();
-        v.sort();
+            .inventory);
+        v.sort_by_key(|(ty, _)| *ty);
         let flat_inv = Self::flatten_inventory(&v);
         self.selected_item = Some(
             flat_inv
                 .get(idx)
-                .map(|i| {
-                    SelectedItem::PlayerInventory(i.0, if right_click { i.1 / 2 } else { i.1 })
+                .map(|(ty, entry)| {
+                    SelectedItem::PlayerInventory(*ty, if right_click { entry.count / 2 } else { entry.count })
                 })
                 .ok_or_else(|| JsValue::from_str("Item name not identified"))?,
         );
@@ -2131,7 +2129,7 @@ impl FactorishState {
             id,
             inv_type,
             item.0,
-            if right_click { item.1 / 2 } else { item.1 },
+            if right_click { item.1.count / 2 } else { item.1.count },
         ));
         Ok(())
     }

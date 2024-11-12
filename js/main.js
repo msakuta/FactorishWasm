@@ -720,6 +720,7 @@ let unlimited = true;
             return {
                 name: item[0],
                 count: item[1],
+                spoil: item[2],
             };
         }) : [];
     }

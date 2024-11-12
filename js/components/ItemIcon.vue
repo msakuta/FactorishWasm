@@ -17,6 +17,10 @@ export default {
       type: Boolean,
       default: false,
     },
+    spoil: {
+      type: Number,
+      default: 0,
+    }
   },
 
   setup(props, context) {
@@ -32,6 +36,14 @@ export default {
           height: `32px`,
         };
       },
+      spoilBar: () => ({
+        width: "32px",
+        position: "absolute",
+        left: "0px",
+        bottom: "0px",
+        height: "4px",
+        backgroundColor: "#fff",
+      }),
     }
   }
 }
@@ -42,5 +54,6 @@ export default {
     <div v-if="!noCount && 0 < count" class="overlay noselect">
     {{ count }}
     </div>
+    <div v-if="spoil !== 0" :style="spoilBar()"></div>
   </div>
 </template>
