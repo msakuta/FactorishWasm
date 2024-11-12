@@ -1343,18 +1343,6 @@ impl FactorishState {
         // we need to accumulate events during simulation and return them as an array.
         let mut events = vec![];
 
-        let mut frame_proc_result_to_event = |result: Result<FrameProcResult, ()>| match result {
-            Ok(FrameProcResult::None) => (),
-            Ok(FrameProcResult::InventoryChanged(pos)) => {
-                events.push(JSEvent::UpdateStructureInventory(pos.x, pos.y))
-            }
-            Ok(FrameProcResult::UpdateResearch) => {
-                console_log!("UpdateResearch event");
-                events.push(JSEvent::UpdateResearch)
-            }
-            Err(e) => console_log!("frame_proc Error: {:?}", e),
-        };
-
         self.ore_harvesting = (|| {
             let mut ore_harvesting = self.ore_harvesting?;
             let mut ret = true;
@@ -1405,13 +1393,38 @@ impl FactorishState {
         })();
 
         let sim_time = self.sim_time;
+        let mut spoiled_items = 0;
         self.player.inventory.retain(|_ty, item| {
-            if item.spoil_time == 0. {
+            if item.spoil_time == 0. || sim_time < item.spoil_time {
                 true
             } else {
-                sim_time < item.spoil_time
+                spoiled_items += item.count;
+                false
             }
         });
+
+        if 0 < spoiled_items {
+            self.player
+                .add_item(&ItemType::Spoilage, ItemEntry::new(spoiled_items, 0.));
+            if !events
+                .iter()
+                .any(|evt| matches!(evt, JSEvent::UpdatePlayerInventory))
+            {
+                events.push(JSEvent::UpdatePlayerInventory);
+            }
+        }
+
+        let mut frame_proc_result_to_event = |result: Result<FrameProcResult, ()>| match result {
+            Ok(FrameProcResult::None) => (),
+            Ok(FrameProcResult::InventoryChanged(pos)) => {
+                events.push(JSEvent::UpdateStructureInventory(pos.x, pos.y))
+            }
+            Ok(FrameProcResult::UpdateResearch) => {
+                console_log!("UpdateResearch event");
+                events.push(JSEvent::UpdateResearch)
+            }
+            Err(e) => console_log!("frame_proc Error: {:?}", e),
+        };
 
         let start_structures = performance().now();
         // This is silly way to avoid borrow checker that temporarily move the structures
