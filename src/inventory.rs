@@ -58,6 +58,27 @@ pub(crate) fn _inventory_to_counts(items: &Inventory) -> Vec<(ItemType, usize)> 
         .collect::<Vec<_>>()
 }
 
+/// Returns if the spoilage happened, meaning the inventory has spontaneously changed,
+/// so the graphics should update.
+pub(crate) fn spoil_process(inventory: &mut Inventory, sim_time: f64) -> bool {
+    let mut spoiled_items = 0;
+    inventory.retain(|_ty, item| {
+        if item.spoil_time == 0. || sim_time < item.spoil_time {
+            true
+        } else {
+            spoiled_items += item.count;
+            false
+        }
+    });
+
+    if 0 < spoiled_items {
+        inventory.add_items(&ItemType::Spoilage, ItemEntry::new(spoiled_items, 0.));
+        true
+    } else {
+        false
+    }
+}
+
 pub(crate) trait InventoryTrait {
     fn remove_item(&mut self, item: &ItemType) -> bool {
         self.remove_items(item, 1).count != 0

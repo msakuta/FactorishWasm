@@ -1201,6 +1201,7 @@ let unlimited = true;
         if(selPos){
             showBurnerStatus(selPos);
             updateStructureProgress(selPos);
+            updateStructureInventory(selPos);
         }
 
         const minimapData = sim.render_minimap(miniMapSize, miniMapSize);

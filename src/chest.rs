@@ -1,4 +1,4 @@
-use crate::inventory::ItemEntry;
+use crate::inventory::{spoil_process, ItemEntry};
 
 use super::{
     drop_items::DropItem,
@@ -110,6 +110,19 @@ impl Structure for Chest {
                 .map(|item| format!("{:?}: {}<br>", item.0, item.1.count))
                 .fold(String::from(""), |accum, item| accum + &item)
         )
+    }
+
+    fn frame_proc(
+        &mut self,
+        _me: crate::structure::StructureId,
+        state: &mut FactorishState,
+        _structures: &mut StructureDynIter,
+    ) -> Result<FrameProcResult, ()> {
+        if spoil_process(&mut self.inventory, state.sim_time) {
+            Ok(FrameProcResult::InventoryChanged(self.position))
+        } else {
+            Ok(FrameProcResult::None)
+        }
     }
 
     fn item_response(&mut self, _item: &DropItem) -> Result<ItemResponseResult, ()> {

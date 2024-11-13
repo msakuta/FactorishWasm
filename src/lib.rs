@@ -69,7 +69,8 @@ use electric_furnace::ElectricFurnace;
 use furnace::Furnace;
 use inserter::Inserter;
 use inventory::{
-    inventory_to_vec, Inventory, InventoryTrait, InventoryType, ItemEntry, STACK_SIZE,
+    inventory_to_vec, spoil_process, Inventory, InventoryTrait, InventoryType, ItemEntry,
+    STACK_SIZE,
 };
 use items::{item_to_str, str_to_item, ItemType};
 use lab::Lab;
@@ -1392,20 +1393,9 @@ impl FactorishState {
             }
         })();
 
-        let sim_time = self.sim_time;
-        let mut spoiled_items = 0;
-        self.player.inventory.retain(|_ty, item| {
-            if item.spoil_time == 0. || sim_time < item.spoil_time {
-                true
-            } else {
-                spoiled_items += item.count;
-                false
-            }
-        });
+        let spoiled = spoil_process(&mut self.player.inventory, self.sim_time);
 
-        if 0 < spoiled_items {
-            self.player
-                .add_item(&ItemType::Spoilage, ItemEntry::new(spoiled_items, 0.));
+        if spoiled {
             if !events
                 .iter()
                 .any(|evt| matches!(evt, JSEvent::UpdatePlayerInventory))
