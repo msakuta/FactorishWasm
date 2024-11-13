@@ -2355,18 +2355,33 @@ impl FactorishState {
             return Ok(false);
         };
         if to_player {
-            if let Some(SelectedItem::StructInventory(_, sel_inventory_type, item, count)) =
-                self.selected_item
+            if let Some(SelectedItem::StructInventory(
+                _,
+                sel_inventory_type,
+                item,
+                selected_count,
+            )) = self.selected_item
             {
                 let (structure, player) = self.find_structure_by_id_mut_and_player_err(id)?;
-                let count = if all {
-                    structure
-                        .inventory(sel_inventory_type)
-                        .map(|i| i.count_item(&item))
-                        .unwrap_or(0)
+                let (spoil, count);
+                if let Some(inventory) = structure.inventory(sel_inventory_type) {
+                    spoil = inventory.get(&item).map_or(0., |entry| entry.spoil_time);
+                    if all {
+                        count = inventory.count_item(&item);
+                    } else {
+                        count = inventory.count_item(&item).min(selected_count);
+                    }
                 } else {
-                    count
-                };
+                    spoil = 0.;
+                    count = 0;
+                }
+
+                console_log!(
+                    "moving to player inventory Count: {} spoil: {}",
+                    count,
+                    spoil
+                );
+
                 player.inventory.add_items(
                     &item,
                     ItemEntry::new(
@@ -2374,10 +2389,10 @@ impl FactorishState {
                             .add_inventory(
                                 sel_inventory_type,
                                 &item,
-                                ItemEntry::new(-(count as isize) as usize, 0.),
+                                ItemEntry::new(-(count as isize) as usize, spoil),
                             )
                             .abs() as usize,
-                        0.,
+                        spoil,
                     ),
                 );
                 self.on_player_update
@@ -2393,11 +2408,14 @@ impl FactorishState {
                     } else {
                         src_inventory.count_item(&item).min(count)
                     };
-                    console_log!("src_inventory Count: {}", count);
+                    let spoil = src_inventory
+                        .get(&item)
+                        .map_or(0., |entry| entry.spoil_time);
+                    console_log!("src_inventory Count: {} spoil: {}", count, spoil);
                     src_inventory.remove_items(
                         &item,
                         structure
-                            .add_inventory(inventory_type, &item, ItemEntry::new(count, 0.))
+                            .add_inventory(inventory_type, &item, ItemEntry::new(count, spoil))
                             .abs() as usize,
                     )
                 };

@@ -256,7 +256,7 @@ pub(crate) fn default_add_inventory(
     }
     if let Some(inventory) = s.inventory_mut(inventory_type) {
         if 0 < count {
-            inventory.add_items(item_type, ItemEntry::new(count as usize, 0.));
+            inventory.add_items(item_type, ItemEntry::new(count as usize, input.spoil_time));
             count
         } else {
             -(inventory

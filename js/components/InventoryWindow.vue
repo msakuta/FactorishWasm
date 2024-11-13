@@ -206,6 +206,7 @@ export default {
                 <item-icon
                   :item="storageItems.value[i-1].name"
                   :count="storageItems.value[i-1].count"
+                  :spoil="storageItems.value[i-1].spoil"
                 />
               </template>
             </div>
