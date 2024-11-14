@@ -1329,7 +1329,7 @@ impl FactorishState {
         // );
 
         ret.iter()
-            .map(JsValue::from_serde)
+            .map(to_value)
             .collect::<Result<js_sys::Array, _>>()
             .map_err(|e| JsValue::from_str(&e.to_string()))
     }

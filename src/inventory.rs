@@ -1,7 +1,7 @@
 use super::ItemType;
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, convert::TryFrom, iter::IntoIterator};
 use serde_wasm_bindgen::from_value;
+use std::{collections::HashMap, convert::TryFrom, iter::IntoIterator};
 use wasm_bindgen::prelude::*;
 
 pub(crate) const STACK_SIZE: usize = 50;
