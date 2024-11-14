@@ -100,12 +100,6 @@ use web_sys::{
     CanvasRenderingContext2d, HtmlCanvasElement, HtmlDivElement, ImageBitmap, WebGlRenderingContext,
 };
 
-// When the `wee_alloc` feature is enabled, use `wee_alloc` as the global
-// allocator.
-#[cfg(feature = "wee_alloc")]
-#[global_allocator]
-static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
-
 fn window() -> web_sys::Window {
     web_sys::window().expect("no global `window` exists")
 }
