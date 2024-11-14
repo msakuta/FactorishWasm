@@ -1,6 +1,7 @@
 use super::ItemType;
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, convert::TryFrom, iter::IntoIterator};
+use serde_wasm_bindgen::from_value;
 use wasm_bindgen::prelude::*;
 
 pub(crate) const STACK_SIZE: usize = 50;
@@ -201,6 +202,6 @@ pub(crate) enum InventoryType {
 impl TryFrom<JsValue> for InventoryType {
     type Error = JsValue;
     fn try_from(value: JsValue) -> Result<Self, JsValue> {
-        value.into_serde().map_err(|e| js_str!("{}", e.to_string()))
+        from_value(value).map_err(|e| js_str!("{}", e.to_string()))
     }
 }

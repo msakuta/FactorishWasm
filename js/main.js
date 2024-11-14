@@ -4,7 +4,7 @@ import sciencePack1 from "../img/science-pack-1.png";
 import menuIcon from "../img/menuIcon.png";
 
 import { loadImages, getImageFile } from "./images.js";
-import { FactorishState } from "../pkg/index.js";
+import { FactorishState } from "../pkg";
 
 import { createApp, nextTick } from "vue";
 

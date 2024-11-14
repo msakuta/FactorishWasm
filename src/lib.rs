@@ -92,6 +92,7 @@ use underground_pipe::UndergroundPipe;
 use water_well::{FluidType, WaterWell};
 
 use serde::{Deserialize, Serialize};
+use serde_wasm_bindgen::{from_value, to_value};
 use std::hash::Hash;
 use std::{
     collections::{HashMap, HashSet},
@@ -102,12 +103,6 @@ use wasm_bindgen::JsCast;
 use web_sys::{
     CanvasRenderingContext2d, HtmlCanvasElement, HtmlDivElement, ImageBitmap, WebGlRenderingContext,
 };
-
-// When the `wee_alloc` feature is enabled, use `wee_alloc` as the global
-// allocator.
-#[cfg(feature = "wee_alloc")]
-#[global_allocator]
-static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
 
 fn window() -> web_sys::Window {
     web_sys::window().expect("no global `window` exists")
@@ -621,7 +616,7 @@ impl FactorishState {
     ) -> Result<FactorishState, JsValue> {
         console_log!("FactorishState constructor");
 
-        let terrain_params: TerrainParameters = serde_wasm_bindgen::from_value(terrain_params)?;
+        let terrain_params: TerrainParameters = from_value(terrain_params)?;
 
         let mut tool_belt = [None; 10];
         tool_belt[0] = Some(ItemType::OreMine);
@@ -2201,7 +2196,7 @@ impl FactorishState {
             //     })
             //     .collect::<js_sys::Array>(),
             // )
-            Ok(JsValue::from_serde(
+            Ok(to_value(
                 &structure
                     .get_recipes()
                     .into_owned()
@@ -2240,7 +2235,7 @@ impl FactorishState {
     }
 
     pub fn get_technologies(&self) -> Result<JsValue, JsValue> {
-        JsValue::from_serde(
+        to_value(
             &TECHNOLOGIES
                 .iter()
                 .map(|t| TechnologySerial::from(t, self))
@@ -2255,7 +2250,7 @@ impl FactorishState {
                 .iter()
                 .find(|tech| tech.tag == research.technology)
             {
-                JsValue::from_serde(&ResearchSerial {
+                to_value(&ResearchSerial {
                     technology: research.technology,
                     progress: research.progress as f64 / tech.steps as f64,
                 })
@@ -2764,7 +2759,7 @@ impl FactorishState {
                         self.on_player_update
                             .call1(&window(), &JsValue::from(self.get_player_inventory()?))
                             .unwrap_or_else(|_| JsValue::from(true));
-                        events.push(JsValue::from_serde(&JSEvent::UpdatePlayerInventory).unwrap());
+                        events.push(to_value(&JSEvent::UpdatePlayerInventory).unwrap());
                     }
                 }
             } else if let Some(structure) = self.find_structure_tile(&[cursor.x, cursor.y]) {
@@ -2778,7 +2773,7 @@ impl FactorishState {
                     if let Ok(recipe_enable) = self.open_structure_inventory(cursor.x, cursor.y) {
                         // self.on_show_inventory.call0(&window()).unwrap();
                         events.push(
-                            JsValue::from_serde(&JSEvent::ShowInventoryAt {
+                            to_value(&JSEvent::ShowInventoryAt {
                                 pos: (cursor.x, cursor.y),
                                 recipe_enable,
                             })
@@ -2795,7 +2790,7 @@ impl FactorishState {
             } else {
                 // Right click means explicit cleanup, so we pick up items no matter what.
                 self.harvest(&cursor, true, true)?;
-                events.push(JsValue::from_serde(&JSEvent::UpdatePlayerInventory).unwrap());
+                events.push(to_value(&JSEvent::UpdatePlayerInventory).unwrap());
             }
         }
 
@@ -2901,10 +2896,7 @@ impl FactorishState {
                 if self.selected_structure_inventory.is_some() {
                     self.selected_structure_inventory = None;
                 }
-                Ok(
-                    js_sys::Array::of1(&JsValue::from_serde(&JSEvent::ShowInventory).unwrap())
-                        .into(),
-                )
+                Ok(js_sys::Array::of1(&to_value(&JSEvent::ShowInventory).unwrap()).into())
             }
             81 => {
                 // 'q'
@@ -3159,14 +3151,14 @@ impl FactorishState {
 
     pub fn get_selected_item_type(&self) -> JsValue {
         self.selected_item
-            .and_then(|i| JsValue::from_serde(&i).ok())
+            .and_then(|i| to_value(&i).ok())
             .unwrap_or(JsValue::NULL)
     }
 
     /// Returns either "Input", "Output" or "Burner" for the selected inventory
     pub fn get_selected_inventory_type(&self) -> JsValue {
         if let Some(SelectedItem::StructInventory(_, type_, _, _)) = self.selected_item {
-            JsValue::from_serde(&type_).unwrap_or(JsValue::NULL)
+            to_value(&type_).unwrap_or(JsValue::NULL)
         } else {
             JsValue::NULL
         }
@@ -3201,7 +3193,7 @@ impl FactorishState {
             };
         if let Some(SelectedItem::ToolBelt(sel)) = self.selected_item {
             if self.tool_belt[sel].is_none() {
-                return Ok(JsValue::from_serde(&JSEvent::ShowInventory).unwrap());
+                return Ok(to_value(&JSEvent::ShowInventory).unwrap());
             }
         }
         Ok(JsValue::from_bool(self.selected_item.is_some()))
