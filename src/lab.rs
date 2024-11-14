@@ -220,7 +220,7 @@ impl Structure for Lab {
             // Refill the energy from the fuel
             if self.power < recipe.power_cost {
                 let mut accumulated = 0.;
-                for network in &state
+                if let Some(network) = state
                     .power_networks
                     .iter()
                     .find(|network| network.sinks.contains(&me))

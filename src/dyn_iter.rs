@@ -1,5 +1,6 @@
 use std::iter;
 
+#[allow(dead_code)]
 pub(crate) trait DynIter {
     type Item: ?Sized;
     fn dyn_iter(&self) -> Box<dyn Iterator<Item = &Self::Item> + '_>;
@@ -18,6 +19,7 @@ where
     }
 }
 
+#[allow(dead_code)]
 pub(crate) trait DynIterMut: DynIter {
     fn dyn_iter_mut(&mut self) -> Box<dyn Iterator<Item = &mut Self::Item> + '_>;
 }
@@ -115,7 +117,7 @@ fn test_dyn_iter() {
 
     let mut v_mut = v.clone();
     let (first, mid) = v_mut.split_at_mut(2);
-    let (center, last) = mid.split_first_mut().unwrap();
+    let (_center, last) = mid.split_first_mut().unwrap();
     let mut chained = Chained(MutRef(first), MutRef(last));
     assert_eq!(
         vec![0, 1, 3, 4],
