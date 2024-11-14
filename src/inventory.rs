@@ -1,5 +1,6 @@
 use super::ItemType;
 use serde::{Deserialize, Serialize};
+use serde_wasm_bindgen::from_value;
 use std::{collections::HashMap, convert::TryFrom};
 use wasm_bindgen::prelude::*;
 
@@ -113,6 +114,6 @@ pub(crate) enum InventoryType {
 impl TryFrom<JsValue> for InventoryType {
     type Error = JsValue;
     fn try_from(value: JsValue) -> Result<Self, JsValue> {
-        value.into_serde().map_err(|e| js_str!("{}", e.to_string()))
+        from_value(value).map_err(|e| js_str!("{}", e.to_string()))
     }
 }
