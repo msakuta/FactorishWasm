@@ -31,7 +31,7 @@ module.exports = {
     ]),
 
     new WasmPackPlugin({
-      crateDirectory: __dirname,
+      crateDirectory: path.resolve(__dirname, "."),
     }),
 
     new HtmlWebpackPlugin({
