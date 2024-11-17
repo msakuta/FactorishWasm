@@ -30,12 +30,26 @@ export default {
     const visible = ref(false);
     const recipes = ref([]);
 
+    const firstOutput = (recipe) => {
+      let result = "";
+      if (!recipe || !recipe.output) {
+        return "";
+      }
+      recipe.output.forEach((v, k) => {
+          console.log(`  ${k}: ${v}`);
+          result = k;
+      });
+      return result;
+    }
+
     return {
       visible,
       left: ref(0),
       top: ref(0),
       recipes,
       itemBack,
+
+      firstOutput,
 
       zIndex: ref(0),
       dragWindowMouseDown,
@@ -100,9 +114,9 @@ export default {
           @mouseleave="evt => onMouseLeaveRecipe(i-1, evt)"
           :style="{backgroundColor: `#ffffff`, backgroundImage: `url(${itemBack})`}"
         >
-          <template v-if="i-1 < recipes.length && Object.entries(recipes[i-1].output).length">
+          <template v-if="firstOutput(recipes[i-1])">
             <item-icon
-              :item="Object.entries(recipes[i-1].output)[0][0]"
+              :item="firstOutput(recipes[i-1])"
               :noCount="true"
             />
           </template>
