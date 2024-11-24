@@ -21,6 +21,41 @@ export default {
   },
 
   setup(props, context) {
+
+    const outputString = (recipe) => {
+      let result = "";
+      if (!recipe || !recipe.output) {
+        return "";
+      }
+      recipe.output.forEach((v, k) => {
+          if (result !== "") result += ", ";
+          result += k;
+      });
+      return result;
+    }
+
+    const outputIcons = (recipe) => {
+      let result = [];
+      if (!recipe || !recipe.output) {
+        return "";
+      }
+      recipe.output.forEach((v, k) => {
+          result.push([k, v]);
+      });
+      return result;
+    }
+
+    const inputIcons = (recipe) => {
+      let result = [];
+      if (!recipe || !recipe.input) {
+        return "";
+      }
+      recipe.input.forEach((v, k) => {
+          result.push([k, v]);
+      });
+      return result;
+    }
+
     return {
       visible: ref(false),
       drawMode: ref(HTMLDraw),
@@ -37,6 +72,10 @@ export default {
       recipe: ref({}),
       technology: ref({}),
 
+      outputString,
+      outputIcons,
+      inputIcons,
+
       HTMLDraw,
       RecipeDraw,
       ResearchDraw,
@@ -51,21 +90,21 @@ export default {
   >
     <div v-if="drawMode === HTMLDraw" v-html="text" />
     <div v-else-if="drawMode === RecipeDraw">
-      <div v-for="k, item in recipe.output" :key="k" style="display: inline-block; width = 10%">
-        {{item}}
+      <div style="display: inline-block; width = 10%">
+        {{outputString(recipe)}}
       </div>
       <div>
         Time: {{recipe.recipe_time * 0.05}}s
       </div>
       <div class="recipe-box" style="width: 200px">
         <span style="display: inline-block; width: 50%">
-          <span v-for="count, item in recipe.input" :key="item">
-            <item-icon :item="item" :count="count"></item-icon>
+          <span v-for="item in inputIcons(recipe)" :key="item">
+            <item-icon :item="item[0]" :count="item[1]"></item-icon>
           </span>
         </span>
         <img :src="rightarrow" style="width: 20px; height: 32px">
-        <span v-for="count, item in recipe.output" :key="item" style="display: inline-block; width = 10%">
-          <item-icon :item="item" :count="count"></item-icon>
+        <span v-for="item in outputIcons(recipe)" :key="item" style="display: inline-block; width = 10%">
+          <item-icon :item="item[0]" :count="item[1]"></item-icon>
         </span>
       </div>
     </div>
