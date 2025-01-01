@@ -28,6 +28,7 @@ export default {
     const terrainSeed = ref(defaultParams.terrainSeed);
     const waterNoiseThreshold = ref(defaultParams.waterNoiseThreshold);
     const resourceAmount = ref(defaultParams.resourceAmount);
+    const resourceDistanceFactor = ref(defaultParams.resourceDistanceFactor);
     const noiseScale = ref(defaultParams.noiseScale);
     const noiseThreshold = ref(defaultParams.noiseThreshold);
     const noiseOctaves = ref(defaultParams.noiseOctaves);
@@ -45,6 +46,7 @@ export default {
       terrainSeed,
       waterNoiseThreshold,
       resourceAmount,
+      resourceDistanceFactor,
       noiseScale,
       noiseThreshold,
       noiseOctaves,
@@ -65,6 +67,7 @@ export default {
           terrainSeed: parseInt(terrainSeed.value),
           waterNoiseThreshold: parseFloat(waterNoiseThreshold.value),
           resourceAmount: parseFloat(resourceAmount.value),
+          resourceDistanceFactor: parseFloat(resourceDistanceFactor.value),
           noiseScale: parseFloat(noiseScale.value),
           noiseThreshold: parseFloat(noiseThreshold.value),
           noiseOctaves: parseInt(noiseOctaves.value),
@@ -150,6 +153,11 @@ export default {
         Resource Amount:
         <input type="range" max="10000" min="100" step="100" v-model="resourceAmount">
         {{ resourceAmount }}
+      </div>
+      <div>
+        Resource Distance Factor:
+        <input type="range" max="10" min="0" step="1e-3" v-model="resourceDistanceFactor">
+        {{ resourceDistanceFactor }}
       </div>
       <div>
         Resource Noise Scale:

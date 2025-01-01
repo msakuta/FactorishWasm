@@ -35,6 +35,7 @@ let unlimited = true;
         terrainSeed: 8913095,
         waterNoiseThreshold: 0.28,
         resourceAmount: 1000.,
+        resourceDistanceFactor: 0.1,
         noiseScale: 5.,
         noiseThreshold: 0.30,
         noiseOctaves: 3,
@@ -89,6 +90,7 @@ let unlimited = true;
             terrain_seed: defaultParams.terrainSeed,
             water_noise_threshold: defaultParams.waterNoiseThreshold,
             resource_amount: defaultParams.resourceAmount,
+            resource_distance_factor: defaultParams.resourceDistanceFactor,
             noise_scale: defaultParams.noiseScale,
             noise_threshold: defaultParams.noiseThreshold,
             noise_octaves: defaultParams.noiseOctaves,
@@ -1130,13 +1132,13 @@ let unlimited = true;
         }
     }
 
-    function newGame({sizeStr, scenario, terrainSeed, waterNoiseThreshold, resourceAmount, noiseScale, noiseThreshold, noiseOctaves}){
-        if(sizeStr === "unlimited"){
+    function newGame(params){
+        if(params.sizeStr === "unlimited"){
             xsize = ysize = 128;
             unlimited = true;
         }
         else{
-            xsize = ysize = parseInt(sizeStr);
+            xsize = ysize = parseInt(params.sizeStr);
             unlimited = false;
         }
         sim = new FactorishState(
@@ -1144,17 +1146,18 @@ let unlimited = true;
                 width: xsize,
                 height: ysize,
                 unlimited,
-                terrain_seed: terrainSeed,
-                water_noise_threshold: waterNoiseThreshold,
-                resource_amount: resourceAmount,
-                noise_scale: noiseScale,
-                noise_threshold: noiseThreshold,
-                noise_octaves: noiseOctaves,
+                terrain_seed: params.terrainSeed,
+                water_noise_threshold: params.waterNoiseThreshold,
+                resource_amount: params.resourceAmount,
+                resource_distance_factor: params.resourceDistanceFactor,
+                noise_scale: params.noiseScale,
+                noise_threshold: params.noiseThreshold,
+                noise_octaves: params.noiseOctaves,
             },
             updateInventory,
             popupText,
             structureDestroyed,
-            scenario,
+            params.scenario,
             context,
             loadedImages);
         try{

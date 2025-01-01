@@ -15,6 +15,7 @@ pub(crate) struct TerrainParameters {
     pub terrain_seed: u32,
     pub water_noise_threshold: f64,
     pub resource_amount: f64,
+    pub resource_distance_factor: f64,
     pub noise_scale: f64,
     pub noise_threshold: f64,
     pub noise_octaves: u32,
@@ -87,6 +88,7 @@ pub(crate) fn gen_chunk(position: Position, terrain_params: &TerrainParameters) 
         terrain_seed,
         water_noise_threshold,
         resource_amount,
+        resource_distance_factor,
         noise_scale,
         noise_threshold,
         noise_octaves,
@@ -103,27 +105,21 @@ pub(crate) fn gen_chunk(position: Position, terrain_params: &TerrainParameters) 
     let stone_terms = gen_terms(&mut rng, bits);
     for y in 0..CHUNK_SIZE {
         for x in 0..CHUNK_SIZE {
-            let [fx, fy] = [
-                (x as f64 + position.x as f64 * CHUNK_SIZE as f64) / noise_scale,
-                (y as f64 + position.y as f64 * CHUNK_SIZE as f64) / noise_scale,
-            ];
+            let dx = x as f64 + position.x as f64 * CHUNK_SIZE as f64;
+            let dy = y as f64 + position.y as f64 * CHUNK_SIZE as f64;
+            let [fx, fy] = [dx / noise_scale, dy / noise_scale];
             let cell = &mut ret[(x + y * CHUNK_SIZE) as usize];
             cell.water = water_noise_threshold < perlin_noise_pixel(fx, fy, bits, &ocean_terms);
             if cell.water {
                 continue; // No ores in water
             }
-            let iron = (perlin_noise_pixel(fx, fy, bits, &iron_terms) - noise_threshold)
-                * 4.
-                * resource_amount;
-            let copper = (perlin_noise_pixel(fx, fy, bits, &copper_terms) - noise_threshold)
-                * 4.
-                * resource_amount;
-            let coal = (perlin_noise_pixel(fx, fy, bits, &coal_terms) - noise_threshold)
-                * 4.
-                * resource_amount;
-            let stone = (perlin_noise_pixel(fx, fy, bits, &stone_terms) - noise_threshold)
-                * 4.
-                * resource_amount;
+            let distance_factor = 1. + resource_distance_factor * (dx.powi(2) + dy.powi(2)).sqrt();
+            let factor = 4. * resource_amount * distance_factor;
+            let iron = (perlin_noise_pixel(fx, fy, bits, &iron_terms) - noise_threshold) * factor;
+            let copper =
+                (perlin_noise_pixel(fx, fy, bits, &copper_terms) - noise_threshold) * factor;
+            let coal = (perlin_noise_pixel(fx, fy, bits, &coal_terms) - noise_threshold) * factor;
+            let stone = (perlin_noise_pixel(fx, fy, bits, &stone_terms) - noise_threshold) * factor;
 
             match [
                 (Ore::Iron, iron),
