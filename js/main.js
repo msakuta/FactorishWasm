@@ -1142,6 +1142,10 @@ let unlimited = true;
             researchTitleElem.innerHTML = `${research.technology} (${(research.progress * 100).toFixed(0)}%)`;
             researchProgressElem.style.width = `${research.progress * 100}%`;
         }
+        else{
+            researchTitleElem.innerHTML = "No research";
+            researchProgressElem.style.width = "0";
+        }
     }
 
     function processEvents(events){
