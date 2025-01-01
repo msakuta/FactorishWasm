@@ -44,7 +44,7 @@ pub(crate) fn gen_terms(rng: &mut Xor128, bit: u32) -> Vec<[f64; 6]> {
 fn random_gradient(x: f64, y: f64, terms: &[f64; 6]) -> [f64; 2] {
     let random = 2920.
         * (x * terms[0] + y * terms[1] + terms[2]).sin()
-        * (x * terms[3] * y * terms[4] + terms[5]).cos();
+        * (x * terms[3] + y * terms[4] + terms[5]).cos();
     [random.cos(), random.sin()]
 }
 
