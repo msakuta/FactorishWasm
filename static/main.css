@@ -31,10 +31,9 @@ body {
     bottom: 0px;
     left: 50%;
     width: 424px;
-    height: 48px;
+    height: 40px;
     margin-left: -180px;
     z-index: 100;
-    background-color: rgba(191, 191, 191, 0.75);
     padding: 0.5em;
 }
 

@@ -71,9 +71,9 @@ let unlimited = true;
     const vueToolTipApp = createApp(ToolTip).mount('#toolTip');
 
     const infoElem = document.createElement('div');
+    infoElem.className = 'noselect windowFrame';
     infoElem.style.position = 'absolute';
-    infoElem.style.backgroundColor = 'rgba(255, 255, 191, 0.75)';
-    infoElem.style.border = '1px solid #00f';
+    infoElem.style.padding = '4px';
     container.appendChild(infoElem);
 
 
@@ -176,8 +176,9 @@ let unlimited = true;
     researchProgressBgElem.appendChild(researchProgressElem);
 
     const miniMapElem = document.createElement('canvas');
+    miniMapElem.classList = 'noselect windowFrame';
     miniMapElem.style.position = 'absolute';
-    miniMapElem.style.border = '1px solid #000';
+    miniMapElem.style.padding = '4px';
     miniMapElem.onmousedown = (evt) => {
         miniMapDrag = [evt.offsetX, evt.offsetY];
     };
@@ -303,7 +304,7 @@ let unlimited = true;
     }
 
     // Tool bar
-    var toolBarElem = document.getElementById('toolBar');
+    const toolBarElem = document.getElementById('toolBar');
     toolBarElem.style.borderStyle = 'solid';
     toolBarElem.style.borderWidth = '1px';
     toolBarElem.style.borderColor = 'red';
