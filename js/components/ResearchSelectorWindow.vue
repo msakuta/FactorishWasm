@@ -91,7 +91,7 @@ export default {
     <div ref="recipeTitle" class="inventoryTitle" @mousedown="dragWindow">Research</div>
     <close-button @click="close"></close-button>
     <div ref="recipeClient">
-      <div style="vertical-align: middle;">
+      <div style="vertical-align: middle; margin-left: 10px">
         <div>
           <h4>
             Current research:

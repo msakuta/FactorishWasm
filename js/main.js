@@ -146,11 +146,35 @@ let unlimited = true;
 
     let miniMapDrag = null;
     const tilesize = 32;
-    const textType = isIE() ? "Text" : "text/plain";
     var windowZIndex = 1000;
     const objViewSize = tilesize / 2; // View size is slightly greater than hit detection radius
     const tableMargin = 10.;
     const miniMapSize = 200;
+    const researchHeight = 35;
+
+    const researchElem = document.createElement('div');
+    researchElem.classList = 'noselect windowFrame';
+    researchElem.style.position = 'absolute';
+    researchElem.style.top = '8px';
+    researchElem.style.right = '8px';
+    researchElem.style.width = `${miniMapSize}px`;
+    researchElem.style.height = `${researchHeight}px`;
+    researchElem.style.padding = '4px';
+    researchElem.onclick = evt => showReserachSelect(evt);
+    container.appendChild(researchElem);
+
+    const researchTitleElem = document.createElement('div');
+    researchTitleElem.innerHTML = "Research: ";
+    researchElem.appendChild(researchTitleElem);
+
+    const researchProgressBgElem = document.createElement('div');
+    researchProgressBgElem.className = "progressBarBack";
+    researchProgressBgElem.style.width = `${miniMapSize - tableMargin * 2}px`;
+    researchElem.appendChild(researchProgressBgElem);
+    const researchProgressElem = document.createElement('div');
+    researchProgressElem.className = "progressBar";
+    researchProgressBgElem.appendChild(researchProgressElem);
+
     const miniMapElem = document.createElement('canvas');
     miniMapElem.style.position = 'absolute';
     miniMapElem.style.border = '1px solid #000';
@@ -174,7 +198,7 @@ let unlimited = true;
     miniMapElem.style.width = miniMapSize + 'px';
     miniMapElem.style.height = miniMapSize + 'px';
     miniMapElem.style.right = '8px';
-    miniMapElem.style.top = '8px';
+    miniMapElem.style.top = '68px';
     const mrect = miniMapElem.getBoundingClientRect();
     const miniMapContext = miniMapElem.getContext('2d');
 
@@ -770,7 +794,7 @@ let unlimited = true;
     function researchClickHandler(_technologies, i, evt){
         console.log(`researchClickHandler: evt.ctrlKey: ${evt.ctrlKey}`);
         if(sim.select_research(i)){
-            vueResearchSelector.research = sim.get_research();
+            updateResearch();
         }
         evt.preventDefault();
     };
@@ -1081,6 +1105,8 @@ let unlimited = true;
 
     try{
         sim.load_game();
+        // If succeeded to load a game, update the research panel which is rarely updated.
+        updateResearch();
     }
     catch(e){
         console.error(e);
@@ -1106,6 +1132,18 @@ let unlimited = true;
 
     updateInventory(sim.get_player_inventory());
 
+    function updateResearch(){
+        const research = sim.get_research();
+        if(vueResearchSelector.visible) {
+            vueResearchSelector.research = research;
+            vueResearchSelector.technologies = sim.get_technologies();
+        }
+        if(research){
+            researchTitleElem.innerHTML = `${research.technology} (${(research.progress * 100).toFixed(0)}%)`;
+            researchProgressElem.style.width = `${research.progress * 100}%`;
+        }
+    }
+
     function processEvents(events){
         if(!events)
             return;
@@ -1123,11 +1161,7 @@ let unlimited = true;
                 showInventory(event.ShowInventoryAt);
             }
             else if(event === "UpdateResearch") {
-                console.log("Receiving UpdateResearch evnt");
-                if(vueResearchSelector.visible) {
-                    vueResearchSelector.research = sim.get_research();
-                    vueResearchSelector.technologies = sim.get_technologies();
-                }
+                updateResearch();
             }
         }
     }
