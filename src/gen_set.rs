@@ -83,8 +83,9 @@ impl<T> GenPayload<T> {
         }
     }
 
-    pub fn take(&mut self) -> Option<T> {
-        match std::mem::replace(self, Self::Free(None)) {
+    /// Take the item away, place a pointer to the free list head and return the item
+    fn take(&mut self, free_head: Option<usize>) -> Option<T> {
+        match std::mem::replace(self, Self::Free(free_head)) {
             Self::Occupied(v) => Some(v),
             _ => None,
         }
@@ -137,7 +138,7 @@ impl<T> GenSet<T> {
     pub fn remove(&mut self, id: GenId<T>) -> Option<T> {
         if let Some(i) = self.v.get_mut(id.id as usize) {
             if i.gen == id.gen {
-                let ret = i.item.take();
+                let ret = i.item.take(self.free_head);
 
                 self.free_head = Some(id.id as usize);
                 return ret;
