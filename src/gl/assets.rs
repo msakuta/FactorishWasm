@@ -97,6 +97,7 @@ pub(crate) struct Assets {
     pub tex_science_pack_1: WebGlTexture,
     pub tex_science_pack_2: WebGlTexture,
     pub tex_underground_belt_item: WebGlTexture,
+    pub tex_bot: WebGlTexture,
 
     pub tex_smoke: WebGlTexture,
 
@@ -188,6 +189,7 @@ impl Assets {
             tex_science_pack_1: load_texture_local("sciencePack1")?,
             tex_science_pack_2: load_texture_local("sciencePack2")?,
             tex_underground_belt_item: load_texture_local("undergroundBeltItem")?,
+            tex_bot: load_texture_local("bot")?,
 
             tex_smoke: load_texture_local("smoke")?,
 

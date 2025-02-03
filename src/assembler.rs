@@ -176,6 +176,13 @@ impl Assembler {
                     20.,
                     hash_set!(TechnologyTag::Electricity),
                 ),
+                Recipe::new_with_requires(
+                    hash_map!(ItemType::IronPlate => 2, ItemType::Circuit => 2),
+                    hash_map!(ItemType::LogisticBot => 1),
+                    20.,
+                    20.,
+                    hash_set!(TechnologyTag::LogisticBot),
+                ),
                 Recipe::new(
                     hash_map!(ItemType::IronPlate => 1, ItemType::Gear => 1),
                     hash_map!(ItemType::SciencePack1 => 1),

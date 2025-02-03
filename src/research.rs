@@ -14,6 +14,7 @@ pub(crate) enum TechnologyTag {
     Transportation,
     Electricity,
     SteelWorks,
+    LogisticBot,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -43,6 +44,7 @@ impl TechnologySerial {
                 TechnologyTag::Transportation => "Transport Belt",
                 TechnologyTag::Electricity => "Electric Pole",
                 TechnologyTag::SteelWorks => "Steel Plate",
+                TechnologyTag::LogisticBot => "Logistic Bot",
             },
             input: tech
                 .input
@@ -92,6 +94,12 @@ pub(crate) const TECHNOLOGIES: Lazy<Vec<Technology>> = Lazy::new(|| {
             tag: TechnologyTag::SteelWorks,
             input: hash_map!(ItemType::SciencePack1 => 1, ItemType::SciencePack2 => 1),
             steps: 50,
+            research_time: 30.,
+        },
+        Technology {
+            tag: TechnologyTag::LogisticBot,
+            input: hash_map!(ItemType::SciencePack1 => 1, ItemType::SciencePack2 => 1),
+            steps: 150,
             research_time: 30.,
         },
     ]

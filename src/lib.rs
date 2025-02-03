@@ -575,6 +575,7 @@ pub struct FactorishState {
     image_science_pack_2: Option<ImageBundle>,
     image_time: Option<ImageBundle>,
     image_underground_belt_item: Option<ImageBundle>,
+    image_bot: Option<ImageBundle>,
 
     assets: Assets,
 }
@@ -700,6 +701,7 @@ impl FactorishState {
             image_science_pack_2: None,
             image_time: None,
             image_underground_belt_item: None,
+            image_bot: None,
             board,
             terrain_params,
             structures,

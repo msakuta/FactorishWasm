@@ -36,6 +36,7 @@ pub(crate) enum ItemType {
     ElectPole,
     Splitter,
     UndergroundBelt,
+    LogisticBot,
 }
 
 pub(crate) fn item_to_str(type_: &ItemType) -> String {
@@ -70,6 +71,7 @@ pub(crate) fn item_to_str(type_: &ItemType) -> String {
         ItemType::ElectPole => "Electric Pole".to_string(),
         ItemType::Splitter => "Splitter".to_string(),
         ItemType::UndergroundBelt => "Underground Belt".to_string(),
+        ItemType::LogisticBot => "Logistic Bot".to_string(),
     }
 }
 
@@ -103,6 +105,7 @@ pub(crate) fn str_to_item(name: &str) -> Option<ItemType> {
         "Underground Pipe" => Some(ItemType::UndergroundPipe),
         "Steam Engine" => Some(ItemType::SteamEngine),
         "Electric Pole" => Some(ItemType::ElectPole),
+        "Logistic Bot" => Some(ItemType::LogisticBot),
         "Splitter" => Some(ItemType::Splitter),
         "Underground Belt" => Some(ItemType::UndergroundBelt),
 
@@ -176,6 +179,7 @@ pub(crate) fn render_drop_item(
         ItemType::ElectPole => render16(&state.image_elect_pole),
         ItemType::Splitter => render16(&state.image_splitter),
         ItemType::UndergroundBelt => render16(&state.image_underground_belt_item),
+        ItemType::LogisticBot => render16(&state.image_bot),
     }
 }
 
@@ -240,6 +244,7 @@ pub(crate) fn render_drop_item_mat_gl(
         ItemType::ElectPole => render16(&state.assets.tex_elect_pole),
         ItemType::Splitter => render16(&state.assets.tex_splitter),
         ItemType::UndergroundBelt => render16(&state.assets.tex_underground_belt_item),
+        ItemType::LogisticBot => render16(&state.assets.tex_bot),
     }
 }
 
@@ -296,5 +301,6 @@ pub(crate) fn get_item_image_url<'a>(state: &'a FactorishState, item_type: &Item
         ItemType::ElectPole => &state.image_elect_pole.as_ref().unwrap().url,
         ItemType::Splitter => &state.image_splitter.as_ref().unwrap().url,
         ItemType::UndergroundBelt => &state.image_underground_belt_item.as_ref().unwrap().url,
+        ItemType::LogisticBot => &state.image_bot.as_ref().unwrap().url,
     }
 }

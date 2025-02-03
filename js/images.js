@@ -41,6 +41,7 @@ import pipeItem from "../img/pipe-item.png";
 import undergroundPipeItem from "../img/underground-pipe-item.png";
 import steamEngine from "../img/steam-engine.png";
 import electPole from "../img/elect-pole.png";
+import bot from "../img/bot.png";
 import smoke from "../img/smoke.png";
 import undergroundBeltItem from "../img/underground-belt-item.png";
 import fuelAlarm from '../img/fuel-alarm.png';
@@ -70,6 +71,7 @@ export let loadImages = [
     ["boiler", boiler],
     ["steamEngine", steamEngine],
     ["electPole", electPole],
+    ["bot", bot],
     ["splitter", splitter],
     ["waterWell", waterWell],
     ["offshorePump", offshorePump],
@@ -163,6 +165,8 @@ function getImageFileInt(type){
         return [steamEngine, 3];
     case 'Electric Pole':
         return electPole;
+    case 'Logistic Bot':
+        return bot;
     default:
         return "";
     }
