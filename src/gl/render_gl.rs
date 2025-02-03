@@ -4,10 +4,10 @@ use super::{
     utils::{enable_buffer, vertex_buffer_sub_data, Flatten},
 };
 use crate::{
-    apply_bounds, drop_item_iter, elect_pole::draw_wire_gl, items::render_drop_item_gl,
-    performance, structure::Structure, Cell, FactorishState, FluidType, Ore, OreValue, Position,
-    PowerWire, Rotation, CHUNK_SIZE, CHUNK_SIZE_I, DROP_ITEM_SIZE, INDEX_CHUNK_SIZE,
-    ORE_HARVEST_TIME, TILE_SIZE, TILE_SIZE_F,
+    apply_bounds, elect_pole::draw_wire_gl, items::render_drop_item_gl, performance,
+    structure::Structure, Cell, FactorishState, FluidType, Ore, OreValue, Position, PowerWire,
+    Rotation, CHUNK_SIZE, CHUNK_SIZE_I, DROP_ITEM_SIZE, INDEX_CHUNK_SIZE, ORE_HARVEST_TIME,
+    TILE_SIZE, TILE_SIZE_F,
 };
 use cgmath::{Matrix3, Matrix4, Rad, Vector2, Vector3};
 use slice_of_array::SliceFlatExt;
@@ -210,7 +210,7 @@ impl FactorishState {
 
         draw_structures(0)?;
 
-        for item in drop_item_iter(&self.drop_items) {
+        for item in self.drop_items.iter() {
             render_drop_item_gl(self, &gl, &item.type_, item.x, item.y)?;
         }
 
@@ -347,7 +347,7 @@ impl FactorishState {
                     gl.draw_arrays(GL::LINE_LOOP, 0, 4);
                 }
                 gl.uniform4fv_with_f32_array(shader.color_loc.as_ref(), &[1., 0., 1., 1.]);
-                for item in drop_item_iter(&self.drop_items) {
+                for item in self.drop_items.iter() {
                     set_transform(
                         shader,
                         (

@@ -12,6 +12,7 @@ mod dyn_iter;
 mod elect_pole;
 mod electric_furnace;
 mod furnace;
+mod gen_set;
 mod inserter;
 mod inventory;
 mod items;
@@ -48,9 +49,8 @@ mod gl {
 
 use crate::{
     drop_items::{
-        add_index, build_index, drop_item_id_iter, drop_item_iter, hit_check, hit_check_with_index,
-        remove_index, update_index, DropItem, DropItemEntry, DropItemId, DropItemIndex,
-        DROP_ITEM_SIZE, INDEX_CHUNK_SIZE,
+        add_index, build_index, hit_check, hit_check_with_index, remove_index, update_index,
+        DropItem, DropItemId, DropItemIndex, DROP_ITEM_SIZE, INDEX_CHUNK_SIZE,
     },
     gl::assets::Assets,
     perf::PerfStats,
@@ -67,6 +67,7 @@ use dyn_iter::{Chained, DynIterMut, MutRef};
 use elect_pole::ElectPole;
 use electric_furnace::ElectricFurnace;
 use furnace::Furnace;
+use gen_set::{GenId, GenPayload, GenSet};
 use inserter::Inserter;
 use inventory::{Inventory, InventoryTrait, InventoryType, STACK_SIZE};
 use items::{item_to_str, str_to_item, ItemType};
@@ -505,7 +506,7 @@ pub struct FactorishState {
     terrain_params: TerrainParameters,
     structures: Vec<StructureEntry>,
     selected_structure_inventory: Option<StructureId>,
-    drop_items: Vec<DropItemEntry>,
+    drop_items: GenSet<DropItem>,
     drop_items_index: DropItemIndex,
     tool_belt: [Option<ItemType>; 10],
     power_networks: Vec<PowerNetwork>,
@@ -809,8 +810,7 @@ impl FactorishState {
             "items".to_string(),
             serde_json::Value::from(
                 self.drop_items
-                    .iter()
-                    .filter_map(|entry| entry.item.as_ref())
+                    .items()
                     .map(serde_json::to_value)
                     .collect::<serde_json::Result<Vec<serde_json::Value>>>()
                     .map_err(|e| js_str!("Serialize error: {}", e))?,
@@ -1055,12 +1055,10 @@ impl FactorishState {
             .ok_or_else(|| js_str!("items in saved data is not an array"))?
             .into_iter()
             .map(|value| {
-                Ok(DropItemEntry::from_value(
-                    serde_json::from_value(std::mem::take(value))
-                        .map_err(|e| js_str!("Item deserialization error: {:?}", e))?,
-                ))
+                Ok(serde_json::from_value(std::mem::take(value))
+                    .map_err(|e| js_str!("Item deserialization error: {:?}", e))?)
             })
-            .collect::<Result<Vec<DropItemEntry>, JsValue>>()?;
+            .collect::<Result<GenSet<DropItem>, JsValue>>()?;
 
         self.drop_items_index = build_index(&self.drop_items);
 
@@ -1388,25 +1386,31 @@ impl FactorishState {
             .add(performance().now() - start_structures);
 
         let start_index = performance().now();
-        let index = &mut self.drop_items_index; //build_index(&self.drop_items);
-        for i in 0..self.drop_items.len() {
-            // (id, item) in drop_item_id_iter_mut(&mut self.drop_items) {
-            let entry = &self.drop_items[i];
-            let item = if let Some(item) = entry.item.as_ref() {
-                item
-            } else {
+        let index = &mut self.drop_items_index;
+
+        for i in (0..self.drop_items.len()).rev() {
+            let free_head = self.drop_items.free_head;
+            let Some(entry) = self.drop_items.get_by_index_mut(i) else {
                 continue;
             };
-            let id = DropItemId::new(i as u32, entry.gen);
+            let Some(item) = entry.item.as_mut() else {
+                continue;
+            };
+            let id = GenId::new(i as u32, entry.gen);
+
             if let Some(bounds) = self.bounds.as_ref() {
                 if !(0. < item.x
                     && item.x < bounds.width as f64 * TILE_SIZE
                     && 0. < item.y
                     && item.y < bounds.height as f64 * TILE_SIZE)
                 {
+                    remove_index(index, id, item.x, item.y);
+                    entry.item = GenPayload::Free(free_head);
+                    self.drop_items.free_head = Some(i);
                     continue;
                 }
             }
+
             if let Some(item_response_result) = structures
                 .iter_mut()
                 .filter_map(|s| s.dynamic.as_mut())
@@ -1420,38 +1424,23 @@ impl FactorishState {
             {
                 match item_response_result.0 {
                     ItemResponse::Move(moved_x, moved_y) => {
-                        if hit_check_with_index(
+                        if !hit_check_with_index(
                             &self.drop_items,
-                            &index,
+                            index,
                             moved_x,
                             moved_y,
                             Some(id),
                         ) {
-                            continue;
-                        }
-                        let position = Position {
-                            x: moved_x.div_euclid(TILE_SIZE) as i32,
-                            y: moved_y.div_euclid(TILE_SIZE) as i32,
-                        };
-                        if let Some(s) = structures
-                            .iter()
-                            .filter_map(|s| s.dynamic.as_deref())
-                            .find(|s| s.contains(&position))
-                        {
-                            if !s.movable() {
-                                continue;
+                            if let Some(item) = self.drop_items.get_mut(id) {
+                                update_index(index, id, item.x, item.y, moved_x, moved_y);
+                                item.x = moved_x;
+                                item.y = moved_y;
                             }
-                        } else {
-                            continue;
                         }
-                        update_index(index, id, item.x, item.y, moved_x, moved_y);
-                        let item = self.drop_items[i].item.as_mut().unwrap();
-                        item.x = moved_x;
-                        item.y = moved_y;
                     }
                     ItemResponse::Consume => {
                         remove_index(index, id, item.x, item.y);
-                        self.drop_items[i].item = None;
+                        self.drop_items.remove(id);
                     }
                 }
                 if let Some(result) = item_response_result.1 {
@@ -1593,30 +1582,23 @@ impl FactorishState {
     // }
 
     fn find_item(&self, pos: &Position) -> Option<(DropItemId, &DropItem)> {
-        drop_item_id_iter(&self.drop_items).find(|(_, item)| {
+        self.drop_items.items().find(|(_, item)| {
             item.x.div_euclid(TILE_SIZE) as i32 == pos.x
                 && item.y.div_euclid(TILE_SIZE) as i32 == pos.y
         })
     }
 
     fn remove_item(&mut self, id: DropItemId) -> Option<DropItem> {
-        if let Some(entry) = self.drop_items.get_mut(id.id as usize) {
-            entry.item.take()
-        } else {
-            None
-        }
+        self.drop_items.remove(id)
     }
 
     fn _remove_item_pos(&mut self, pos: &Position) -> Option<DropItem> {
-        if let Some(entry) = self.drop_items.iter_mut().find(|item| {
-            if let Some(item) = item.item.as_ref() {
-                item.x.div_euclid(TILE_SIZE) as i32 == pos.x
-                    && item.y.div_euclid(TILE_SIZE) as i32 == pos.y
-            } else {
-                false
-            }
-        }) {
-            entry.item.take()
+        let found_id = self.drop_items.items().find(|(_, item)| {
+            item.x.div_euclid(TILE_SIZE) as i32 == pos.x
+                && item.y.div_euclid(TILE_SIZE) as i32 == pos.y
+        });
+        if let Some((id, _)) = found_id {
+            self.drop_items.remove(id)
         } else {
             None
         }
@@ -1704,27 +1686,7 @@ impl FactorishState {
             return Err(NewObjectErr::BlockedByItem);
         }
         let (x, y) = (item.x, item.y);
-        let entry = self
-            .drop_items
-            .iter_mut()
-            .enumerate()
-            .find(|(_, entry)| entry.item.is_none());
-        let id = if let Some((i, entry)) = entry {
-            entry.item = Some(item);
-            entry.gen += 1;
-            DropItemId {
-                id: i as u32,
-                gen: entry.gen,
-            }
-        } else {
-            let obj = DropItemEntry::from_value(item);
-            let i = self.drop_items.len();
-            self.drop_items.push(obj);
-            DropItemId {
-                id: i as u32,
-                gen: 0,
-            }
-        };
+        let id = self.drop_items.add(item);
         add_index(&mut self.drop_items_index, id, x, y);
         Ok(())
     }
@@ -1830,24 +1792,19 @@ impl FactorishState {
         if !harvested_structure && clear_item {
             // Pick up dropped items in the cell
             let mut picked_items = Inventory::new();
-            for entry in &mut self.drop_items {
-                let item = if let Some(item) = entry.item.as_ref() {
-                    item
-                } else {
-                    continue;
-                };
-
+            let player = &mut self.player;
+            self.drop_items.retain(|item| {
                 if !(item.x.div_euclid(TILE_SIZE) as i32 == position.x
                     && item.y.div_euclid(TILE_SIZE) as i32 == position.y)
                 {
-                    continue;
+                    return true;
                 }
                 let item_type = item.type_;
-                entry.item = None;
                 picked_items.add_item(&item_type);
-                self.player.add_item(&item_type, 1);
+                player.add_item(&item_type, 1);
                 harvested_items = true;
-            }
+                false
+            });
             for (item_type, count) in picked_items {
                 popup_text += &format!("+{} {}\n", count, &item_to_str(&item_type));
             }
@@ -2511,7 +2468,7 @@ impl FactorishState {
             self.harvest(&cursor, false, true)?;
             if self.find_structure_tile(&[cursor.x, cursor.y]).is_none()
             // Let the player pick up drop items before harvesting ore below.
-            && !drop_item_iter(&self.drop_items).any(|item| {
+            && !self.drop_items.items().any(|(_, item)| {
                 item.x.div_euclid(TILE_SIZE) == pos[0].div_euclid(TILE_SIZE)
                     && item.y.div_euclid(TILE_SIZE) == pos[1].div_euclid(TILE_SIZE)
             }) {

@@ -1,8 +1,10 @@
+use crate::{DropItem, GenSet};
+
 use super::{
     assembler::Assembler,
     boiler::Boiler,
     chest::Chest,
-    drop_items::{build_index, DropItemEntry},
+    drop_items::build_index,
     elect_pole::ElectPole,
     furnace::Furnace,
     inserter::Inserter,
@@ -61,7 +63,7 @@ fn update_water(
 
 fn default_scenario(
     terrain_params: &TerrainParameters,
-) -> (Vec<StructureEntry>, Chunks, Vec<DropItemEntry>) {
+) -> (Vec<StructureEntry>, Chunks, GenSet<DropItem>) {
     let structures = vec![
         wrap_structure(Box::new(TransportBelt::new(10, 3, Rotation::Left))),
         wrap_structure(Box::new(TransportBelt::new(11, 3, Rotation::Left))),
@@ -77,12 +79,12 @@ fn default_scenario(
 
     update_water(&structures, &mut terrain, &terrain_params);
 
-    (structures, terrain, vec![])
+    (structures, terrain, GenSet::new())
 }
 
 fn pipe_bench(
     terrain_params: &TerrainParameters,
-) -> (Vec<StructureEntry>, Chunks, Vec<DropItemEntry>) {
+) -> (Vec<StructureEntry>, Chunks, GenSet<DropItem>) {
     let (mut structures, mut terrain, items) = default_scenario(terrain_params);
 
     structures
@@ -101,7 +103,7 @@ fn pipe_bench(
 
 fn inserter_bench(
     terrain_params: &TerrainParameters,
-) -> (Vec<StructureEntry>, Chunks, Vec<DropItemEntry>) {
+) -> (Vec<StructureEntry>, Chunks, GenSet<DropItem>) {
     let (mut structures, mut terrain, items) = default_scenario(terrain_params);
 
     structures.extend((10..=100).map(|x| {
@@ -152,26 +154,28 @@ fn inserter_bench(
 
 fn transport_bench(
     terrain_params: &TerrainParameters,
-) -> (Vec<StructureEntry>, Chunks, Vec<DropItemEntry>) {
+) -> (Vec<StructureEntry>, Chunks, GenSet<DropItem>) {
     let (mut structures, mut terrain, mut items) = default_scenario(terrain_params);
 
     structures.extend(
         (11..=100).map(|x| wrap_structure(Box::new(TransportBelt::new(x, 10, Rotation::Left)))),
     );
-    items.extend((11..=100).map(|x| DropItemEntry::new(ItemType::CoalOre, &Position::new(x, 10))));
+    items.extend((11..=100).map(|x| DropItem::new(ItemType::CoalOre, x, 10)));
     structures.extend(
         (10..=99).map(|x| wrap_structure(Box::new(TransportBelt::new(x, 100, Rotation::Right)))),
     );
-    items.extend((10..=99).map(|x| DropItemEntry::new(ItemType::IronOre, &Position::new(x, 100))));
+
+    items.extend((10..=99).map(|x| DropItem::new(ItemType::IronOre, x, 100)));
     structures.extend(
         (10..=99).map(|x| wrap_structure(Box::new(TransportBelt::new(10, x, Rotation::Bottom)))),
     );
-    items.extend((10..=99).map(|x| DropItemEntry::new(ItemType::CopperOre, &Position::new(10, x))));
+
+    items.extend((10..=99).map(|x| DropItem::new(ItemType::CopperOre, x, 10)));
     structures.extend(
         (11..=100).map(|x| wrap_structure(Box::new(TransportBelt::new(100, x, Rotation::Top)))),
     );
-    items
-        .extend((11..=100).map(|x| DropItemEntry::new(ItemType::StoneOre, &Position::new(100, x))));
+
+    items.extend((11..=100).map(|x| DropItem::new(ItemType::StoneOre, x, 100)));
 
     update_water(&structures, &mut terrain, &terrain_params);
 
@@ -180,7 +184,7 @@ fn transport_bench(
 
 fn electric_bench(
     terrain_params: &TerrainParameters,
-) -> (Vec<StructureEntry>, Chunks, Vec<DropItemEntry>) {
+) -> (Vec<StructureEntry>, Chunks, GenSet<DropItem>) {
     let (mut structures, mut terrain, items) = default_scenario(terrain_params);
 
     structures.extend((10..=100).map(|x| {
@@ -222,7 +226,7 @@ fn electric_bench(
 pub(crate) fn select_scenario(
     name: &str,
     terrain_params: &TerrainParameters,
-) -> Result<(Vec<StructureEntry>, Chunks, Vec<DropItemEntry>), JsValue> {
+) -> Result<(Vec<StructureEntry>, Chunks, GenSet<DropItem>), JsValue> {
     match name {
         "default" => Ok(default_scenario(terrain_params)),
         "pipe_bench" => Ok(pipe_bench(terrain_params)),

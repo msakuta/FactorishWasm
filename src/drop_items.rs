@@ -1,11 +1,12 @@
-use super::{items::ItemType, Position, TILE_SIZE, TILE_SIZE_I};
+use super::{items::ItemType, TILE_SIZE, TILE_SIZE_I};
+use crate::gen_set::{GenId, GenSet};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 pub(crate) const DROP_ITEM_SIZE: f64 = 8.;
 pub(crate) const DROP_ITEM_SIZE_I: i32 = DROP_ITEM_SIZE as i32;
 
-pub(crate) type DropItemId = GenId;
+pub(crate) type DropItemId = GenId<DropItem>;
 
 #[derive(Serialize, Deserialize)]
 pub(crate) struct DropItem {
@@ -24,90 +25,15 @@ impl DropItem {
     }
 }
 
-pub(crate) type DropItemEntry = GenEntry<DropItem>;
-
-impl DropItemEntry {
-    pub(crate) fn new(type_: ItemType, position: &Position) -> Self {
-        Self {
-            gen: 0,
-            item: Some(DropItem::new(type_, position.x, position.y)),
-        }
-    }
-
-    pub(crate) fn from_value(value: DropItem) -> Self {
-        Self {
-            gen: 0,
-            item: Some(value),
-        }
-    }
-}
-
-/// Returns an iterator over valid structures
-pub(crate) fn drop_item_id_iter(
-    drop_items: &[DropItemEntry],
-) -> impl Iterator<Item = (DropItemId, &DropItem)> {
-    drop_items.iter().enumerate().filter_map(|(id, item)| {
-        Some((
-            DropItemId {
-                id: id as u32,
-                gen: item.gen,
-            },
-            item.item.as_ref()?,
-        ))
-    })
-}
-
-/// Returns an iterator over valid structures
-#[allow(dead_code)]
-pub(crate) fn drop_item_id_iter_mut(
-    drop_items: &mut [DropItemEntry],
-) -> impl Iterator<Item = (DropItemId, &mut DropItem)> {
-    drop_items.iter_mut().enumerate().filter_map(|(id, item)| {
-        Some((
-            DropItemId {
-                id: id as u32,
-                gen: item.gen,
-            },
-            item.item.as_mut()?,
-        ))
-    })
-}
-
-/// Returns an iterator over valid structures
-pub(crate) fn drop_item_iter(drop_items: &[DropItemEntry]) -> impl Iterator<Item = &DropItem> {
-    drop_items.iter().filter_map(|item| item.item.as_ref())
-}
-
-#[derive(Serialize, Deserialize, PartialEq, Clone, Copy, Debug)]
-pub(crate) struct GenId {
-    pub id: u32,
-    pub gen: u32,
-}
-
-impl GenId {
-    pub(crate) fn new(id: u32, gen: u32) -> Self {
-        Self { id, gen }
-    }
-}
-
-pub(crate) struct GenEntry<T> {
-    pub gen: u32,
-    pub item: Option<T>,
-}
-
-pub(crate) type DropItemIndex = HashMap<(i32, i32), Vec<GenId>>;
+pub(crate) type DropItemIndex = HashMap<(i32, i32), Vec<GenId<DropItem>>>;
 
 pub(crate) const INDEX_CHUNK_SIZE: usize = 16;
 const INDEX_GRID_SIZE: usize = INDEX_CHUNK_SIZE * TILE_SIZE_I as usize;
 const INDEX_GRID_SIZE_D: f64 = INDEX_GRID_SIZE as f64;
 
-pub(crate) fn build_index(items: &[DropItemEntry]) -> DropItemIndex {
+pub(crate) fn build_index(items: &GenSet<DropItem>) -> DropItemIndex {
     let mut ret = DropItemIndex::new();
-    for (id, item) in items
-        .iter()
-        .enumerate()
-        .filter_map(|(i, item)| Some((GenId::new(i as u32, item.gen), item.item.as_ref()?)))
-    {
+    for (id, item) in items.items() {
         ret.entry((
             item.x.div_euclid(INDEX_GRID_SIZE_D) as i32,
             item.y.div_euclid(INDEX_GRID_SIZE_D) as i32,
@@ -120,28 +46,23 @@ pub(crate) fn build_index(items: &[DropItemEntry]) -> DropItemIndex {
 
 /// Check whether given coordinates hits some DropItem
 pub(crate) fn hit_check(
-    items: &[DropItemEntry],
+    items: &GenSet<DropItem>,
     x: f64,
     y: f64,
     ignore: Option<DropItemId>,
 ) -> bool {
-    for (id, entry) in items.iter().enumerate() {
-        if let Some(item) = entry.item.as_ref() {
-            if let Some(ignore_id) = ignore {
-                let id = DropItemId::new(id as u32, entry.gen);
-                if ignore_id == id {
-                    continue;
-                }
-            }
-            if (x - item.x).abs() < DROP_ITEM_SIZE && (y - item.y).abs() < DROP_ITEM_SIZE {
-                return true;
-            }
+    for (id, item) in items.items() {
+        if ignore == Some(id) {
+            continue;
+        }
+        if (x - item.x).abs() < DROP_ITEM_SIZE && (y - item.y).abs() < DROP_ITEM_SIZE {
+            return true;
         }
     }
     false
 }
 
-pub(crate) fn add_index(index: &mut DropItemIndex, id: GenId, x: f64, y: f64) {
+pub(crate) fn add_index(index: &mut DropItemIndex, id: GenId<DropItem>, x: f64, y: f64) {
     let new_chunk = (
         x.div_euclid(INDEX_GRID_SIZE_D) as i32,
         y.div_euclid(INDEX_GRID_SIZE_D) as i32,
@@ -151,7 +72,7 @@ pub(crate) fn add_index(index: &mut DropItemIndex, id: GenId, x: f64, y: f64) {
 
 pub(crate) fn update_index(
     index: &mut DropItemIndex,
-    id: GenId,
+    id: GenId<DropItem>,
     old_x: f64,
     old_y: f64,
     x: f64,
@@ -172,11 +93,12 @@ pub(crate) fn update_index(
     index.entry(new_chunk).or_default().push(id);
 }
 
-pub(crate) fn remove_index(index: &mut DropItemIndex, id: GenId, old_x: f64, old_y: f64) {
+pub(crate) fn remove_index(index: &mut DropItemIndex, id: GenId<DropItem>, old_x: f64, old_y: f64) {
     let old_chunk = (
         old_x.div_euclid(INDEX_GRID_SIZE_D) as i32,
         old_y.div_euclid(INDEX_GRID_SIZE_D) as i32,
     );
+
     if let Some(chunk) = index.get_mut(&old_chunk) {
         if let Some((remove_idx, _)) = chunk.iter().enumerate().find(|(_, item)| **item == id) {
             chunk.swap_remove(remove_idx);
@@ -194,7 +116,7 @@ fn intersecting_chunks(x: f64, y: f64) -> [i32; 4] {
 
 /// Check whether given coordinates hits some object
 pub(crate) fn hit_check_with_index(
-    items: &[DropItemEntry],
+    items: &GenSet<DropItem>,
     index: &DropItemIndex,
     x: f64,
     y: f64,
@@ -208,13 +130,7 @@ pub(crate) fn hit_check_with_index(
                     if Some(*id) == ignore {
                         continue;
                     }
-                    if let Some(item) = items.get(id.id as usize).and_then(|entry| {
-                        if entry.gen != id.gen {
-                            None
-                        } else {
-                            entry.item.as_ref()
-                        }
-                    }) {
+                    if let Some(item) = items.get(*id) {
                         if (x as f64 - item.x).abs() < DROP_ITEM_SIZE
                             && (y as f64 - item.y).abs() < DROP_ITEM_SIZE
                         {
@@ -246,15 +162,12 @@ fn test_hit_check() {
         (3., 10.),
     ]
     .into_iter()
-    .map(|(x, y)| DropItemEntry {
-        gen: 0,
-        item: Some(DropItem {
-            type_: ItemType::CoalOre,
-            x: tr(x),
-            y: tr(y),
-        }),
+    .map(|(x, y)| DropItem {
+        type_: ItemType::CoalOre,
+        x: tr(x),
+        y: tr(y),
     })
-    .collect::<Vec<_>>();
+    .collect::<GenSet<_>>();
 
     let index = build_index(&items);
 
