@@ -1,11 +1,13 @@
 use std::iter::FromIterator;
 
-use serde::{Deserialize, Serialize};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use wasm_bindgen::JsValue;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub(crate) struct GenId<T> {
     pub id: u32,
     pub gen: u32,
+    #[serde(skip)]
     _ph: std::marker::PhantomData<fn(T)>,
 }
 
@@ -89,11 +91,13 @@ impl<T> GenPayload<T> {
     }
 }
 
+#[derive(Serialize, Deserialize, Debug)]
 pub(crate) struct GenEntry<T> {
     pub gen: u32,
     pub item: GenPayload<T>,
 }
 
+#[derive(Serialize, Deserialize, Debug)]
 pub(crate) struct GenSet<T> {
     v: Vec<GenEntry<T>>,
     pub free_head: Option<usize>,
@@ -227,6 +231,47 @@ impl<T> GenSet<T> {
 
     pub fn get_by_index_mut(&mut self, index: usize) -> Option<&mut GenEntry<T>> {
         self.v.get_mut(index)
+    }
+}
+
+// TODO: This is not the most scalable implementation of serialization.
+// In particular, it exposes the internal structure and the implementation of
+// the free list, which should be reset when deserialized, because the free list
+// is an empty payload for data whose sole purpose is performance, but serialized
+// save data shouldn't care and should be cleaned up on deserialization.
+// However, it's not trivial to implement, because the entries in the entity set may have gaps,
+// which should be filled with the free list on deserialization.
+// Only the elements after the last valid entry should be removed, but the elements in the
+// free list in the gaps should also be reconstructed, otherwise the list may be broken if we remove
+// those at the end. We could also ignore the gaps and assign None to the free list, but it would
+// waste memory by leaking the entries, and the amount of wasted memory will increase every time
+// the save data is loaded.
+//
+// Note also that we need to serialize `gen` field of `GenEntry`, even though only one generation is valid at
+// any given time, because there may be some outdated references that points to an old entry with previous
+// generation, and unless we actively invalidate them, we don't know if the reference points to a valid entry.
+// Theoretically, if the serializer has the knowledge of which reference is valid, we can actively remove them
+// in serialized data, but serde is not designed to have access to such a context.
+// We could abuse globals or thread locals to implement such architecture, but it just feels overengineered.
+//
+// No, actually we can't remove free entries at the end, because the generation of free entries
+// need to be kept even after serialize/deserialize. I need to think more about it.
+// In the meantime, I serialize everything with one linear.
+impl<T> GenSet<T>
+where
+    T: Serialize,
+{
+    pub fn serialize_json(&self) -> Result<serde_json::Value, JsValue> {
+        serde_json::to_value(&self).map_err(|e| js_str!("Serialize error: {}", e))
+    }
+}
+
+impl<T> GenSet<T>
+where
+    T: DeserializeOwned,
+{
+    pub fn deserialize_json(json: serde_json::Value) -> Result<Self, JsValue> {
+        serde_json::from_value(json).map_err(move |e| js_str!("Deserialize error: {}", e))
     }
 }
 

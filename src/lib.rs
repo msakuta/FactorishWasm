@@ -806,16 +806,7 @@ impl FactorishState {
             .map_err(|e| js_str!("Serialize error: {}", e))?,
         );
 
-        map.insert(
-            "items".to_string(),
-            serde_json::Value::from(
-                self.drop_items
-                    .items()
-                    .map(serde_json::to_value)
-                    .collect::<serde_json::Result<Vec<serde_json::Value>>>()
-                    .map_err(|e| js_str!("Serialize error: {}", e))?,
-            ),
-        );
+        map.insert("items".to_string(), self.drop_items.serialize_json()?);
         map.insert(
             "tool_belt".to_string(),
             map_err(serde_json::to_value(self.tool_belt), "toolbelt")?,
@@ -1048,17 +1039,7 @@ impl FactorishState {
         self.power_networks = build_power_networks(&s_d_iter, &self.power_wires);
         drop(s_d_iter);
 
-        self.drop_items = json
-            .get_mut("items")
-            .ok_or_else(|| js_str!("\"items\" not found"))?
-            .as_array_mut()
-            .ok_or_else(|| js_str!("items in saved data is not an array"))?
-            .into_iter()
-            .map(|value| {
-                Ok(serde_json::from_value(std::mem::take(value))
-                    .map_err(|e| js_str!("Item deserialization error: {:?}", e))?)
-            })
-            .collect::<Result<GenSet<DropItem>, JsValue>>()?;
+        self.drop_items = GenSet::deserialize_json(json_take(&mut json, "items")?)?;
 
         self.drop_items_index = build_index(&self.drop_items);
 
