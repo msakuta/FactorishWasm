@@ -21,11 +21,6 @@ jobs:
       #with:
         # Optional version of wasm-pack to install (eg. "v0.9.1", "latest")
         #version: # optional, default is latest
-    - name: Rust
-      uses: actions-rust-lang/setup-rust-toolchain@v1
-      with:
-        # Pin the version to avoid Wasm reference type which is not supported by webpack yet
-        toolchain: 1.81.0
     - name: Run Rust tests
       run: cargo test --verbose
     - name: Use Node.js 16.x
