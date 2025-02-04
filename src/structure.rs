@@ -160,6 +160,11 @@ impl BoundingBox {
             (self.y0 + self.y1) as f32 / 2.,
         )
     }
+
+    pub fn iter_tiles(&self) -> impl Iterator<Item = Position> {
+        let copy = *self;
+        (copy.x0..copy.x1).flat_map(move |x| (copy.y0..copy.y1).map(move |y| Position::new(x, y)))
+    }
 }
 
 #[derive(Copy, Clone, Serialize, Deserialize, RotateEnum, PartialEq)]

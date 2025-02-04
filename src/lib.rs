@@ -159,7 +159,7 @@ enum JSEvent {
     UpdateResearch,
 }
 
-#[derive(Copy, Clone, Serialize, Deserialize, PartialEq, Debug)]
+#[derive(Copy, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Debug)]
 enum Ore {
     Iron,
     Coal,

@@ -1,4 +1,4 @@
-use crate::{structure::Size, Vector2d};
+use crate::structure::Size;
 
 use super::{
     draw_direction_arrow,
@@ -15,7 +15,7 @@ use super::{
 };
 use cgmath::{Matrix3, Matrix4, Vector2, Vector3};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use wasm_bindgen::prelude::*;
 use web_sys::{CanvasRenderingContext2d, WebGlRenderingContext as GL};
 
@@ -255,29 +255,41 @@ impl Structure for OreMine {
     }
 
     fn desc(&self, state: &FactorishState) -> String {
-        let tile = if let Some(tile) = state.tile_at(&self.position) {
-            tile
-        } else {
-            return "Cell not found".to_string();
+        let Some(_recipe) = &self.recipe else {
+            return String::from("Empty");
         };
-        if let Some(_recipe) = &self.recipe {
-            // Progress bar
-            format!("{}{}{}{}{}",
-                format!("Progress: {:.0}%<br>", self.progress * 100.),
-                "<div style='position: relative; width: 100px; height: 10px; background-color: #001f1f; margin: 2px; border: 1px solid #3f3f3f'>",
-                format!("<div style='position: absolute; width: {}px; height: 10px; background-color: #ff00ff'></div></div>",
-                    self.progress * 100.),
-                format!(r#"Power: {:.1}kJ <div style='position: relative; width: 100px; height: 10px; background-color: #001f1f; margin: 2px; border: 1px solid #3f3f3f'>
-                 <div style='position: absolute; width: {}px; height: 10px; background-color: #ff00ff'></div></div>"#,
-                    self.power,
-                    if 0. < self.max_power { (self.power) / self.max_power * 100. } else { 0. }),
-                format!("Expected output: {}", tile.ore.map(|ore| ore.1).unwrap_or(0)))
+
+        let expected_outputs = self
+            .bounding_box()
+            .iter_tiles()
+            .filter_map(|p| state.tile_at(&p).and_then(|t| t.ore))
+            .fold(
+                BTreeMap::new(),
+                |mut acc: BTreeMap<crate::Ore, u32>, cur| {
+                    *acc.entry(cur.0).or_default() += cur.1;
+                    acc
+                },
+            );
+
+        let expected_output_fmt = expected_outputs
+            .iter()
+            .map(|(ore, amount)| format!("&nbsp;&nbsp;{:?}: {}<br>", ore, amount))
+            .fold("".to_string(), |acc, cur| acc + &cur);
+
+        // Progress bar
+        format!("{}{}{}{}{}",
+            format!("Progress: {:.0}%<br>", self.progress * 100.),
+            "<div style='position: relative; width: 100px; height: 10px; background-color: #001f1f; margin: 2px; border: 1px solid #3f3f3f'>",
+            format!("<div style='position: absolute; width: {}px; height: 10px; background-color: #ff00ff'></div></div>",
+                self.progress * 100.),
+            format!(r#"Power: {:.1}kJ <div style='position: relative; width: 100px; height: 10px; background-color: #001f1f; margin: 2px; border: 1px solid #3f3f3f'>
+                <div style='position: absolute; width: {}px; height: 10px; background-color: #ff00ff'></div></div>"#,
+                self.power,
+                if 0. < self.max_power { (self.power) / self.max_power * 100. } else { 0. }),
+            format!("Expected output:<br>{}", if expected_output_fmt.is_empty() { "None" } else { &expected_output_fmt }))
         // getHTML(generateItemImage("time", true, this.recipe.time), true) + "<br>" +
         // "Outputs: <br>" +
         // getHTML(generateItemImage(this.recipe.output, true, 1), true) + "<br>";
-        } else {
-            String::from("Empty")
-        }
     }
 
     fn frame_proc(
@@ -286,22 +298,22 @@ impl Structure for OreMine {
         state: &mut FactorishState,
         structures: &mut StructureDynIter,
     ) -> Result<FrameProcResult, ()> {
-        let otile = &state.tile_at(&self.position);
-        if otile.is_none() {
-            return Ok(FrameProcResult::None);
-        }
-        let tile = otile.unwrap();
-
         let mut ret = FrameProcResult::None;
 
         if self.recipe.is_none() {
-            if let Some(item_type) = tile.get_ore_type() {
-                self.recipe = Some(Recipe::new(
-                    HashMap::new(),
-                    hash_map!(item_type => 1usize),
-                    8.,
-                    80.,
-                ));
+            for tile in self
+                .bounding_box()
+                .iter_tiles()
+                .filter_map(|p| state.tile_at(&p))
+            {
+                if let Some(item_type) = tile.get_ore_type() {
+                    self.recipe = Some(Recipe::new(
+                        HashMap::new(),
+                        hash_map!(item_type => 1usize),
+                        8.,
+                        80.,
+                    ));
+                }
             }
         }
         if let Some(recipe) = &self.recipe {
