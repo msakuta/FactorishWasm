@@ -336,9 +336,15 @@ impl Structure for OreMine {
                 }
             }
 
-            let output = |state: &mut FactorishState, _item, position: &Position| {
-                let tile = state.tile_at_mut(&position).ok_or(())?;
-                let ore = tile.ore.as_mut().ok_or(())?;
+            let recipe_ore = recipe.output.iter().next().map(|(ore, _)| ore).ok_or(())?;
+            let bbox = self.bounding_box();
+
+            let remove_ore_from_tile = |state: &mut FactorishState, pos: &Position| {
+                let tile = state.tile_at_mut(&pos)?;
+                let ore = tile.ore.as_mut()?;
+                if ore.0.to_item_type() != *recipe_ore {
+                    return None;
+                }
                 let val = &mut ore.1;
                 if 0 < *val {
                     *val -= 1;
@@ -346,10 +352,19 @@ impl Structure for OreMine {
                     if ret == 0 {
                         tile.ore = None;
                     }
-                    Ok(ret)
+                    Some(ret)
                 } else {
-                    Err(())
+                    None
                 }
+            };
+
+            let remove_ore_from_tiles = |state: &mut FactorishState| {
+                for pos in bbox.iter_tiles() {
+                    if let Some(val) = remove_ore_from_tile(state, &pos) {
+                        return Some(val);
+                    }
+                }
+                None
             };
 
             // Proceed only if we have sufficient energy in the buffer.
@@ -363,7 +378,7 @@ impl Structure for OreMine {
                     if let Some(item) = it.next() {
                         // Check whether we can input first
                         if structure.can_input(item.0) {
-                            if let Ok(val) = output(state, *item.0, &self.position) {
+                            if let Some(val) = remove_ore_from_tiles(state) {
                                 structure
                                     .input(&DropItem {
                                         type_: *item.0,
@@ -401,7 +416,7 @@ impl Structure for OreMine {
                         assert!(it.next().is_none());
                         if let Err(_code) = state.new_object(&output_position, *item.0) {
                             // console_log!("Failed to create object: {:?}", code);
-                        } else if let Ok(val) = output(state, *item.0, &self.position) {
+                        } else if let Some(val) = remove_ore_from_tiles(state) {
                             if val == 0 {
                                 self.recipe = None;
                             }

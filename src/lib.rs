@@ -167,6 +167,17 @@ enum Ore {
     Stone,
 }
 
+impl Ore {
+    fn to_item_type(self) -> ItemType {
+        match self {
+            Ore::Iron => ItemType::IronOre,
+            Ore::Coal => ItemType::CoalOre,
+            Ore::Copper => ItemType::CopperOre,
+            Ore::Stone => ItemType::StoneOre,
+        }
+    }
+}
+
 #[derive(Copy, Clone, Serialize, Deserialize)]
 struct OreValue(Ore, u32);
 
