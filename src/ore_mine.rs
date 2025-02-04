@@ -30,6 +30,7 @@ pub(crate) struct OreMine {
     max_power: f64,
     recipe: Option<Recipe>,
     input_inventory: Inventory,
+    #[serde(skip)]
     output_structure: Option<StructureId>,
     #[serde(skip)]
     digging: bool,
