@@ -114,10 +114,11 @@ pub(crate) fn draw_fuel_alarm_gl(
         gl.use_program(Some(&shader.program));
         gl.active_texture(GL::TEXTURE0);
         gl.bind_texture(GL::TEXTURE_2D, Some(&state.assets.tex_fuel_alarm));
-        let position = this.position();
+        let position = this.bounding_box().center();
+        // Subtract 0.5 to bring the sprite to center
         let (x, y) = (
-            position.x as f32 + state.viewport.x as f32,
-            position.y as f32 + state.viewport.y as f32,
+            position.x - 0.5 + state.viewport.x as f32,
+            position.y - 0.5 + state.viewport.y as f32,
         );
         gl.uniform_matrix3fv_with_f32_array(
             shader.tex_transform_loc.as_ref(),

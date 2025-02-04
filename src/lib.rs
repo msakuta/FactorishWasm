@@ -393,11 +393,15 @@ struct TempEnt {
 
 impl TempEnt {
     fn new(rng: &mut Xor128, position: Position) -> Self {
+        TempEnt::new_float(rng, (position.x as f64 + 0.5, position.y as f64 + 0.25))
+    }
+
+    fn new_float(rng: &mut Xor128, position: (f64, f64)) -> Self {
         let life = rng.next() * 3. + 6.;
         TempEnt {
             position: (
-                (position.x as f64 + 0.5) * TILE_SIZE,
-                (position.y as f64 + 0.25 + rng.next() * 0.5) * TILE_SIZE,
+                position.0 * TILE_SIZE,
+                (position.1 + rng.next() * 0.5) * TILE_SIZE,
             ),
             velocity: (
                 (rng.next() * 1.5 - 0.75 + 0.5), // A bit bias to the right

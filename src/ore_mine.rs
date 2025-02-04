@@ -1,3 +1,5 @@
+use crate::structure::Size;
+
 use super::{
     draw_direction_arrow,
     drop_items::hit_check,
@@ -54,11 +56,38 @@ impl OreMine {
         other: &dyn Structure,
         construct: bool,
     ) -> Result<(), JsValue> {
-        let output_position = self.position.add(self.rotation.delta());
-        if *other.position() == output_position {
+        let output_position = self.output_pos();
+        if other.bounding_box().intersects_position(output_position) {
             self.output_structure = if construct { Some(other_id) } else { None };
         }
         Ok(())
+    }
+
+    /// Get output port position of products, in float coordinates
+    fn output_pos(&self) -> Position {
+        let pos = self.output_port_pos();
+        let direction_delta = self.rotation.delta();
+        Position {
+            x: pos.x + direction_delta.0,
+            y: pos.y + direction_delta.1,
+        }
+    }
+
+    /// Get output port position of products, in float coordinates
+    fn output_port_pos(&self) -> Position {
+        let x = self.position.x;
+        let y = self.position.y;
+        let x = if matches!(self.rotation, Rotation::Right | Rotation::Bottom) {
+            x + 1
+        } else {
+            x
+        };
+        let y = if matches!(self.rotation, Rotation::Left | Rotation::Bottom) {
+            y + 1
+        } else {
+            y
+        };
+        Position { x, y }
     }
 }
 
@@ -71,17 +100,25 @@ impl Structure for OreMine {
         &self.position
     }
 
+    fn size(&self) -> Size {
+        Size {
+            width: 2,
+            height: 2,
+        }
+    }
+
     fn draw(
         &self,
         state: &FactorishState,
         context: &CanvasRenderingContext2d,
         depth: i32,
-        _is_toolbar: bool,
+        is_toolbar: bool,
     ) -> Result<(), JsValue> {
         let (x, y) = (
             self.position.x as f64 * TILE_SIZE,
             self.position.y as f64 * TILE_SIZE,
         );
+        let source_scale = if is_toolbar { 2. } else { 1. };
         match depth {
             0 => match state.image_mine.as_ref() {
                 Some(img) => {
@@ -95,8 +132,8 @@ impl Structure for OreMine {
                             &img.bitmap,
                             sx,
                             0.,
-                            TILE_SIZE * 2.,
-                            TILE_SIZE * 2.,
+                            TILE_SIZE * source_scale,
+                            TILE_SIZE * source_scale,
                             x,
                             y,
                             TILE_SIZE,
@@ -136,18 +173,26 @@ impl Structure for OreMine {
                 gl.uniform1f(shader.alpha_loc.as_ref(), if is_ghost { 0.5 } else { 1. });
 
                 enable_buffer(&gl, &state.assets.screen_buffer, 2, shader.vertex_position);
-                gl.uniform_matrix4fv_with_f32_array(
-                    shader.transform_loc.as_ref(),
-                    false,
-                    (state.get_world_transform()?
-                        * Matrix4::from_scale(2.)
-                        * Matrix4::from_translation(Vector3::new(x, y, 0.)))
-                    .flatten(),
-                );
 
                 gl.active_texture(GL::TEXTURE0);
 
-                let draw_exit = || {
+                let draw_exit = || -> Result<(), JsValue> {
+                    let mut port_pos = self.output_port_pos().to_float();
+                    port_pos.0 += state.viewport.x;
+                    port_pos.1 += state.viewport.y;
+                    gl.uniform_matrix4fv_with_f32_array(
+                        shader.transform_loc.as_ref(),
+                        false,
+                        (state.get_world_transform()?
+                            * Matrix4::from_scale(2.)
+                            * Matrix4::from_translation(Vector3::new(
+                                port_pos.0 as f32,
+                                port_pos.1 as f32,
+                                0.,
+                            )))
+                        .flatten(),
+                    );
+
                     gl.bind_texture(GL::TEXTURE_2D, Some(&state.assets.tex_ore_mine_exit));
                     let sx = self.rotation.angle_4() as f32 / 4.;
                     gl.uniform_matrix3fv_with_f32_array(
@@ -158,12 +203,22 @@ impl Structure for OreMine {
                         .flatten(),
                     );
                     gl.draw_arrays(GL::TRIANGLE_FAN, 0, 4);
+                    Ok(())
                 };
 
                 if self.rotation != Rotation::Bottom {
-                    draw_exit();
+                    draw_exit()?;
                 }
 
+                gl.uniform_matrix4fv_with_f32_array(
+                    shader.transform_loc.as_ref(),
+                    false,
+                    (state.get_world_transform()?
+                        * Matrix4::from_scale(2.)
+                        * Matrix4::from_translation(Vector3::new(x, y, 0.))
+                        * Matrix4::from_scale(2.))
+                    .flatten(),
+                );
                 gl.bind_texture(GL::TEXTURE_2D, Some(&state.assets.tex_ore_mine));
                 let sx = if self.digging {
                     (((state.sim_time * 5.) as isize) % 2 + 1) as f32 / 3.
@@ -181,7 +236,7 @@ impl Structure for OreMine {
                 gl.draw_arrays(GL::TRIANGLE_FAN, 0, 4);
 
                 if self.rotation == Rotation::Bottom {
-                    draw_exit();
+                    draw_exit()?;
                 }
             }
             2 => {
@@ -286,11 +341,9 @@ impl Structure for OreMine {
             // Proceed only if we have sufficient energy in the buffer.
             let progress = get_powered_progress(self.power, self.progress, recipe);
             if 1. <= self.progress + progress {
-                let output_position = self.position.add(self.rotation.delta());
-                if let Some(structure) = self
-                    .output_structure
-                    .map(|id| structures.get_mut(id))
-                    .flatten()
+                let output_position = self.output_pos();
+                let output_pixels = output_position.to_pixels();
+                if let Some(structure) = self.output_structure.and_then(|id| structures.get_mut(id))
                 {
                     let mut it = recipe.output.iter();
                     if let Some(item) = it.next() {
@@ -300,8 +353,8 @@ impl Structure for OreMine {
                                 structure
                                     .input(&DropItem {
                                         type_: *item.0,
-                                        x: output_position.x as f64 * TILE_SIZE,
-                                        y: output_position.y as f64 * TILE_SIZE,
+                                        x: output_pixels.0 as f64,
+                                        y: output_pixels.1 as f64,
                                     })
                                     .map_err(|_| ())?;
                                 if val == 0 {
@@ -320,8 +373,8 @@ impl Structure for OreMine {
                         return Ok(FrameProcResult::None);
                     }
                 }
-                let drop_x = output_position.x as f64 * TILE_SIZE + TILE_SIZE / 2.;
-                let drop_y = output_position.y as f64 * TILE_SIZE + TILE_SIZE / 2.;
+                let drop_x = output_pixels.0 as f64 + TILE_SIZE / 2.;
+                let drop_y = output_pixels.0 as f64 + TILE_SIZE / 2.;
                 if !hit_check(&state.drop_items, drop_x, drop_y, None)
                     && state
                         .tile_at(&output_position)
@@ -357,9 +410,10 @@ impl Structure for OreMine {
 
             // Show smoke if there was some progress
             if state.rng.next() < progress * 5. {
-                state
-                    .temp_ents
-                    .push(TempEnt::new(&mut state.rng, self.position));
+                state.temp_ents.push(TempEnt::new_float(
+                    &mut state.rng,
+                    (self.position.x as f64 + 1., self.position.y as f64 + 0.5),
+                ));
             }
         } else {
             self.digging = false;

@@ -1,6 +1,6 @@
 mod iter;
 
-use crate::inventory::STACK_SIZE;
+use crate::{inventory::STACK_SIZE, TILE_SIZE_F};
 
 use super::{
     drop_items::DropItem,
@@ -11,6 +11,7 @@ use super::{
     water_well::FluidBox,
     FactorishState, Inventory, InventoryTrait, Recipe,
 };
+use cgmath::Vector2;
 use rotate_enum::RotateEnum;
 use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
@@ -25,6 +26,8 @@ macro_rules! serialize_impl {
         }
     };
 }
+
+type Vector2f = Vector2<f32>;
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) struct StructureId {
@@ -105,6 +108,14 @@ impl Position {
         }
         None
     }
+
+    pub(crate) fn to_float(&self) -> (f64, f64) {
+        (self.x as f64, self.y as f64)
+    }
+
+    pub(crate) fn to_pixels(&self) -> (f32, f32) {
+        (self.x as f32 * TILE_SIZE_F, self.y as f32 * TILE_SIZE_F)
+    }
 }
 
 impl From<&[i32; 2]> for Position {
@@ -118,11 +129,37 @@ pub(crate) struct Size {
     pub height: i32,
 }
 
+#[derive(Clone, Copy, Debug)]
 pub(crate) struct BoundingBox {
     pub x0: i32,
     pub y0: i32,
     pub x1: i32,
     pub y1: i32,
+}
+
+impl BoundingBox {
+    pub fn from_position_size(position: Position, size: Size) -> Self {
+        Self {
+            x0: position.x,
+            y0: position.y,
+            x1: position.x + size.width,
+            y1: position.y + size.height,
+        }
+    }
+
+    pub fn intersects_position(&self, position: Position) -> bool {
+        self.x0 <= position.x
+            && position.x < self.x1
+            && self.y0 <= position.y
+            && position.y < self.y1
+    }
+
+    pub fn center(&self) -> Vector2f {
+        Vector2f::new(
+            (self.x0 + self.x1) as f32 / 2.,
+            (self.y0 + self.y1) as f32 / 2.,
+        )
+    }
 }
 
 #[derive(Copy, Clone, Serialize, Deserialize, RotateEnum, PartialEq)]
@@ -285,13 +322,7 @@ pub(crate) trait Structure {
         }
     }
     fn bounding_box(&self) -> BoundingBox {
-        let (position, size) = (self.position(), self.size());
-        BoundingBox {
-            x0: position.x,
-            y0: position.y,
-            x1: position.x + size.width,
-            y1: position.y + size.height,
-        }
+        BoundingBox::from_position_size(*self.position(), self.size())
     }
     fn contains(&self, pos: &Position) -> bool {
         let bb = self.bounding_box();
