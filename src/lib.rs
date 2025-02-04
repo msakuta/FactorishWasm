@@ -1490,8 +1490,9 @@ impl FactorishState {
 
     /// Look up a structure at a given tile coordinates
     fn find_structure_tile(&self, tile: &[i32]) -> Option<&dyn Structure> {
+        let position = Position::new(tile[0], tile[1]);
         self.structure_iter()
-            .find(|s| s.position().x == tile[0] && s.position().y == tile[1])
+            .find(|s| s.bounding_box().intersects_position(position))
     }
 
     /// Mutable variant of find_structure_tile
