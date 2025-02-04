@@ -1,3 +1,5 @@
+use crate::structure::Size;
+
 use super::{
     draw_direction_arrow,
     drop_items::hit_check,
@@ -13,7 +15,7 @@ use super::{
 };
 use cgmath::{Matrix3, Matrix4, Vector2, Vector3};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use wasm_bindgen::prelude::*;
 use web_sys::{CanvasRenderingContext2d, WebGlRenderingContext as GL};
 
@@ -28,6 +30,7 @@ pub(crate) struct OreMine {
     max_power: f64,
     recipe: Option<Recipe>,
     input_inventory: Inventory,
+    #[serde(skip)]
     output_structure: Option<StructureId>,
     #[serde(skip)]
     digging: bool,
@@ -54,11 +57,38 @@ impl OreMine {
         other: &dyn Structure,
         construct: bool,
     ) -> Result<(), JsValue> {
-        let output_position = self.position.add(self.rotation.delta());
-        if *other.position() == output_position {
+        let output_position = self.output_pos();
+        if other.bounding_box().intersects_position(output_position) {
             self.output_structure = if construct { Some(other_id) } else { None };
         }
         Ok(())
+    }
+
+    /// Get output port position of products, in float coordinates
+    fn output_pos(&self) -> Position {
+        let pos = self.output_port_pos();
+        let direction_delta = self.rotation.delta();
+        Position {
+            x: pos.x + direction_delta.0,
+            y: pos.y + direction_delta.1,
+        }
+    }
+
+    /// Get output port position of products, in float coordinates
+    fn output_port_pos(&self) -> Position {
+        let x = self.position.x;
+        let y = self.position.y;
+        let x = if matches!(self.rotation, Rotation::Right | Rotation::Bottom) {
+            x + 1
+        } else {
+            x
+        };
+        let y = if matches!(self.rotation, Rotation::Left | Rotation::Bottom) {
+            y + 1
+        } else {
+            y
+        };
+        Position { x, y }
     }
 }
 
@@ -71,17 +101,25 @@ impl Structure for OreMine {
         &self.position
     }
 
+    fn size(&self) -> Size {
+        Size {
+            width: 2,
+            height: 2,
+        }
+    }
+
     fn draw(
         &self,
         state: &FactorishState,
         context: &CanvasRenderingContext2d,
         depth: i32,
-        _is_toolbar: bool,
+        is_toolbar: bool,
     ) -> Result<(), JsValue> {
         let (x, y) = (
             self.position.x as f64 * TILE_SIZE,
             self.position.y as f64 * TILE_SIZE,
         );
+        let source_scale = if is_toolbar { 2. } else { 1. };
         match depth {
             0 => match state.image_mine.as_ref() {
                 Some(img) => {
@@ -95,8 +133,8 @@ impl Structure for OreMine {
                             &img.bitmap,
                             sx,
                             0.,
-                            TILE_SIZE,
-                            TILE_SIZE,
+                            TILE_SIZE * source_scale,
+                            TILE_SIZE * source_scale,
                             x,
                             y,
                             TILE_SIZE,
@@ -136,18 +174,23 @@ impl Structure for OreMine {
                 gl.uniform1f(shader.alpha_loc.as_ref(), if is_ghost { 0.5 } else { 1. });
 
                 enable_buffer(&gl, &state.assets.screen_buffer, 2, shader.vertex_position);
-                gl.uniform_matrix4fv_with_f32_array(
-                    shader.transform_loc.as_ref(),
-                    false,
-                    (state.get_world_transform()?
-                        * Matrix4::from_scale(2.)
-                        * Matrix4::from_translation(Vector3::new(x, y, 0.)))
-                    .flatten(),
-                );
 
                 gl.active_texture(GL::TEXTURE0);
 
-                let draw_exit = || {
+                let draw_exit = || -> Result<(), JsValue> {
+                    let port_pos = self.output_port_pos().to_f64() + state.viewport.offset_f64();
+                    let port_pos_f32 = port_pos
+                        .cast::<f32>()
+                        .ok_or_else(|| js_str!("Failed to cast port position"))?;
+                    gl.uniform_matrix4fv_with_f32_array(
+                        shader.transform_loc.as_ref(),
+                        false,
+                        (state.get_world_transform()?
+                            * Matrix4::from_scale(2.)
+                            * Matrix4::from_translation(port_pos_f32.extend(0.)))
+                        .flatten(),
+                    );
+
                     gl.bind_texture(GL::TEXTURE_2D, Some(&state.assets.tex_ore_mine_exit));
                     let sx = self.rotation.angle_4() as f32 / 4.;
                     gl.uniform_matrix3fv_with_f32_array(
@@ -158,12 +201,22 @@ impl Structure for OreMine {
                         .flatten(),
                     );
                     gl.draw_arrays(GL::TRIANGLE_FAN, 0, 4);
+                    Ok(())
                 };
 
                 if self.rotation != Rotation::Bottom {
-                    draw_exit();
+                    draw_exit()?;
                 }
 
+                gl.uniform_matrix4fv_with_f32_array(
+                    shader.transform_loc.as_ref(),
+                    false,
+                    (state.get_world_transform()?
+                        * Matrix4::from_scale(2.)
+                        * Matrix4::from_translation(Vector3::new(x, y, 0.))
+                        * Matrix4::from_scale(2.))
+                    .flatten(),
+                );
                 gl.bind_texture(GL::TEXTURE_2D, Some(&state.assets.tex_ore_mine));
                 let sx = if self.digging {
                     (((state.sim_time * 5.) as isize) % 2 + 1) as f32 / 3.
@@ -181,12 +234,16 @@ impl Structure for OreMine {
                 gl.draw_arrays(GL::TRIANGLE_FAN, 0, 4);
 
                 if self.rotation == Rotation::Bottom {
-                    draw_exit();
+                    draw_exit()?;
                 }
             }
             2 => {
                 if state.alt_mode {
-                    draw_direction_arrow_gl((x, y), &self.rotation, state, gl)?;
+                    let output_pos = self.output_port_pos().to_f64() + state.viewport.offset_f64();
+                    let output_pos_f32 = output_pos
+                        .cast::<f32>()
+                        .ok_or_else(|| js_str!("Failed to cast port position"))?;
+                    draw_direction_arrow_gl(output_pos_f32, &self.rotation, state, gl)?;
                 }
                 if !is_ghost {
                     crate::draw_fuel_alarm_gl_impl!(self, state, gl);
@@ -198,29 +255,41 @@ impl Structure for OreMine {
     }
 
     fn desc(&self, state: &FactorishState) -> String {
-        let tile = if let Some(tile) = state.tile_at(&self.position) {
-            tile
-        } else {
-            return "Cell not found".to_string();
+        let Some(_recipe) = &self.recipe else {
+            return String::from("Empty");
         };
-        if let Some(_recipe) = &self.recipe {
-            // Progress bar
-            format!("{}{}{}{}{}",
-                format!("Progress: {:.0}%<br>", self.progress * 100.),
-                "<div style='position: relative; width: 100px; height: 10px; background-color: #001f1f; margin: 2px; border: 1px solid #3f3f3f'>",
-                format!("<div style='position: absolute; width: {}px; height: 10px; background-color: #ff00ff'></div></div>",
-                    self.progress * 100.),
-                format!(r#"Power: {:.1}kJ <div style='position: relative; width: 100px; height: 10px; background-color: #001f1f; margin: 2px; border: 1px solid #3f3f3f'>
-                 <div style='position: absolute; width: {}px; height: 10px; background-color: #ff00ff'></div></div>"#,
-                    self.power,
-                    if 0. < self.max_power { (self.power) / self.max_power * 100. } else { 0. }),
-                format!("Expected output: {}", tile.ore.map(|ore| ore.1).unwrap_or(0)))
+
+        let expected_outputs = self
+            .bounding_box()
+            .iter_tiles()
+            .filter_map(|p| state.tile_at(&p).and_then(|t| t.ore))
+            .fold(
+                BTreeMap::new(),
+                |mut acc: BTreeMap<crate::Ore, u32>, cur| {
+                    *acc.entry(cur.0).or_default() += cur.1;
+                    acc
+                },
+            );
+
+        let expected_output_fmt = expected_outputs
+            .iter()
+            .map(|(ore, amount)| format!("&nbsp;&nbsp;{:?}: {}<br>", ore, amount))
+            .fold("".to_string(), |acc, cur| acc + &cur);
+
+        // Progress bar
+        format!("{}{}{}{}{}",
+            format!("Progress: {:.0}%<br>", self.progress * 100.),
+            "<div style='position: relative; width: 100px; height: 10px; background-color: #001f1f; margin: 2px; border: 1px solid #3f3f3f'>",
+            format!("<div style='position: absolute; width: {}px; height: 10px; background-color: #ff00ff'></div></div>",
+                self.progress * 100.),
+            format!(r#"Power: {:.1}kJ <div style='position: relative; width: 100px; height: 10px; background-color: #001f1f; margin: 2px; border: 1px solid #3f3f3f'>
+                <div style='position: absolute; width: {}px; height: 10px; background-color: #ff00ff'></div></div>"#,
+                self.power,
+                if 0. < self.max_power { (self.power) / self.max_power * 100. } else { 0. }),
+            format!("Expected output:<br>{}", if expected_output_fmt.is_empty() { "None" } else { &expected_output_fmt }))
         // getHTML(generateItemImage("time", true, this.recipe.time), true) + "<br>" +
         // "Outputs: <br>" +
         // getHTML(generateItemImage(this.recipe.output, true, 1), true) + "<br>";
-        } else {
-            String::from("Empty")
-        }
     }
 
     fn frame_proc(
@@ -229,22 +298,22 @@ impl Structure for OreMine {
         state: &mut FactorishState,
         structures: &mut StructureDynIter,
     ) -> Result<FrameProcResult, ()> {
-        let otile = &state.tile_at(&self.position);
-        if otile.is_none() {
-            return Ok(FrameProcResult::None);
-        }
-        let tile = otile.unwrap();
-
         let mut ret = FrameProcResult::None;
 
         if self.recipe.is_none() {
-            if let Some(item_type) = tile.get_ore_type() {
-                self.recipe = Some(Recipe::new(
-                    HashMap::new(),
-                    hash_map!(item_type => 1usize),
-                    8.,
-                    80.,
-                ));
+            for tile in self
+                .bounding_box()
+                .iter_tiles()
+                .filter_map(|p| state.tile_at(&p))
+            {
+                if let Some(item_type) = tile.get_ore_type() {
+                    self.recipe = Some(Recipe::new(
+                        HashMap::new(),
+                        hash_map!(item_type => 1usize),
+                        8.,
+                        80.,
+                    ));
+                }
             }
         }
         if let Some(recipe) = &self.recipe {
@@ -267,9 +336,15 @@ impl Structure for OreMine {
                 }
             }
 
-            let output = |state: &mut FactorishState, _item, position: &Position| {
-                let tile = state.tile_at_mut(&position).ok_or(())?;
-                let ore = tile.ore.as_mut().ok_or(())?;
+            let recipe_ore = recipe.output.iter().next().map(|(ore, _)| ore).ok_or(())?;
+            let bbox = self.bounding_box();
+
+            let remove_ore_from_tile = |state: &mut FactorishState, pos: &Position| {
+                let tile = state.tile_at_mut(&pos)?;
+                let ore = tile.ore.as_mut()?;
+                if ore.0.to_item_type() != *recipe_ore {
+                    return None;
+                }
                 let val = &mut ore.1;
                 if 0 < *val {
                     *val -= 1;
@@ -277,31 +352,38 @@ impl Structure for OreMine {
                     if ret == 0 {
                         tile.ore = None;
                     }
-                    Ok(ret)
+                    Some(ret)
                 } else {
-                    Err(())
+                    None
                 }
+            };
+
+            let remove_ore_from_tiles = |state: &mut FactorishState| {
+                for pos in bbox.iter_tiles() {
+                    if let Some(val) = remove_ore_from_tile(state, &pos) {
+                        return Some(val);
+                    }
+                }
+                None
             };
 
             // Proceed only if we have sufficient energy in the buffer.
             let progress = get_powered_progress(self.power, self.progress, recipe);
             if 1. <= self.progress + progress {
-                let output_position = self.position.add(self.rotation.delta());
-                if let Some(structure) = self
-                    .output_structure
-                    .map(|id| structures.get_mut(id))
-                    .flatten()
+                let output_position = self.output_pos();
+                let output_pixels = output_position.to_pixels();
+                if let Some(structure) = self.output_structure.and_then(|id| structures.get_mut(id))
                 {
                     let mut it = recipe.output.iter();
                     if let Some(item) = it.next() {
                         // Check whether we can input first
                         if structure.can_input(item.0) {
-                            if let Ok(val) = output(state, *item.0, &self.position) {
+                            if let Some(val) = remove_ore_from_tiles(state) {
                                 structure
                                     .input(&DropItem {
                                         type_: *item.0,
-                                        x: output_position.x as f64 * TILE_SIZE,
-                                        y: output_position.y as f64 * TILE_SIZE,
+                                        x: output_pixels.x as f64,
+                                        y: output_pixels.y as f64,
                                     })
                                     .map_err(|_| ())?;
                                 if val == 0 {
@@ -320,8 +402,8 @@ impl Structure for OreMine {
                         return Ok(FrameProcResult::None);
                     }
                 }
-                let drop_x = output_position.x as f64 * TILE_SIZE + TILE_SIZE / 2.;
-                let drop_y = output_position.y as f64 * TILE_SIZE + TILE_SIZE / 2.;
+                let drop_x = output_pixels.x as f64 + TILE_SIZE / 2.;
+                let drop_y = output_pixels.y as f64 + TILE_SIZE / 2.;
                 if !hit_check(&state.drop_items, drop_x, drop_y, None)
                     && state
                         .tile_at(&output_position)
@@ -334,7 +416,7 @@ impl Structure for OreMine {
                         assert!(it.next().is_none());
                         if let Err(_code) = state.new_object(&output_position, *item.0) {
                             // console_log!("Failed to create object: {:?}", code);
-                        } else if let Ok(val) = output(state, *item.0, &self.position) {
+                        } else if let Some(val) = remove_ore_from_tiles(state) {
                             if val == 0 {
                                 self.recipe = None;
                             }
@@ -357,9 +439,10 @@ impl Structure for OreMine {
 
             // Show smoke if there was some progress
             if state.rng.next() < progress * 5. {
-                state
-                    .temp_ents
-                    .push(TempEnt::new(&mut state.rng, self.position));
+                state.temp_ents.push(TempEnt::new_float(
+                    &mut state.rng,
+                    (self.position.x as f64 + 1., self.position.y as f64 + 0.5),
+                ));
             }
         } else {
             self.digging = false;

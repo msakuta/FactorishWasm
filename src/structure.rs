@@ -1,15 +1,14 @@
 mod iter;
 
-use crate::inventory::STACK_SIZE;
-
 use super::{
     drop_items::DropItem,
     dyn_iter::{DynIter, DynIterMut},
     inventory::InventoryType,
+    inventory::STACK_SIZE,
     items::ItemType,
     underground_belt::UnderDirection,
     water_well::FluidBox,
-    FactorishState, Inventory, InventoryTrait, Recipe,
+    FactorishState, Inventory, InventoryTrait, Recipe, Vector2d, Vector2f, TILE_SIZE_F,
 };
 use rotate_enum::RotateEnum;
 use serde::{Deserialize, Serialize};
@@ -105,6 +104,18 @@ impl Position {
         }
         None
     }
+
+    pub(crate) fn to_f64(&self) -> Vector2d {
+        Vector2d::new(self.x as f64, self.y as f64)
+    }
+
+    pub(crate) fn to_f32(&self) -> Vector2f {
+        Vector2f::new(self.x as f32, self.y as f32)
+    }
+
+    pub(crate) fn to_pixels(&self) -> Vector2f {
+        Vector2f::new(self.x as f32 * TILE_SIZE_F, self.y as f32 * TILE_SIZE_F)
+    }
 }
 
 impl From<&[i32; 2]> for Position {
@@ -118,11 +129,42 @@ pub(crate) struct Size {
     pub height: i32,
 }
 
+#[derive(Clone, Copy, Debug)]
 pub(crate) struct BoundingBox {
     pub x0: i32,
     pub y0: i32,
     pub x1: i32,
     pub y1: i32,
+}
+
+impl BoundingBox {
+    pub fn from_position_size(position: Position, size: Size) -> Self {
+        Self {
+            x0: position.x,
+            y0: position.y,
+            x1: position.x + size.width,
+            y1: position.y + size.height,
+        }
+    }
+
+    pub fn intersects_position(&self, position: Position) -> bool {
+        self.x0 <= position.x
+            && position.x < self.x1
+            && self.y0 <= position.y
+            && position.y < self.y1
+    }
+
+    pub fn center(&self) -> Vector2f {
+        Vector2f::new(
+            (self.x0 + self.x1) as f32 / 2.,
+            (self.y0 + self.y1) as f32 / 2.,
+        )
+    }
+
+    pub fn iter_tiles(&self) -> impl Iterator<Item = Position> {
+        let copy = *self;
+        (copy.x0..copy.x1).flat_map(move |x| (copy.y0..copy.y1).map(move |y| Position::new(x, y)))
+    }
 }
 
 #[derive(Copy, Clone, Serialize, Deserialize, RotateEnum, PartialEq)]
@@ -285,13 +327,7 @@ pub(crate) trait Structure {
         }
     }
     fn bounding_box(&self) -> BoundingBox {
-        let (position, size) = (self.position(), self.size());
-        BoundingBox {
-            x0: position.x,
-            y0: position.y,
-            x1: position.x + size.width,
-            y1: position.y + size.height,
-        }
+        BoundingBox::from_position_size(*self.position(), self.size())
     }
     fn contains(&self, pos: &Position) -> bool {
         let bb = self.bounding_box();

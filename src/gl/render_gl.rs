@@ -6,8 +6,8 @@ use super::{
 use crate::{
     apply_bounds, elect_pole::draw_wire_gl, items::render_drop_item_gl, performance,
     structure::Structure, Cell, FactorishState, FluidType, Ore, OreValue, Position, PowerWire,
-    Rotation, CHUNK_SIZE, CHUNK_SIZE_I, DROP_ITEM_SIZE, INDEX_CHUNK_SIZE, ORE_HARVEST_TIME,
-    TILE_SIZE, TILE_SIZE_F,
+    Rotation, Vector2f, CHUNK_SIZE, CHUNK_SIZE_I, DROP_ITEM_SIZE, INDEX_CHUNK_SIZE,
+    ORE_HARVEST_TIME, TILE_SIZE, TILE_SIZE_F,
 };
 use cgmath::{Matrix3, Matrix4, Rad, Vector2, Vector3};
 use slice_of_array::SliceFlatExt;
@@ -15,11 +15,12 @@ use wasm_bindgen::prelude::*;
 use web_sys::{WebGlRenderingContext as GL, WebGlTexture};
 
 pub(crate) fn draw_direction_arrow_gl(
-    (x, y): (f32, f32),
+    pos: impl Into<Vector2f>,
     rotation: &Rotation,
     state: &FactorishState,
     gl: &GL,
 ) -> Result<(), JsValue> {
+    let Vector2f { x, y } = pos.into();
     let shader = state
         .assets
         .textured_shader
@@ -114,10 +115,11 @@ pub(crate) fn draw_fuel_alarm_gl(
         gl.use_program(Some(&shader.program));
         gl.active_texture(GL::TEXTURE0);
         gl.bind_texture(GL::TEXTURE_2D, Some(&state.assets.tex_fuel_alarm));
-        let position = this.position();
+        let position = this.bounding_box().center();
+        // Subtract 0.5 to bring the sprite to center
         let (x, y) = (
-            position.x as f32 + state.viewport.x as f32,
-            position.y as f32 + state.viewport.y as f32,
+            position.x - 0.5 + state.viewport.x as f32,
+            position.y - 0.5 + state.viewport.y as f32,
         );
         gl.uniform_matrix3fv_with_f32_array(
             shader.tex_transform_loc.as_ref(),

@@ -159,12 +159,23 @@ enum JSEvent {
     UpdateResearch,
 }
 
-#[derive(Copy, Clone, Serialize, Deserialize, PartialEq, Debug)]
+#[derive(Copy, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Debug)]
 enum Ore {
     Iron,
     Coal,
     Copper,
     Stone,
+}
+
+impl Ore {
+    fn to_item_type(self) -> ItemType {
+        match self {
+            Ore::Iron => ItemType::IronOre,
+            Ore::Coal => ItemType::CoalOre,
+            Ore::Copper => ItemType::CopperOre,
+            Ore::Stone => ItemType::StoneOre,
+        }
+    }
 }
 
 #[derive(Copy, Clone, Serialize, Deserialize)]
@@ -393,11 +404,15 @@ struct TempEnt {
 
 impl TempEnt {
     fn new(rng: &mut Xor128, position: Position) -> Self {
+        TempEnt::new_float(rng, (position.x as f64 + 0.5, position.y as f64 + 0.25))
+    }
+
+    fn new_float(rng: &mut Xor128, position: (f64, f64)) -> Self {
         let life = rng.next() * 3. + 6.;
         TempEnt {
             position: (
-                (position.x as f64 + 0.5) * TILE_SIZE,
-                (position.y as f64 + 0.25 + rng.next() * 0.5) * TILE_SIZE,
+                position.0 * TILE_SIZE,
+                (position.1 + rng.next() * 0.5) * TILE_SIZE,
             ),
             velocity: (
                 (rng.next() * 1.5 - 0.75 + 0.5), // A bit bias to the right
@@ -443,6 +458,9 @@ struct OreHarvesting {
     timer: i32,
 }
 
+type Vector2d = cgmath::Vector2<f64>;
+type Vector2f = cgmath::Vector2<f32>;
+
 #[derive(Serialize, Deserialize)]
 struct Viewport {
     x: f64,
@@ -457,6 +475,16 @@ impl Default for Viewport {
             y: 0.,
             scale: 1.,
         }
+    }
+}
+
+impl Viewport {
+    fn offset_f64(&self) -> Vector2d {
+        Vector2d::new(self.x as f64, self.y as f64)
+    }
+
+    fn offset(&self) -> Vector2f {
+        Vector2f::new(self.x as f32, self.y as f32)
     }
 }
 
@@ -1473,8 +1501,9 @@ impl FactorishState {
 
     /// Look up a structure at a given tile coordinates
     fn find_structure_tile(&self, tile: &[i32]) -> Option<&dyn Structure> {
+        let position = Position::new(tile[0], tile[1]);
         self.structure_iter()
-            .find(|s| s.position().x == tile[0] && s.position().y == tile[1])
+            .find(|s| s.bounding_box().intersects_position(position))
     }
 
     /// Mutable variant of find_structure_tile
@@ -1492,20 +1521,19 @@ impl FactorishState {
     ///
     /// Because mutable version of find_structure_tile doesn't work.
     fn find_structure_tile_idx(&self, tile: &[i32]) -> Option<usize> {
+        let position = Position::new(tile[0], tile[1]);
         self.structures
             .iter()
             .enumerate()
             .filter_map(|(id, s)| Some((id, s.dynamic.as_deref()?)))
-            .find(|(_, s)| s.position().x == tile[0] && s.position().y == tile[1])
+            .find(|(_, s)| s.bounding_box().intersects_position(position))
             .map(|(idx, _)| idx)
     }
 
     fn find_structure_tile_id(&self, tile: &[i32]) -> Option<(StructureId, &dyn Structure)> {
+        let position = Position::new(tile[0], tile[1]);
         self.structure_id_iter()
-            .find(|(_, d)| {
-                let pos = *d.position();
-                pos.x == tile[0] && pos.y == tile[1]
-            })
+            .find(|(_, d)| d.bounding_box().intersects_position(position))
             .map(|(id, s)| (id, s))
     }
 

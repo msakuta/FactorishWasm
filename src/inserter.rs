@@ -60,10 +60,11 @@ impl Inserter {
     ) -> Result<(), JsValue> {
         let input_position = self.position.add(self.rotation.delta_inv());
         let output_position = self.position.add(self.rotation.delta());
-        if *other.position() == input_position {
+        let other_bb = other.bounding_box();
+        if other_bb.intersects_position(input_position) {
             self.input_structure = if construct { Some(other_id) } else { None };
         }
-        if *other.position() == output_position {
+        if other_bb.intersects_position(output_position) {
             self.output_structure = if construct { Some(other_id) } else { None };
         }
         Ok(())
