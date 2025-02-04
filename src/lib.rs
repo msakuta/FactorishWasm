@@ -415,8 +415,8 @@ impl TempEnt {
                 (position.1 + rng.next() * 0.5) * TILE_SIZE,
             ),
             velocity: (
-                (rng.next() * 1.5 - 0.75 + 0.5), // A bit bias to the right
-                (4. + rng.next()),
+                (rng.next() * 3.0 - 1.5 + 1.0), // A bit bias to the right
+                (8. + 3. * rng.next()),
             ),
             rotation: rng.next() * std::f64::consts::PI * 2.,
             life,
@@ -2030,10 +2030,11 @@ impl FactorishState {
         y: i32,
         inventory_type: JsValue,
     ) -> Result<js_sys::Array, JsValue> {
+        let position = Position { x, y };
         let inventory_type = InventoryType::try_from(inventory_type)?;
         if let Some((id, inventory)) = self
             .structure_id_iter()
-            .find(|(_, d)| *d.position() == Position { x, y })
+            .find(|(_, d)| d.bounding_box().intersects_position(position))
             .and_then(|(id, s)| Some((id, Self::inventory_to_vec(s, inventory_type)?)))
         {
             return self.vec_to_js(

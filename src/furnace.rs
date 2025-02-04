@@ -1,15 +1,14 @@
-use crate::structure::get_powered_progress;
-
 use super::{
     gl::utils::{enable_buffer, Flatten},
     inventory::InventoryType,
     items::item_to_str,
     research::TechnologyTag,
     structure::{
-        default_add_inventory, Structure, StructureDynIter, StructureId, RECIPE_CAPACITY_MULTIPLIER,
+        default_add_inventory, get_powered_progress, Size, Structure, StructureDynIter,
+        StructureId, RECIPE_CAPACITY_MULTIPLIER,
     },
     DropItem, FactorishState, FrameProcResult, Inventory, InventoryTrait, ItemType, Position,
-    Recipe, TempEnt, COAL_POWER,
+    Recipe, TempEnt, COAL_POWER, TILE_SIZE,
 };
 use cgmath::{Matrix3, Matrix4, Vector2, Vector3};
 use once_cell::sync::Lazy;
@@ -81,17 +80,22 @@ impl Structure for Furnace {
         &self.position
     }
 
+    fn size(&self) -> Size {
+        Size::new(2, 2)
+    }
+
     fn draw(
         &self,
         state: &FactorishState,
         context: &CanvasRenderingContext2d,
         depth: i32,
-        _is_toolbar: bool,
+        is_toolbar: bool,
     ) -> Result<(), JsValue> {
         if depth != 0 {
             return Ok(());
         };
         let (x, y) = (self.position.x as f64 * 32., self.position.y as f64 * 32.);
+        let source_scale = if is_toolbar { 2. } else { 1. };
         match state.image_furnace.as_ref() {
             Some(img) => {
                 let sx = if self.progress.is_some() && 0. < self.power {
@@ -103,12 +107,12 @@ impl Structure for Furnace {
                     &img.bitmap,
                     sx,
                     0.,
-                    32.,
-                    32.,
+                    TILE_SIZE * source_scale,
+                    TILE_SIZE * source_scale,
                     x,
                     y,
-                    32.,
-                    32.,
+                    TILE_SIZE,
+                    TILE_SIZE,
                 )?;
             }
             None => return Err(JsValue::from_str("furnace image not available")),
@@ -158,9 +162,10 @@ impl Structure for Furnace {
         gl.uniform_matrix4fv_with_f32_array(
             shader.transform_loc.as_ref(),
             false,
-            &(state.get_world_transform()?
+            (state.get_world_transform()?
                 * Matrix4::from_scale(2.)
-                * Matrix4::from_translation(Vector3::new(x, y, 0.)))
+                * Matrix4::from_translation(Vector3::new(x, y, 0.))
+                * Matrix4::from_scale(2.))
             .flatten(),
         );
         gl.draw_arrays(GL::TRIANGLE_FAN, 0, 4);
@@ -254,9 +259,11 @@ impl Structure for Furnace {
                 // Proceed only if we have sufficient energy in the buffer.
                 let progress = get_powered_progress(self.power, prev_progress, recipe);
                 if state.rng.next() < progress * 10. {
-                    state
-                        .temp_ents
-                        .push(TempEnt::new(&mut state.rng, self.position));
+                    let position = self.position.to_f64();
+                    state.temp_ents.push(TempEnt::new_float(
+                        &mut state.rng,
+                        (position.x + 1.4, position.y),
+                    ));
                 }
                 if 1. <= prev_progress + progress {
                     self.progress = None;
