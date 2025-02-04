@@ -2030,10 +2030,11 @@ impl FactorishState {
         y: i32,
         inventory_type: JsValue,
     ) -> Result<js_sys::Array, JsValue> {
+        let position = Position { x, y };
         let inventory_type = InventoryType::try_from(inventory_type)?;
         if let Some((id, inventory)) = self
             .structure_id_iter()
-            .find(|(_, d)| *d.position() == Position { x, y })
+            .find(|(_, d)| d.bounding_box().intersects_position(position))
             .and_then(|(id, s)| Some((id, Self::inventory_to_vec(s, inventory_type)?)))
         {
             return self.vec_to_js(
