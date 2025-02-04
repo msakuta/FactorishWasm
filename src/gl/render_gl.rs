@@ -6,8 +6,8 @@ use super::{
 use crate::{
     apply_bounds, elect_pole::draw_wire_gl, items::render_drop_item_gl, performance,
     structure::Structure, Cell, FactorishState, FluidType, Ore, OreValue, Position, PowerWire,
-    Rotation, CHUNK_SIZE, CHUNK_SIZE_I, DROP_ITEM_SIZE, INDEX_CHUNK_SIZE, ORE_HARVEST_TIME,
-    TILE_SIZE, TILE_SIZE_F,
+    Rotation, Vector2f, CHUNK_SIZE, CHUNK_SIZE_I, DROP_ITEM_SIZE, INDEX_CHUNK_SIZE,
+    ORE_HARVEST_TIME, TILE_SIZE, TILE_SIZE_F,
 };
 use cgmath::{Matrix3, Matrix4, Rad, Vector2, Vector3};
 use slice_of_array::SliceFlatExt;
@@ -15,11 +15,12 @@ use wasm_bindgen::prelude::*;
 use web_sys::{WebGlRenderingContext as GL, WebGlTexture};
 
 pub(crate) fn draw_direction_arrow_gl(
-    (x, y): (f32, f32),
+    pos: impl Into<Vector2f>,
     rotation: &Rotation,
     state: &FactorishState,
     gl: &GL,
 ) -> Result<(), JsValue> {
+    let Vector2f { x, y } = pos.into();
     let shader = state
         .assets
         .textured_shader

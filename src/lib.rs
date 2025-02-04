@@ -447,6 +447,9 @@ struct OreHarvesting {
     timer: i32,
 }
 
+type Vector2d = cgmath::Vector2<f64>;
+type Vector2f = cgmath::Vector2<f32>;
+
 #[derive(Serialize, Deserialize)]
 struct Viewport {
     x: f64,
@@ -461,6 +464,16 @@ impl Default for Viewport {
             y: 0.,
             scale: 1.,
         }
+    }
+}
+
+impl Viewport {
+    fn offset_f64(&self) -> Vector2d {
+        Vector2d::new(self.x as f64, self.y as f64)
+    }
+
+    fn offset(&self) -> Vector2f {
+        Vector2f::new(self.x as f32, self.y as f32)
     }
 }
 

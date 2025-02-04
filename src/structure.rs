@@ -1,17 +1,15 @@
 mod iter;
 
-use crate::{inventory::STACK_SIZE, TILE_SIZE_F};
-
 use super::{
     drop_items::DropItem,
     dyn_iter::{DynIter, DynIterMut},
     inventory::InventoryType,
+    inventory::STACK_SIZE,
     items::ItemType,
     underground_belt::UnderDirection,
     water_well::FluidBox,
-    FactorishState, Inventory, InventoryTrait, Recipe,
+    FactorishState, Inventory, InventoryTrait, Recipe, Vector2d, Vector2f, TILE_SIZE_F,
 };
-use cgmath::Vector2;
 use rotate_enum::RotateEnum;
 use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
@@ -26,8 +24,6 @@ macro_rules! serialize_impl {
         }
     };
 }
-
-type Vector2f = Vector2<f32>;
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) struct StructureId {
@@ -109,12 +105,16 @@ impl Position {
         None
     }
 
-    pub(crate) fn to_float(&self) -> (f64, f64) {
-        (self.x as f64, self.y as f64)
+    pub(crate) fn to_f64(&self) -> Vector2d {
+        Vector2d::new(self.x as f64, self.y as f64)
     }
 
-    pub(crate) fn to_pixels(&self) -> (f32, f32) {
-        (self.x as f32 * TILE_SIZE_F, self.y as f32 * TILE_SIZE_F)
+    pub(crate) fn to_f32(&self) -> Vector2f {
+        Vector2f::new(self.x as f32, self.y as f32)
+    }
+
+    pub(crate) fn to_pixels(&self) -> Vector2f {
+        Vector2f::new(self.x as f32 * TILE_SIZE_F, self.y as f32 * TILE_SIZE_F)
     }
 }
 

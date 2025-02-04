@@ -1,4 +1,4 @@
-use crate::structure::Size;
+use crate::{structure::Size, Vector2d};
 
 use super::{
     draw_direction_arrow,
@@ -177,19 +177,16 @@ impl Structure for OreMine {
                 gl.active_texture(GL::TEXTURE0);
 
                 let draw_exit = || -> Result<(), JsValue> {
-                    let mut port_pos = self.output_port_pos().to_float();
-                    port_pos.0 += state.viewport.x;
-                    port_pos.1 += state.viewport.y;
+                    let port_pos = self.output_port_pos().to_f64() + state.viewport.offset_f64();
+                    let port_pos_f32 = port_pos
+                        .cast::<f32>()
+                        .ok_or_else(|| js_str!("Failed to cast port position"))?;
                     gl.uniform_matrix4fv_with_f32_array(
                         shader.transform_loc.as_ref(),
                         false,
                         (state.get_world_transform()?
                             * Matrix4::from_scale(2.)
-                            * Matrix4::from_translation(Vector3::new(
-                                port_pos.0 as f32,
-                                port_pos.1 as f32,
-                                0.,
-                            )))
+                            * Matrix4::from_translation(port_pos_f32.extend(0.)))
                         .flatten(),
                     );
 
@@ -241,7 +238,11 @@ impl Structure for OreMine {
             }
             2 => {
                 if state.alt_mode {
-                    draw_direction_arrow_gl((x, y), &self.rotation, state, gl)?;
+                    let output_pos = self.output_port_pos().to_f64() + state.viewport.offset_f64();
+                    let output_pos_f32 = output_pos
+                        .cast::<f32>()
+                        .ok_or_else(|| js_str!("Failed to cast port position"))?;
+                    draw_direction_arrow_gl(output_pos_f32, &self.rotation, state, gl)?;
                 }
                 if !is_ghost {
                     crate::draw_fuel_alarm_gl_impl!(self, state, gl);
@@ -353,8 +354,8 @@ impl Structure for OreMine {
                                 structure
                                     .input(&DropItem {
                                         type_: *item.0,
-                                        x: output_pixels.0 as f64,
-                                        y: output_pixels.1 as f64,
+                                        x: output_pixels.x as f64,
+                                        y: output_pixels.y as f64,
                                     })
                                     .map_err(|_| ())?;
                                 if val == 0 {
@@ -373,8 +374,8 @@ impl Structure for OreMine {
                         return Ok(FrameProcResult::None);
                     }
                 }
-                let drop_x = output_pixels.0 as f64 + TILE_SIZE / 2.;
-                let drop_y = output_pixels.0 as f64 + TILE_SIZE / 2.;
+                let drop_x = output_pixels.x as f64 + TILE_SIZE / 2.;
+                let drop_y = output_pixels.y as f64 + TILE_SIZE / 2.;
                 if !hit_check(&state.drop_items, drop_x, drop_y, None)
                     && state
                         .tile_at(&output_position)
