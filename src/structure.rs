@@ -129,6 +129,12 @@ pub(crate) struct Size {
     pub height: i32,
 }
 
+impl Size {
+    pub fn new(width: i32, height: i32) -> Self {
+        Self { width, height }
+    }
+}
+
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct BoundingBox {
     pub x0: i32,

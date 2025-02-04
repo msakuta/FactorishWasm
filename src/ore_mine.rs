@@ -102,10 +102,7 @@ impl Structure for OreMine {
     }
 
     fn size(&self) -> Size {
-        Size {
-            width: 2,
-            height: 2,
-        }
+        Size::new(2, 2)
     }
 
     fn draw(
