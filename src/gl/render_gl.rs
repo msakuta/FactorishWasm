@@ -296,7 +296,7 @@ impl FactorishState {
                         .flatten(),
                 );
 
-                let scale = ((ent.max_life - ent.life) * 0.15).min(1.) as f32;
+                let scale = ((ent.max_life - ent.life) * 0.3).min(2.) as f32;
                 gl.uniform_matrix4fv_with_f32_array(
                     shader.transform_loc.as_ref(),
                     false,

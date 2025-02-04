@@ -415,8 +415,8 @@ impl TempEnt {
                 (position.1 + rng.next() * 0.5) * TILE_SIZE,
             ),
             velocity: (
-                (rng.next() * 1.5 - 0.75 + 0.5), // A bit bias to the right
-                (4. + rng.next()),
+                (rng.next() * 3.0 - 1.5 + 1.0), // A bit bias to the right
+                (8. + 3. * rng.next()),
             ),
             rotation: rng.next() * std::f64::consts::PI * 2.,
             life,

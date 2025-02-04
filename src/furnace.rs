@@ -262,7 +262,7 @@ impl Structure for Furnace {
                     let position = self.position.to_f64();
                     state.temp_ents.push(TempEnt::new_float(
                         &mut state.rng,
-                        (position.x + 0.7, position.y),
+                        (position.x + 1.4, position.y),
                     ));
                 }
                 if 1. <= prev_progress + progress {
