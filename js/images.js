@@ -24,6 +24,7 @@ import boilerConnector from "../img/boiler-connector.png";
 import pipe from "../img/pipe.png";
 import inserter from "../img/inserter-base.png";
 import direction from "../img/direction.png";
+import directionWhite from "../img/direction-white.png";
 import sparseDirection from "../img/sparse-direction.png";
 import flowDirection from "../img/flow-direction.png";
 import connectOverlay from "../img/connect-overlay.png";
@@ -80,6 +81,7 @@ export let loadImages = [
     ["pipe", pipe],
     ["inserter", inserter],
     ["direction", direction],
+    ["directionWhite", directionWhite],
     ["flowDirection", flowDirection],
     ["sparseDirection", sparseDirection],
     ["connectOverlay", connectOverlay],

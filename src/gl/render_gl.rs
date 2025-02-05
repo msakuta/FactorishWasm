@@ -20,39 +20,60 @@ pub(crate) fn draw_direction_arrow_gl(
     state: &FactorishState,
     gl: &GL,
 ) -> Result<(), JsValue> {
-    let Vector2f { x, y } = pos.into();
-    let shader = state
-        .assets
-        .textured_shader
-        .as_ref()
-        .ok_or_else(|| js_str!("Shader not found"))?;
-    gl.use_program(Some(&shader.program));
-    gl.active_texture(GL::TEXTURE0);
-    gl.bind_texture(GL::TEXTURE_2D, Some(&state.assets.tex_direction));
+    let drawer = DirectionDrawer::with_tex(&state.assets.tex_direction);
+    drawer.draw(pos, rotation, state, gl)
+}
 
-    gl.uniform_matrix3fv_with_f32_array(
-        shader.tex_transform_loc.as_ref(),
-        false,
-        Matrix3::from_nonuniform_scale(1., 1.).flatten(),
-    );
+pub(crate) struct DirectionDrawer<'a> {
+    tex: &'a WebGlTexture,
+}
 
-    gl.uniform_matrix4fv_with_f32_array(
-        shader.transform_loc.as_ref(),
-        false,
-        (state.get_world_transform()?
-            * Matrix4::from_scale(2.)
-            * Matrix4::from_translation(Vector3::new(x + 0.5, y + 0.5, 0.))
-            * Matrix4::from_angle_z(Rad(rotation.angle_rad() as f32 + std::f32::consts::PI))
-            * Matrix4::from_nonuniform_scale(0.25, 0.5, 1.)
-            * Matrix4::from_translation(Vector3::new(-0.5, -0.5, 0.)))
-        .flatten(),
-    );
+impl<'a> DirectionDrawer<'a> {
+    pub fn with_tex(tex: &'a WebGlTexture) -> Self {
+        Self { tex }
+    }
 
-    enable_buffer(&gl, &state.assets.screen_buffer, 2, shader.vertex_position);
+    pub fn draw(
+        &self,
+        pos: impl Into<Vector2f>,
+        rotation: &Rotation,
+        state: &FactorishState,
+        gl: &GL,
+    ) -> Result<(), JsValue> {
+        let Vector2f { x, y } = pos.into();
+        let shader = state
+            .assets
+            .textured_shader
+            .as_ref()
+            .ok_or_else(|| js_str!("Shader not found"))?;
+        gl.use_program(Some(&shader.program));
+        gl.active_texture(GL::TEXTURE0);
+        gl.bind_texture(GL::TEXTURE_2D, Some(self.tex));
 
-    gl.draw_arrays(GL::TRIANGLE_FAN, 0, 4);
+        gl.uniform_matrix3fv_with_f32_array(
+            shader.tex_transform_loc.as_ref(),
+            false,
+            Matrix3::from_nonuniform_scale(1., 1.).flatten(),
+        );
 
-    Ok(())
+        gl.uniform_matrix4fv_with_f32_array(
+            shader.transform_loc.as_ref(),
+            false,
+            (state.get_world_transform()?
+                * Matrix4::from_scale(2.)
+                * Matrix4::from_translation(Vector3::new(x + 0.5, y + 0.5, 0.))
+                * Matrix4::from_angle_z(Rad(rotation.angle_rad() as f32 + std::f32::consts::PI))
+                * Matrix4::from_nonuniform_scale(0.25, 0.5, 1.)
+                * Matrix4::from_translation(Vector3::new(-0.5, -0.5, 0.)))
+            .flatten(),
+        );
+
+        enable_buffer(&gl, &state.assets.screen_buffer, 2, shader.vertex_position);
+
+        gl.draw_arrays(GL::TRIANGLE_FAN, 0, 4);
+
+        Ok(())
+    }
 }
 
 #[macro_export]

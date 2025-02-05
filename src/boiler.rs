@@ -3,6 +3,7 @@ use super::{
     gl::{
         draw_direction_arrow_gl,
         utils::{enable_buffer, Flatten},
+        DirectionDrawer,
     },
     inventory::InventoryType,
     pipe::Pipe,
@@ -245,33 +246,34 @@ impl Structure for Boiler {
                         false,
                         Matrix3::identity().flatten(),
                     );
+
+                    let draw_int =
+                        |x, y, rotation| draw_direction_arrow_gl((x, y), rotation, state, gl);
+                    let draw_steam = |x, y, rotation| {
+                        let drawer = DirectionDrawer::with_tex(&state.assets.tex_direction_white);
+                        drawer.draw((x, y), rotation, state, gl)
+                    };
                     if state.alt_mode {
                         match self.rotation {
                             Rotation::Left => {
-                                draw_direction_arrow_gl((x, y + 1.), &Rotation::Left, state, gl)?;
-                                draw_direction_arrow_gl(
-                                    (x + 2., y + 1.),
-                                    &Rotation::Right,
-                                    state,
-                                    gl,
-                                )?;
+                                draw_int(x, y + 1., &Rotation::Left)?;
+                                draw_int(x + 2., y + 1., &Rotation::Right)?;
+                                draw_steam(x + 1., y, &Rotation::Top)?;
                             }
                             Rotation::Right => {
-                                draw_direction_arrow_gl((x, y), &Rotation::Left, state, gl)?;
-                                draw_direction_arrow_gl((x + 2., y), &Rotation::Right, state, gl)?;
+                                draw_int(x, y, &Rotation::Left)?;
+                                draw_int(x + 2., y, &Rotation::Right)?;
+                                draw_steam(x + 1., y + 1., &Rotation::Bottom)?;
                             }
                             Rotation::Top => {
-                                draw_direction_arrow_gl((x, y), &Rotation::Top, state, gl)?;
-                                draw_direction_arrow_gl((x, y + 2.), &Rotation::Bottom, state, gl)?;
+                                draw_int(x, y, &Rotation::Top)?;
+                                draw_int(x, y + 2., &Rotation::Bottom)?;
+                                draw_steam(x + 1., y + 1., &Rotation::Left)?;
                             }
                             Rotation::Bottom => {
-                                draw_direction_arrow_gl((x + 1., y), &Rotation::Top, state, gl)?;
-                                draw_direction_arrow_gl(
-                                    (x + 1., y + 2.),
-                                    &Rotation::Bottom,
-                                    state,
-                                    gl,
-                                )?;
+                                draw_int(x + 1., y, &Rotation::Top)?;
+                                draw_int(x + 1., y + 2., &Rotation::Bottom)?;
+                                draw_steam(x + 1., y + 1., &Rotation::Left)?;
                             }
                         }
                     }
