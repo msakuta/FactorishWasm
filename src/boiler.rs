@@ -1,15 +1,18 @@
-use super::pipe::Pipe;
 use super::{
     drop_items::DropItem,
-    gl::utils::{enable_buffer, Flatten},
+    gl::{
+        draw_direction_arrow_gl,
+        utils::{enable_buffer, Flatten},
+    },
     inventory::InventoryType,
+    pipe::Pipe,
     serialize_impl,
-    structure::{Structure, StructureDynIter, StructureId},
+    structure::{Size, Structure, StructureDynIter, StructureId},
     water_well::{FluidBox, FluidType},
     FactorishState, FrameProcResult, Inventory, InventoryTrait, ItemType, Position, Recipe,
-    TempEnt, COAL_POWER,
+    RotateErr, Rotation, TempEnt, COAL_POWER,
 };
-use cgmath::{Matrix3, Matrix4, Vector2, Vector3};
+use cgmath::{Matrix3, Matrix4, Rad, SquareMatrix, Vector2, Vector3};
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 use web_sys::{CanvasRenderingContext2d, WebGlRenderingContext as GL};
@@ -21,6 +24,7 @@ const FUEL_CAPACITY: usize = 10;
 #[derive(Serialize, Deserialize)]
 pub(crate) struct Boiler {
     position: Position,
+    rotation: Rotation,
     inventory: Inventory,
     progress: Option<f64>,
     power: f64,
@@ -34,6 +38,7 @@ impl Boiler {
     pub(crate) fn new(position: &Position) -> Self {
         Boiler {
             position: *position,
+            rotation: Rotation::Top,
             inventory: Inventory::new(),
             progress: None,
             power: 0.,
@@ -78,6 +83,13 @@ impl Structure for Boiler {
 
     fn position(&self) -> &Position {
         &self.position
+    }
+
+    fn size(&self) -> Size {
+        match &self.rotation {
+            Rotation::Left | Rotation::Right => Size::new(3, 2),
+            Rotation::Top | Rotation::Bottom => Size::new(2, 3),
+        }
     }
 
     fn draw(
@@ -141,7 +153,52 @@ impl Structure for Boiler {
                 gl.use_program(Some(&shader.program));
                 gl.uniform1f(shader.alpha_loc.as_ref(), if is_ghost { 0.5 } else { 1. });
                 gl.active_texture(GL::TEXTURE0);
-                gl.bind_texture(GL::TEXTURE_2D, Some(&state.assets.tex_boiler));
+
+                enable_buffer(gl, &state.assets.screen_buffer, 2, shader.vertex_position);
+                let world_transform = state.get_world_transform()?;
+
+                let render_connector = |x, y, rotation| {
+                    gl.bind_texture(GL::TEXTURE_2D, Some(&state.assets.tex_boiler_connector));
+                    gl.uniform_matrix3fv_with_f32_array(
+                        shader.tex_transform_loc.as_ref(),
+                        false,
+                        Matrix3::identity().flatten(),
+                    );
+                    gl.uniform_matrix4fv_with_f32_array(
+                        shader.transform_loc.as_ref(),
+                        false,
+                        (world_transform
+                            * Matrix4::from_scale(2.)
+                            * Matrix4::from_translation(Vector3::new(x + 1., y + 1., 0.))
+                            * Matrix4::from_angle_z(Rad(rotation))
+                            * Matrix4::from_nonuniform_scale(2., 1., 1.)
+                            * Matrix4::from_translation(Vector3::new(-0.5, -0.5, 0.)))
+                        .flatten(),
+                    );
+
+                    gl.draw_arrays(GL::TRIANGLE_FAN, 0, 4);
+                };
+
+                match self.rotation {
+                    Rotation::Left => {
+                        render_connector(x + 1., y + 0.5, 0.);
+                        render_connector(x, y + 0.5, std::f32::consts::PI);
+                    }
+                    Rotation::Right => {
+                        render_connector(x, y - 0.5, std::f32::consts::PI);
+                        render_connector(x + 1., y - 0.5, 0.);
+                    }
+                    Rotation::Top => {
+                        render_connector(x - 0.5, y + 1., std::f32::consts::PI * 0.5);
+                        render_connector(x - 0.5, y, -std::f32::consts::PI * 0.5);
+                    }
+                    Rotation::Bottom => {
+                        render_connector(x + 0.5, y, -std::f32::consts::PI * 0.5);
+                        render_connector(x + 0.5, y + 1., std::f32::consts::PI * 0.5);
+                    }
+                }
+
+                gl.bind_texture(GL::TEXTURE_2D, Some(&state.assets.tex_boiler_center));
                 let sx = if self.progress.is_some()
                     && Self::COMBUSTION_EPSILON < self.combustion_rate()
                 {
@@ -152,24 +209,72 @@ impl Structure for Boiler {
                 gl.uniform_matrix3fv_with_f32_array(
                     shader.tex_transform_loc.as_ref(),
                     false,
-                    (Matrix3::from_nonuniform_scale(1. / 3., 1.)
-                        * Matrix3::from_translation(Vector2::new(sx, 0.)))
-                    .flatten(),
+                    Matrix3::identity().flatten(),
+                    // (Matrix3::from_nonuniform_scale(1. / 3., 1.)
+                    //     * Matrix3::from_translation(Vector2::new(sx, 0.)))
+                    // .flatten(),
                 );
 
-                enable_buffer(&gl, &state.assets.screen_buffer, 2, shader.vertex_position);
+                let (x, y) = match self.rotation {
+                    Rotation::Left | Rotation::Right => (x + 0.5, y),
+                    _ => (x, y + 0.5),
+                };
+
                 gl.uniform_matrix4fv_with_f32_array(
                     shader.transform_loc.as_ref(),
                     false,
-                    (state.get_world_transform()?
+                    (world_transform
                         * Matrix4::from_scale(2.)
-                        * Matrix4::from_translation(Vector3::new(x, y, 0.)))
+                        * Matrix4::from_translation(Vector3::new(x, y, 0.))
+                        * Matrix4::from_scale(2.))
                     .flatten(),
                 );
                 gl.draw_arrays(GL::TRIANGLE_FAN, 0, 4);
             }
             2 => {
+                let shader = state
+                    .assets
+                    .textured_shader
+                    .as_ref()
+                    .ok_or_else(|| js_str!("Shader not found"))?;
+
                 if !is_ghost {
+                    gl.bind_texture(GL::TEXTURE_2D, Some(&state.assets.tex_direction));
+                    gl.uniform_matrix3fv_with_f32_array(
+                        shader.tex_transform_loc.as_ref(),
+                        false,
+                        Matrix3::identity().flatten(),
+                    );
+                    if state.alt_mode {
+                        match self.rotation {
+                            Rotation::Left => {
+                                draw_direction_arrow_gl((x, y + 1.), &Rotation::Left, state, gl)?;
+                                draw_direction_arrow_gl(
+                                    (x + 2., y + 1.),
+                                    &Rotation::Right,
+                                    state,
+                                    gl,
+                                )?;
+                            }
+                            Rotation::Right => {
+                                draw_direction_arrow_gl((x, y), &Rotation::Left, state, gl)?;
+                                draw_direction_arrow_gl((x + 2., y), &Rotation::Right, state, gl)?;
+                            }
+                            Rotation::Top => {
+                                draw_direction_arrow_gl((x, y), &Rotation::Top, state, gl)?;
+                                draw_direction_arrow_gl((x, y + 2.), &Rotation::Bottom, state, gl)?;
+                            }
+                            Rotation::Bottom => {
+                                draw_direction_arrow_gl((x + 1., y), &Rotation::Top, state, gl)?;
+                                draw_direction_arrow_gl(
+                                    (x + 1., y + 2.),
+                                    &Rotation::Bottom,
+                                    state,
+                                    gl,
+                                )?;
+                            }
+                        }
+                    }
                     crate::draw_fuel_alarm_gl_impl!(self, state, gl)
                 }
             }
@@ -261,6 +366,20 @@ impl Structure for Boiler {
             return Ok(ret);
         }
         Ok(FrameProcResult::None)
+    }
+
+    fn rotate(
+        &mut self,
+        _state: &mut FactorishState,
+        _others: &StructureDynIter,
+    ) -> Result<(), RotateErr> {
+        self.rotation = self.rotation.next();
+        Ok(())
+    }
+
+    fn set_rotation(&mut self, rotation: &Rotation) -> Result<(), ()> {
+        self.rotation = *rotation;
+        Ok(())
     }
 
     fn input(&mut self, o: &DropItem) -> Result<(), JsValue> {

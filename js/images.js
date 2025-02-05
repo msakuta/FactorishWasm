@@ -19,6 +19,8 @@ import electricFurnace from "../img/electric-furnace.png";
 import waterWell from "../img/waterwell.png";
 import offshorePump from "../img/offshore-pump.png";
 import boiler from "../img/boiler.png";
+import boilerCenter from "../img/boiler-center.png";
+import boilerConnector from "../img/boiler-connector.png";
 import pipe from "../img/pipe.png";
 import inserter from "../img/inserter-base.png";
 import direction from "../img/direction.png";
@@ -68,6 +70,8 @@ export let loadImages = [
     ["assembler", assembler],
     ["lab", lab],
     ["boiler", boiler],
+    ["boilerCenter", boilerCenter],
+    ["boilerConnector", boilerConnector],
     ["steamEngine", steamEngine],
     ["electPole", electPole],
     ["splitter", splitter],
