@@ -158,18 +158,11 @@ impl Structure for Boiler {
                 enable_buffer(gl, &state.assets.screen_buffer, 2, shader.vertex_position);
                 let world_transform = state.get_world_transform()?;
 
-                let render_connector = |x, y, rotation| {
-                    gl.bind_texture(GL::TEXTURE_2D, Some(&state.assets.tex_boiler_connector));
-                    gl.uniform_matrix3fv_with_f32_array(
-                        shader.tex_transform_loc.as_ref(),
-                        false,
-                        Matrix3::identity().flatten(),
-                    );
+                let render_connector = |x: f32, y: f32, rotation, transform: &Matrix4<_>| {
                     gl.uniform_matrix4fv_with_f32_array(
                         shader.transform_loc.as_ref(),
                         false,
-                        (world_transform
-                            * Matrix4::from_scale(2.)
+                        (transform
                             * Matrix4::from_translation(Vector3::new(x + 1., y + 1., 0.))
                             * Matrix4::from_angle_z(Rad(rotation))
                             * Matrix4::from_nonuniform_scale(2., 1., 1.)
@@ -180,22 +173,35 @@ impl Structure for Boiler {
                     gl.draw_arrays(GL::TRIANGLE_FAN, 0, 4);
                 };
 
+                let render_connectors = |x, y, rotation| {
+                    let transform = world_transform
+                        * Matrix4::from_scale(2.)
+                        * Matrix4::from_translation(Vector3::new(x, y, 0.))
+                        * Matrix4::from_angle_z(Rad(rotation));
+                    render_connector(1., 0.5, 0., &transform);
+                    render_connector(0., 0.5, std::f32::consts::PI, &transform);
+                    render_connector(0.5, 0., -std::f32::consts::PI * 0.5, &transform);
+                };
+
+                gl.bind_texture(GL::TEXTURE_2D, Some(&state.assets.tex_boiler_connector));
+                gl.uniform_matrix3fv_with_f32_array(
+                    shader.tex_transform_loc.as_ref(),
+                    false,
+                    Matrix3::identity().flatten(),
+                );
+
                 match self.rotation {
                     Rotation::Left => {
-                        render_connector(x + 1., y + 0.5, 0.);
-                        render_connector(x, y + 0.5, std::f32::consts::PI);
+                        render_connectors(x, y, 0.);
                     }
                     Rotation::Right => {
-                        render_connector(x, y - 0.5, std::f32::consts::PI);
-                        render_connector(x + 1., y - 0.5, 0.);
+                        render_connectors(x + 3., y + 2., std::f32::consts::PI);
                     }
                     Rotation::Top => {
-                        render_connector(x - 0.5, y + 1., std::f32::consts::PI * 0.5);
-                        render_connector(x - 0.5, y, -std::f32::consts::PI * 0.5);
+                        render_connectors(x + 2., y, std::f32::consts::PI * 0.5);
                     }
                     Rotation::Bottom => {
-                        render_connector(x + 0.5, y, -std::f32::consts::PI * 0.5);
-                        render_connector(x + 0.5, y + 1., std::f32::consts::PI * 0.5);
+                        render_connectors(x, y + 3., -std::f32::consts::PI * 0.5);
                     }
                 }
 
@@ -268,12 +274,12 @@ impl Structure for Boiler {
                             Rotation::Top => {
                                 draw_int(x, y, &Rotation::Top)?;
                                 draw_int(x, y + 2., &Rotation::Bottom)?;
-                                draw_steam(x + 1., y + 1., &Rotation::Left)?;
+                                draw_steam(x + 1., y + 1., &Rotation::Right)?;
                             }
                             Rotation::Bottom => {
                                 draw_int(x + 1., y, &Rotation::Top)?;
                                 draw_int(x + 1., y + 2., &Rotation::Bottom)?;
-                                draw_steam(x + 1., y + 1., &Rotation::Left)?;
+                                draw_steam(x, y + 1., &Rotation::Left)?;
                             }
                         }
                     }
