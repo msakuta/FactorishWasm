@@ -3221,7 +3221,6 @@ impl FactorishState {
         let Some((id, _)) = self.find_structure_tile_id(cursor) else {
             return Ok(());
         };
-        console_log!("mouse_up id: {:?}", id);
         let Some(s) = self
             .structures
             .get_mut(id.id as usize)
@@ -3243,7 +3242,6 @@ impl FactorishState {
         let message = inv.iter().fold("".to_string(), |acc, (item, count)| {
             acc + &format!("+{} {:?}\n", count, item)
         });
-        console_log!("  struct inventory: {:?}", inv);
         self.player.inventory.merge(std::mem::take(inv));
         if !message.is_empty() {
             self.new_popup_text(
