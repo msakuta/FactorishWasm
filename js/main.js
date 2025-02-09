@@ -1056,8 +1056,9 @@ let unlimited = true;
     });
     canvas.addEventListener("mouseup", (evt) => {
         if(!dragging || !dragging[2]){
-            if(!paused)
-                processEvents(sim.mouse_up([evt.offsetX, evt.offsetY], evt.button));
+            if(!paused){
+                processEvents(sim.mouse_up([evt.offsetX, evt.offsetY], evt.button, evt.ctrlKey));
+            }
         }
         dragging = null;
     })

@@ -2497,7 +2497,7 @@ impl FactorishState {
         Ok(JsValue::from(js_sys::Array::new()))
     }
 
-    pub fn mouse_up(&mut self, pos: &[f64], button: i32) -> Result<JsValue, JsValue> {
+    pub fn mouse_up(&mut self, pos: &[f64], button: i32, ctrl: bool) -> Result<JsValue, JsValue> {
         if pos.len() < 2 {
             return Err(JsValue::from_str("position must have 2 elements"));
         }
@@ -2508,6 +2508,12 @@ impl FactorishState {
         let mut events = vec![];
 
         if button == 0 {
+            if ctrl {
+                if let Some(cursor) = self.cursor {
+                    self.take_structure_inventory(&cursor)?;
+                }
+                return Ok(JsValue::from(events.iter().collect::<js_sys::Array>()));
+            }
             if let Some((selected_tool, _)) = self.get_selected_tool_or_item_opt() {
                 let cell = self.tile_at(&cursor);
                 if let Some((count, cell)) =
@@ -3209,5 +3215,43 @@ impl FactorishState {
                 s.dynamic.as_deref()?,
             ))
         })
+    }
+
+    fn take_structure_inventory(&mut self, cursor: &[i32]) -> Result<(), JsValue> {
+        let Some((id, _)) = self.find_structure_tile_id(cursor) else {
+            return Ok(());
+        };
+        console_log!("mouse_up id: {:?}", id);
+        let Some(s) = self
+            .structures
+            .get_mut(id.id as usize)
+            .and_then(|s| s.dynamic.as_mut())
+        else {
+            // Failing to find a structure is not an error
+            return Ok(());
+        };
+
+        // First try output then burner, since the player should prefer to take output
+        let inv = if let Some(inv) = s.inventory_mut(InventoryType::Output) {
+            inv
+        } else if let Some(inv) = s.inventory_mut(InventoryType::Burner) {
+            inv
+        } else {
+            return Ok(());
+        };
+
+        let message = inv.iter().fold("".to_string(), |acc, (item, count)| {
+            acc + &format!("+{} {:?}\n", count, item)
+        });
+        console_log!("  struct inventory: {:?}", inv);
+        self.player.inventory.merge(std::mem::take(inv));
+        if !message.is_empty() {
+            self.new_popup_text(
+                message,
+                cursor[0] as f64 * TILE_SIZE,
+                cursor[1] as f64 * TILE_SIZE,
+            )?;
+        }
+        Ok(())
     }
 }
