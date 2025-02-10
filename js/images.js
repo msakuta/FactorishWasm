@@ -45,6 +45,7 @@ import smoke from "../img/smoke.png";
 import undergroundBeltItem from "../img/underground-belt-item.png";
 import fuelAlarm from '../img/fuel-alarm.png';
 import electricityAlarm from '../img/electricity-alarm.png';
+import darkGlow from '../img/dark-glow.png';
 
 // We could fetch and await in Rust code, but it's far easier to do in JavaScript runtime.
 // We initiate promises at the very beginning of the initialization, and by the time we initialize everything
@@ -95,6 +96,7 @@ export let loadImages = [
     ["smoke", smoke],
     ["fuelAlarm", fuelAlarm],
     ["electricityAlarm", electricityAlarm],
+    ["darkGlow", darkGlow],
 ].map(async ([name, src]) => {
     const res = await fetch(src);
     return [name, src, await createImageBitmap(await res.blob())];

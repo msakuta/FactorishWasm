@@ -99,6 +99,7 @@ pub(crate) struct Assets {
     pub tex_underground_belt_item: WebGlTexture,
 
     pub tex_smoke: WebGlTexture,
+    pub tex_dark_glow: WebGlTexture,
 
     pub flat_shader: Option<ShaderBundle>,
     pub textured_shader: Option<ShaderBundle>,
@@ -190,6 +191,7 @@ impl Assets {
             tex_underground_belt_item: load_texture_local("undergroundBeltItem")?,
 
             tex_smoke: load_texture_local("smoke")?,
+            tex_dark_glow: load_texture_local("darkGlow")?,
 
             flat_shader: None,
             textured_shader: None,

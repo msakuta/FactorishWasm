@@ -1,3 +1,5 @@
+use crate::items::{render_drop_item_gl, render_item_overlay_gl};
+
 use super::{
     gl::utils::{enable_buffer, Flatten},
     inventory::InventoryType,
@@ -10,7 +12,7 @@ use super::{
     DropItem, FactorishState, FrameProcResult, Inventory, InventoryTrait, ItemType, Position,
     Recipe, TempEnt, COAL_POWER, TILE_SIZE,
 };
-use cgmath::{Matrix3, Matrix4, Vector2, Vector3};
+use cgmath::{Matrix3, Matrix4, SquareMatrix, Vector2, Vector3};
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
@@ -171,6 +173,15 @@ impl Structure for Furnace {
         gl.draw_arrays(GL::TRIANGLE_FAN, 0, 4);
 
         if !is_ghost {
+            if state.alt_mode {
+                if let Some((output, _)) = self.recipe.as_ref().and_then(|r| r.output.iter().next())
+                {
+                    let pos = self.bounding_box().center();
+                    console_log!("rendering output item: {:?} at {:?}", output, pos);
+                    render_item_overlay_gl(state, gl, output, &pos)?;
+                }
+            }
+
             crate::draw_fuel_alarm_gl_impl!(self, state, gl);
         }
 

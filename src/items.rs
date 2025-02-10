@@ -1,5 +1,7 @@
+use crate::Vector2f;
+
 use super::{gl::utils::Flatten, FactorishState, ImageBundle, TILE_SIZE_F};
-use cgmath::{Matrix3, Matrix4, Vector3};
+use cgmath::{Matrix3, Matrix4, One, Vector2, Vector3};
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 use web_sys::{CanvasRenderingContext2d, WebGlRenderingContext as GL, WebGlTexture};
@@ -262,6 +264,48 @@ pub(crate) fn render_drop_item_gl(
                 0.,
             )),
     )
+}
+
+pub(crate) fn render_item_overlay_gl(
+    state: &FactorishState,
+    gl: &GL,
+    item_type: &ItemType,
+    pos: &Vector2f,
+) -> Result<(), JsValue> {
+    let transform = state.get_world_transform()?
+        * Matrix4::from_scale(2.)
+        * Matrix4::from_translation(
+            (pos + Vector2::new(state.viewport.x as f32, state.viewport.y as f32)
+                - Vector2::new(0.25, 0.25))
+            .extend(0.),
+        );
+
+    let _render_dark_glow = (|img: &WebGlTexture| -> Result<(), JsValue> {
+        let shader = state
+            .assets
+            .textured_alpha_shader
+            .as_ref()
+            .ok_or_else(|| js_str!("Shader not found"))?;
+        gl.use_program(Some(&shader.program));
+        gl.bind_texture(GL::TEXTURE_2D, Some(&img));
+        gl.uniform1f(shader.alpha_loc.as_ref(), 1.);
+        gl.uniform_matrix3fv_with_f32_array(
+            shader.tex_transform_loc.as_ref(),
+            false,
+            Matrix3::one().flatten(),
+        );
+
+        gl.uniform_matrix4fv_with_f32_array(
+            shader.transform_loc.as_ref(),
+            false,
+            (transform * Matrix4::from_translation(Vector3::new(-0.25, -0.25, 0.))).flatten(),
+        );
+
+        gl.draw_arrays(GL::TRIANGLE_FAN, 0, 4);
+        Ok(())
+    })(&state.assets.tex_dark_glow)?;
+
+    render_drop_item_mat_gl(state, gl, item_type, transform)
 }
 
 pub(crate) fn get_item_image_url<'a>(state: &'a FactorishState, item_type: &ItemType) -> &'a str {
