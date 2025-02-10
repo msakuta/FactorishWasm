@@ -1,4 +1,4 @@
-use crate::items::render_item_overlay_gl;
+use crate::{items::render_item_overlay_gl, structure::Size};
 
 use super::{
     drop_items::DropItem,
@@ -207,6 +207,10 @@ impl Structure for Assembler {
         &self.position
     }
 
+    fn size(&self) -> Size {
+        Size::new(3, 3)
+    }
+
     fn draw(
         &self,
         state: &FactorishState,
@@ -277,7 +281,8 @@ impl Structure for Assembler {
                 false,
                 (state.get_world_transform()?
                     * Matrix4::from_scale(2.)
-                    * Matrix4::from_translation(Vector3::new(x, y, 0.)))
+                    * Matrix4::from_translation(Vector3::new(x, y, 0.))
+                    * Matrix4::from_scale(3.))
                 .flatten(),
             );
             Ok(())
