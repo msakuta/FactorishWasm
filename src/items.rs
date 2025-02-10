@@ -1,4 +1,4 @@
-use crate::Vector2f;
+use crate::{gl::utils::enable_buffer, Vector2f};
 
 use super::{gl::utils::Flatten, FactorishState, ImageBundle, TILE_SIZE_F};
 use cgmath::{Matrix3, Matrix4, One, Vector2, Vector3};
@@ -286,7 +286,9 @@ pub(crate) fn render_item_overlay_gl(
             .textured_alpha_shader
             .as_ref()
             .ok_or_else(|| js_str!("Shader not found"))?;
+        enable_buffer(gl, &state.assets.screen_buffer, 2, shader.vertex_position);
         gl.use_program(Some(&shader.program));
+        gl.uniform1i(shader.texture_loc.as_ref(), 0);
         gl.bind_texture(GL::TEXTURE_2D, Some(&img));
         gl.uniform1f(shader.alpha_loc.as_ref(), 1.);
         gl.uniform_matrix3fv_with_f32_array(
