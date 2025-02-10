@@ -171,6 +171,15 @@ impl BoundingBox {
         let copy = *self;
         (copy.x0..copy.x1).flat_map(move |x| (copy.y0..copy.y1).map(move |y| Position::new(x, y)))
     }
+
+    /// Measure L0 distance of closest point between bounding boxes. Not Euclidean distance.
+    pub fn distance(&self, other: &BoundingBox) -> i32 {
+        let x01 = self.x0 - other.x1;
+        let y01 = self.y0 - other.y1;
+        let x10 = self.x1 - other.x0;
+        let y10 = self.y1 - other.y0;
+        x01.abs().min(x10.abs()).max(y01.abs().min(y10.abs()))
+    }
 }
 
 #[derive(Copy, Clone, Serialize, Deserialize, RotateEnum, PartialEq)]

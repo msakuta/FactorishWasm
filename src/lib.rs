@@ -2571,7 +2571,7 @@ impl FactorishState {
                         {
                             if (new_s.power_sink() && structure.power_source()
                                 || new_s.power_source() && structure.power_sink())
-                                && new_s.position().distance(structure.position())
+                                && new_s.bounding_box().distance(&structure.bounding_box())
                                     <= new_s.wire_reach().min(structure.wire_reach()) as i32
                             {
                                 let new_power_wire = PowerWire(id, other_id);
