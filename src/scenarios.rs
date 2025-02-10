@@ -264,7 +264,9 @@ impl FactorishState {
                 let structure2 = structures[j].dynamic.as_deref().unwrap();
                 if (structure1.power_sink() && structure2.power_source()
                     || structure1.power_source() && structure2.power_sink())
-                    && structure1.bounding_box().distance(&structure2.bounding_box())
+                    && structure1
+                        .bounding_box()
+                        .distance(&structure2.bounding_box())
                         <= structure1.wire_reach().min(structure2.wire_reach()) as i32
                 {
                     let add = PowerWire(

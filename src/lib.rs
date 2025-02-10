@@ -2511,6 +2511,10 @@ impl FactorishState {
             if ctrl {
                 if let Some(cursor) = self.cursor {
                     self.take_structure_inventory(&cursor)?;
+                    events.push(
+                        to_value(&JSEvent::UpdateStructureInventory(cursor[0], cursor[1])).unwrap(),
+                    );
+                    events.push(to_value(&JSEvent::UpdatePlayerInventory).unwrap());
                 }
                 return Ok(JsValue::from(events.iter().collect::<js_sys::Array>()));
             }
