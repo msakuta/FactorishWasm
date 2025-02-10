@@ -1,3 +1,5 @@
+use crate::items::render_item_overlay_gl;
+
 use super::{
     drop_items::DropItem,
     gl::{
@@ -303,8 +305,19 @@ impl Structure for Assembler {
                 gl.draw_arrays(GL::TRIANGLE_FAN, 0, 4);
             }
             2 => {
-                if !is_ghost && self.recipe.is_some() && self.power == 0. {
-                    draw_electricity_alarm_gl((x, y), state, gl)?;
+                if !is_ghost {
+                    if state.alt_mode {
+                        if let Some((output, _)) =
+                            self.recipe.as_ref().and_then(|r| r.output.iter().next())
+                        {
+                            let pos = self.bounding_box().center();
+                            render_item_overlay_gl(state, gl, output, &pos)?;
+                        }
+                    }
+
+                    if self.recipe.is_some() && self.power == 0. {
+                        draw_electricity_alarm_gl((x, y), state, gl)?;
+                    }
                 }
             }
             _ => (),

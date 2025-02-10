@@ -177,7 +177,6 @@ impl Structure for Furnace {
                 if let Some((output, _)) = self.recipe.as_ref().and_then(|r| r.output.iter().next())
                 {
                     let pos = self.bounding_box().center();
-                    console_log!("rendering output item: {:?} at {:?}", output, pos);
                     render_item_overlay_gl(state, gl, output, &pos)?;
                 }
             }
