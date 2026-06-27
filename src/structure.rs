@@ -76,6 +76,8 @@ impl Position {
             y: self.y + o.1,
         }
     }
+
+    #[allow(dead_code)]
     pub(crate) fn distance(&self, position: &Position) -> i32 {
         (position.x - self.x).abs().max((position.y - self.y).abs())
     }
@@ -109,6 +111,7 @@ impl Position {
         Vector2d::new(self.x as f64, self.y as f64)
     }
 
+    #[allow(dead_code)]
     pub(crate) fn to_f32(&self) -> Vector2f {
         Vector2f::new(self.x as f32, self.y as f32)
     }
@@ -476,7 +479,7 @@ pub(crate) trait Structure {
     /// Returns a list of recipes. The return value is wrapped in a Cow because some
     /// structures can return dynamically configured list of recipes, while some others
     /// have static fixed list of recipes. In reality, all our structures return a fixed list though.
-    fn get_recipes(&self) -> Cow<[Recipe]> {
+    fn get_recipes(&self) -> Cow<'_, [Recipe]> {
         Cow::from(&[][..])
     }
     fn auto_recipe(&self) -> bool {

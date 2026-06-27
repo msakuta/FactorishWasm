@@ -321,7 +321,7 @@ impl Structure for Lab {
         ret
     }
 
-    fn get_recipes(&self) -> std::borrow::Cow<[Recipe]> {
+    fn get_recipes(&self) -> std::borrow::Cow<'_, [Recipe]> {
         static RECIPES: once_cell::sync::Lazy<Vec<Recipe>> = once_cell::sync::Lazy::new(|| {
             vec![Recipe::new(
                 hash_map!(ItemType::SciencePack1 => 1usize),

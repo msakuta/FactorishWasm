@@ -482,7 +482,7 @@ impl Structure for Assembler {
         ret
     }
 
-    fn get_recipes(&self) -> std::borrow::Cow<[Recipe]> {
+    fn get_recipes(&self) -> std::borrow::Cow<'_, [Recipe]> {
         std::borrow::Cow::from(Assembler::get_recipes())
     }
 

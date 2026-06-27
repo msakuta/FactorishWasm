@@ -483,6 +483,7 @@ impl Viewport {
         Vector2d::new(self.x as f64, self.y as f64)
     }
 
+    #[allow(dead_code)]
     fn offset(&self) -> Vector2f {
         Vector2f::new(self.x as f32, self.y as f32)
     }

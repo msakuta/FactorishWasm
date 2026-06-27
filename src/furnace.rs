@@ -1,4 +1,4 @@
-use crate::items::{render_drop_item_gl, render_item_overlay_gl};
+use crate::items::render_item_overlay_gl;
 
 use super::{
     gl::utils::{enable_buffer, Flatten},
@@ -12,7 +12,7 @@ use super::{
     DropItem, FactorishState, FrameProcResult, Inventory, InventoryTrait, ItemType, Position,
     Recipe, TempEnt, COAL_POWER, TILE_SIZE,
 };
-use cgmath::{Matrix3, Matrix4, SquareMatrix, Vector2, Vector3};
+use cgmath::{Matrix3, Matrix4, Vector2, Vector3};
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
@@ -417,7 +417,7 @@ impl Structure for Furnace {
         ret
     }
 
-    fn get_recipes(&self) -> std::borrow::Cow<[Recipe]> {
+    fn get_recipes(&self) -> std::borrow::Cow<'_, [Recipe]> {
         std::borrow::Cow::from(&RECIPES[..])
     }
 

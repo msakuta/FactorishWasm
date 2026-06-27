@@ -20,7 +20,7 @@ impl<'a> StructureSlice<'a> {
     /// Lifetime annotation is still a bit weird, it should return StructureSlice<'a> since the
     /// underlying StructureEntry lifetime should not change by making a slice to it, but
     /// somehow it fails to compile if I do.
-    fn clone(&mut self) -> StructureSlice {
+    fn clone(&mut self) -> StructureSlice<'_> {
         StructureSlice {
             start: self.start,
             slice: self.slice,
